@@ -26,14 +26,15 @@ Skycode is a fork of VS Code with a deeply integrated AI agent. Unlike extension
 | **Diagnostics** | Read ESLint, TypeScript, and other linter errors |
 | **Jupyter Notebooks** | Create and edit notebook cells |
 
-### 4 Operating Modes
+### 5 Operating Modes
 
-| Mode | Purpose |
-|------|---------|
-| **Act** | Default. Full tool access, code modification |
-| **Plan** | Design approach. Read-only, no code changes |
-| **Debug** | Systematic debugging with runtime evidence |
-| **Ask** | Q&A. Explore codebase without modifications |
+| Mode | Purpose | Tools |
+|------|---------|-------|
+| **Act** | Default. Execute tasks, edit files, run commands | All |
+| **Ask** | Explore code, answer questions | Read-only |
+| **Plan** | Gather info, design approach | Read-only + `plan_mode_respond` |
+| **Debug** | Systematic debugging with runtime evidence | Read-only + `execute_command` |
+| **Chat** | General conversation, any topic | Read-only (on explicit request) |
 
 The agent can dynamically switch between modes during a conversation.
 
