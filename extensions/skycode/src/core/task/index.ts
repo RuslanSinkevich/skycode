@@ -1482,6 +1482,9 @@ export class Task {
 			isAborted: () => this.taskState.abort,
 			initiateStepLoop: (userContent) => this.initiateStepLoop(userContent as SkycodeUserContent[]),
 			sayTaskProgress: (text) => this.sayTaskProgress(text),
+			setSilentStep: (silent) => {
+				this.taskState.isSilentStep = silent
+			},
 		}
 	}
 

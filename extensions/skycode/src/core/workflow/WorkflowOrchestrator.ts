@@ -63,6 +63,7 @@ export class WorkflowOrchestrator {
 			this.executionState.stepTimings[index].startedAt = Date.now()
 			await this.emitProgress()
 
+			this.task.setSilentStep(!step.visible)
 			const stepPrompt = this.buildStepPrompt(step.name, step.prompt, index, enabledSteps.length)
 
 			try {
@@ -79,6 +80,8 @@ export class WorkflowOrchestrator {
 				this.executionState.stepStatuses[index] = "failed"
 				this.executionState.overallStatus = "failed"
 				break
+			} finally {
+				this.task.setSilentStep(false)
 			}
 
 			this.executionState.stepTimings[index].completedAt = Date.now()
@@ -160,4 +163,5 @@ export interface WorkflowCapableTask {
 	isAborted(): boolean
 	initiateStepLoop(userContent: Array<{ type: "text"; text: string }>): Promise<void>
 	sayTaskProgress(text: string): Promise<void>
+	setSilentStep(silent: boolean): void
 }

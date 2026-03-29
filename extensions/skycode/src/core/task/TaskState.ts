@@ -72,4 +72,5 @@ export class TaskState {
 	// Multi-step workflow
 	isWorkflowStep = false
 	stepCompleted = false
+	isSilentStep = false
 }

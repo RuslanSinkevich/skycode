@@ -11,15 +11,17 @@ import {
 	ToggleWindsurfRuleRequest,
 	ToggleWorkflowRequest,
 } from "@shared/proto/skycode/file"
+import { NewTaskRequest } from "@shared/proto/skycode/task"
+import { StringRequest } from "@shared/proto/skycode/common"
 import { VSCodeButton, VSCodeLink } from "@vscode/webview-ui-toolkit/react"
-import React, { useEffect, useRef, useState } from "react"
+import React, { useCallback, useEffect, useRef, useState } from "react"
 import { useClickAway, useWindowSize } from "react-use"
 import styled from "styled-components"
 import PopupModalContainer from "@/components/common/PopupModalContainer"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
-import { FileServiceClient } from "@/services/grpc-client"
+import { FileServiceClient, TaskServiceClient } from "@/services/grpc-client"
 import { isMacOSOrLinux } from "@/utils/platformUtils"
 import HookRow from "./HookRow"
 import NewRuleRow from "./NewRuleRow"
@@ -428,6 +430,26 @@ const SkycodeRulesToggleModal: React.FC = () => {
 			})
 	}
 
+	const handleRunWorkflow = useCallback(
+		(rulePath: string) => {
+			const fileName = rulePath.replace(/^.*[/\\]/, "").replace(/\.(yaml|yml|md|txt)$/i, "")
+			TaskServiceClient.newTask(NewTaskRequest.create({ text: `/${fileName}`, images: [] })).catch((err) =>
+				console.error("Failed to run workflow:", err),
+			)
+			setIsVisible(false)
+		},
+		[],
+	)
+
+	const handleEditWorkflow = useCallback(
+		(rulePath: string) => {
+			FileServiceClient.openFile(StringRequest.create({ value: rulePath })).catch((err) =>
+				console.error("Failed to open workflow:", err),
+			)
+		},
+		[],
+	)
+
 	// Close modal when clicking outside
 	useClickAway(modalRef, () => {
 		setIsVisible(false)
@@ -659,6 +681,8 @@ const SkycodeRulesToggleModal: React.FC = () => {
 									<RulesToggleList
 										isGlobal={true}
 										listGap="small"
+										onEditWorkflow={handleEditWorkflow}
+										onRunWorkflow={handleRunWorkflow}
 										rules={globalWorkflows}
 										ruleType={"workflow"}
 										showNewRule={true}
@@ -673,6 +697,8 @@ const SkycodeRulesToggleModal: React.FC = () => {
 									<RulesToggleList
 										isGlobal={false}
 										listGap="small"
+										onEditWorkflow={handleEditWorkflow}
+										onRunWorkflow={handleRunWorkflow}
 										rules={localWorkflows}
 										ruleType={"workflow"}
 										showNewRule={true}

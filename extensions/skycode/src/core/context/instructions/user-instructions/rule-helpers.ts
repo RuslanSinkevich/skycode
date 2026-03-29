@@ -358,7 +358,14 @@ export const createRuleFile = async (isGlobal: boolean, filename: string, cwd: s
 			return { filePath, fileExists }
 		}
 
-		await fs.writeFile(filePath, "", "utf8")
+		// Multi-step workflow: write YAML template instead of empty file
+		if (type === "workflow" && (filePath.endsWith(".yaml") || filePath.endsWith(".yml"))) {
+			const { generateWorkflowTemplate } = await import("@core/workflow/WorkflowParser")
+			const humanName = path.basename(filePath).replace(/\.(yaml|yml)$/, "").replace(/[-_]/g, " ")
+			await fs.writeFile(filePath, generateWorkflowTemplate(humanName), "utf8")
+		} else {
+			await fs.writeFile(filePath, "", "utf8")
+		}
 
 		return { filePath, fileExists: false }
 	} catch (_error) {
