@@ -61,6 +61,9 @@ const NewRuleRow: React.FC<NewRuleRowProps> = ({ isGlobal, ruleType, existingHoo
 	}
 
 	const isValidExtension = (ext: string): boolean => {
+		if (ruleType === "workflow") {
+			return ext === "" || ext === ".md" || ext === ".txt" || ext === ".yaml" || ext === ".yml"
+		}
 		return ext === "" || ext === ".md" || ext === ".txt"
 	}
 

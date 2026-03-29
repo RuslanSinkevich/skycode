@@ -1060,6 +1060,17 @@ export class Task {
 			Logger.error("Failed to record environment metadata:", error)
 		}
 
+		// Multi-step workflow: detect .yaml workflow and run orchestrator instead of plain loop
+		const workflowDefinition = await this.detectMultiStepWorkflow(task)
+		if (workflowDefinition) {
+			const { WorkflowOrchestrator } = await import("@core/workflow")
+			const orchestrator = new WorkflowOrchestrator(this.asWorkflowCapable(), workflowDefinition, task || "", "")
+			this._session?.pipeline.start()
+			await orchestrator.execute()
+			this._session?.pipeline.complete()
+			return
+		}
+
 		await this.initiateTaskLoop(userContent)
 	}
 
@@ -1387,6 +1398,97 @@ export class Task {
 				this.taskState.consecutiveMistakeCount++
 			}
 		}
+	}
+
+	/**
+	 * Run agent loop for a single workflow step.
+	 * Similar to initiateTaskLoop but exits on stepCompleted flag (set by attempt_completion).
+	 * Does not manage pipeline start/complete — the orchestrator handles that.
+	 */
+	public async initiateStepLoop(userContent: SkycodeUserContent[]): Promise<void> {
+		this.taskState.stepCompleted = false
+		this.taskState.isWorkflowStep = true
+
+		let nextUserContent: SkycodeContent[] = userContent
+		while (!this.taskState.abort && !this.taskState.stepCompleted) {
+			this._session?.pipeline.nextIteration()
+
+			const didEndLoop = await this.recursivelyMakeSkycodeRequests(nextUserContent, false)
+
+			if (didEndLoop || this.taskState.stepCompleted) {
+				break
+			}
+
+			nextUserContent = [
+				{
+					type: "text",
+					text: formatResponse.noToolsUsed(this.useNativeToolCalls),
+				},
+			]
+			this.taskState.consecutiveMistakeCount++
+		}
+
+		this.taskState.isWorkflowStep = false
+	}
+
+	/**
+	 * Detect if the task text contains a slash command that references a multi-step .yaml workflow.
+	 */
+	private async detectMultiStepWorkflow(task?: string): Promise<import("@core/workflow").WorkflowDefinition | null> {
+		if (!task) {
+			return null
+		}
+
+		const slashMatch = task.match(/(^|\s)\/([a-zA-Z0-9_.-]+)(?=\s|$)/)
+		if (!slashMatch) {
+			return null
+		}
+
+		const commandName = slashMatch[2]
+		const stateManager = StateManager.get()
+
+		const globalToggles = stateManager.getGlobalSettingsKey("globalWorkflowToggles") || {}
+		const localToggles = stateManager.getWorkspaceStateKey("workflowToggles") || {}
+
+		const allPaths = [
+			...Object.entries(localToggles).filter(([_, v]) => v),
+			...Object.entries(globalToggles).filter(([_, v]) => v),
+		]
+
+		for (const [filePath] of allPaths) {
+			const fileName = filePath.replace(/^.*[/\\]/, "")
+			if (fileName === commandName || fileName === `${commandName}.yaml` || fileName === `${commandName}.yml`) {
+				const { isMultiStepWorkflow, parseWorkflowFile } = await import("@core/workflow")
+				if (isMultiStepWorkflow(filePath)) {
+					try {
+						return await parseWorkflowFile(filePath)
+					} catch (error) {
+						Logger.error(`Failed to parse multi-step workflow ${filePath}:`, error)
+						return null
+					}
+				}
+			}
+		}
+
+		return null
+	}
+
+	/**
+	 * Adapter to expose Task as WorkflowCapableTask for the orchestrator.
+	 */
+	private asWorkflowCapable(): import("@core/workflow").WorkflowCapableTask {
+		return {
+			getUlid: () => this.ulid,
+			isAborted: () => this.taskState.abort,
+			initiateStepLoop: (userContent) => this.initiateStepLoop(userContent as SkycodeUserContent[]),
+			sayTaskProgress: (text) => this.sayTaskProgress(text),
+		}
+	}
+
+	private async sayTaskProgress(text: string): Promise<void> {
+		await this.say("task_progress", text)
+		this.taskState.currentFocusChainChecklist = text
+		await this.postStateToWebview()
 	}
 
 	/**
