@@ -12,9 +12,10 @@ export interface EmbeddingProvider {
 	/**
 	 * Compute embeddings for an array of text chunks.
 	 * @param texts - Array of text strings to embed
+	 * @param textType - "passage" for documents, "query" for search queries (e5 models need this)
 	 * @returns Array of embedding vectors (same order as input)
 	 */
-	embed(texts: string[]): Promise<number[][]>
+	embed(texts: string[], textType?: "query" | "passage"): Promise<number[][]>
 	/** Dispose of any resources held by the provider */
 	dispose(): void
 }

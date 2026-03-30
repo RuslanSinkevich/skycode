@@ -15,12 +15,19 @@ import { pathToFileURL } from "node:url"
 interface InitMessage {
 	type: "init"
 	extensionPath: string
+	modelId?: string
+	huggingFaceId?: string
+	dimensions?: number
+	requiresPrefix?: boolean
+	allowRemoteModels?: boolean
 }
 
 interface EmbedMessage {
 	type: "embed"
 	id: number
 	texts: string[]
+	/** "query" adds "query: " prefix, "passage" adds "passage: " prefix (for e5 models) */
+	textType?: "query" | "passage"
 }
 
 interface DisposeMessage {
@@ -49,12 +56,20 @@ interface ErrorMessage {
 // ── State ──────────────────────────────────────────────────────
 
 let pipeline: any = null
+let modelRequiresPrefix = false
 
 // ── Model loading ──────────────────────────────────────────────
 
-async function initModel(extensionPath: string): Promise<void> {
+async function initModel(msg: InitMessage): Promise<void> {
+	const {
+		extensionPath,
+		huggingFaceId = "paraphrase-multilingual-MiniLM-L12-v2",
+		dimensions = 384,
+		requiresPrefix = false,
+		allowRemoteModels: allowRemote = false,
+	} = msg
+
 	try {
-		// Dynamic import — transformers.js WASM library shipped in vendor/
 		const transformersPath = path.join(
 			extensionPath,
 			"vendor",
@@ -65,17 +80,17 @@ async function initModel(extensionPath: string): Promise<void> {
 			"transformers.js",
 		)
 
-		// On Windows, absolute paths must be file:// URLs for ESM dynamic import
 		const transformersUrl = pathToFileURL(transformersPath).href
 		const { env, pipeline: createPipeline } = await import(transformersUrl)
 
 		env.allowLocalModels = true
-		env.allowRemoteModels = false
+		env.allowRemoteModels = allowRemote
 		env.localModelPath = path.join(extensionPath, "models")
 
-		pipeline = await createPipeline("feature-extraction", "paraphrase-multilingual-MiniLM-L12-v2")
+		pipeline = await createPipeline("feature-extraction", huggingFaceId)
+		modelRequiresPrefix = requiresPrefix
 
-		parentPort?.postMessage({ type: "ready", dimensions: 384 } satisfies ReadyMessage)
+		parentPort?.postMessage({ type: "ready", dimensions } satisfies ReadyMessage)
 	} catch (err: any) {
 		parentPort?.postMessage({
 			type: "error",
@@ -87,7 +102,7 @@ async function initModel(extensionPath: string): Promise<void> {
 
 // ── Embedding computation ──────────────────────────────────────
 
-async function computeEmbeddings(id: number, texts: string[]): Promise<void> {
+async function computeEmbeddings(id: number, texts: string[], textType?: "query" | "passage"): Promise<void> {
 	if (!pipeline) {
 		parentPort?.postMessage({
 			type: "error",
@@ -99,9 +114,12 @@ async function computeEmbeddings(id: number, texts: string[]): Promise<void> {
 
 	try {
 		const results: number[][] = []
+		const prefixed = modelRequiresPrefix && textType
+			? texts.map((t) => `${textType}: ${t}`)
+			: texts
 
-		for (let i = 0; i < texts.length; i++) {
-			const output = await pipeline([texts[i]], {
+		for (let i = 0; i < prefixed.length; i++) {
+			const output = await pipeline([prefixed[i]], {
 				pooling: "mean",
 				normalize: true,
 			})
@@ -127,10 +145,10 @@ async function computeEmbeddings(id: number, texts: string[]): Promise<void> {
 parentPort?.on("message", async (msg: IncomingMessage) => {
 	switch (msg.type) {
 		case "init":
-			await initModel(msg.extensionPath)
+			await initModel(msg)
 			break
 		case "embed":
-			await computeEmbeddings(msg.id, msg.texts)
+			await computeEmbeddings(msg.id, msg.texts, msg.textType)
 			break
 		case "dispose":
 			pipeline = null

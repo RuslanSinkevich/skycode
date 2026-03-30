@@ -162,7 +162,7 @@ const RuleRow: React.FC<{
 				<span className="flex flex-col min-w-0">
 					<span className="ph-no-capture">{isMultiStep && multiStepName ? multiStepName : finalDisplayName}</span>
 					{isMultiStep && stepCount !== undefined && (
-						<span className="text-xs opacity-50">{stepCount} steps</span>
+						<span className="text-xs opacity-50">{t("workflow.steps_count", { count: stepCount })}</span>
 					)}
 				</span>
 				{ruleType === "agents" && (
@@ -187,10 +187,10 @@ const RuleRow: React.FC<{
 					/>
 					{isMultiStep && onEditWorkflow ? (
 						<Button
-							aria-label="Edit workflow"
+							aria-label={t("workflow.editWorkflow")}
 							onClick={() => onEditWorkflow(rulePath)}
 							size="xs"
-							title="Edit workflow steps"
+							title={t("workflow.editWorkflow")}
 							variant="icon">
 							<PenIcon />
 						</Button>
@@ -206,10 +206,10 @@ const RuleRow: React.FC<{
 					)}
 					{isMultiStep && onRunWorkflow && (
 						<Button
-							aria-label="Run workflow"
+							aria-label={t("workflow.runWorkflow")}
 							onClick={() => onRunWorkflow(rulePath)}
 							size="xs"
-							title="Run this workflow"
+							title={t("workflow.runWorkflow")}
 							variant="icon">
 							<PlayIcon className="text-green-400" />
 						</Button>

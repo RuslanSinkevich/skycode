@@ -576,11 +576,26 @@
 					],
 					"description": "Режим индексации кодовой базы для семантического поиска"
 				},
-				"skycode.indexing.remoteApiUrl": {
-					"type": "string",
-					"default": "",
-					"description": "URL удалённого API для эмбеддингов (формат OpenAI: https://api.openai.com/v1/embeddings)"
-				},
+			"skycode.indexing.localModel": {
+				"type": "string",
+				"enum": [
+					"mini",
+					"base",
+					"large"
+				],
+				"default": "mini",
+				"enumDescriptions": [
+					"Быстрая (~23 МБ) — базовая мультиязычная поддержка",
+					"Сбалансированная (~278 МБ) — хороший мультиязычный поиск, скачивается при первом использовании",
+					"Качественная (~562 МБ) — лучший мультиязычный поиск, скачивается при первом использовании"
+				],
+				"description": "Локальная модель эмбеддингов для индексации (mini — быстрая, base/large — лучше качество, но больше размер)"
+			},
+			"skycode.indexing.remoteApiUrl": {
+				"type": "string",
+				"default": "",
+				"description": "URL удалённого API для эмбеддингов (формат OpenAI: https://api.openai.com/v1/embeddings)"
+			},
 				"skycode.indexing.remoteApiKey": {
 					"type": "string",
 					"default": "",

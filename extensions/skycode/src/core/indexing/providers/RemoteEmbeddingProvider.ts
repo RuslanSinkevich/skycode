@@ -39,7 +39,7 @@ export class RemoteEmbeddingProvider implements EmbeddingProvider {
 		this.id = `remote-${model}`
 	}
 
-	async embed(texts: string[]): Promise<number[][]> {
+	async embed(texts: string[], _textType?: "query" | "passage"): Promise<number[][]> {
 		if (texts.length === 0) {
 			return []
 		}

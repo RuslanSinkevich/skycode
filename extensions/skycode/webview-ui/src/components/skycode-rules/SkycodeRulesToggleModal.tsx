@@ -572,7 +572,7 @@ const SkycodeRulesToggleModal: React.FC = () => {
 								{t("skycodeRules.workflows")}
 							</TabButton>
 							<TabButton isActive={currentView === "scenarios"} onClick={() => setCurrentView("scenarios")}>
-								Сценарии
+								{t("workflow.scenarios")}
 							</TabButton>
 								{hooksEnabled && (
 									<TabButton isActive={currentView === "hooks"} onClick={() => setCurrentView("hooks")}>
@@ -618,8 +618,8 @@ const SkycodeRulesToggleModal: React.FC = () => {
 								</p>
 							) : currentView === "scenarios" ? (
 								<p>
-									Пошаговые сценарии — агент выполняет шаги по очереди автоматически.
-									Создайте сценарий, нажмите ▶ для запуска.
+									{t("workflow.scenariosDescription")}
+									{" "}{t("workflow.scenariosHint")}
 								</p>
 							) : currentView === "skills" ? (
 								<p>
@@ -778,7 +778,7 @@ const SkycodeRulesToggleModal: React.FC = () => {
 								{/* Global Scenarios */}
 								{globalScenarios.length > 0 && (
 									<div className="mb-3">
-										<div className="text-sm font-normal mb-2">{t("skycodeRules.globalWorkflows")}</div>
+										<div className="text-sm font-normal mb-2">{t("workflow.globalScenarios")}</div>
 										<RulesToggleList
 											isGlobal={true}
 											listGap="small"
@@ -795,7 +795,7 @@ const SkycodeRulesToggleModal: React.FC = () => {
 
 								{/* Local Scenarios */}
 								<div className="mb-3">
-									<div className="text-sm font-normal mb-2">{t("skycodeRules.workspaceWorkflows")}</div>
+									<div className="text-sm font-normal mb-2">{t("workflow.workspaceScenarios")}</div>
 									<RulesToggleList
 										isGlobal={false}
 										listGap="small"

@@ -1,4 +1,4 @@
-import type { IndexingConfig, IndexingMode, IndexingPhase, IndexingProgress } from "@shared/IndexingTypes"
+import type { IndexingConfig, IndexingMode, IndexingPhase, IndexingProgress, LocalModelId } from "@shared/IndexingTypes"
 import { DEFAULT_INDEXING_CONFIG, DEFAULT_INDEXING_PROGRESS } from "@shared/IndexingTypes"
 import { VSCodeButton, VSCodeDropdown, VSCodeOption, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import { useCallback, useEffect, useState } from "react"
@@ -71,6 +71,11 @@ const IndexingSettingsSection = ({ renderSectionHeader }: IndexingSettingsSectio
 	const handleModeChange = useCallback((e: any) => {
 		const mode = e.target.value as IndexingMode
 		postIndexingConfigKey("mode", mode)
+	}, [])
+
+	const handleLocalModelChange = useCallback((e: any) => {
+		const modelId = e.target.value as LocalModelId
+		postIndexingConfigKey("localModel", modelId)
 	}, [])
 
 	const handleRemoteUrlBlur = useCallback(() => {
@@ -149,6 +154,28 @@ const IndexingSettingsSection = ({ renderSectionHeader }: IndexingSettingsSectio
 						{config.mode === "off" && t("indexing.mode.offDescription")}
 					</p>
 				</div>
+
+				{/* Local model selector */}
+				{config.mode === "local" && (
+					<div className="mb-4">
+						<label className="block text-sm font-medium mb-1">{t("indexing.localModel")}</label>
+						<VSCodeDropdown onChange={handleLocalModelChange} style={{ width: "100%" }} value={config.localModel || "mini"}>
+							<VSCodeOption value="mini">{t("indexing.localModel.mini")}</VSCodeOption>
+							<VSCodeOption value="base">{t("indexing.localModel.base")}</VSCodeOption>
+							<VSCodeOption value="large">{t("indexing.localModel.large")}</VSCodeOption>
+						</VSCodeDropdown>
+						<p className="text-xs text-description mt-1">
+							{config.localModel === "base" && t("indexing.localModel.baseDescription")}
+							{config.localModel === "large" && t("indexing.localModel.largeDescription")}
+							{(!config.localModel || config.localModel === "mini") && t("indexing.localModel.miniDescription")}
+						</p>
+						{config.localModel && config.localModel !== "mini" && (
+							<p className="text-xs mt-1" style={{ color: "var(--vscode-editorWarning-foreground)" }}>
+								{t("indexing.localModel.reindexWarning")}
+							</p>
+						)}
+					</div>
+				)}
 
 				{/* Remote API settings */}
 				{config.mode === "remote" && (

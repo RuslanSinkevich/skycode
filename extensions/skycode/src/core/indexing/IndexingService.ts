@@ -12,8 +12,9 @@ import * as crypto from "node:crypto"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import * as vscode from "vscode"
-import type { IndexingConfig, IndexingMode, IndexingProgress, CodeChunk, IndexSearchResult } from "@shared/IndexingTypes"
+import type { IndexingConfig, IndexingMode, IndexingProgress, CodeChunk, IndexSearchResult, LocalModelId } from "@shared/IndexingTypes"
 import { DEFAULT_INDEXING_CONFIG, DEFAULT_INDEXING_PROGRESS } from "@shared/IndexingTypes"
+import { getModelMeta } from "./models/EmbeddingModelRegistry"
 import { walkFiles } from "./FileWalker"
 import { chunkFile, setTreeSitterWasmDir } from "./CodeChunker"
 import { createEmbeddingProvider } from "./EmbeddingRouter"
@@ -28,8 +29,13 @@ const EMBED_BATCH_SIZE = 32
 const BATCH_DELAY_MS = 50
 /** Debounce for file watcher change bursts (ms) */
 const FILE_CHANGE_DEBOUNCE_MS = 700
-/** Embedding model currently used for local indexing */
-const CURRENT_EMBEDDING_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
+/** Resolve current embedding model HuggingFace ID from config */
+function getCurrentEmbeddingModel(config: IndexingConfig): string {
+	if (config.mode === "local") {
+		return getModelMeta(config.localModel || "mini").huggingFaceId
+	}
+	return config.remoteModel || "text-embedding-3-small"
+}
 
 export class IndexingService implements vscode.Disposable {
 	private readonly storage: IndexStorage
@@ -83,6 +89,7 @@ export class IndexingService implements vscode.Disposable {
 
 		return {
 			mode: cfg.get<IndexingMode>("mode", DEFAULT_INDEXING_CONFIG.mode),
+			localModel: cfg.get<LocalModelId>("localModel", DEFAULT_INDEXING_CONFIG.localModel),
 			remoteApiUrl: cfg.get("remoteApiUrl", DEFAULT_INDEXING_CONFIG.remoteApiUrl),
 			remoteApiKey: cfg.get("remoteApiKey", DEFAULT_INDEXING_CONFIG.remoteApiKey),
 			remoteModel: cfg.get("remoteModel", DEFAULT_INDEXING_CONFIG.remoteModel),
@@ -104,18 +111,18 @@ export class IndexingService implements vscode.Disposable {
 
 	/** React to config changes */
 	private onConfigChanged(): void {
-		const oldMode: string = this.config.mode
+		const oldMode = this.config.mode
+		const oldLocalModel = this.config.localModel
 		this.config = this.readConfig()
-		const newMode: string = this.config.mode
+		const newMode = this.config.mode
 
-		// If mode changed, restart or stop
 		if (newMode === "off") {
 			this.stop()
 		} else if (oldMode === "off" && newMode !== "off") {
-			// Was off, now on — start indexing
 			void this.startIndexing()
 		} else if (oldMode !== newMode) {
-			// Provider type changed — re-index
+			void this.startIndexing()
+		} else if (newMode === "local" && oldLocalModel !== this.config.localModel) {
 			void this.startIndexing()
 		}
 
@@ -150,13 +157,14 @@ export class IndexingService implements vscode.Disposable {
 		let loaded = await this.storage.load()
 
 		// Check if model changed — if so, clear index (embeddings are incompatible)
+		const currentModel = getCurrentEmbeddingModel(this.config)
 		const storedModel = this.storage.getMetadata("embeddingModel")
-		if (storedModel && storedModel !== CURRENT_EMBEDDING_MODEL) {
-			console.log(`[Skycode Indexing] Embedding model changed (${storedModel} -> ${CURRENT_EMBEDDING_MODEL}). Clearing index.`)
+		if (storedModel && storedModel !== currentModel) {
+			console.log(`[Skycode Indexing] Embedding model changed (${storedModel} -> ${currentModel}). Clearing index.`)
 			await this.storage.clear()
 			loaded = false
 		}
-		this.storage.setMetadata("embeddingModel", CURRENT_EMBEDDING_MODEL)
+		this.storage.setMetadata("embeddingModel", currentModel)
 		await this.storage.save()
 
 		// Set up file watcher for incremental updates
@@ -254,7 +262,7 @@ export class IndexingService implements vscode.Disposable {
 			}
 
 			const texts = chunks.map((c) => c.content)
-			const embeddings = await this.provider.embed(texts)
+			const embeddings = await this.provider.embed(texts, "passage")
 
 			const rows: ChunkRow[] = chunks.map((c) => ({
 				id: c.id,
@@ -349,7 +357,7 @@ export class IndexingService implements vscode.Disposable {
 
 			// Phase 2: Initialize storage
 			this.storage.beginIndexing(this.provider.id, this.provider.dimensions)
-			this.storage.setMetadata("embeddingModel", CURRENT_EMBEDDING_MODEL)
+			this.storage.setMetadata("embeddingModel", getCurrentEmbeddingModel(this.config))
 
 			// Phase 3: Chunk all files
 			const allChunks: Array<{ chunk: CodeChunk; fileHash: string }> = []
@@ -404,7 +412,7 @@ export class IndexingService implements vscode.Disposable {
 
 				let embeddings: number[][]
 				try {
-					embeddings = await this.provider.embed(texts)
+					embeddings = await this.provider.embed(texts, "passage")
 				} catch (err: any) {
 					console.error("[Skycode Indexing] Embedding error at batch", i, ":", err)
 					// Don't fail entire indexing - skip this batch and continue
@@ -561,7 +569,7 @@ export class IndexingService implements vscode.Disposable {
 
 		let queryVec: number[]
 		try {
-			const embedResult = await this.provider.embed([query])
+			const embedResult = await this.provider.embed([query], "query")
 			queryVec = embedResult[0]
 		} catch (err) {
 			console.warn("[Skycode Search] Query embedding failed:", err)

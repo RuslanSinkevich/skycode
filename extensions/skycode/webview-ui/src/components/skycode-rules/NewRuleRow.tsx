@@ -120,7 +120,7 @@ const NewRuleRow: React.FC<NewRuleRowProps> = ({ isGlobal, ruleType, existingHoo
 			if (ruleType === "multi-step-workflow") {
 				const sanitized = trimmedFilename.replace(/\.(yaml|yml|md|txt)$/i, "")
 				if (!/^[\p{L}\p{N}_-]+$/u.test(sanitized)) {
-					setError("Допустимы только буквы, цифры, дефис и подчёркивание")
+					setError(t("workflow.validationError"))
 					return
 				}
 				const finalFilename = `${sanitized}.yaml`
@@ -254,7 +254,7 @@ const NewRuleRow: React.FC<NewRuleRowProps> = ({ isGlobal, ruleType, existingHoo
 												? t("skycodeRules.skillNameHint")
 												: t("skycodeRules.ruleNameHint")
 									: ruleType === "multi-step-workflow"
-										? "Новый пошаговый workflow..."
+										? t("workflow.newScenario")
 										: ruleType === "workflow"
 											? t("skycodeRules.newWorkflowFile")
 											: ruleType === "skill"

@@ -60,7 +60,7 @@ export class LocalEmbeddingProvider implements EmbeddingProvider {
 		return text.slice(0, LocalEmbeddingProvider.MAX_EMBED_CHARS)
 	}
 
-	async embed(texts: string[]): Promise<number[][]> {
+	async embed(texts: string[], _textType?: "query" | "passage"): Promise<number[][]> {
 		if (texts.length === 0) {
 			return []
 		}

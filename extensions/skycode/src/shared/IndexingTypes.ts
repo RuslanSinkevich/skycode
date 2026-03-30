@@ -6,9 +6,13 @@
 /** Embedding provider mode */
 export type IndexingMode = "off" | "local" | "remote"
 
+/** Local embedding model quality tier */
+export type LocalModelId = "mini" | "base" | "large"
+
 /** Configuration for the indexing system */
 export interface IndexingConfig {
 	mode: IndexingMode
+	localModel: LocalModelId
 	remoteApiUrl: string
 	remoteApiKey: string
 	remoteModel: string
@@ -19,6 +23,7 @@ export interface IndexingConfig {
 /** Default indexing configuration */
 export const DEFAULT_INDEXING_CONFIG: IndexingConfig = {
 	mode: "local",
+	localModel: "mini",
 	remoteApiUrl: "",
 	remoteApiKey: "",
 	remoteModel: "text-embedding-3-small",

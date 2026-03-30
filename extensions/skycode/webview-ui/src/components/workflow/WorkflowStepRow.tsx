@@ -1,6 +1,7 @@
 import { ChevronDownIcon, ChevronRightIcon, GripVerticalIcon, TrashIcon } from "lucide-react"
 import React, { memo, useCallback, useState } from "react"
 import { cn } from "@/lib/utils"
+import { useI18n } from "@/i18n"
 
 export interface WorkflowStepData {
 	name: string
@@ -21,6 +22,7 @@ interface WorkflowStepRowProps {
 
 export const WorkflowStepRow: React.FC<WorkflowStepRowProps> = memo(
 	({ step, index, total, onChange, onMoveUp, onMoveDown, onDelete }) => {
+		const { t } = useI18n()
 		const [isExpanded, setIsExpanded] = useState(true)
 
 		const toggleExpand = useCallback(() => setIsExpanded((p) => !p), [])
@@ -57,7 +59,7 @@ export const WorkflowStepRow: React.FC<WorkflowStepRowProps> = memo(
 						className="flex-1 min-w-0 bg-transparent border-0 outline-0 text-sm text-foreground focus:outline-none"
 						onChange={(e) => updateField("name", e.target.value)}
 						onClick={(e) => e.stopPropagation()}
-						placeholder="Название шага..."
+						placeholder={t("workflow.stepNamePlaceholder")}
 						type="text"
 						value={step.name}
 					/>
@@ -71,9 +73,9 @@ export const WorkflowStepRow: React.FC<WorkflowStepRowProps> = memo(
 							e.stopPropagation()
 							updateField("enabled", !step.enabled)
 						}}
-						title={step.enabled ? "Выключить шаг" : "Включить шаг"}
+						title={step.enabled ? t("workflow.disableStep") : t("workflow.enableStep")}
 						type="button">
-						{step.enabled ? "Вкл" : "Выкл"}
+						{step.enabled ? t("workflow.stepOn") : t("workflow.stepOff")}
 					</button>
 
 					<button
@@ -82,7 +84,7 @@ export const WorkflowStepRow: React.FC<WorkflowStepRowProps> = memo(
 							e.stopPropagation()
 							updateField("visible", !step.visible)
 						}}
-						title={step.visible ? "Тихий режим (скрыть вывод)" : "Показывать вывод"}
+						title={step.visible ? t("workflow.silentMode") : t("workflow.showOutput")}
 						type="button">
 						<span
 							className={cn("codicon", {
@@ -100,7 +102,7 @@ export const WorkflowStepRow: React.FC<WorkflowStepRowProps> = memo(
 							e.stopPropagation()
 							onMoveUp(index)
 						}}
-						title="Вверх"
+						title={t("workflow.moveUp")}
 						type="button">
 						<span className="codicon codicon-arrow-up" style={{ fontSize: 14 }} />
 					</button>
@@ -112,7 +114,7 @@ export const WorkflowStepRow: React.FC<WorkflowStepRowProps> = memo(
 							e.stopPropagation()
 							onMoveDown(index)
 						}}
-						title="Вниз"
+						title={t("workflow.moveDown")}
 						type="button">
 						<span className="codicon codicon-arrow-down" style={{ fontSize: 14 }} />
 					</button>
@@ -123,7 +125,7 @@ export const WorkflowStepRow: React.FC<WorkflowStepRowProps> = memo(
 							e.stopPropagation()
 							onDelete(index)
 						}}
-						title="Удалить шаг"
+						title={t("workflow.deleteStep")}
 						type="button">
 						<TrashIcon size={14} />
 					</button>
@@ -135,7 +137,7 @@ export const WorkflowStepRow: React.FC<WorkflowStepRowProps> = memo(
 						<textarea
 							className="w-full min-h-[80px] bg-(--vscode-input-background) text-(--vscode-input-foreground) border rounded-sm p-2 text-sm resize-y outline-none focus:border-blue-500"
 							onChange={(e) => updateField("prompt", e.target.value)}
-							placeholder="Инструкция для этого шага..."
+							placeholder={t("workflow.stepPromptPlaceholder")}
 							style={{ borderColor: "var(--vscode-input-border)" }}
 							value={step.prompt}
 						/>

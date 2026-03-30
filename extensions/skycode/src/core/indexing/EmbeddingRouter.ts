@@ -22,7 +22,7 @@ export function createEmbeddingProvider(
 ): EmbeddingProvider | null {
 	switch (config.mode) {
 		case "local":
-			return new EmbeddingWorkerManager(extensionPath)
+			return new EmbeddingWorkerManager(extensionPath, config.localModel || "mini")
 
 		case "remote": {
 			if (!config.remoteApiUrl) {

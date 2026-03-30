@@ -1,7 +1,7 @@
 import { PlusIcon } from "lucide-react"
 import React, { useCallback, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
+import { useI18n } from "@/i18n"
 import { WorkflowStepData, WorkflowStepRow } from "./WorkflowStepRow"
 
 export interface WorkflowEditorData {
@@ -24,17 +24,16 @@ const DEFAULT_STEP: WorkflowStepData = {
 	visible: true,
 }
 
-function createDefaultData(): WorkflowEditorData {
-	return {
-		name: "",
-		description: "",
-		requiresInput: true,
-		steps: [{ ...DEFAULT_STEP, name: "Шаг 1" }],
-	}
-}
-
 export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ initial, onSave, onCancel }) => {
-	const [data, setData] = useState<WorkflowEditorData>(initial ?? createDefaultData)
+	const { t } = useI18n()
+	const [data, setData] = useState<WorkflowEditorData>(
+		initial ?? {
+			name: "",
+			description: "",
+			requiresInput: true,
+			steps: [{ ...DEFAULT_STEP, name: t("workflow.defaultStepName", { n: 1 }) }],
+		},
+	)
 
 	const updateField = useCallback(<K extends keyof WorkflowEditorData>(field: K, value: WorkflowEditorData[K]) => {
 		setData((prev) => ({ ...prev, [field]: value }))
@@ -66,9 +65,9 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ initial, onSave,
 	const addStep = useCallback(() => {
 		setData((prev) => ({
 			...prev,
-			steps: [...prev.steps, { ...DEFAULT_STEP, name: `Шаг ${prev.steps.length + 1}` }],
+			steps: [...prev.steps, { ...DEFAULT_STEP, name: t("workflow.defaultStepName", { n: prev.steps.length + 1 }) }],
 		}))
-	}, [])
+	}, [t])
 
 	const canSave = data.name.trim() && data.steps.length > 0 && data.steps.some((s) => s.name.trim() && s.prompt.trim())
 
@@ -85,10 +84,10 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ initial, onSave,
 					className="text-sm opacity-60 hover:opacity-100"
 					onClick={onCancel}
 					type="button">
-					← Назад
+					{t("workflow.back")}
 				</button>
 				<span className="text-sm font-medium flex-1 text-center">
-					{initial ? "Редактирование сценария" : "Новый сценарий"}
+					{initial ? t("workflow.editScenario") : t("workflow.newScenarioTitle")}
 				</span>
 				<div className="w-12" />
 			</div>
@@ -97,11 +96,11 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ initial, onSave,
 			<div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-4">
 				{/* Name */}
 				<div>
-					<label className="text-xs text-description mb-1 block">Название</label>
+					<label className="text-xs text-description mb-1 block">{t("workflow.name")}</label>
 					<input
 						className="w-full bg-(--vscode-input-background) text-(--vscode-input-foreground) border rounded-sm px-2.5 py-1.5 text-sm outline-none focus:border-blue-500"
 						onChange={(e) => updateField("name", e.target.value)}
-						placeholder="Мой сценарий"
+						placeholder={t("workflow.namePlaceholder")}
 						style={{ borderColor: "var(--vscode-input-border)" }}
 						type="text"
 						value={data.name}
@@ -110,11 +109,11 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ initial, onSave,
 
 				{/* Description */}
 				<div>
-					<label className="text-xs text-description mb-1 block">Описание (необязательно)</label>
+					<label className="text-xs text-description mb-1 block">{t("workflow.description")}</label>
 					<input
 						className="w-full bg-(--vscode-input-background) text-(--vscode-input-foreground) border rounded-sm px-2.5 py-1.5 text-sm outline-none focus:border-blue-500"
 						onChange={(e) => updateField("description", e.target.value)}
-						placeholder="Что делает этот сценарий?"
+						placeholder={t("workflow.descriptionPlaceholder")}
 						style={{ borderColor: "var(--vscode-input-border)" }}
 						type="text"
 						value={data.description}
@@ -129,13 +128,13 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ initial, onSave,
 						onChange={(e) => updateField("requiresInput", e.target.checked)}
 						type="checkbox"
 					/>
-					<span className="text-sm">Требует ввод пользователя перед запуском</span>
+					<span className="text-sm">{t("workflow.requiresInput")}</span>
 				</label>
 
 				{/* Steps */}
 				<div>
 					<label className="text-xs text-description mb-2 block">
-						Шаги ({data.steps.length})
+						{t("workflow.steps")} ({data.steps.length})
 					</label>
 					<div className="flex flex-col gap-2">
 						{data.steps.map((step, i) => (
@@ -158,7 +157,7 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ initial, onSave,
 						style={{ borderColor: "var(--vscode-panel-border)" }}
 						type="button">
 						<PlusIcon size={14} />
-						Добавить шаг
+						{t("workflow.addStep")}
 					</button>
 				</div>
 			</div>
@@ -168,10 +167,10 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ initial, onSave,
 				className="flex items-center justify-end gap-2 px-4 py-3 border-t"
 				style={{ borderColor: "var(--vscode-panel-border)" }}>
 				<Button onClick={onCancel} variant="secondary">
-					Отмена
+					{t("workflow.cancel")}
 				</Button>
 				<Button disabled={!canSave} onClick={handleSave}>
-					Сохранить
+					{t("workflow.save")}
 				</Button>
 			</div>
 		</div>

@@ -8,14 +8,19 @@
 import { Worker } from "node:worker_threads"
 import * as path from "node:path"
 import type { EmbeddingProvider } from "../types"
+import type { LocalModelId } from "../../../shared/IndexingTypes"
+import { getModelMeta, type EmbeddingModelMeta } from "../models/EmbeddingModelRegistry"
 
 /** Max chars per text chunk — longer chunks are truncated before sending to the worker */
 const MAX_EMBED_CHARS = 2000
 
 export class EmbeddingWorkerManager implements EmbeddingProvider {
 	readonly id = "local-worker-thread"
-	readonly dimensions = 384
+	get dimensions(): number {
+		return this.modelMeta.dimensions
+	}
 
+	private modelMeta: EmbeddingModelMeta
 	private worker: Worker | null = null
 	private ready = false
 	private readyPromise: Promise<void> | null = null
@@ -28,7 +33,12 @@ export class EmbeddingWorkerManager implements EmbeddingProvider {
 		}
 	>()
 
-	constructor(private readonly extensionPath: string) {}
+	constructor(
+		private readonly extensionPath: string,
+		modelId: LocalModelId = "mini",
+	) {
+		this.modelMeta = getModelMeta(modelId)
+	}
 
 	/**
 	 * Start the worker and load the model.
@@ -111,6 +121,11 @@ export class EmbeddingWorkerManager implements EmbeddingProvider {
 			this.worker.postMessage({
 				type: "init",
 				extensionPath: this.extensionPath,
+				modelId: this.modelMeta.id,
+				huggingFaceId: this.modelMeta.huggingFaceId,
+				dimensions: this.modelMeta.dimensions,
+				requiresPrefix: this.modelMeta.requiresPrefix,
+				allowRemoteModels: this.modelMeta.allowRemoteModels,
 			})
 		})
 
@@ -120,11 +135,11 @@ export class EmbeddingWorkerManager implements EmbeddingProvider {
 	/**
 	 * Compute embeddings for an array of texts.
 	 * Texts longer than MAX_EMBED_CHARS are truncated.
+	 * @param textType "passage" for documents, "query" for search queries (relevant for e5 models)
 	 */
-	async embed(texts: string[]): Promise<number[][]> {
+	async embed(texts: string[], textType?: "query" | "passage"): Promise<number[][]> {
 		if (texts.length === 0) return []
 
-		// Ensure worker is ready
 		if (!this.ready || !this.worker) {
 			await this.start()
 		}
@@ -133,14 +148,13 @@ export class EmbeddingWorkerManager implements EmbeddingProvider {
 			throw new Error("Embedding worker not available")
 		}
 
-		// Truncate long texts before sending to worker (saves IPC overhead)
 		const truncated = texts.map((t) => (t.length > MAX_EMBED_CHARS ? t.slice(0, MAX_EMBED_CHARS) : t))
 
 		const id = this.requestId++
 
 		return new Promise<number[][]>((resolve, reject) => {
 			this.pendingRequests.set(id, { resolve, reject })
-			this.worker!.postMessage({ type: "embed", id, texts: truncated })
+			this.worker!.postMessage({ type: "embed", id, texts: truncated, textType })
 		})
 	}
 

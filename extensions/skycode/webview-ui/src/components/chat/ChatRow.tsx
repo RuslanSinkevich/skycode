@@ -1173,12 +1173,12 @@ export const ChatRowContent = memo(
 								<div className="flex items-center gap-2 py-1.5 px-2 my-1 rounded text-xs text-description border border-dashed"
 									style={{ borderColor: "var(--vscode-panel-border)" }}>
 									<span className="codicon codicon-play text-green-400" style={{ fontSize: 12 }} />
-									<span className="font-medium">
-										Шаг {(stepData.stepIndex ?? 0) + 1}/{stepData.totalSteps ?? "?"}: {stepData.stepName ?? ""}
-									</span>
-									{stepData.silent && (
-										<span className="codicon codicon-eye-closed opacity-50 ml-auto" title="Тихий режим" style={{ fontSize: 12 }} />
-									)}
+								<span className="font-medium">
+									{t("workflow.stepProgress", { current: (stepData.stepIndex ?? 0) + 1, total: stepData.totalSteps ?? "?", name: stepData.stepName ?? "" })}
+								</span>
+								{stepData.silent && (
+									<span className="codicon codicon-eye-closed opacity-50 ml-auto" title={t("workflow.silentModeLabel")} style={{ fontSize: 12 }} />
+								)}
 								</div>
 							)
 						} catch {
