@@ -1,3 +1,5 @@
+> **Русская версия:** [core.md](../ru/architecture/core.md)
+
 # Core Module
 
 Entry point: `extension.ts` → Controller → Task

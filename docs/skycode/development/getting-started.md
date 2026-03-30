@@ -1,3 +1,5 @@
+> **Русская версия:** [getting-started.md](../ru/development/getting-started.md)
+
 # Development Guide
 
 ## Prerequisites

@@ -1,3 +1,5 @@
+> **Русская версия:** [fork-patches.md](../ru/development/fork-patches.md)
+
 # VS Code Fork Patches
 
 All modifications to the VS Code core are marked with `SKYCODE_FORK_BEGIN` / `SKYCODE_FORK_END` or `[SKYCODE]` comments.

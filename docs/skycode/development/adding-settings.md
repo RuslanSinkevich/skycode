@@ -1,3 +1,5 @@
+> **Русская версия:** [adding-settings.md](../ru/development/adding-settings.md)
+
 # Adding Settings
 
 Complete guide to adding a new setting to Skycode AI.

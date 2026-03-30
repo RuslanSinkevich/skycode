@@ -1,3 +1,5 @@
+> **Русская версия:** [context-management.md](../ru/architecture/context-management.md)
+
 # Context Management
 
 How Skycode handles chat history accumulation, when and why context compression happens.

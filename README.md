@@ -8,6 +8,14 @@ Skycode is a fork of VS Code with a deeply integrated AI agent. Unlike extension
   <img src="./docs/skycode/hero-demo.gif" alt="Skycode AI in action" width="900">
 </p>
 
+<p align="center">
+  <a href="https://skycode-ai.ru/en">Website</a> ·
+  <a href="https://skycode-ai.ru/ru">Сайт (RU)</a> ·
+  <a href="#documentation">Docs (EN)</a> ·
+  <a href="./docs/skycode/ru/architecture/overview.md">Docs (RU)</a> ·
+  <a href="https://github.com/RuslanSinkevich/skycode">GitHub</a>
+</p>
+
 ---
 
 ## Features
@@ -141,6 +149,8 @@ Open the Skycode panel in the sidebar → configure your API provider → start 
 ---
 
 ## Documentation
+
+> **Документация на русском:** [docs/skycode/ru/](./docs/skycode/ru/architecture/overview.md)
 
 ### Architecture
 - [Overview](./docs/skycode/architecture/overview.md)

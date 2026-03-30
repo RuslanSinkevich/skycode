@@ -1,3 +1,5 @@
+> **Русская версия:** [network.md](../ru/development/network.md)
+
 # Network Requests & Proxy
 
 ## Important

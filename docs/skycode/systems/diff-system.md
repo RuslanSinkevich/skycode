@@ -1,3 +1,5 @@
+> **Русская версия:** [diff-system.md](../ru/systems/diff-system.md)
+
 # Inline Diff System v4
 
 Cursor-like inline diff system. The AI agent writes changes directly to files, and the user controls them via Accept/Reject buttons rendered in the editor. Per-message snapshots enable precise rollback.

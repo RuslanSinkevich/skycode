@@ -1,3 +1,5 @@
+> **Русская версия:** [mcp.md](../ru/systems/mcp.md)
+
 # Model Context Protocol (MCP)
 
 MCP is a protocol that gives the AI agent access to external tools and resources. An MCP server is a local program that provides a set of **tools** and **resources** to the agent.

@@ -1,3 +1,5 @@
+> **Русская версия:** [indexing-system.md](../ru/systems/indexing-system.md)
+
 # Codebase Indexing System
 
 Semantic indexing for intelligent code search. Enables the AI agent to retrieve relevant context from the entire project before responding.

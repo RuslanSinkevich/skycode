@@ -1,3 +1,5 @@
+> **Русская версия:** [overview.md](../ru/architecture/overview.md)
+
 # Architecture Overview
 
 Skycode AI is a VS Code extension consisting of three major subsystems:

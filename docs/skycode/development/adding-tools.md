@@ -1,3 +1,5 @@
+> **Русская версия:** [adding-tools.md](../ru/development/adding-tools.md)
+
 # Adding Agent Tools
 
 Guide to adding new tools to the Skycode AI agent.
