@@ -119,7 +119,7 @@ const NewRuleRow: React.FC<NewRuleRowProps> = ({ isGlobal, ruleType, existingHoo
 			// Multi-step workflow: force .yaml extension, strip any user-provided extension
 			if (ruleType === "multi-step-workflow") {
 				const sanitized = trimmedFilename.replace(/\.(yaml|yml|md|txt)$/i, "")
-				if (!/^[a-zA-Z0-9_-]+$/.test(sanitized)) {
+				if (!/^[\p{L}\p{N}_-]+$/u.test(sanitized)) {
 					setError("Допустимы только буквы, цифры, дефис и подчёркивание")
 					return
 				}

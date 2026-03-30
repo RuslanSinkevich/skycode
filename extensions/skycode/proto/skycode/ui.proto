@@ -71,6 +71,7 @@ enum SkycodeSay {
   HOOK_OUTPUT_STREAM = 31;
   COMMAND_PERMISSION_DENIED = 32;
   CONDITIONAL_RULES_APPLIED = 33;
+  WORKFLOW_STEP_START = 34;
 }
 
 // Enum for SkycodeSayTool tool types

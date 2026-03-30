@@ -1419,13 +1419,9 @@ export class Task {
 				break
 			}
 
-			nextUserContent = [
-				{
-					type: "text",
-					text: formatResponse.noToolsUsed(this.useNativeToolCalls),
-				},
-			]
-			this.taskState.consecutiveMistakeCount++
+			// Workflow step: if agent responded with text only (no tools, no attempt_completion),
+			// treat the step as complete. Don't loop — prevents infinite text-only cycles.
+			break
 		}
 
 		this.taskState.isWorkflowStep = false
@@ -1439,7 +1435,7 @@ export class Task {
 			return null
 		}
 
-		const slashMatch = task.match(/(^|\s)\/([a-zA-Z0-9_.-]+)(?=\s|$)/)
+		const slashMatch = task.match(/(^|\s)\/([\p{L}\p{N}_.-]+)(?=\s|$)/u)
 		if (!slashMatch) {
 			return null
 		}
@@ -1482,6 +1478,7 @@ export class Task {
 			isAborted: () => this.taskState.abort,
 			initiateStepLoop: (userContent) => this.initiateStepLoop(userContent as SkycodeUserContent[]),
 			sayTaskProgress: (text) => this.sayTaskProgress(text),
+			sayWorkflowStepStart: (data) => this.say("workflow_step_start", JSON.stringify(data)),
 			setSilentStep: (silent) => {
 				this.taskState.isSilentStep = silent
 			},
@@ -3034,6 +3031,12 @@ export class Task {
 				const didToolUse = this.taskState.assistantMessageContent.some((block) => block.type === "tool_use")
 
 				if (!didToolUse) {
+					// Workflow step: text-only response means step is complete — exit immediately
+					if (this.taskState.isWorkflowStep) {
+						this.taskState.stepCompleted = true
+						return true
+					}
+
 					// normal request where tool use is required
 					this.taskState.userMessageContent.push({
 						type: "text",
@@ -3059,8 +3062,13 @@ export class Task {
 					this.taskState.consecutiveMistakeCount = 0
 				}
 
-				const recDidEndLoop = await this.recursivelyMakeSkycodeRequests(nextUserContent)
-				didEndLoop = recDidEndLoop
+				// Workflow step completed (e.g. via attempt_completion) — stop recursion
+				if (this.taskState.isWorkflowStep && this.taskState.stepCompleted) {
+					didEndLoop = true
+				} else {
+					const recDidEndLoop = await this.recursivelyMakeSkycodeRequests(nextUserContent)
+					didEndLoop = recDidEndLoop
+				}
 			} else {
 				// if there's no assistant_responses, that means we got no text or tool_use content blocks from API which we should assume is an error
 				const { model, providerId } = this.getCurrentProviderInfo()

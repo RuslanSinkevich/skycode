@@ -21,7 +21,7 @@ interface WorkflowStepRowProps {
 
 export const WorkflowStepRow: React.FC<WorkflowStepRowProps> = memo(
 	({ step, index, total, onChange, onMoveUp, onMoveDown, onDelete }) => {
-		const [isExpanded, setIsExpanded] = useState(false)
+		const [isExpanded, setIsExpanded] = useState(true)
 
 		const toggleExpand = useCallback(() => setIsExpanded((p) => !p), [])
 
@@ -39,39 +39,50 @@ export const WorkflowStepRow: React.FC<WorkflowStepRowProps> = memo(
 					"border-l-2 border-l-blue-500": step.enabled,
 				})}
 				style={{ borderColor: "var(--vscode-panel-border)" }}>
-				{/* Header */}
-				<div className="flex items-center gap-1.5 px-2 py-1.5 bg-(--vscode-toolbar-hoverBackground)/30">
+				{/* Header — click to expand/collapse */}
+				<div
+					className="flex items-center gap-1.5 px-2 py-1.5 bg-(--vscode-toolbar-hoverBackground)/30 cursor-pointer select-none"
+					onClick={toggleExpand}>
 					<GripVerticalIcon className="shrink-0 opacity-40" size={14} />
 
-					{/* Step number */}
+					{isExpanded ? (
+						<ChevronDownIcon className="shrink-0 opacity-50" size={14} />
+					) : (
+						<ChevronRightIcon className="shrink-0 opacity-50" size={14} />
+					)}
+
 					<span className="text-xs opacity-60 shrink-0 w-4 text-center">{index + 1}</span>
 
-					{/* Step name (editable) */}
 					<input
 						className="flex-1 min-w-0 bg-transparent border-0 outline-0 text-sm text-foreground focus:outline-none"
 						onChange={(e) => updateField("name", e.target.value)}
-						placeholder="Step name..."
+						onClick={(e) => e.stopPropagation()}
+						placeholder="Название шага..."
 						type="text"
 						value={step.name}
 					/>
 
-					{/* Enabled toggle */}
 					<button
 						className={cn("px-1.5 py-0.5 rounded text-xs font-medium shrink-0", {
 							"bg-green-700/30 text-green-400": step.enabled,
 							"bg-gray-700/30 text-gray-500": !step.enabled,
 						})}
-						onClick={() => updateField("enabled", !step.enabled)}
-						title={step.enabled ? "Disable step" : "Enable step"}
+						onClick={(e) => {
+							e.stopPropagation()
+							updateField("enabled", !step.enabled)
+						}}
+						title={step.enabled ? "Выключить шаг" : "Включить шаг"}
 						type="button">
-						{step.enabled ? "On" : "Off"}
+						{step.enabled ? "Вкл" : "Выкл"}
 					</button>
 
-					{/* Visibility toggle */}
 					<button
 						className="p-0.5 opacity-60 hover:opacity-100 shrink-0"
-						onClick={() => updateField("visible", !step.visible)}
-						title={step.visible ? "Switch to silent mode" : "Switch to visible mode"}
+						onClick={(e) => {
+							e.stopPropagation()
+							updateField("visible", !step.visible)
+						}}
+						title={step.visible ? "Тихий режим (скрыть вывод)" : "Показывать вывод"}
 						type="button">
 						<span
 							className={cn("codicon", {
@@ -82,52 +93,49 @@ export const WorkflowStepRow: React.FC<WorkflowStepRowProps> = memo(
 						/>
 					</button>
 
-					{/* Move up */}
 					<button
 						className="p-0.5 opacity-40 hover:opacity-100 shrink-0 disabled:opacity-20"
 						disabled={index === 0}
-						onClick={() => onMoveUp(index)}
-						title="Move up"
+						onClick={(e) => {
+							e.stopPropagation()
+							onMoveUp(index)
+						}}
+						title="Вверх"
 						type="button">
 						<span className="codicon codicon-arrow-up" style={{ fontSize: 14 }} />
 					</button>
 
-					{/* Move down */}
 					<button
 						className="p-0.5 opacity-40 hover:opacity-100 shrink-0 disabled:opacity-20"
 						disabled={index === total - 1}
-						onClick={() => onMoveDown(index)}
-						title="Move down"
+						onClick={(e) => {
+							e.stopPropagation()
+							onMoveDown(index)
+						}}
+						title="Вниз"
 						type="button">
 						<span className="codicon codicon-arrow-down" style={{ fontSize: 14 }} />
 					</button>
 
-					{/* Expand/collapse prompt */}
-					<button
-						className="p-0.5 opacity-60 hover:opacity-100 shrink-0"
-						onClick={toggleExpand}
-						title={isExpanded ? "Collapse prompt" : "Edit prompt"}
-						type="button">
-						{isExpanded ? <ChevronDownIcon size={14} /> : <ChevronRightIcon size={14} />}
-					</button>
-
-					{/* Delete */}
 					<button
 						className="p-0.5 opacity-40 hover:opacity-100 text-red-400 shrink-0"
-						onClick={() => onDelete(index)}
-						title="Delete step"
+						onClick={(e) => {
+							e.stopPropagation()
+							onDelete(index)
+						}}
+						title="Удалить шаг"
 						type="button">
 						<TrashIcon size={14} />
 					</button>
 				</div>
 
-				{/* Expanded prompt textarea */}
+				{/* Prompt textarea */}
 				{isExpanded && (
 					<div className="px-3 pb-2 pt-1">
 						<textarea
 							className="w-full min-h-[80px] bg-(--vscode-input-background) text-(--vscode-input-foreground) border rounded-sm p-2 text-sm resize-y outline-none focus:border-blue-500"
 							onChange={(e) => updateField("prompt", e.target.value)}
-							placeholder="Instructions for this step..."
+							placeholder="Инструкция для этого шага..."
 							style={{ borderColor: "var(--vscode-input-border)" }}
 							value={step.prompt}
 						/>

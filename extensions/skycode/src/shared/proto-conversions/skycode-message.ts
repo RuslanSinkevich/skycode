@@ -104,6 +104,7 @@ function convertSkycodeSayToProtoEnum(say: AppSkycodeSay | undefined): SkycodeSa
 		hook_output_stream: SkycodeSay.HOOK_OUTPUT_STREAM,
 		conditional_rules_applied: SkycodeSay.CONDITIONAL_RULES_APPLIED,
 		generate_explanation: SkycodeSay.GENERATE_EXPLANATION,
+		workflow_step_start: SkycodeSay.WORKFLOW_STEP_START,
 	}
 
 	const result = mapping[say]
@@ -152,6 +153,7 @@ function convertProtoEnumToSkycodeSay(say: SkycodeSay): AppSkycodeSay | undefine
 		[SkycodeSay.HOOK_STATUS]: "hook_status",
 		[SkycodeSay.HOOK_OUTPUT_STREAM]: "hook_output_stream",
 		[SkycodeSay.CONDITIONAL_RULES_APPLIED]: "conditional_rules_applied",
+		[SkycodeSay.WORKFLOW_STEP_START]: "workflow_step_start",
 	}
 
 	return mapping[say]
