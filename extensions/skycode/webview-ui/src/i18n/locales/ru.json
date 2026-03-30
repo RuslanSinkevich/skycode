@@ -1040,7 +1040,7 @@
 	"voice.modelDescription": "Чем выше качество — тем точнее распознавание и пунктуация, но медленнее обработка.",
 	"voice.modelTiny": "Базовое",
 	"voice.modelBase": "Стандартное",
-	"voice.modelSmall": "Улучшенное (Pro)",
+	"voice.modelSmall": "Улучшенное",
 	"voice.setupRequired": "Нажмите для настройки голосового ввода",
 	"voice.authRequired": "Для загрузки компонентов необходимо войти в аккаунт Skycode.",
 	"voice.signIn": "Войти",

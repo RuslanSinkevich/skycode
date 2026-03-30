@@ -16,8 +16,8 @@ interface VoiceSectionProps {
 
 const WHISPER_MODELS = [
 	{ id: "tiny", labelKey: "voice.modelTiny", requiresAuth: false, locked: false },
-	{ id: "base", labelKey: "voice.modelBase", requiresAuth: true, locked: false },
-	{ id: "small", labelKey: "voice.modelSmall", requiresAuth: true, locked: true },
+	{ id: "base", labelKey: "voice.modelBase", requiresAuth: false, locked: false },
+	{ id: "small", labelKey: "voice.modelSmall", requiresAuth: false, locked: false },
 ]
 
 const VoiceSection = ({ renderSectionHeader }: VoiceSectionProps) => {

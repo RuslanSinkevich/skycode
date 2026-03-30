@@ -1040,7 +1040,7 @@
 	"voice.modelDescription": "Higher quality means more accurate recognition and punctuation, but slower processing.",
 	"voice.modelTiny": "Basic",
 	"voice.modelBase": "Standard",
-	"voice.modelSmall": "Enhanced (Pro)",
+	"voice.modelSmall": "Enhanced",
 	"voice.setupRequired": "Click to set up voice input",
 	"voice.authRequired": "Please sign in to your Skycode account to download components.",
 	"voice.signIn": "Sign In",
