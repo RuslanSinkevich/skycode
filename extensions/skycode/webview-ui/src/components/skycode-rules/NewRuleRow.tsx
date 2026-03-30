@@ -116,6 +116,31 @@ const NewRuleRow: React.FC<NewRuleRowProps> = ({ isGlobal, ruleType, existingHoo
 				return
 			}
 
+			// Multi-step workflow: force .yaml extension, strip any user-provided extension
+			if (ruleType === "multi-step-workflow") {
+				const sanitized = trimmedFilename.replace(/\.(yaml|yml|md|txt)$/i, "")
+				if (!/^[a-zA-Z0-9_-]+$/.test(sanitized)) {
+					setError("Допустимы только буквы, цифры, дефис и подчёркивание")
+					return
+				}
+				const finalFilename = `${sanitized}.yaml`
+				try {
+					await FileServiceClient.createRuleFile(
+						RuleFileRequest.create({
+							isGlobal,
+							filename: finalFilename,
+							type: "workflow",
+						}),
+					)
+				} catch (err) {
+					console.error("Error creating multi-step workflow:", err)
+				}
+				setFilename("")
+				setError(null)
+				setIsExpanded(false)
+				return
+			}
+
 			const extension = getExtension(trimmedFilename)
 
 			if (!isValidExtension(extension)) {
@@ -221,16 +246,20 @@ const NewRuleRow: React.FC<NewRuleRowProps> = ({ isGlobal, ruleType, existingHoo
 							onChange={(e) => setFilename(e.target.value)}
 							placeholder={
 								isExpanded
-									? ruleType === "workflow"
-										? t("skycodeRules.workflowNameHint")
-										: ruleType === "skill"
-											? t("skycodeRules.skillNameHint")
-											: t("skycodeRules.ruleNameHint")
-									: ruleType === "workflow"
-										? t("skycodeRules.newWorkflowFile")
-										: ruleType === "skill"
-											? t("skycodeRules.newSkill")
-											: t("skycodeRules.newRuleFile")
+									? ruleType === "multi-step-workflow"
+										? "deploy, review, test..."
+										: ruleType === "workflow"
+											? t("skycodeRules.workflowNameHint")
+											: ruleType === "skill"
+												? t("skycodeRules.skillNameHint")
+												: t("skycodeRules.ruleNameHint")
+									: ruleType === "multi-step-workflow"
+										? "Новый пошаговый workflow..."
+										: ruleType === "workflow"
+											? t("skycodeRules.newWorkflowFile")
+											: ruleType === "skill"
+												? t("skycodeRules.newSkill")
+												: t("skycodeRules.newRuleFile")
 							}
 							ref={inputRef}
 							type="text"

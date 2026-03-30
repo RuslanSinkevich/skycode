@@ -229,13 +229,19 @@ const SkycodeRulesToggleModal: React.FC = () => {
 		.map(([path, enabled]): [string, boolean] => [path, enabled as boolean])
 		.sort(([a], [b]) => a.localeCompare(b))
 
-	const localWorkflows = Object.entries(localWorkflowToggles || {})
-		.map(([path, enabled]): [string, boolean] => [path, enabled as boolean])
-		.sort(([a], [b]) => a.localeCompare(b))
+	const isYamlPath = (p: string) => /\.(yaml|yml)$/i.test(p)
 
-	const globalWorkflows = Object.entries(globalWorkflowToggles || {})
+	const allLocalWorkflows = Object.entries(localWorkflowToggles || {})
 		.map(([path, enabled]): [string, boolean] => [path, enabled as boolean])
 		.sort(([a], [b]) => a.localeCompare(b))
+	const localWorkflows = allLocalWorkflows.filter(([p]) => !isYamlPath(p))
+	const localMultiStepWorkflows = allLocalWorkflows.filter(([p]) => isYamlPath(p))
+
+	const allGlobalWorkflows = Object.entries(globalWorkflowToggles || {})
+		.map(([path, enabled]): [string, boolean] => [path, enabled as boolean])
+		.sort(([a], [b]) => a.localeCompare(b))
+	const globalWorkflows = allGlobalWorkflows.filter(([p]) => !isYamlPath(p))
+	const globalMultiStepWorkflows = allGlobalWorkflows.filter(([p]) => isYamlPath(p))
 
 	// Get remote rules and workflows from remote config
 	const remoteGlobalRules = remoteConfigSettings.remoteGlobalRules || []
@@ -673,16 +679,46 @@ const SkycodeRulesToggleModal: React.FC = () => {
 									</div>
 								)}
 
-								{/* Global Workflows Section */}
+								{/* Multi-step Workflows Section */}
 								<div className="mb-3">
-									<div className="text-sm font-normal mb-2">{t("skycodeRules.globalWorkflows")}</div>
-
-									{/* File-based Global Workflows */}
+									<div className="text-sm font-normal mb-2 flex items-center gap-1.5">
+										<span className="codicon codicon-zap text-yellow-400" style={{ fontSize: 13 }} />
+										Пошаговые workflows
+									</div>
+									<div className="text-xs text-description mb-2">
+										Автоматические пошаговые сценарии. Агент выполнит каждый шаг по очереди.
+									</div>
 									<RulesToggleList
 										isGlobal={true}
 										listGap="small"
 										onEditWorkflow={handleEditWorkflow}
 										onRunWorkflow={handleRunWorkflow}
+										rules={globalMultiStepWorkflows}
+										ruleType={"workflow"}
+										showNewRule={false}
+										showNoRules={false}
+										toggleRule={(rulePath, enabled) => toggleWorkflow(true, rulePath, enabled)}
+									/>
+									<RulesToggleList
+										isGlobal={false}
+										listGap="small"
+										onEditWorkflow={handleEditWorkflow}
+										onRunWorkflow={handleRunWorkflow}
+										rules={localMultiStepWorkflows}
+										ruleType={"workflow"}
+										showNewRule={false}
+										showNoRules={false}
+										toggleRule={(rulePath, enabled) => toggleWorkflow(false, rulePath, enabled)}
+									/>
+									<NewRuleRow isGlobal={false} ruleType="multi-step-workflow" />
+								</div>
+
+								{/* Global Workflows Section */}
+								<div className="mb-3">
+									<div className="text-sm font-normal mb-2">{t("skycodeRules.globalWorkflows")}</div>
+									<RulesToggleList
+										isGlobal={true}
+										listGap="small"
 										rules={globalWorkflows}
 										ruleType={"workflow"}
 										showNewRule={true}
@@ -697,8 +733,6 @@ const SkycodeRulesToggleModal: React.FC = () => {
 									<RulesToggleList
 										isGlobal={false}
 										listGap="small"
-										onEditWorkflow={handleEditWorkflow}
-										onRunWorkflow={handleRunWorkflow}
 										rules={localWorkflows}
 										ruleType={"workflow"}
 										showNewRule={true}
