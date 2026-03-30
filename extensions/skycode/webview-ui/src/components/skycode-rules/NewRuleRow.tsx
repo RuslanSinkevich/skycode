@@ -61,6 +61,9 @@ const NewRuleRow: React.FC<NewRuleRowProps> = ({ isGlobal, ruleType, existingHoo
 	}
 
 	const isValidExtension = (ext: string): boolean => {
+		if (ruleType === "workflow") {
+			return ext === "" || ext === ".md" || ext === ".txt" || ext === ".yaml" || ext === ".yml"
+		}
 		return ext === "" || ext === ".md" || ext === ".txt"
 	}
 
@@ -107,6 +110,31 @@ const NewRuleRow: React.FC<NewRuleRowProps> = ({ isGlobal, ruleType, existingHoo
 					console.error("Error creating skill:", err)
 				}
 
+				setFilename("")
+				setError(null)
+				setIsExpanded(false)
+				return
+			}
+
+			// Multi-step workflow: force .yaml extension, strip any user-provided extension
+			if (ruleType === "multi-step-workflow") {
+				const sanitized = trimmedFilename.replace(/\.(yaml|yml|md|txt)$/i, "")
+				if (!/^[\p{L}\p{N}_-]+$/u.test(sanitized)) {
+					setError("Допустимы только буквы, цифры, дефис и подчёркивание")
+					return
+				}
+				const finalFilename = `${sanitized}.yaml`
+				try {
+					await FileServiceClient.createRuleFile(
+						RuleFileRequest.create({
+							isGlobal,
+							filename: finalFilename,
+							type: "workflow",
+						}),
+					)
+				} catch (err) {
+					console.error("Error creating multi-step workflow:", err)
+				}
 				setFilename("")
 				setError(null)
 				setIsExpanded(false)
@@ -218,16 +246,20 @@ const NewRuleRow: React.FC<NewRuleRowProps> = ({ isGlobal, ruleType, existingHoo
 							onChange={(e) => setFilename(e.target.value)}
 							placeholder={
 								isExpanded
-									? ruleType === "workflow"
-										? t("skycodeRules.workflowNameHint")
-										: ruleType === "skill"
-											? t("skycodeRules.skillNameHint")
-											: t("skycodeRules.ruleNameHint")
-									: ruleType === "workflow"
-										? t("skycodeRules.newWorkflowFile")
-										: ruleType === "skill"
-											? t("skycodeRules.newSkill")
-											: t("skycodeRules.newRuleFile")
+									? ruleType === "multi-step-workflow"
+										? "deploy, review, test..."
+										: ruleType === "workflow"
+											? t("skycodeRules.workflowNameHint")
+											: ruleType === "skill"
+												? t("skycodeRules.skillNameHint")
+												: t("skycodeRules.ruleNameHint")
+									: ruleType === "multi-step-workflow"
+										? "Новый пошаговый workflow..."
+										: ruleType === "workflow"
+											? t("skycodeRules.newWorkflowFile")
+											: ruleType === "skill"
+												? t("skycodeRules.newSkill")
+												: t("skycodeRules.newRuleFile")
 							}
 							ref={inputRef}
 							type="text"

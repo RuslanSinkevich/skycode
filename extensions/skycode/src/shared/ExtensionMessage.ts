@@ -144,6 +144,8 @@ export interface ExtensionState {
 	// Free-trial gate
 	freeRequestCount?: number
 	freeRequestLimit?: number
+	// Multi-step workflow
+	activeWorkflowName?: string
 }
 
 export interface SkycodeMessage {
@@ -220,6 +222,7 @@ export type SkycodeSay =
 	| "hook_status"
 	| "hook_output_stream"
 	| "conditional_rules_applied"
+	| "workflow_step_start"
 
 export interface SkycodeSayTool {
 	tool:

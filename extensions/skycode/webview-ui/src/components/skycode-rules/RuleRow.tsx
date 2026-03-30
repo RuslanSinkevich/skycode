@@ -1,7 +1,7 @@
 import { DeleteSkillRequest, RuleFileRequest } from "@shared/proto/index.skycode"
 import { StringRequest } from "@shared/proto/skycode/common"
 import { REMOTE_URI_SCHEME } from "@shared/remote-config/constants"
-import { EyeIcon, InfoIcon, PenIcon, Trash2Icon } from "lucide-react"
+import { EyeIcon, InfoIcon, PenIcon, PlayIcon, Trash2Icon, ZapIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -38,7 +38,26 @@ const RuleRow: React.FC<{
 	isRemote?: boolean
 	alwaysEnabled?: boolean
 	onDeleteSkill?: () => void
-}> = ({ rulePath, enabled, isGlobal, toggleRule, ruleType, isRemote = false, alwaysEnabled = false, onDeleteSkill }) => {
+	isMultiStep?: boolean
+	multiStepName?: string
+	stepCount?: number
+	onEditWorkflow?: (rulePath: string) => void
+	onRunWorkflow?: (rulePath: string) => void
+}> = ({
+	rulePath,
+	enabled,
+	isGlobal,
+	toggleRule,
+	ruleType,
+	isRemote = false,
+	alwaysEnabled = false,
+	onDeleteSkill,
+	isMultiStep = false,
+	multiStepName,
+	stepCount,
+	onEditWorkflow,
+	onRunWorkflow,
+}) => {
 	const { t } = useI18n()
 	const displayName = getDisplayNameFromPath(rulePath)
 	const skillDisplayName = getSkillDisplayNameFromSkillMdPath(rulePath)
@@ -134,18 +153,27 @@ const RuleRow: React.FC<{
 	return (
 		<div className="mb-2.5">
 			<div className="flex items-center px-2 py-4 rounded bg-text-block-background max-h-4">
-				<span className="flex-1 overflow-hidden break-all whitespace-normal flex items-center mr-1" title={rulePath}>
-					{getRuleTypeIcon() && <span className="mr-1.5">{getRuleTypeIcon()}</span>}
-					<span className="ph-no-capture">{finalDisplayName}</span>
-					{ruleType === "agents" && (
-						<Tooltip>
-							<TooltipTrigger asChild className="cursor-help">
-								<InfoIcon className="ml-1.5 opacity-70 size-[0.85rem]" />
-							</TooltipTrigger>
-							<TooltipContent>{t("skycodeRules.agentsTooltip")}</TooltipContent>
-						</Tooltip>
+			<span className="flex-1 overflow-hidden break-all whitespace-normal flex items-center mr-1" title={rulePath}>
+				{isMultiStep ? (
+					<ZapIcon className="mr-1.5 shrink-0 text-yellow-400" size={14} />
+				) : (
+					getRuleTypeIcon() && <span className="mr-1.5">{getRuleTypeIcon()}</span>
+				)}
+				<span className="flex flex-col min-w-0">
+					<span className="ph-no-capture">{isMultiStep && multiStepName ? multiStepName : finalDisplayName}</span>
+					{isMultiStep && stepCount !== undefined && (
+						<span className="text-xs opacity-50">{stepCount} steps</span>
 					)}
 				</span>
+				{ruleType === "agents" && (
+					<Tooltip>
+						<TooltipTrigger asChild className="cursor-help">
+							<InfoIcon className="ml-1.5 opacity-70 size-[0.85rem]" />
+						</TooltipTrigger>
+						<TooltipContent>{t("skycodeRules.agentsTooltip")}</TooltipContent>
+					</Tooltip>
+				)}
+			</span>
 
 				{/* Toggle Switch */}
 				<div className="flex items-center space-x-2 gap-2">
@@ -157,14 +185,35 @@ const RuleRow: React.FC<{
 						onClick={() => toggleRule(rulePath, !enabled)}
 						title={isDisabled ? t("skycodeRules.ruleRequiredCannotDisable") : undefined}
 					/>
-					<Button
-						aria-label={isRemote ? t("skycodeRules.viewRuleFile") : t("skycodeRules.editRuleFile")}
-						onClick={handleEditClick}
-						size="xs"
-						title={isRemote ? t("skycodeRules.viewRuleFileReadOnly") : t("skycodeRules.editRuleFile")}
-						variant="icon">
-						{isRemote ? <EyeIcon /> : <PenIcon />}
-					</Button>
+					{isMultiStep && onEditWorkflow ? (
+						<Button
+							aria-label="Edit workflow"
+							onClick={() => onEditWorkflow(rulePath)}
+							size="xs"
+							title="Edit workflow steps"
+							variant="icon">
+							<PenIcon />
+						</Button>
+					) : (
+						<Button
+							aria-label={isRemote ? t("skycodeRules.viewRuleFile") : t("skycodeRules.editRuleFile")}
+							onClick={handleEditClick}
+							size="xs"
+							title={isRemote ? t("skycodeRules.viewRuleFileReadOnly") : t("skycodeRules.editRuleFile")}
+							variant="icon">
+							{isRemote ? <EyeIcon /> : <PenIcon />}
+						</Button>
+					)}
+					{isMultiStep && onRunWorkflow && (
+						<Button
+							aria-label="Run workflow"
+							onClick={() => onRunWorkflow(rulePath)}
+							size="xs"
+							title="Run this workflow"
+							variant="icon">
+							<PlayIcon className="text-green-400" />
+						</Button>
+					)}
 					<Button
 						aria-label={t("skycodeRules.deleteRuleFile")}
 						disabled={isRemote}

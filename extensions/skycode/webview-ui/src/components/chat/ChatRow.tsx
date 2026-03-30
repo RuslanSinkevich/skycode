@@ -1165,7 +1165,26 @@ export const ChatRowContent = memo(
 							</div>
 						)
 					case "task_progress":
-						return <InvisibleSpacer /> // task_progress messages should be displayed in TaskHeader only, not in chat
+						return <InvisibleSpacer />
+					case "workflow_step_start": {
+						try {
+							const stepData = JSON.parse(message.text || "{}")
+							return (
+								<div className="flex items-center gap-2 py-1.5 px-2 my-1 rounded text-xs text-description border border-dashed"
+									style={{ borderColor: "var(--vscode-panel-border)" }}>
+									<span className="codicon codicon-play text-green-400" style={{ fontSize: 12 }} />
+									<span className="font-medium">
+										Шаг {(stepData.stepIndex ?? 0) + 1}/{stepData.totalSteps ?? "?"}: {stepData.stepName ?? ""}
+									</span>
+									{stepData.silent && (
+										<span className="codicon codicon-eye-closed opacity-50 ml-auto" title="Тихий режим" style={{ fontSize: 12 }} />
+									)}
+								</div>
+							)
+						} catch {
+							return <InvisibleSpacer />
+						}
+					}
 					default:
 						return (
 							<div>

@@ -93,6 +93,12 @@ service FileService {
 
   // Deletes an existing skill directory
   rpc deleteSkillFile(DeleteSkillRequest) returns (SkillsToggles);
+
+  // Loads a multi-step workflow definition from a .yaml file
+  rpc loadWorkflowDefinition(StringRequest) returns (WorkflowDefinitionResponse);
+
+  // Saves a multi-step workflow definition to a .yaml file
+  rpc saveWorkflowDefinition(SaveWorkflowDefinitionRequest) returns (Empty);
 }
 
 // Response for refreshRules operation
@@ -331,4 +337,33 @@ message DeleteSkillRequest {
   Metadata metadata = 1;
   string skill_path = 2; // Path to the skill directory
   bool is_global = 3; // Whether this is a global or workspace skill
+}
+
+// A single step in a multi-step workflow
+message WorkflowStepProto {
+  string name = 1;
+  string prompt = 2;
+  bool enabled = 3;
+  bool visible = 4;
+}
+
+// Response containing a parsed workflow definition
+message WorkflowDefinitionResponse {
+  string name = 1;
+  string description = 2;
+  int32 version = 3;
+  bool requires_input = 4;
+  repeated WorkflowStepProto steps = 5;
+  string file_path = 6;
+}
+
+// Request to save a workflow definition
+message SaveWorkflowDefinitionRequest {
+  Metadata metadata = 1;
+  string file_path = 2;
+  string name = 3;
+  string description = 4;
+  int32 version = 5;
+  bool requires_input = 6;
+  repeated WorkflowStepProto steps = 7;
 }

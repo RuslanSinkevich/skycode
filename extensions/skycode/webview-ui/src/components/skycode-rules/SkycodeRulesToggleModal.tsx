@@ -2,6 +2,7 @@ import { EmptyRequest } from "@shared/proto/skycode/common"
 import {
 	RefreshedRules,
 	RuleScope,
+	SaveWorkflowDefinitionRequest,
 	SkycodeRulesToggles,
 	SkillInfo,
 	ToggleAgentsRuleRequest,
@@ -11,16 +12,19 @@ import {
 	ToggleWindsurfRuleRequest,
 	ToggleWorkflowRequest,
 } from "@shared/proto/skycode/file"
+import { NewTaskRequest } from "@shared/proto/skycode/task"
+import { StringRequest } from "@shared/proto/skycode/common"
 import { VSCodeButton, VSCodeLink } from "@vscode/webview-ui-toolkit/react"
-import React, { useEffect, useRef, useState } from "react"
+import React, { useCallback, useEffect, useRef, useState } from "react"
 import { useClickAway, useWindowSize } from "react-use"
 import styled from "styled-components"
 import PopupModalContainer from "@/components/common/PopupModalContainer"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
-import { FileServiceClient } from "@/services/grpc-client"
+import { FileServiceClient, TaskServiceClient } from "@/services/grpc-client"
 import { isMacOSOrLinux } from "@/utils/platformUtils"
+import { WorkflowEditor, type WorkflowEditorData } from "@/components/workflow/WorkflowEditor"
 import HookRow from "./HookRow"
 import NewRuleRow from "./NewRuleRow"
 import RuleRow from "./RuleRow"
@@ -69,7 +73,8 @@ const SkycodeRulesToggleModal: React.FC = () => {
 	const { width: viewportWidth, height: viewportHeight } = useWindowSize()
 	const [arrowPosition, setArrowPosition] = useState(0)
 	const [menuPosition, setMenuPosition] = useState(0)
-	const [currentView, setCurrentView] = useState<"rules" | "workflows" | "hooks" | "skills">("rules")
+	const [currentView, setCurrentView] = useState<"rules" | "workflows" | "scenarios" | "hooks" | "skills">("rules")
+	const [editingWorkflow, setEditingWorkflow] = useState<{ filePath: string; data: WorkflowEditorData } | null>(null)
 
 	// Auto-switch to rules tab if hooks become disabled while viewing hooks tab
 	useEffect(() => {
@@ -227,12 +232,26 @@ const SkycodeRulesToggleModal: React.FC = () => {
 		.map(([path, enabled]): [string, boolean] => [path, enabled as boolean])
 		.sort(([a], [b]) => a.localeCompare(b))
 
+	const isYamlPath = (p: string) => /\.(yaml|yml)$/i.test(p)
+
 	const localWorkflows = Object.entries(localWorkflowToggles || {})
 		.map(([path, enabled]): [string, boolean] => [path, enabled as boolean])
+		.filter(([p]) => !isYamlPath(p))
 		.sort(([a], [b]) => a.localeCompare(b))
 
 	const globalWorkflows = Object.entries(globalWorkflowToggles || {})
 		.map(([path, enabled]): [string, boolean] => [path, enabled as boolean])
+		.filter(([p]) => !isYamlPath(p))
+		.sort(([a], [b]) => a.localeCompare(b))
+
+	const localScenarios = Object.entries(localWorkflowToggles || {})
+		.map(([path, enabled]): [string, boolean] => [path, enabled as boolean])
+		.filter(([p]) => isYamlPath(p))
+		.sort(([a], [b]) => a.localeCompare(b))
+
+	const globalScenarios = Object.entries(globalWorkflowToggles || {})
+		.map(([path, enabled]): [string, boolean] => [path, enabled as boolean])
+		.filter(([p]) => isYamlPath(p))
 		.sort(([a], [b]) => a.localeCompare(b))
 
 	// Get remote rules and workflows from remote config
@@ -428,6 +447,65 @@ const SkycodeRulesToggleModal: React.FC = () => {
 			})
 	}
 
+	const handleRunWorkflow = useCallback(
+		(rulePath: string) => {
+			const fileName = rulePath.replace(/^.*[/\\]/, "").replace(/\.(yaml|yml|md|txt)$/i, "")
+			TaskServiceClient.newTask(NewTaskRequest.create({ text: `/${fileName}`, images: [] })).catch((err) =>
+				console.error("Failed to run workflow:", err),
+			)
+			setIsVisible(false)
+		},
+		[],
+	)
+
+	const handleEditWorkflow = useCallback(
+		(rulePath: string) => {
+			FileServiceClient.loadWorkflowDefinition(StringRequest.create({ value: rulePath }))
+				.then((resp) => {
+					setEditingWorkflow({
+						filePath: resp.filePath || rulePath,
+						data: {
+							name: resp.name,
+							description: resp.description || "",
+							requiresInput: resp.requiresInput,
+							steps: (resp.steps || []).map((s) => ({
+								name: s.name,
+								prompt: s.prompt,
+								enabled: s.enabled,
+								visible: s.visible,
+							})),
+						},
+					})
+				})
+				.catch((err) => console.error("Failed to load workflow:", err))
+		},
+		[],
+	)
+
+	const handleSaveWorkflow = useCallback(
+		(data: WorkflowEditorData) => {
+			if (!editingWorkflow) return
+			FileServiceClient.saveWorkflowDefinition(
+				SaveWorkflowDefinitionRequest.create({
+					filePath: editingWorkflow.filePath,
+					name: data.name,
+					description: data.description,
+					version: 1,
+					requiresInput: data.requiresInput,
+					steps: data.steps.map((s) => ({
+						name: s.name,
+						prompt: s.prompt,
+						enabled: s.enabled,
+						visible: s.visible,
+					})),
+				}),
+			)
+				.then(() => setEditingWorkflow(null))
+				.catch((err) => console.error("Failed to save workflow:", err))
+		},
+		[editingWorkflow],
+	)
+
 	// Close modal when clicking outside
 	useClickAway(modalRef, () => {
 		setIsVisible(false)
@@ -464,6 +542,14 @@ const SkycodeRulesToggleModal: React.FC = () => {
 
 			{isVisible && (
 				<PopupModalContainer $arrowPosition={arrowPosition} $menuPosition={menuPosition}>
+					{editingWorkflow ? (
+						<WorkflowEditor
+							initial={editingWorkflow.data}
+							onCancel={() => setEditingWorkflow(null)}
+							onSave={handleSaveWorkflow}
+						/>
+					) : (
+					<>
 					{/* Fixed header section - tabs and description */}
 					<div className="flex-shrink-0 px-2 pt-0">
 						{/* Tabs container */}
@@ -479,12 +565,15 @@ const SkycodeRulesToggleModal: React.FC = () => {
 									gap: "1px",
 									borderBottom: "1px solid var(--vscode-panel-border)",
 								}}>
-								<TabButton isActive={currentView === "rules"} onClick={() => setCurrentView("rules")}>
-									{t("skycodeRules.rules")}
-								</TabButton>
-								<TabButton isActive={currentView === "workflows"} onClick={() => setCurrentView("workflows")}>
-									{t("skycodeRules.workflows")}
-								</TabButton>
+							<TabButton isActive={currentView === "rules"} onClick={() => setCurrentView("rules")}>
+								{t("skycodeRules.rules")}
+							</TabButton>
+							<TabButton isActive={currentView === "workflows"} onClick={() => setCurrentView("workflows")}>
+								{t("skycodeRules.workflows")}
+							</TabButton>
+							<TabButton isActive={currentView === "scenarios"} onClick={() => setCurrentView("scenarios")}>
+								Сценарии
+							</TabButton>
 								{hooksEnabled && (
 									<TabButton isActive={currentView === "hooks"} onClick={() => setCurrentView("hooks")}>
 										{t("skycodeRules.hooks")}
@@ -526,6 +615,11 @@ const SkycodeRulesToggleModal: React.FC = () => {
 									<VSCodeLink className="text-xs inline" href="https://skycode-ai.ru/ru/docs/skycode-rules">
 										{t("skycodeRules.docs")}
 									</VSCodeLink>
+								</p>
+							) : currentView === "scenarios" ? (
+								<p>
+									Пошаговые сценарии — агент выполняет шаги по очереди автоматически.
+									Создайте сценарий, нажмите ▶ для запуска.
 								</p>
 							) : currentView === "skills" ? (
 								<p>
@@ -654,8 +748,6 @@ const SkycodeRulesToggleModal: React.FC = () => {
 								{/* Global Workflows Section */}
 								<div className="mb-3">
 									<div className="text-sm font-normal mb-2">{t("skycodeRules.globalWorkflows")}</div>
-
-									{/* File-based Global Workflows */}
 									<RulesToggleList
 										isGlobal={true}
 										listGap="small"
@@ -679,6 +771,47 @@ const SkycodeRulesToggleModal: React.FC = () => {
 										showNoRules={false}
 										toggleRule={(rulePath, enabled) => toggleWorkflow(false, rulePath, enabled)}
 									/>
+								</div>
+							</>
+						) : currentView === "scenarios" ? (
+							<>
+								{/* Global Scenarios */}
+								{globalScenarios.length > 0 && (
+									<div className="mb-3">
+										<div className="text-sm font-normal mb-2">{t("skycodeRules.globalWorkflows")}</div>
+										<RulesToggleList
+											isGlobal={true}
+											listGap="small"
+											onEditWorkflow={handleEditWorkflow}
+											onRunWorkflow={handleRunWorkflow}
+											rules={globalScenarios}
+											ruleType={"workflow"}
+											showNewRule={false}
+											showNoRules={false}
+											toggleRule={(rulePath, enabled) => toggleWorkflow(true, rulePath, enabled)}
+										/>
+									</div>
+								)}
+
+								{/* Local Scenarios */}
+								<div className="mb-3">
+									<div className="text-sm font-normal mb-2">{t("skycodeRules.workspaceWorkflows")}</div>
+									<RulesToggleList
+										isGlobal={false}
+										listGap="small"
+										onEditWorkflow={handleEditWorkflow}
+										onRunWorkflow={handleRunWorkflow}
+										rules={localScenarios}
+										ruleType={"workflow"}
+										showNewRule={false}
+										showNoRules={false}
+										toggleRule={(rulePath, enabled) => toggleWorkflow(false, rulePath, enabled)}
+									/>
+								</div>
+
+								{/* New scenario */}
+								<div className="-mb-2.5">
+									<NewRuleRow isGlobal={false} ruleType="multi-step-workflow" />
 								</div>
 							</>
 						) : currentView === "hooks" ? (
@@ -819,6 +952,8 @@ const SkycodeRulesToggleModal: React.FC = () => {
 							</>
 						) : null}
 					</div>
+				</>
+					)}
 				</PopupModalContainer>
 			)}
 		</div>

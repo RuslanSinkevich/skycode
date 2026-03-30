@@ -1,6 +1,10 @@
 import NewRuleRow from "./NewRuleRow"
 import RuleRow from "./RuleRow"
 
+function isMultiStepPath(filePath: string): boolean {
+	return /\.(yaml|yml)$/i.test(filePath)
+}
+
 const RulesToggleList = ({
 	rules,
 	toggleRule,
@@ -11,6 +15,8 @@ const RulesToggleList = ({
 	showNoRules,
 	isRemote = false,
 	alwaysEnabledMap = {},
+	onEditWorkflow,
+	onRunWorkflow,
 }: {
 	rules: [string, boolean][]
 	toggleRule: (rulePath: string, enabled: boolean) => void
@@ -21,6 +27,8 @@ const RulesToggleList = ({
 	showNoRules: boolean
 	isRemote?: boolean
 	alwaysEnabledMap?: Record<string, boolean>
+	onEditWorkflow?: (rulePath: string) => void
+	onRunWorkflow?: (rulePath: string) => void
 }) => {
 	const gapClasses = {
 		small: "gap-0",
@@ -34,18 +42,24 @@ const RulesToggleList = ({
 		<div className={`flex flex-col ${gapClass}`}>
 			{rules.length > 0 ? (
 				<>
-					{rules.map(([rulePath, enabled]) => (
+				{rules.map(([rulePath, enabled]) => {
+					const multiStep = ruleType === "workflow" && isMultiStepPath(rulePath)
+					return (
 						<RuleRow
 							alwaysEnabled={alwaysEnabledMap[rulePath]}
 							enabled={enabled}
 							isGlobal={isGlobal}
+							isMultiStep={multiStep}
 							isRemote={isRemote}
 							key={rulePath}
+							onEditWorkflow={multiStep ? onEditWorkflow : undefined}
+							onRunWorkflow={multiStep ? onRunWorkflow : undefined}
 							rulePath={rulePath}
 							ruleType={ruleType}
 							toggleRule={toggleRule}
 						/>
-					))}
+					)
+				})}
 					{showNewRule && <NewRuleRow isGlobal={isGlobal} ruleType={ruleType} />}
 				</>
 			) : (

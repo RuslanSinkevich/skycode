@@ -68,4 +68,9 @@ export class TaskState {
 	// Auto-context summarization
 	currentlySummarizing: boolean = false
 	lastAutoCompactTriggerIndex?: number
+
+	// Multi-step workflow
+	isWorkflowStep = false
+	stepCompleted = false
+	isSilentStep = false
 }

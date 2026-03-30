@@ -159,6 +159,13 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		// Run TaskComplete hook after task completion
 		await this.runTaskCompleteHook(config, block)
 
+		// Multi-step workflow: signal step completion and return immediately
+		// without waiting for user input — the orchestrator will start the next step.
+		if (config.taskState.isWorkflowStep) {
+			config.taskState.stepCompleted = true
+			return "[attempt_completion] Result: Done"
+		}
+
 		// [SKYCODE-SKYCODE] Cursor-style: show completion as info, wait for user's next message
 		// ask("completion_result") still used to pause the loop and wait for user input,
 		// but now it returns immediately if user types new message (no approval button needed)
