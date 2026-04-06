@@ -38,7 +38,34 @@ export class PendingChangesStorage {
 
   readonly onDidChange = this._onDidChange.event;
 
+  // In-memory cache + coalesced persist (same pattern as DiffStore)
+  private _cache: StoredPendingChange[] | null = null;
+  private _dirty = false;
+  private _persistScheduled = false;
+  private _changeScheduled = false;
+
   private constructor() {}
+
+  private schedulePersist(): void {
+    if (this._persistScheduled) return;
+    this._persistScheduled = true;
+    queueMicrotask(() => {
+      this._persistScheduled = false;
+      if (this._dirty && this._context) {
+        this._context.workspaceState.update(STORAGE_KEY, this._cache ?? []);
+        this._dirty = false;
+      }
+    });
+  }
+
+  private scheduleChangeEvent(): void {
+    if (this._changeScheduled) return;
+    this._changeScheduled = true;
+    queueMicrotask(() => {
+      this._changeScheduled = false;
+      this._onDidChange.fire();
+    });
+  }
 
   static getInstance(): PendingChangesStorage {
     if (!PendingChangesStorage._instance) {
@@ -66,15 +93,18 @@ export class PendingChangesStorage {
    */
   getAll(): StoredPendingChange[] {
     this.ensureInitialized();
-    // Используем workspaceState вместо globalState - данные привязаны к workspace
-    const data = this._context!.workspaceState.get<StoredPendingChange[]>(STORAGE_KEY, []);
-    // Safety check - ensure we always return an array
-    if (!Array.isArray(data)) {
-      console.warn('[PendingChangesStorage] Invalid data in storage, resetting to empty array');
-      this._context!.workspaceState.update(STORAGE_KEY, []);
-      return [];
+    if (!this._cache) {
+      const data = this._context!.workspaceState.get<StoredPendingChange[]>(STORAGE_KEY, []);
+      if (!Array.isArray(data)) {
+        console.warn('[PendingChangesStorage] Invalid data in storage, resetting to empty array');
+        this._cache = [];
+        this._dirty = true;
+        this.schedulePersist();
+      } else {
+        this._cache = data;
+      }
     }
-    return data;
+    return this._cache;
   }
 
   /**
@@ -108,14 +138,16 @@ export class PendingChangesStorage {
     this.ensureInitialized();
     const all = this.getAll();
 
-    // Удаляем если уже есть с таким ID
-    const filtered = all.filter(c => c.id !== change.id);
-    filtered.push(change);
+    const idx = all.findIndex(c => c.id === change.id);
+    if (idx !== -1) {
+      all[idx] = change;
+    } else {
+      all.push(change);
+    }
 
-    await this._context!.workspaceState.update(STORAGE_KEY, filtered);
-    this._onDidChange.fire();
-
-    console.log('[PendingChangesStorage] Added:', change.id, 'total:', filtered.length);
+    this._dirty = true;
+    this.schedulePersist();
+    this.scheduleChangeEvent();
   }
 
   /**
@@ -124,12 +156,13 @@ export class PendingChangesStorage {
   async remove(id: string): Promise<void> {
     this.ensureInitialized();
     const all = this.getAll();
-    const filtered = all.filter(c => c.id !== id);
+    const idx = all.findIndex(c => c.id === id);
 
-    if (filtered.length !== all.length) {
-      await this._context!.workspaceState.update(STORAGE_KEY, filtered);
-      this._onDidChange.fire();
-      console.log('[PendingChangesStorage] Removed:', id, 'remaining:', filtered.length);
+    if (idx !== -1) {
+      all.splice(idx, 1);
+      this._dirty = true;
+      this.schedulePersist();
+      this.scheduleChangeEvent();
     }
   }
 
@@ -140,12 +173,15 @@ export class PendingChangesStorage {
     this.ensureInitialized();
     const all = this.getAll();
     const normalizedPath = fsPath.toLowerCase();
+    const before = all.length;
+    // Filter in-place by rebuilding the cache array
     const filtered = all.filter(c => c.fsPath.toLowerCase() !== normalizedPath);
 
-    if (filtered.length !== all.length) {
-      await this._context!.workspaceState.update(STORAGE_KEY, filtered);
-      this._onDidChange.fire();
-      console.log('[PendingChangesStorage] Removed all for file:', fsPath);
+    if (filtered.length !== before) {
+      this._cache = filtered;
+      this._dirty = true;
+      this.schedulePersist();
+      this.scheduleChangeEvent();
     }
   }
 
@@ -154,9 +190,9 @@ export class PendingChangesStorage {
    */
   async clear(): Promise<void> {
     this.ensureInitialized();
+    this._cache = [];
     await this._context!.workspaceState.update(STORAGE_KEY, []);
     this._onDidChange.fire();
-    console.log('[PendingChangesStorage] Cleared all');
   }
 
   /**
@@ -169,8 +205,8 @@ export class PendingChangesStorage {
 
     if (index !== -1) {
       all[index].lineNumber = newLineNumber;
-      this._context!.workspaceState.update(STORAGE_KEY, all);
-      // Не fire event для позиции - это частое обновление
+      this._dirty = true;
+      this.schedulePersist();
     }
   }
 

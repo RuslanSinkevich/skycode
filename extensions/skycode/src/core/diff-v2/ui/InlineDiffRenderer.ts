@@ -98,15 +98,39 @@ export class InlineDiffRenderer implements vscode.Disposable {
 
   /**
    * Flush queued hunks and resume immediate rendering.
+   * Groups hunks by file and creates zones in parallel per file.
    */
   async flush(): Promise<void> {
     if (this.suspendDepth > 0) this.suspendDepth--;
     if (this.suspendDepth > 0) return;
 
     const queued = this.pendingQueue.splice(0);
+    if (queued.length === 0) return;
+
+    // Group by fsPath to batch per-editor work
+    const byFile = new Map<string, Hunk[]>();
     for (const hunk of queued) {
-      await this.onHunkAdded(hunk);
+      const key = hunk.fsPath.toLowerCase();
+      let arr = byFile.get(key);
+      if (!arr) { arr = []; byFile.set(key, arr); }
+      arr.push(hunk);
     }
+
+    // Process all files in parallel; within each file, create zones sequentially
+    // (sequential per-editor avoids race conditions on the same editor's view zones)
+    const tasks = Array.from(byFile.values()).map(async (hunks) => {
+      for (const hunk of hunks) {
+        if (this.hasZonesFor(hunk.id)) continue;
+        const editor = vscode.window.visibleTextEditors.find(
+          (e) => e.document.uri.fsPath.toLowerCase() === hunk.fsPath.toLowerCase(),
+        );
+        if (editor) {
+          await this.createZonesForHunk(editor, hunk);
+        }
+      }
+    });
+
+    await Promise.all(tasks);
   }
 
   // ==================== Reactive event handling ====================
