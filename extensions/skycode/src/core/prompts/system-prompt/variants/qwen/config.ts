@@ -38,27 +38,23 @@ export const config = createVariant(ModelFamily.QWEN)
 		SystemPromptSection.SKILLS,
 	)
 	.tools(
+		// Essential tools
 		SkycodeDefaultTool.FILE_READ,
 		SkycodeDefaultTool.FILE_NEW,
 		SkycodeDefaultTool.FILE_EDIT,
+		SkycodeDefaultTool.BASH,
+		SkycodeDefaultTool.ATTEMPT,
+		SkycodeDefaultTool.ASK,
+		SkycodeDefaultTool.PLAN_MODE,
+		// Search tools
 		SkycodeDefaultTool.CODEBASE_SEARCH,
 		SkycodeDefaultTool.SEARCH,
 		SkycodeDefaultTool.LIST_FILES,
 		SkycodeDefaultTool.GLOB,
 		SkycodeDefaultTool.LIST_CODE_DEF,
 		SkycodeDefaultTool.READ_DIAGNOSTICS,
-		SkycodeDefaultTool.WEB_SEARCH,
+		// MCP (kept for compatibility)
 		SkycodeDefaultTool.MCP_USE,
-		SkycodeDefaultTool.MCP_ACCESS,
-		SkycodeDefaultTool.MCP_DOCS,
-		SkycodeDefaultTool.BROWSER,
-		SkycodeDefaultTool.BASH,
-		SkycodeDefaultTool.TODO,
-		SkycodeDefaultTool.GENERATE_EXPLANATION,
-		SkycodeDefaultTool.USE_SKILL,
-		SkycodeDefaultTool.ATTEMPT,
-		SkycodeDefaultTool.PLAN_MODE,
-		SkycodeDefaultTool.ASK,
 	)
 	.placeholders({
 		MODEL_FAMILY: "qwen",

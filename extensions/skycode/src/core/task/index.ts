@@ -68,7 +68,7 @@ import { convertSkycodeMessageToProto } from "@shared/proto-conversions/skycode-
 import { SkycodeDefaultTool, READ_ONLY_TOOLS } from "@shared/tools"
 import { SkycodeAskResponse } from "@shared/WebviewMessage"
 import { getApiSettingsMode, isReadOnlyMode } from "@shared/storage/types"
-import { isClaude4PlusModelFamily, isGPT5ModelFamily, isLocalModel, isNextGenModelFamily } from "@utils/model-utils"
+import { isClaude4PlusModelFamily, isGPT5ModelFamily, isLocalModel, isNextGenModelFamily, getModelCapabilityTier, getSessionLimitsForModel } from "@utils/model-utils"
 import { arePathsEqual, getDesktopDir } from "@utils/path"
 import { filterExistingFiles } from "@utils/tabFiltering"
 import cloneDeep from "clone-deep"
@@ -1367,6 +1367,11 @@ export class Task {
 		// Pipeline: начинаем run
 		this._session?.pipeline.start()
 
+		// Reset session budget counters for the new user turn
+		this.taskState.turnToolCallCount = 0
+		this.taskState.consecutiveReadOnlyToolCalls = 0
+		this.taskState.sessionBudgetExhausted = false
+
 		let nextUserContent = userContent
 		let includeFileDetails = true
 		while (!this.taskState.abort) {
@@ -2336,6 +2341,15 @@ export class Task {
 			throw new Error("Task instance aborted")
 		}
 
+		// Session budget hard stop: if model ignored the exhaustion warning, end the loop
+		if (this.taskState.sessionBudgetExhausted) {
+			await this.say(
+				"error",
+				"Session budget exhausted — the model reached its tool call limit for this turn. The task will be paused. You can continue with a new message.",
+			)
+			return true
+		}
+
 		// Increment API request counter for focus chain list management
 		this.taskState.apiRequestCount++
 		this.taskState.apiRequestsSinceLastTodoUpdate++
@@ -2483,6 +2497,19 @@ export class Task {
 						previousApiReqIndex,
 						await ensureTaskDirectoryExists(this.taskId),
 					)
+				}
+			}
+		}
+
+		// Step-based forced compaction for weak/medium models:
+		// If the model has used many API requests, force context compaction even if
+		// token-based threshold hasn't been reached (weak models degrade before filling context).
+		if (!shouldCompact) {
+			const modelTier = getModelCapabilityTier(this.api.getModel().id)
+			if (modelTier !== "strong") {
+				const limits = getSessionLimitsForModel(this.api.getModel().id)
+				if (this.taskState.apiRequestCount > 0 && this.taskState.apiRequestCount % limits.forceCompactAfterSteps === 0) {
+					shouldCompact = true
 				}
 			}
 		}

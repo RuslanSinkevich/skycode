@@ -69,6 +69,11 @@ export class TaskState {
 	currentlySummarizing: boolean = false
 	lastAutoCompactTriggerIndex?: number
 
+	// Session budget for weak/quantized models
+	turnToolCallCount: number = 0
+	consecutiveReadOnlyToolCalls: number = 0
+	sessionBudgetExhausted: boolean = false
+
 	// Multi-step workflow
 	isWorkflowStep = false
 	stepCompleted = false
