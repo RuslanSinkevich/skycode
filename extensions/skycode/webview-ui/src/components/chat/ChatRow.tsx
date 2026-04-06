@@ -69,7 +69,7 @@ interface ChatRowProps {
 	onToggleExpand: (ts: number) => void
 	lastModifiedMessage?: SkycodeMessage
 	isLast: boolean
-	onHeightChange: (isTaller: boolean) => void
+	onHeightChange?: (isTaller: boolean) => void
 	inputValue?: string
 	sendMessageFromChatRow?: (text: string, images: string[], files: string[]) => void
 	onSetQuote: (text: string) => void
@@ -106,13 +106,10 @@ const ChatRow = memo(
 		)
 
 		useEffect(() => {
-			// used for partials command output etc.
-			// NOTE: it's important we don't distinguish between partial or complete here since our scroll effects in chatview need to handle height change during partial -> complete
-			const isInitialRender = prevHeightRef.current === 0 // prevents scrolling when new element is added since we already scroll for that
-			// height starts off at Infinity
+			const isInitialRender = prevHeightRef.current === 0
 			if (isLast && height !== 0 && height !== Infinity && height !== prevHeightRef.current) {
 				if (!isInitialRender) {
-					onHeightChange(height > prevHeightRef.current)
+					onHeightChange?.(height > prevHeightRef.current)
 				}
 				prevHeightRef.current = height
 			}

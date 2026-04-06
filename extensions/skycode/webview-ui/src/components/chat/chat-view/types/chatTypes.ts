@@ -91,7 +91,6 @@ export interface ScrollBehavior {
 	pendingScrollToMessage: number | null
 	setPendingScrollToMessage: React.Dispatch<React.SetStateAction<number | null>>
 	handleRangeChanged: (range: ListRange) => void
-	/** Callback for Virtuoso scrollerRef — stores the scroller element for custom "at bottom" detection */
 	onScrollerRef: (ref: HTMLElement | Window | null) => void
 }
 
