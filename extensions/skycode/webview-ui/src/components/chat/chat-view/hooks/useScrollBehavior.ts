@@ -58,6 +58,7 @@ export function useScrollBehavior(
 	const prevMessagesLengthRef = useRef(messages.length)
 	const resizeObserverRef = useRef<ResizeObserver | null>(null)
 	const scrollFollowRafRef = useRef<number | null>(null)
+	const wheelTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
 	// Grace: after programmatic scroll, ignore wheel/scroll events briefly
 	// so the browser's own scroll event from our scrollTo doesn't get
@@ -221,6 +222,21 @@ export function useScrollBehavior(
 		const scroller = scrollerRef.current
 		if (!scroller) return
 
+		const onWheel = (e: WheelEvent) => {
+			userInteractingRef.current = true
+
+			if (e.deltaY < 0) {
+				disableAutoScrollRef.current = true
+				programmaticScrollUntilRef.current = 0
+				setShowScrollToBottom(true)
+			}
+
+			if (wheelTimeoutRef.current) clearTimeout(wheelTimeoutRef.current)
+			wheelTimeoutRef.current = setTimeout(() => {
+				userInteractingRef.current = false
+			}, 150)
+		}
+
 		const markUserInteraction = () => {
 			userInteractingRef.current = true
 		}
@@ -228,18 +244,19 @@ export function useScrollBehavior(
 			userInteractingRef.current = false
 		}
 
-		scroller.addEventListener("wheel", markUserInteraction, { passive: true })
+		scroller.addEventListener("wheel", onWheel, { passive: true })
 		scroller.addEventListener("touchstart", markUserInteraction, { passive: true })
 		scroller.addEventListener("pointerdown", markUserInteraction, { passive: true })
 		scroller.addEventListener("touchend", clearUserInteraction, { passive: true })
 		scroller.addEventListener("pointerup", clearUserInteraction, { passive: true })
 
 		return () => {
-			scroller.removeEventListener("wheel", markUserInteraction)
+			scroller.removeEventListener("wheel", onWheel)
 			scroller.removeEventListener("touchstart", markUserInteraction)
 			scroller.removeEventListener("pointerdown", markUserInteraction)
 			scroller.removeEventListener("touchend", clearUserInteraction)
 			scroller.removeEventListener("pointerup", clearUserInteraction)
+			if (wheelTimeoutRef.current) clearTimeout(wheelTimeoutRef.current)
 		}
 	}, [scrollerRef.current])
 
@@ -252,8 +269,7 @@ export function useScrollBehavior(
 		const handleScroll = () => {
 			if (isPinningRef.current) return
 
-			// Ignore scroll events caused by our own programmatic scrollTo
-			if (Date.now() < programmaticScrollUntilRef.current) return
+			if (Date.now() < programmaticScrollUntilRef.current && !userInteractingRef.current) return
 
 			const footerPx = getFooterPixels()
 			const distanceFromContent =
@@ -378,6 +394,9 @@ export function useScrollBehavior(
 		() => () => {
 			if (scrollFollowRafRef.current != null) {
 				cancelAnimationFrame(scrollFollowRafRef.current)
+			}
+			if (wheelTimeoutRef.current != null) {
+				clearTimeout(wheelTimeoutRef.current)
 			}
 		},
 		[],

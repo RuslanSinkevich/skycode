@@ -5,7 +5,6 @@ import { StateManager } from "@core/storage/StateManager"
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js"
-import { getDefaultEnvironment, StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 import {
 	CallToolResultSchema,
@@ -30,10 +29,8 @@ import chokidar, { FSWatcher } from "chokidar"
 import deepEqual from "fast-deep-equal"
 import * as fs from "fs/promises"
 import { nanoid } from "nanoid"
-import ReconnectingEventSource from "reconnecting-eventsource"
 import { z } from "zod"
 import { HostProvider } from "@/hosts/host-provider"
-import { fetch } from "@/shared/net"
 import { ShowMessageType } from "@/shared/proto/host/window"
 import { Logger } from "@/shared/services/Logger"
 import { expandEnvironmentVariables } from "@/utils/envExpansion"
@@ -41,6 +38,7 @@ import { getServerAuthHash } from "@/utils/mcpAuth"
 import { TelemetryService } from "../telemetry/TelemetryService"
 import { DEFAULT_REQUEST_TIMEOUT_MS } from "./constants"
 import { McpOAuthManager } from "./McpOAuthManager"
+import { createTransport } from "./McpTransportFactory"
 import { BaseConfigSchema, McpSettingsSchema, ServerConfigSchema } from "./schemas"
 import { McpConnection, McpServerConfig, Transport } from "./types"
 export class McpHub {
@@ -320,13 +318,8 @@ export class McpHub {
 		}
 
 		try {
-			// Store unexpanded config for display/comparison (keeps credentials out of stored config)
 			const configForStorage = JSON.stringify(config)
 
-			// Expand environment variables in config before using it
-			const expandedConfig = expandEnvironmentVariables(config)
-
-			// Each MCP server requires its own transport connection and has unique capabilities, configurations, and error handling. Having separate clients also allows proper scoping of resources/tools and independent server management like reconnection.
 			const client = new Client(
 				{
 					name: "Skycode",
@@ -337,165 +330,34 @@ export class McpHub {
 				},
 			)
 
-			let transport: StdioClientTransport | SSEClientTransport | StreamableHTTPClientTransport
-
-			// Create OAuth provider for remote transports (SSE and HTTP)
-			const authProvider =
-				expandedConfig.type === "sse" || expandedConfig.type === "streamableHttp"
-					? await this.mcpOAuthManager.getOrCreateProvider(name, expandedConfig.url)
-					: undefined
-
-			switch (expandedConfig.type) {
-				case "stdio": {
-					transport = new StdioClientTransport({
-						command: expandedConfig.command,
-						args: expandedConfig.args,
-						cwd: expandedConfig.cwd,
-						env: {
-							...getDefaultEnvironment(),
-							...(expandedConfig.env || {}), // Now has expanded environment variables
-						},
-						stderr: "pipe",
-					})
-
-					transport.onerror = async (error) => {
-						Logger.error(`Transport error for "${name}":`, error)
-						const connection = this.findConnection(name, source)
-						if (connection) {
-							connection.server.status = "disconnected"
-							McpHub.mcpServerKeys.delete(connection.server.uid || name)
-							this.appendErrorMessage(connection, error instanceof Error ? error.message : `${error}`)
+			const { transport, authProvider } = await createTransport(name, config, this.mcpOAuthManager, {
+				onTransportError: async (serverName, error) => {
+					const connection = this.findConnection(serverName, source)
+					if (connection) {
+						connection.server.status = "disconnected"
+						McpHub.mcpServerKeys.delete(connection.server.uid || serverName)
+						this.appendErrorMessage(connection, error instanceof Error ? error.message : `${error}`)
+					}
+					await this.notifyWebviewOfServerChanges()
+				},
+				onTransportClose: async (serverName) => {
+					const connection = this.findConnection(serverName, source)
+					if (connection) {
+						connection.server.status = "disconnected"
+						McpHub.mcpServerKeys.delete(connection.server.uid || serverName)
+					}
+					await this.notifyWebviewOfServerChanges()
+				},
+				onStderr: async (serverName, output) => {
+					const connection = this.findConnection(serverName, source)
+					if (connection) {
+						this.appendErrorMessage(connection, output)
+						if (connection.server.status === "disconnected") {
+							await this.notifyWebviewOfServerChanges()
 						}
-						await this.notifyWebviewOfServerChanges()
 					}
-
-					transport.onclose = async () => {
-						const connection = this.findConnection(name, source)
-						if (connection) {
-							connection.server.status = "disconnected"
-							McpHub.mcpServerKeys.delete(connection.server.uid || name)
-						}
-						await this.notifyWebviewOfServerChanges()
-					}
-
-					await transport.start()
-					const stderrStream = transport.stderr
-					if (stderrStream) {
-						stderrStream.on("data", async (data: Buffer) => {
-							const output = data.toString()
-							const isInfoLog = !/\berror\b/i.test(output)
-
-							if (isInfoLog) {
-								Logger.log(`Server "${name}" info:`, output)
-							} else {
-								Logger.error(`Server "${name}" stderr:`, output)
-								const connection = this.findConnection(name, source)
-								if (connection) {
-									this.appendErrorMessage(connection, output)
-									if (connection.server.status === "disconnected") {
-										await this.notifyWebviewOfServerChanges()
-									}
-								}
-							}
-						})
-					} else {
-						Logger.error(`No stderr stream for ${name}`)
-					}
-					transport.start = async () => {}
-					break
-				}
-				case "sse": {
-					const sseOptions = {
-						authProvider,
-						requestInit: {
-							headers: expandedConfig.headers,
-						},
-					}
-					const reconnectingEventSourceOptions = {
-						max_retry_time: 5000,
-						withCredentials: !!expandedConfig.headers?.["Authorization"],
-						// IMPORTANT: Custom fetch function is required for SSE with OAuth
-						// When we provide eventSourceInit, we override the SDK's default fetch
-						// The SDK's default would call _commonHeaders() for auth, but since we're
-						// overriding it, we must provide our own fetch that:
-						// 1. Calls authProvider.tokens() dynamically (not captured once)
-						// 2. Gets fresh tokens for each connection/reconnection
-						// 3. Allows the SDK to auto-refresh expired tokens
-						// Without this, tokens would be stale and fail after expiry
-						fetch: authProvider
-							? async (url: string | URL, init?: RequestInit) => {
-									const tokens = await authProvider.tokens() // Dynamic - gets fresh tokens
-									const headers = new Headers(init?.headers)
-									if (tokens?.access_token) {
-										headers.set("Authorization", `Bearer ${tokens.access_token}`)
-									}
-									return fetch(url.toString(), { ...init, headers })
-								}
-							: undefined,
-					}
-					// Use ReconnectingEventSource for auto-reconnection on connection drops
-					global.EventSource = ReconnectingEventSource
-					transport = new SSEClientTransport(new URL(expandedConfig.url), {
-						...sseOptions,
-						eventSourceInit: reconnectingEventSourceOptions,
-					})
-
-					transport.onerror = async (error) => {
-						Logger.error(`Transport error for "${name}":`, error)
-						const connection = this.findConnection(name, source)
-						if (connection) {
-							connection.server.status = "disconnected"
-							McpHub.mcpServerKeys.delete(connection.server.uid || name)
-							this.appendErrorMessage(connection, error instanceof Error ? error.message : `${error}`)
-						}
-						await this.notifyWebviewOfServerChanges()
-					}
-					break
-				}
-				case "streamableHttp": {
-					// Use ReconnectingEventSource for auto-reconnection on connection drops
-					global.EventSource = ReconnectingEventSource
-
-					// Custom fetch wrapper that treats 404 as 405 for GET requests.
-					// The MCP SDK sends a GET request to check for SSE stream support.
-					// Per MCP spec, servers should return 405 if they don't support SSE,
-					// but many servers (incorrectly) return 404. The SDK only handles 405
-					// gracefully, so we normalize 404 -> 405 to fix compatibility.
-					// See: https://github.com/modelcontextprotocol/typescript-sdk/issues/1150
-					const streamableHttpFetch: typeof fetch = async (url, init) => {
-						const response = await fetch(url, init)
-						if (init?.method === "GET" && response.status === 404) {
-							return new Response(response.body, {
-								status: 405,
-								statusText: "Method Not Allowed",
-								headers: response.headers,
-							})
-						}
-						return response
-					}
-
-					transport = new StreamableHTTPClientTransport(new URL(expandedConfig.url), {
-						authProvider,
-						requestInit: {
-							headers: expandedConfig.headers ?? undefined,
-						},
-						fetch: streamableHttpFetch,
-					})
-					transport.onerror = async (error) => {
-						Logger.error(`Transport error for "${name}":`, error)
-						const connection = this.findConnection(name, source)
-						if (connection) {
-							connection.server.status = "disconnected"
-							McpHub.mcpServerKeys.delete(connection.server.uid || name)
-							this.appendErrorMessage(connection, error instanceof Error ? error.message : `${error}`)
-						}
-						await this.notifyWebviewOfServerChanges()
-					}
-					break
-				}
-				default:
-					throw new Error(`Unknown transport type: ${(config as any).type}`)
-			}
+				},
+			})
 
 			const connection: McpConnection = {
 				server: {
