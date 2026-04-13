@@ -125,7 +125,7 @@ export class EmbeddingWorkerManager implements EmbeddingProvider {
 				huggingFaceId: this.modelMeta.huggingFaceId,
 				dimensions: this.modelMeta.dimensions,
 				requiresPrefix: this.modelMeta.requiresPrefix,
-				allowRemoteModels: this.modelMeta.allowRemoteModels,
+				downloadUrl: this.modelMeta.downloadUrl,
 			})
 		})
 

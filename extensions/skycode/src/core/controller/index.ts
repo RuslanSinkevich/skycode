@@ -40,7 +40,7 @@ import { featureFlagsService } from "@/services/feature-flags"
 import { getDistinctId } from "@/services/logging/distinctId"
 import { telemetryService } from "@/services/telemetry"
 import { BannerCardData } from "@/shared/skycode/banner"
-import { DEFAULT_INDEXING_CONFIG, type IndexingConfig, type IndexingMode } from "@/shared/IndexingTypes"
+import { DEFAULT_INDEXING_CONFIG, type IndexingConfig, type IndexingMode, type LocalModelId } from "@/shared/IndexingTypes"
 import { getAxiosSettings } from "@/shared/net"
 import { ShowMessageType } from "@/shared/proto/host/window"
 import { Logger } from "@/shared/services/Logger"
@@ -1202,6 +1202,7 @@ export class Controller {
 				const cfg = vscode.workspace.getConfiguration("skycode.indexing")
 				return {
 					mode: cfg.get("mode", DEFAULT_INDEXING_CONFIG.mode) as IndexingMode,
+					localModel: cfg.get<LocalModelId>("localModel", DEFAULT_INDEXING_CONFIG.localModel),
 					remoteApiUrl: cfg.get("remoteApiUrl", DEFAULT_INDEXING_CONFIG.remoteApiUrl),
 					remoteApiKey: cfg.get("remoteApiKey", DEFAULT_INDEXING_CONFIG.remoteApiKey),
 					remoteModel: cfg.get("remoteModel", DEFAULT_INDEXING_CONFIG.remoteModel),
