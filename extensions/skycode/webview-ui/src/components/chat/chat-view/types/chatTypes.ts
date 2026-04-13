@@ -3,7 +3,6 @@
  */
 
 import { SkycodeAsk, SkycodeMessage } from "@shared/ExtensionMessage"
-import { ListRange, VirtuosoHandle } from "react-virtuoso"
 import { ButtonActionType } from "../shared/buttonConfig"
 
 /**
@@ -76,7 +75,6 @@ export interface MessageHandlers {
  * Scroll behavior interface
  */
 export interface ScrollBehavior {
-	virtuosoRef: React.RefObject<VirtuosoHandle>
 	scrollContainerRef: React.RefObject<HTMLDivElement>
 	disableAutoScrollRef: React.MutableRefObject<boolean>
 	scrollToBottomSmooth: () => void
@@ -90,8 +88,7 @@ export interface ScrollBehavior {
 	setIsAtBottom: React.Dispatch<React.SetStateAction<boolean>>
 	pendingScrollToMessage: number | null
 	setPendingScrollToMessage: React.Dispatch<React.SetStateAction<number | null>>
-	handleRangeChanged: (range: ListRange) => void
-	onScrollerRef: (ref: HTMLElement | Window | null) => void
+	onScrollerRef: (ref: HTMLElement | null) => void
 }
 
 /**

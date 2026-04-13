@@ -5,10 +5,8 @@ import { ApiStream } from "@core/api/transform/stream"
 import { AssistantMessageContent, parseAssistantMessageV2, ToolUse } from "@core/assistant-message"
 import { ContextManager } from "@core/context/context-management/ContextManager"
 import { checkContextWindowExceededError } from "@core/context/context-management/context-error-handling"
-import { getContextWindowInfo } from "@core/context/context-management/context-window-utils"
 import { EnvironmentContextTracker } from "@core/context/context-tracking/EnvironmentContextTracker"
 import { FileContextTracker } from "@core/context/context-tracking/FileContextTracker"
-import { extractChangelog } from "@core/context/SessionChangelog"
 import { ModelContextTracker } from "@core/context/context-tracking/ModelContextTracker"
 import {
 	getGlobalSkycodeRules,
@@ -69,8 +67,6 @@ import { SkycodeDefaultTool, READ_ONLY_TOOLS } from "@shared/tools"
 import { SkycodeAskResponse } from "@shared/WebviewMessage"
 import { getApiSettingsMode, isReadOnlyMode } from "@shared/storage/types"
 import { isClaude4PlusModelFamily, isGPT5ModelFamily, isLocalModel, isNextGenModelFamily, getModelCapabilityTier, getSessionLimitsForModel } from "@utils/model-utils"
-import { arePathsEqual, getDesktopDir } from "@utils/path"
-import { filterExistingFiles } from "@utils/tabFiltering"
 import cloneDeep from "clone-deep"
 import Mutex from "p-mutex"
 import pWaitFor from "p-wait-for"
@@ -117,7 +113,8 @@ import { MessageStateHandler } from "./message-state"
 import { StreamResponseHandler } from "./StreamResponseHandler"
 import { TaskState } from "./TaskState"
 import { ToolExecutor } from "./ToolExecutor"
-import { detectAvailableCliTools, extractProviderDomainFromUrl, updateApiReqMsg } from "./utils"
+import { buildEnvironmentDetails } from "./environmentDetails"
+import { extractProviderDomainFromUrl, updateApiReqMsg } from "./utils"
 import { buildUserFeedbackContent } from "./utils/buildUserFeedbackContent"
 
 export type ToolResponse = SkycodeToolResponseContent
@@ -3333,352 +3330,21 @@ export class Task {
 		}
 	}
 
-	/**
-	 * Format workspace roots section for multi-root workspaces
-	 */
-	private formatWorkspaceRootsSection(): string {
-		const multiRootEnabled = isMultiRootEnabled(this.stateManager)
-		const hasWorkspaceManager = !!this.workspaceManager
-		const roots = hasWorkspaceManager ? this.workspaceManager!.getRoots() : []
-
-		// Only show workspace roots if multi-root is enabled and there are multiple roots
-		if (!multiRootEnabled || roots.length <= 1) {
-			return ""
-		}
-
-		let section = "\n\n# Workspace Roots"
-
-		// Format each root with its name, path, and VCS info
-		for (const root of roots) {
-			const name = root.name || path.basename(root.path)
-			const vcs = root.vcs ? ` (${String(root.vcs)})` : ""
-			section += `\n- ${name}: ${root.path}${vcs}`
-		}
-
-		// Add primary workspace information
-		const primary = this.workspaceManager!.getPrimaryRoot()
-		const primaryName = this.getPrimaryWorkspaceName(primary)
-		section += `\n\nPrimary workspace: ${primaryName}`
-
-		return section
-	}
-
-	/**
-	 * Get the display name for the primary workspace
-	 */
-	private getPrimaryWorkspaceName(primary?: ReturnType<WorkspaceRootManager["getRoots"]>[0]): string {
-		if (primary?.name) {
-			return primary.name
-		}
-		if (primary?.path) {
-			return path.basename(primary.path)
-		}
-		return path.basename(this.cwd)
-	}
-
-	/**
-	 * Format the file details header based on workspace configuration
-	 */
-	private formatFileDetailsHeader(): string {
-		const multiRootEnabled = isMultiRootEnabled(this.stateManager)
-		const roots = this.workspaceManager?.getRoots() || []
-
-		if (multiRootEnabled && roots.length > 1) {
-			const primary = this.workspaceManager?.getPrimaryRoot()
-			const primaryName = this.getPrimaryWorkspaceName(primary)
-			return `\n\n# Current Working Directory (Primary: ${primaryName}) Files\n`
-		} else {
-			return `\n\n# Current Working Directory (${this.cwd.toPosix()}) Files\n`
-		}
-	}
-
 	async getEnvironmentDetails(includeFileDetails: boolean = false) {
-		const host = await HostProvider.env.getHostVersion({})
-		let details = ""
-
-		// Chat mode: minimal environment — just time and mode, no project context
-		const currentMode = this.stateManager.getGlobalSettingsKey("mode")
-		if (currentMode === "chat") {
-			const now = new Date()
-			const formatter = new Intl.DateTimeFormat(undefined, {
-				year: "numeric",
-				month: "numeric",
-				day: "numeric",
-				hour: "numeric",
-				minute: "numeric",
-				second: "numeric",
-				hour12: true,
-			})
-			const timeZone = formatter.resolvedOptions().timeZone
-			const timeZoneOffset = -now.getTimezoneOffset() / 60
-			const timeZoneOffsetStr = `${timeZoneOffset >= 0 ? "+" : ""}${timeZoneOffset}:00`
-			details += `# Current Time\n${formatter.format(now)} (${timeZone}, UTC${timeZoneOffsetStr})`
-			details += "\n\n# Current Mode"
-			details += "\nCHAT MODE (conversational - answer from knowledge, use tools ONLY if user explicitly asks)"
-			return `<environment_details>\n${details.trim()}\n</environment_details>`
-		}
-
-		// Workspace roots (multi-root)
-		details += this.formatWorkspaceRootsSection()
-
-		// It could be useful for skycode to know if the user went from one or no file to another between messages, so we always include this context
-		details += `\n\n# ${host.platform} Visible Files`
-		const rawVisiblePaths = (await HostProvider.window.getVisibleTabs({})).paths
-		const filteredVisiblePaths = await filterExistingFiles(rawVisiblePaths)
-		const visibleFilePaths = filteredVisiblePaths.map((absolutePath) => path.relative(this.cwd, absolutePath))
-
-		// Filter paths through skycodeIgnoreController
-		const allowedVisibleFiles = this.skycodeIgnoreController
-			.filterPaths(visibleFilePaths)
-			.map((p) => p.toPosix())
-			.join("\n")
-
-		if (allowedVisibleFiles) {
-			details += `\n${allowedVisibleFiles}`
-		} else {
-			details += "\n(No visible files)"
-		}
-
-		details += `\n\n# ${host.platform} Open Tabs`
-		const rawOpenTabPaths = (await HostProvider.window.getOpenTabs({})).paths
-		const filteredOpenTabPaths = await filterExistingFiles(rawOpenTabPaths)
-		const openTabPaths = filteredOpenTabPaths.map((absolutePath) => path.relative(this.cwd, absolutePath))
-
-		// Filter paths through skycodeIgnoreController
-		const allowedOpenTabs = this.skycodeIgnoreController
-			.filterPaths(openTabPaths)
-			.map((p) => p.toPosix())
-			.join("\n")
-
-		if (allowedOpenTabs) {
-			details += `\n${allowedOpenTabs}`
-		} else {
-			details += "\n(No open tabs)"
-		}
-
-		const busyTerminals = this.terminalManager.getTerminals(true)
-		const inactiveTerminals = this.terminalManager.getTerminals(false)
-		// const allTerminals = [...busyTerminals, ...inactiveTerminals]
-
-		if (busyTerminals.length > 0 && this.taskState.didEditFile) {
-			//  || this.didEditFile
-			await setTimeoutPromise(300) // delay after saving file to let terminals catch up
-		}
-		// let terminalWasBusy = false
-		if (busyTerminals.length > 0) {
-			// wait for terminals to cool down
-			// terminalWasBusy = allTerminals.some((t) => this.terminalManager.isProcessHot(t.id))
-			await pWaitFor(() => busyTerminals.every((t) => !this.terminalManager.isProcessHot(t.id)), {
-				interval: 100,
-				timeout: 15_000,
-			}).catch(() => {})
-		}
-
-		this.taskState.didEditFile = false // reset, this lets us know when to wait for saved files to update terminals
-
-		// waiting for updated diagnostics lets terminal output be the most up-to-date possible
-		let terminalDetails = ""
-		if (busyTerminals.length > 0) {
-			// terminals are cool, let's retrieve their output
-			terminalDetails += "\n\n# Actively Running Terminals"
-			for (const busyTerminal of busyTerminals) {
-				terminalDetails += `\n## Original command: \`${busyTerminal.lastCommand}\``
-				const newOutput = this.terminalManager.getUnretrievedOutput(busyTerminal.id)
-				if (newOutput) {
-					terminalDetails += `\n### New Output\n${newOutput}`
-				} else {
-					// details += `\n(Still running, no new output)` // don't want to show this right after running the command
-				}
-			}
-		}
-		// only show inactive terminals if there's output to show
-		if (inactiveTerminals.length > 0) {
-			const inactiveTerminalOutputs = new Map<number, string>()
-			for (const inactiveTerminal of inactiveTerminals) {
-				const newOutput = this.terminalManager.getUnretrievedOutput(inactiveTerminal.id)
-				if (newOutput) {
-					inactiveTerminalOutputs.set(inactiveTerminal.id, newOutput)
-				}
-			}
-			if (inactiveTerminalOutputs.size > 0) {
-				terminalDetails += "\n\n# Inactive Terminals"
-				for (const [terminalId, newOutput] of inactiveTerminalOutputs) {
-					const inactiveTerminal = inactiveTerminals.find((t) => t.id === terminalId)
-					if (inactiveTerminal) {
-						terminalDetails += `\n## ${inactiveTerminal.lastCommand}`
-						terminalDetails += `\n### New Output\n${newOutput}`
-					}
-				}
-			}
-		}
-
-		// Add user-opened terminals (not managed by Skycode)
-		try {
-			const allVscodeTerminals = vscode.window.terminals
-			const userTerminals = allVscodeTerminals.filter((t) => {
-				// Skip Skycode-created terminals (they have the env variable)
-				const creationOptions = t.creationOptions as vscode.TerminalOptions | undefined
-				return !creationOptions?.env?.SKYCODE_ACTIVE
-			})
-			if (userTerminals.length > 0) {
-				terminalDetails += "\n\n# User Terminals"
-				for (const terminal of userTerminals) {
-					const name = terminal.name || "Terminal"
-					const cwd = (terminal as any).shellIntegration?.cwd?.fsPath
-					const cwdInfo = cwd ? ` (cwd: ${path.relative(this.cwd, cwd) || "."})` : ""
-					terminalDetails += `\n- ${name}${cwdInfo}`
-				}
-			}
-		} catch {
-			// Silently ignore errors accessing user terminals
-		}
-
-		if (terminalDetails) {
-			details += terminalDetails
-		}
-
-		// Add recently modified files section
-		const recentlyModifiedFiles = this.fileContextTracker.getAndClearRecentlyModifiedFiles()
-		if (recentlyModifiedFiles.length > 0) {
-			details +=
-				"\n\n# Recently Modified Files\nThese files have been modified since you last accessed them (file was just edited so you may need to re-read it before editing):"
-			for (const filePath of recentlyModifiedFiles) {
-				details += `\n${filePath}`
-			}
-		}
-
-		// Add current time information with timezone
-		const now = new Date()
-		const formatter = new Intl.DateTimeFormat(undefined, {
-			year: "numeric",
-			month: "numeric",
-			day: "numeric",
-			hour: "numeric",
-			minute: "numeric",
-			second: "numeric",
-			hour12: true,
-		})
-		const timeZone = formatter.resolvedOptions().timeZone
-		const timeZoneOffset = -now.getTimezoneOffset() / 60 // Convert to hours and invert sign to match conventional notation
-		const timeZoneOffsetStr = `${timeZoneOffset >= 0 ? "+" : ""}${timeZoneOffset}:00`
-		details += `\n\n# Current Time\n${formatter.format(now)} (${timeZone}, UTC${timeZoneOffsetStr})`
-
-		// Add previous session changelog (only on first message of a new task)
-		if (includeFileDetails) {
-			try {
-				const taskHistory = this.stateManager.getGlobalStateKey("taskHistory")
-				if (taskHistory && taskHistory.length > 0) {
-					// Find previous task (not current one)
-					const previousTask = taskHistory.find((t: HistoryItem) => t.id !== this.taskId)
-					if (previousTask) {
-						const previousMessages = await getSavedSkycodeMessages(previousTask.id)
-						if (previousMessages.length > 0) {
-							const changelog = extractChangelog(previousMessages)
-							if (changelog) {
-								details += changelog
-							}
-						}
-					}
-				}
-			} catch {
-				// Silently ignore changelog loading errors
-			}
-		}
-
-		if (includeFileDetails) {
-			details += this.formatFileDetailsHeader()
-			const isDesktop = arePathsEqual(this.cwd, getDesktopDir())
-			if (isDesktop) {
-				// don't want to immediately access desktop since it would show permission popup
-				details += "(Desktop files not shown automatically. Use list_files to explore if needed.)"
-			} else {
-				const [files, didHitLimit] = await listFiles(this.cwd, true, 200)
-				const result = formatResponse.formatFilesList(this.cwd, files, didHitLimit, this.skycodeIgnoreController)
-				details += result
-			}
-
-			// Add workspace information in JSON format
-			if (this.workspaceManager) {
-				const workspacesJson = await this.workspaceManager.buildWorkspacesJson()
-				if (workspacesJson) {
-					details += `\n\n# Workspace Configuration\n${workspacesJson}`
-				}
-			}
-
-			// Add detected CLI tools
-			const availableCliTools = await detectAvailableCliTools()
-			if (availableCliTools.length > 0) {
-				details += `\n\n# Detected CLI Tools\nThese are some of the tools on the user's machine, and may be useful if needed to accomplish the task: ${availableCliTools.join(", ")}. This list is not exhaustive, and other tools may be available.`
-			}
-		}
-
-		// Add context window usage information (conditionally for some models)
-		const { contextWindow } = getContextWindowInfo(this.api)
-
-		// Get the token count from the most recent API request to accurately reflect context management
-		const getTotalTokensFromApiReqMessage = (msg: SkycodeMessage) => {
-			if (!msg.text) {
-				return 0
-			}
-			try {
-				const { tokensIn, tokensOut, cacheWrites, cacheReads } = JSON.parse(msg.text)
-				return (tokensIn || 0) + (tokensOut || 0) + (cacheWrites || 0) + (cacheReads || 0)
-			} catch (_e) {
-				return 0
-			}
-		}
-
-		const skycodeMessages = this.messageStateHandler.getSkycodeMessages()
-		const modifiedMessages = combineApiRequests(combineCommandSequences(skycodeMessages.slice(1)))
-		const lastApiReqMessage = findLast(modifiedMessages, (msg) => {
-			if (msg.say !== "api_req_started") {
-				return false
-			}
-			return getTotalTokensFromApiReqMessage(msg) > 0
-		})
-
-		const lastApiReqTotalTokens = lastApiReqMessage ? getTotalTokensFromApiReqMessage(lastApiReqMessage) : 0
-		const usagePercentage = Math.round((lastApiReqTotalTokens / contextWindow) * 100)
-
-		// Determine if context window info should be displayed
-		const currentModelId = this.api.getModel().id
-		const isNextGenModel = isClaude4PlusModelFamily(currentModelId) || isGPT5ModelFamily(currentModelId)
-
-		let shouldShowContextWindow = true
-		// For next-gen models, only show context window usage if it exceeds a certain threshold
-		if (isNextGenModel) {
-			const autoCondenseThreshold =
-				(this.stateManager.getGlobalSettingsKey("autoCondenseThreshold") as number | undefined) ?? 0.75
-			const displayThreshold = autoCondenseThreshold - 0.15
-			const currentUsageRatio = lastApiReqTotalTokens / contextWindow
-			shouldShowContextWindow = currentUsageRatio >= displayThreshold
-		}
-
-		if (shouldShowContextWindow) {
-			details += "\n\n# Context Window Usage"
-			details += `\n${lastApiReqTotalTokens.toLocaleString()} / ${(contextWindow / 1000).toLocaleString()}K tokens used (${usagePercentage}%)`
-		}
-
-		details += "\n\n# Current Mode"
-		const mode = this.stateManager.getGlobalSettingsKey("mode")
-		switch (mode) {
-			case "plan":
-				details += "\nPLAN MODE\n" + formatResponse.planModeInstructions()
-				break
-			case "ask":
-				details += "\nASK MODE (read-only - no file modifications or commands allowed)"
-				break
-		case "debug":
-			details += "\nDEBUG MODE (systematic debugging: gather evidence → hypothesize → test → fix)"
-			break
-		case "chat":
-			details += "\nCHAT MODE (conversational - answer from knowledge, use tools ONLY if user explicitly asks)"
-			break
-		default:
-				details += "\nACT MODE"
-				break
-		}
-
-		return `<environment_details>\n${details.trim()}\n</environment_details>`
+		return buildEnvironmentDetails(
+			{
+				cwd: this.cwd,
+				taskId: this.taskId,
+				taskState: this.taskState,
+				stateManager: this.stateManager,
+				terminalManager: this.terminalManager,
+				skycodeIgnoreController: this.skycodeIgnoreController,
+				fileContextTracker: this.fileContextTracker,
+				workspaceManager: this.workspaceManager,
+				messageStateHandler: this.messageStateHandler,
+				api: this.api,
+			},
+			includeFileDetails,
+		)
 	}
 }

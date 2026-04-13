@@ -1,11 +1,7 @@
-import { mentionRegex, mentionRegexGlobal } from "@shared/context-mentions"
+import { mentionRegex } from "@shared/context-mentions"
 import { EmptyRequest, StringRequest } from "@shared/proto/skycode/common"
 import { FileSearchRequest, FileSearchType } from "@shared/proto/skycode/file"
-import { UpdateApiConfigurationRequest } from "@shared/proto/skycode/models"
-import { PlanActMode, TogglePlanActModeRequest } from "@shared/proto/skycode/state"
-import { convertApiConfigurationToProto } from "@shared/proto-conversions/models/api-configuration-conversion"
 import { type SlashCommand } from "@shared/slashCommands"
-import { Mode } from "@shared/storage/types"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import { AtSignIcon, PlusIcon } from "lucide-react"
 import type React from "react"
@@ -16,14 +12,13 @@ import ContextMenu from "@/components/chat/ContextMenu"
 import ModelPickerModal from "@/components/chat/ModelPickerModal"
 import SlashCommandMenu from "@/components/chat/SlashCommandMenu"
 import Thumbnails from "@/components/common/Thumbnails"
-import { getModeSpecificFields, normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { usePlatform } from "@/context/PlatformContext"
 import { useSkycodeAuth } from "@/context/SkycodeAuthContext"
 import { useI18n } from "@/i18n"
 import { cn } from "@/lib/utils"
-import { FileServiceClient, ModelsServiceClient, StateServiceClient, TaskServiceClient } from "@/services/grpc-client"
+import { FileServiceClient, TaskServiceClient } from "@/services/grpc-client"
 import {
 	ContextMenuOptionType,
 	getContextMenuOptionIndex,
@@ -42,10 +37,7 @@ import {
 	removeSlashCommand,
 	shouldShowSlashCommandsMenu,
 	slashCommandDeleteRegex,
-	slashCommandRegexGlobal,
-	validateSlashCommand,
 } from "@/utils/slash-commands"
-import { validateApiConfiguration, validateModelId } from "@/utils/validate"
 import SkycodeRulesToggleModal from "../skycode-rules/SkycodeRulesToggleModal"
 import {
 	MODE_COLORS,
@@ -58,6 +50,8 @@ import {
 } from "./chat-text-area/ChatTextArea.styles"
 import ModeSwitcher from "./chat-text-area/ModeSwitcher"
 import { useChatAttachments } from "./chat-text-area/useChatAttachments"
+import { useModelSelector } from "./chat-text-area/useModelSelector"
+import { useTextHighlight } from "./chat-text-area/useTextHighlight"
 import ServersToggleModal from "./ServersToggleModal"
 import VoiceRecorder from "./VoiceRecorder"
 
@@ -144,9 +138,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		const [showContextMenu, setShowContextMenu] = useState(false)
 		const [cursorPosition, setCursorPosition] = useState(0)
 		const [searchQuery, setSearchQuery] = useState("")
-		const textAreaRef = useRef<HTMLTextAreaElement | null>(null)
 		const [isMouseDownOnMenu, setIsMouseDownOnMenu] = useState(false)
-		const highlightLayerRef = useRef<HTMLDivElement>(null)
 		const [selectedMenuIndex, setSelectedMenuIndex] = useState(-1)
 		const [selectedType, setSelectedType] = useState<ContextMenuOptionType | null>(null)
 		const [justDeletedSpaceAfterMention, setJustDeletedSpaceAfterMention] = useState(false)
@@ -154,22 +146,25 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		const [intendedCursorPosition, setIntendedCursorPosition] = useState<number | null>(null)
 		const contextMenuContainerRef = useRef<HTMLDivElement>(null)
 
+		const { highlightLayerRef, textAreaRef, updateHighlights } = useTextHighlight({
+			inputValue,
+			localWorkflowToggles,
+			globalWorkflowToggles,
+			remoteWorkflowToggles,
+			remoteGlobalWorkflows: remoteConfigSettings?.remoteGlobalWorkflows,
+		})
+
 		const modelSelectorRef = useRef<HTMLDivElement>(null)
 		const { width: viewportWidth, height: viewportHeight } = useWindowSize()
 		const buttonRef = useRef<HTMLDivElement>(null)
 		const [_arrowPosition, setArrowPosition] = useState(0)
 		const [_menuPosition, setMenuPosition] = useState(0)
 		const [pendingInsertions, setPendingInsertions] = useState<string[]>([])
-		const _shiftHoldTimerRef = useRef<NodeJS.Timeout | null>(null)
 
 		const [fileSearchResults, setFileSearchResults] = useState<SearchResult[]>([])
 		const [searchLoading, setSearchLoading] = useState(false)
 		const [, metaKeyChar] = useMetaKeyDetection(platform)
 
-		// Add a ref to track previous menu state
-		const _prevShowModelSelector = useRef(showModelSelector)
-
-		// Drag & drop, paste, file/image attachment logic
 		const {
 			isDraggingOver,
 			showUnsupportedFileError,
@@ -746,56 +741,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			setIsMouseDownOnMenu(true)
 		}, [])
 
-		const updateHighlights = useCallback(() => {
-			if (!textAreaRef.current || !highlightLayerRef.current) {
-				return
-			}
-
-			let processedText = textAreaRef.current.value
-
-			processedText = processedText
-				.replace(/\n$/, "\n\n")
-				.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c] || c)
-				// highlight @mentions
-				.replace(mentionRegexGlobal, '<mark class="mention-context-textarea-highlight">$&</mark>')
-
-			// Highlight only the FIRST valid /slash-command in the text
-			// Only one slash command is processed per message, so we only highlight the first one
-			slashCommandRegexGlobal.lastIndex = 0
-			let hasHighlightedSlashCommand = false
-			processedText = processedText.replace(slashCommandRegexGlobal, (match, prefix, command) => {
-				// Only highlight the first valid slash command
-				if (hasHighlightedSlashCommand) {
-					return match
-				}
-
-				// Extract just the command name (without the slash)
-				const commandName = command.substring(1)
-				const isValidCommand = validateSlashCommand(
-					commandName,
-					localWorkflowToggles,
-					globalWorkflowToggles,
-					remoteWorkflowToggles,
-					remoteConfigSettings?.remoteGlobalWorkflows,
-				)
-
-				if (isValidCommand) {
-					hasHighlightedSlashCommand = true
-					// Keep the prefix (whitespace or empty) and wrap the command in highlight
-					return `${prefix}<mark class="mention-context-textarea-highlight">${command}</mark>`
-				}
-				return match
-			})
-
-			highlightLayerRef.current.innerHTML = processedText
-			highlightLayerRef.current.scrollTop = textAreaRef.current.scrollTop
-			highlightLayerRef.current.scrollLeft = textAreaRef.current.scrollLeft
-		}, [localWorkflowToggles, globalWorkflowToggles, remoteWorkflowToggles, remoteConfigSettings])
-
-		useLayoutEffect(() => {
-			updateHighlights()
-		}, [inputValue, updateHighlights])
-
 		const updateCursorPosition = useCallback(() => {
 			if (textAreaRef.current) {
 				setCursorPosition(textAreaRef.current.selectionStart)
@@ -811,78 +756,19 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			[updateCursorPosition],
 		)
 
-		// Separate the API config submission logic
-		const submitApiConfig = useCallback(async () => {
-			const apiValidationResult = validateApiConfiguration(mode, apiConfiguration)
-			const modelIdValidationResult = validateModelId(mode, apiConfiguration, openRouterModels)
+		const { modelDisplayName, switchToMode, onModeToggle } = useModelSelector({
+			mode,
+			apiConfiguration,
+			openRouterModels,
+			showModelSelector,
+			inputValue,
+			selectedImages,
+			selectedFiles,
+			setInputValue,
+			textAreaRef,
+		})
 
-			if (!apiValidationResult && !modelIdValidationResult && apiConfiguration) {
-				try {
-					await ModelsServiceClient.updateApiConfigurationProto(
-						UpdateApiConfigurationRequest.create({
-							apiConfiguration: convertApiConfigurationToProto(apiConfiguration),
-						}),
-					)
-				} catch (error) {
-					console.error("Failed to update API configuration:", error)
-				}
-			} else {
-				StateServiceClient.getLatestState(EmptyRequest.create())
-					.then(() => {
-						console.log("State refreshed")
-					})
-					.catch((error) => {
-						console.error("Error refreshing state:", error)
-					})
-			}
-		}, [apiConfiguration, openRouterModels])
-
-		const switchToMode = useCallback(
-			(targetMode: Mode) => {
-				if (targetMode === mode) return
-				let changeModeDelay = 0
-				if (showModelSelector) {
-					submitApiConfig()
-					changeModeDelay = 250
-				}
-				setTimeout(async () => {
-					const protoModeMap: Record<Mode, PlanActMode> = {
-						plan: PlanActMode.PLAN,
-						act: PlanActMode.ACT,
-						ask: PlanActMode.PAM_ASK,
-						debug: PlanActMode.DEBUG,
-						chat: PlanActMode.CHAT,
-					}
-					const response = await StateServiceClient.togglePlanActModeProto(
-						TogglePlanActModeRequest.create({
-							mode: protoModeMap[targetMode],
-							chatContent: {
-								message: inputValue.trim() ? inputValue : undefined,
-								images: selectedImages,
-								files: selectedFiles,
-							},
-						}),
-					)
-					setTimeout(() => {
-						if (response.value) {
-							setInputValue("")
-						}
-						textAreaRef.current?.focus()
-					}, 100)
-				}, changeModeDelay)
-			},
-			[mode, showModelSelector, submitApiConfig, inputValue, selectedImages, selectedFiles],
-		)
-
-		const onModeToggle = useCallback(() => {
-			// Keyboard shortcut cycles: plan → act → ask → debug → plan
-			const modeOrder: Mode[] = ["plan", "act", "ask", "debug"]
-			const currentIdx = modeOrder.indexOf(mode)
-			const nextMode = modeOrder[(currentIdx + 1) % modeOrder.length]
-			switchToMode(nextMode)
-		}, [mode, switchToMode])
-
-		useShortcut(usePlatform().togglePlanActKeys, onModeToggle, { disableTextInputs: false }) // important that we don't disable the text input here
+		useShortcut(usePlatform().togglePlanActKeys, onModeToggle, { disableTextInputs: false })
 
 		const handleContextButtonClick = useCallback(() => {
 			// Focus the textarea first
@@ -928,49 +814,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		const handleModelButtonClick = () => {
 			setShowModelSelector(!showModelSelector)
 		}
-
-		// Get model display name
-		const modelDisplayName = useMemo(() => {
-			const { selectedProvider, selectedModelId } = normalizeApiConfiguration(apiConfiguration, mode)
-			const {
-				vsCodeLmModelSelector,
-				togetherModelId,
-				lmStudioModelId,
-				ollamaModelId,
-				liteLlmModelId,
-				requestyModelId,
-				vercelAiGatewayModelId,
-			} = getModeSpecificFields(apiConfiguration, mode)
-			const unknownModel = "unknown"
-
-			if (!apiConfiguration) {
-				return unknownModel
-			}
-			switch (selectedProvider) {
-				case "skycode":
-					return `${selectedProvider}:${selectedModelId}`
-				case "openai":
-					return `openai-compat:${selectedModelId}`
-				case "vscode-lm":
-					return `vscode-lm:${vsCodeLmModelSelector ? `${vsCodeLmModelSelector.vendor ?? ""}/${vsCodeLmModelSelector.family ?? ""}` : unknownModel}`
-				case "together":
-					return `${selectedProvider}:${togetherModelId}`
-				case "lmstudio":
-					return `${selectedProvider}:${lmStudioModelId}`
-				case "ollama":
-					return `${selectedProvider}:${ollamaModelId}`
-				case "litellm":
-					return `${selectedProvider}:${liteLlmModelId}`
-				case "requesty":
-					return `${selectedProvider}:${requestyModelId}`
-				case "vercel-ai-gateway":
-					return `${selectedProvider}:${vercelAiGatewayModelId || selectedModelId}`
-				case "anthropic":
-				case "openrouter":
-				default:
-					return `${selectedProvider}:${selectedModelId}`
-			}
-		}, [apiConfiguration, mode])
 
 		// Calculate arrow position and menu position based on button location
 		useEffect(() => {

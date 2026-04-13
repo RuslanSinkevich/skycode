@@ -108,11 +108,13 @@ export class ZAiHandler implements ApiHandler {
 			}
 
 			if (chunk.usage) {
+				const promptTokens = chunk.usage.prompt_tokens || 0
+				const cachedTokens = chunk.usage.prompt_tokens_details?.cached_tokens || 0
 				yield {
 					type: "usage",
-					inputTokens: chunk.usage.prompt_tokens || 0,
+					inputTokens: promptTokens - cachedTokens,
 					outputTokens: chunk.usage.completion_tokens || 0,
-					cacheReadTokens: chunk.usage.prompt_tokens_details?.cached_tokens || 0,
+					cacheReadTokens: cachedTokens,
 					cacheWriteTokens: 0,
 				}
 			}

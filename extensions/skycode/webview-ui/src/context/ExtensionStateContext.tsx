@@ -14,6 +14,7 @@ import { fromProtobufModels } from "@shared/proto-conversions/models/typeConvers
 import { convertProtoToSkycodeMessage } from "@shared/proto-conversions/skycode-message"
 import type React from "react"
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
+import { useNavigation } from "./useNavigation"
 import { Environment } from "../../../src/config"
 import {
 	basetenDefaultModelId,
@@ -125,93 +126,34 @@ export const ExtensionStateContext = createContext<ExtensionStateContextType | u
 export const ExtensionStateContextProvider: React.FC<{
 	children: React.ReactNode
 }> = ({ children }) => {
-	// UI view state
-	const [showMcp, setShowMcp] = useState(false)
-	const [mcpTab, setMcpTab] = useState<McpViewTab | undefined>(undefined)
-	const [showSettings, setShowSettings] = useState(false)
-	const [settingsTargetSection, setSettingsTargetSection] = useState<string | undefined>(undefined)
-	const [showHistory, setShowHistory] = useState(false)
-	const [showAccount, setShowAccount] = useState(false)
-	const [showWorktrees, setShowWorktrees] = useState(false)
-	const [showAnnouncement, setShowAnnouncement] = useState(false)
-	const [showChatModelSelector, setShowChatModelSelector] = useState(false)
-
-	// Helper for MCP view
-	const closeMcpView = useCallback(() => {
-		setShowMcp(false)
-		setMcpTab(undefined)
-	}, [setShowMcp, setMcpTab])
-
-	// Hide functions
-	const hideSettings = useCallback(() => {
-		setShowSettings(false)
-		setSettingsTargetSection(undefined)
-		StateServiceClient.refreshBanners(EmptyRequest.create({})).catch(() => {})
-	}, [])
-	const hideHistory = useCallback(() => setShowHistory(false), [setShowHistory])
-	const hideAccount = useCallback(() => setShowAccount(false), [setShowAccount])
-	const hideWorktrees = useCallback(() => setShowWorktrees(false), [setShowWorktrees])
-	const hideAnnouncement = useCallback(() => setShowAnnouncement(false), [setShowAnnouncement])
-	const hideChatModelSelector = useCallback(() => setShowChatModelSelector(false), [setShowChatModelSelector])
-
-	// Navigation functions
-	const navigateToMcp = useCallback(
-		(tab?: McpViewTab) => {
-			setShowSettings(false)
-			setShowHistory(false)
-			setShowAccount(false)
-			setShowWorktrees(false)
-			if (tab) {
-				setMcpTab(tab)
-			}
-			setShowMcp(true)
-		},
-		[setShowMcp, setMcpTab, setShowSettings, setShowHistory, setShowAccount, setShowWorktrees],
-	)
-
-	const navigateToSettings = useCallback(
-		(targetSection?: string) => {
-			setShowHistory(false)
-			closeMcpView()
-			setShowAccount(false)
-			setShowWorktrees(false)
-			setSettingsTargetSection(targetSection)
-			setShowSettings(true)
-		},
-		[closeMcpView],
-	)
-
-	const navigateToHistory = useCallback(() => {
-		setShowSettings(false)
-		closeMcpView()
-		setShowAccount(false)
-		setShowWorktrees(false)
-		setShowHistory(true)
-	}, [setShowSettings, closeMcpView, setShowAccount, setShowWorktrees, setShowHistory])
-
-	const navigateToAccount = useCallback(() => {
-		setShowSettings(false)
-		closeMcpView()
-		setShowHistory(false)
-		setShowWorktrees(false)
-		setShowAccount(true)
-	}, [setShowSettings, closeMcpView, setShowHistory, setShowWorktrees, setShowAccount])
-
-	const navigateToWorktrees = useCallback(() => {
-		setShowSettings(false)
-		closeMcpView()
-		setShowHistory(false)
-		setShowAccount(false)
-		setShowWorktrees(true)
-	}, [setShowSettings, closeMcpView, setShowHistory, setShowAccount, setShowWorktrees])
-
-	const navigateToChat = useCallback(() => {
-		setShowSettings(false)
-		closeMcpView()
-		setShowHistory(false)
-		setShowAccount(false)
-		setShowWorktrees(false)
-	}, [setShowSettings, closeMcpView, setShowHistory, setShowAccount, setShowWorktrees])
+	const {
+		showMcp,
+		mcpTab,
+		showSettings,
+		settingsTargetSection,
+		showHistory,
+		showAccount,
+		showWorktrees,
+		showAnnouncement,
+		showChatModelSelector,
+		setShowMcp,
+		setMcpTab,
+		closeMcpView,
+		hideSettings,
+		hideHistory,
+		hideAccount,
+		hideWorktrees,
+		hideAnnouncement,
+		hideChatModelSelector,
+		navigateToMcp,
+		navigateToSettings,
+		navigateToHistory,
+		navigateToAccount,
+		navigateToWorktrees,
+		navigateToChat,
+		setShowAnnouncement,
+		setShowChatModelSelector,
+	} = useNavigation()
 
 	const [state, setState] = useState<ExtensionState>({
 		version: "",

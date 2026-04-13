@@ -1,20 +1,31 @@
 import { SkycodeMessage } from "@shared/ExtensionMessage"
 import { useCallback, useEffect, useRef, useState } from "react"
-import { ListRange, VirtuosoHandle } from "react-virtuoso"
 import { ScrollBehavior } from "../types/chatTypes"
 import { TurnData } from "../utils/messageUtils"
 
 /**
- * Hook for chat scroll management with Turn-based data.
+ * Native-scroll chat scroll manager (no Virtuoso).
  *
- * Key design:
- * - Virtuoso data = TurnData[] (each turn = one user message + AI responses).
- * - Sticky headers are pure CSS (`position: sticky` on TurnBlock header) — no JS hacks.
- * - Footer is always 100vh — never changes — no Virtuoso re-layout jumps.
- * - Auto-scroll uses pixel-based calculation to scroll to content bottom (not into footer).
- * - After user sends a message, scrollToIndex(lastTurn, "start") pins it to the top.
- * - Custom "at bottom" detection accounts for the large footer.
+ * Modes:
+ * 1. AUTO-SCROLL (default): viewport follows content growth — user always sees
+ *    the bottom of the last turn.  Triggered by content height increase
+ *    (ResizeObserver) and turn count change.
+ *
+ * 2. USER-SCROLL: activated when the user scrolls/wheels UP away from the
+ *    content bottom.  Auto-scroll is paused until the user scrolls back down
+ *    to the live area (or clicks "scroll to bottom").
+ *
+ * "Content bottom" = scrollHeight − footerHeight.
+ * Footer is a spacer (100vh) so the last turn can be pinned to the top
+ * of the viewport.  We never auto-scroll *into* the footer.
+ *
+ * Last-turn pinning: when a new turn appears, we scroll so its top aligns
+ * with the viewport top, then re-enable auto-scroll once the layout settles.
  */
+
+const NEAR_BOTTOM_PX = 80
+const AT_BOTTOM_PX = 50
+
 export function useScrollBehavior(
 	messages: SkycodeMessage[],
 	_visibleMessages: SkycodeMessage[],
@@ -28,107 +39,78 @@ export function useScrollBehavior(
 	setIsAtBottom: React.Dispatch<React.SetStateAction<boolean>>
 	pendingScrollToMessage: number | null
 	setPendingScrollToMessage: React.Dispatch<React.SetStateAction<number | null>>
-	handleRangeChanged: (range: ListRange) => void
 } {
-	const virtuosoRef = useRef<VirtuosoHandle>(null)
 	const scrollContainerRef = useRef<HTMLDivElement>(null)
 	const disableAutoScrollRef = useRef(false)
 
-	const scrollerElementRef = useRef<HTMLElement | null>(null)
+	const [showScrollToBottom, setShowScrollToBottom] = useState(false)
+	const [isAtBottom, setIsAtBottom] = useState(true)
+	const [pendingScrollToMessage, setPendingScrollToMessage] = useState<number | null>(null)
 
-	// Track scrollHeight in the scroll handler to distinguish user scroll from content growth.
-	const prevScrollHeightForHandlerRef = useRef(0)
-
-	// Flag: set when pinning a new turn to top, cleared after layout settles.
+	// --- refs for internal bookkeeping ---
+	const scrollerRef = useRef<HTMLElement | null>(null)
+	const prevScrollHeightRef = useRef(0)
 	const isPinningRef = useRef(false)
-
+	const userInteractingRef = useRef(false)
 	const turnsRef = useRef(turns)
 	turnsRef.current = turns
-
-	const [showScrollToBottom, setShowScrollToBottom] = useState(false)
-	const [isAtBottom, setIsAtBottom] = useState(false)
-	const [pendingScrollToMessage, setPendingScrollToMessage] = useState<number | null>(null)
-	const [scrollRoot, setScrollRoot] = useState<HTMLElement | null>(null)
-
-	const handleRangeChanged = useCallback((_range: ListRange) => {}, [])
-
-	// ==================== Pixel-based auto-scroll ====================
-	const prevScrollHeightRef = useRef(0)
+	const prevTurnCountRef = useRef(turns.length)
+	const prevMessagesLengthRef = useRef(messages.length)
+	const resizeObserverRef = useRef<ResizeObserver | null>(null)
 	const scrollFollowRafRef = useRef<number | null>(null)
+
+	// Grace: after programmatic scroll, ignore wheel/scroll events briefly
+	// so the browser's own scroll event from our scrollTo doesn't get
+	// misclassified as "user scrolling".
+	const programmaticScrollUntilRef = useRef(0)
+
+	// ---------- helpers ----------
 
 	const getFooterPixels = useCallback(() => window.innerHeight, [])
 
-	const getContentMaxScroll = useCallback(() => {
-		const scroller = scrollerElementRef.current
-		if (!scroller) return 0
-		return Math.max(0, scroller.scrollHeight - getFooterPixels() - scroller.clientHeight)
-	}, [getFooterPixels])
+	const getContentMaxScroll = useCallback(
+		(scroller: HTMLElement) => {
+			return Math.max(0, scroller.scrollHeight - getFooterPixels() - scroller.clientHeight)
+		},
+		[getFooterPixels],
+	)
 
+	/** Scroll to content bottom (not into footer). */
 	const scrollToContentBottom = useCallback(
-		(behavior: "smooth" | "auto", forShrink = false) => {
-			if (isPinningRef.current) return
-			if (!forShrink && disableAutoScrollRef.current) return
-
-			const scroller = scrollerElementRef.current
-			if (!scroller) {
-				const lastIndex = turnsRef.current.length - 1
-				if (lastIndex >= 0) {
-					virtuosoRef.current?.scrollToIndex({ index: lastIndex, align: "end", behavior })
-				}
-				return
+		(scroller: HTMLElement, behavior: ScrollBehavior_CSS = "auto") => {
+			const maxScroll = getContentMaxScroll(scroller)
+			if (scroller.scrollTop < maxScroll) {
+				programmaticScrollUntilRef.current = Date.now() + 80
+				scroller.scrollTo({ top: maxScroll, behavior })
 			}
-
-			const maxScroll = getContentMaxScroll()
-			const curScrollHeight = scroller.scrollHeight
-
-			if (forShrink) {
-				if (scroller.scrollTop > maxScroll) {
-					scroller.scrollTop = maxScroll
-				}
-			} else {
-				const prevHeight = prevScrollHeightRef.current
-				const heightDelta = curScrollHeight - prevHeight
-
-				if (heightDelta > 0 && maxScroll > scroller.scrollTop) {
-					const newTop = Math.min(scroller.scrollTop + heightDelta, maxScroll)
-					scroller.scrollTo({ top: newTop, behavior })
-				}
-			}
-			prevScrollHeightRef.current = curScrollHeight
+			prevScrollHeightRef.current = scroller.scrollHeight
 		},
 		[getContentMaxScroll],
 	)
 
-	const scrollToBottomSmooth = useCallback(() => {
-		if (scrollFollowRafRef.current != null) return
-		scrollFollowRafRef.current = requestAnimationFrame(() => {
-			scrollFollowRafRef.current = null
-			scrollToContentBottom("auto")
-		})
-	}, [scrollToContentBottom])
-
-	useEffect(
-		() => () => {
-			if (scrollFollowRafRef.current != null) {
-				cancelAnimationFrame(scrollFollowRafRef.current)
-			}
-		},
-		[],
-	)
+	// --- public API ---
 
 	const scrollToBottomAuto = useCallback(() => {
 		disableAutoScrollRef.current = false
-		const scroller = scrollerElementRef.current
+		setShowScrollToBottom(false)
+		const scroller = scrollerRef.current
 		if (scroller) {
-			const maxScroll = getContentMaxScroll()
-			scroller.scrollTo({ top: maxScroll, behavior: "auto" })
-			prevScrollHeightRef.current = scroller.scrollHeight
-		} else {
-			scrollToContentBottom("auto")
+			scrollToContentBottom(scroller, "auto")
 		}
-	}, [getContentMaxScroll, scrollToContentBottom])
+	}, [scrollToContentBottom])
 
-	// ==================== scrollToMessage ====================
+	const scrollToBottomSmooth = useCallback(() => {
+		if (scrollFollowRafRef.current != null) cancelAnimationFrame(scrollFollowRafRef.current)
+		scrollFollowRafRef.current = requestAnimationFrame(() => {
+			scrollFollowRafRef.current = null
+			const scroller = scrollerRef.current
+			if (!scroller || disableAutoScrollRef.current || isPinningRef.current) return
+			scrollToContentBottom(scroller, "auto")
+		})
+	}, [scrollToContentBottom])
+
+	// --- scrollToMessage ---
+
 	const scrollToMessage = useCallback(
 		(messageIndex: number) => {
 			const targetMessage = messages[messageIndex]
@@ -140,20 +122,11 @@ export function useScrollBehavior(
 			let turnIndex = -1
 			for (let t = 0; t < turns.length; t++) {
 				const turn = turns[t]
-				if (turn.userMessage.ts === targetMessage.ts) {
-					turnIndex = t
-					break
-				}
+				if (turn.userMessage.ts === targetMessage.ts) { turnIndex = t; break }
 				for (const item of turn.items) {
 					if (Array.isArray(item)) {
-						if (item.some((m) => m.ts === targetMessage.ts)) {
-							turnIndex = t
-							break
-						}
-					} else if (item.ts === targetMessage.ts) {
-						turnIndex = t
-						break
-					}
+						if (item.some((m) => m.ts === targetMessage.ts)) { turnIndex = t; break }
+					} else if (item.ts === targetMessage.ts) { turnIndex = t; break }
 				}
 				if (turnIndex !== -1) break
 			}
@@ -161,13 +134,16 @@ export function useScrollBehavior(
 			if (turnIndex !== -1) {
 				setPendingScrollToMessage(null)
 				disableAutoScrollRef.current = true
+				setShowScrollToBottom(true)
 
 				requestAnimationFrame(() => {
-					virtuosoRef.current?.scrollToIndex({
-						index: turnIndex,
-						align: "start",
-						behavior: "smooth",
-					})
+					const scroller = scrollerRef.current
+					if (!scroller) return
+					const turnEl = scroller.querySelector(`[data-turn-index="${turnIndex}"]`) as HTMLElement | null
+					if (turnEl) {
+						programmaticScrollUntilRef.current = Date.now() + 200
+						turnEl.scrollIntoView({ block: "start", behavior: "smooth" })
+					}
 				})
 			} else {
 				setPendingScrollToMessage(null)
@@ -176,72 +152,169 @@ export function useScrollBehavior(
 		[messages, turns],
 	)
 
-	// ==================== Expand/collapse rows ====================
+	// --- toggleRowExpansion ---
+
 	const toggleRowExpansion = useCallback(
 		(ts: number) => {
 			const isCollapsing = expandedRows[ts] ?? false
 
-			const lastTurn = turns.at(-1)
-			const lastItem = lastTurn?.items.at(-1)
-			const isLast = lastItem
-				? Array.isArray(lastItem) ? lastItem[0]?.ts === ts : lastItem?.ts === ts
-				: false
-
-			const secondToLastItem = lastTurn?.items.at(-2)
-			const isSecondToLast = secondToLastItem
-				? Array.isArray(secondToLastItem) ? secondToLastItem[0]?.ts === ts : secondToLastItem?.ts === ts
-				: false
-
-			const isLastCollapsedApiReq =
-				isLast &&
-				!Array.isArray(lastItem) &&
-				lastItem?.say === "api_req_started" &&
-				!expandedRows[lastItem.ts]
-
-			setExpandedRows((prev) => ({
-				...prev,
-				[ts]: !prev[ts],
-			}))
+			setExpandedRows((prev) => ({ ...prev, [ts]: !prev[ts] }))
 
 			if (!isCollapsing) {
 				disableAutoScrollRef.current = true
-			}
-			const runShrinkScroll = () => {
+				setShowScrollToBottom(true)
+			} else {
+				// collapsing — clamp scroll so we don't have empty space below content
 				requestAnimationFrame(() => {
-					requestAnimationFrame(() => scrollToContentBottom("auto", true))
+					requestAnimationFrame(() => {
+						const scroller = scrollerRef.current
+						if (!scroller) return
+						const maxScroll = getContentMaxScroll(scroller)
+						if (scroller.scrollTop > maxScroll) {
+							scroller.scrollTop = maxScroll
+						}
+						prevScrollHeightRef.current = scroller.scrollHeight
+					})
 				})
 			}
-			if (isCollapsing && isAtBottom) {
-				runShrinkScroll()
-			} else if (isCollapsing && (isLast || isSecondToLast)) {
-				if (isSecondToLast && !isLastCollapsedApiReq) {
-					return
-				}
-				runShrinkScroll()
-			}
 		},
-		[turns, expandedRows, scrollToContentBottom, isAtBottom, setExpandedRows],
+		[expandedRows, setExpandedRows, getContentMaxScroll],
 	)
 
-	// ==================== Row height changes ====================
+	// --- handleRowHeightChange (called by ChatRow for last message) ---
+
 	const handleRowHeightChange = useCallback(
 		(isTaller: boolean) => {
-			if (!disableAutoScrollRef.current) {
-				if (isTaller) {
-					scrollToBottomSmooth()
-				} else {
-					requestAnimationFrame(() => {
-						requestAnimationFrame(() => scrollToContentBottom("auto", true))
-					})
-				}
+			if (disableAutoScrollRef.current || isPinningRef.current) return
+			const scroller = scrollerRef.current
+			if (!scroller) return
+
+			if (isTaller) {
+				scrollToBottomSmooth()
+			} else {
+				requestAnimationFrame(() => {
+					const maxScroll = getContentMaxScroll(scroller)
+					if (scroller.scrollTop > maxScroll) {
+						scroller.scrollTop = maxScroll
+					}
+					prevScrollHeightRef.current = scroller.scrollHeight
+				})
 			}
 		},
-		[scrollToBottomSmooth, scrollToContentBottom],
+		[scrollToBottomSmooth, getContentMaxScroll],
 	)
 
-	// ==================== New turns / new content ====================
-	const prevTurnCountRef = useRef(turns.length)
-	const prevMessagesLengthRef = useRef(messages.length)
+	// ==================== Scroller ref callback ====================
+
+	const onScrollerRef = useCallback((ref: HTMLElement | null) => {
+		scrollerRef.current = ref
+		if (ref) {
+			prevScrollHeightRef.current = ref.scrollHeight
+		}
+	}, [])
+
+	// ==================== User interaction detection ====================
+	// We track wheel / touchstart / pointerdown on the scroller to know
+	// when the *user* (not our code) is driving scroll position.
+
+	useEffect(() => {
+		const scroller = scrollerRef.current
+		if (!scroller) return
+
+		const markUserInteraction = () => {
+			userInteractingRef.current = true
+		}
+		const clearUserInteraction = () => {
+			userInteractingRef.current = false
+		}
+
+		scroller.addEventListener("wheel", markUserInteraction, { passive: true })
+		scroller.addEventListener("touchstart", markUserInteraction, { passive: true })
+		scroller.addEventListener("pointerdown", markUserInteraction, { passive: true })
+		scroller.addEventListener("touchend", clearUserInteraction, { passive: true })
+		scroller.addEventListener("pointerup", clearUserInteraction, { passive: true })
+
+		return () => {
+			scroller.removeEventListener("wheel", markUserInteraction)
+			scroller.removeEventListener("touchstart", markUserInteraction)
+			scroller.removeEventListener("pointerdown", markUserInteraction)
+			scroller.removeEventListener("touchend", clearUserInteraction)
+			scroller.removeEventListener("pointerup", clearUserInteraction)
+		}
+	}, [scrollerRef.current])
+
+	// ==================== Scroll event — auto-scroll toggle ====================
+
+	useEffect(() => {
+		const scroller = scrollerRef.current
+		if (!scroller) return
+
+		const handleScroll = () => {
+			if (isPinningRef.current) return
+
+			// Ignore scroll events caused by our own programmatic scrollTo
+			if (Date.now() < programmaticScrollUntilRef.current) return
+
+			const footerPx = getFooterPixels()
+			const distanceFromContent =
+				scroller.scrollHeight - footerPx - scroller.scrollTop - scroller.clientHeight
+
+			const nearBottom = distanceFromContent <= NEAR_BOTTOM_PX
+
+			if (nearBottom) {
+				disableAutoScrollRef.current = false
+				setShowScrollToBottom(false)
+			} else if (userInteractingRef.current) {
+				disableAutoScrollRef.current = true
+				setShowScrollToBottom(true)
+			}
+
+			setIsAtBottom(distanceFromContent <= AT_BOTTOM_PX)
+		}
+
+		scroller.addEventListener("scroll", handleScroll, { passive: true })
+		return () => scroller.removeEventListener("scroll", handleScroll)
+	}, [scrollerRef.current, getFooterPixels])
+
+	// ==================== ResizeObserver — follow content growth ====================
+
+	useEffect(() => {
+		const scroller = scrollerRef.current
+		if (!scroller) return
+
+		// Observe the first child (the actual content wrapper) if available,
+		// otherwise the scroller itself.
+		const target = scroller.firstElementChild ?? scroller
+
+		const ro = new ResizeObserver(() => {
+			if (isPinningRef.current || disableAutoScrollRef.current) return
+
+			const curHeight = scroller.scrollHeight
+			const prevHeight = prevScrollHeightRef.current
+
+			if (curHeight > prevHeight) {
+				// Content grew → follow it
+				scrollToContentBottom(scroller, "auto")
+			} else if (curHeight < prevHeight) {
+				// Content shrank → clamp
+				const maxScroll = getContentMaxScroll(scroller)
+				if (scroller.scrollTop > maxScroll) {
+					scroller.scrollTop = maxScroll
+				}
+			}
+			prevScrollHeightRef.current = curHeight
+		})
+
+		ro.observe(target)
+		resizeObserverRef.current = ro
+
+		return () => {
+			ro.disconnect()
+			resizeObserverRef.current = null
+		}
+	}, [scrollerRef.current, scrollToContentBottom, getContentMaxScroll])
+
+	// ==================== New turn pinning ====================
 
 	useEffect(() => {
 		const prevTurnCount = prevTurnCountRef.current
@@ -255,29 +328,37 @@ export function useScrollBehavior(
 		if (curMsgLen <= prevMsgLen) return
 
 		if (curTurnCount > prevTurnCount) {
+			const scroller = scrollerRef.current
+			if (!scroller) return
+
 			isPinningRef.current = true
 			disableAutoScrollRef.current = true
 
-			const idx = turnsRef.current.length - 1
-			if (idx >= 0) {
-				virtuosoRef.current?.scrollToIndex({
-					index: idx,
-					align: "start",
-					behavior: "auto",
-				})
-			}
+			// Wait for DOM to render the new turn element
 			requestAnimationFrame(() => {
+				const lastTurnEl = scroller.querySelector(
+					`[data-turn-index="${curTurnCount - 1}"]`,
+				) as HTMLElement | null
+
+				if (lastTurnEl) {
+					programmaticScrollUntilRef.current = Date.now() + 200
+					const elTop = lastTurnEl.offsetTop - scroller.offsetTop
+					scroller.scrollTo({ top: elTop, behavior: "auto" })
+				}
+
 				requestAnimationFrame(() => {
 					isPinningRef.current = false
-					if (scrollerElementRef.current) {
-						prevScrollHeightRef.current = scrollerElementRef.current.scrollHeight
-					}
 					disableAutoScrollRef.current = false
+					if (scroller) {
+						prevScrollHeightRef.current = scroller.scrollHeight
+					}
 				})
 			})
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [messages.length, turns.length])
+
+	// ==================== Pending scroll to message ====================
 
 	useEffect(() => {
 		if (pendingScrollToMessage !== null) {
@@ -291,51 +372,18 @@ export function useScrollBehavior(
 		}
 	}, [messages.length])
 
-	// ==================== Custom "at bottom" detection ====================
-	const onScrollerRef = useCallback((ref: HTMLElement | Window | null) => {
-		const el = ref instanceof HTMLElement ? ref : null
-		scrollerElementRef.current = el
-		if (el) {
-			prevScrollHeightRef.current = el.scrollHeight
-			prevScrollHeightForHandlerRef.current = el.scrollHeight
-		}
-		setScrollRoot(el)
-	}, [])
+	// ==================== Cleanup ====================
 
-	useEffect(() => {
-		if (!scrollRoot) return
-
-		prevScrollHeightForHandlerRef.current = scrollRoot.scrollHeight
-
-		const handleScroll = () => {
-			if (isPinningRef.current) return
-
-			const { scrollTop, scrollHeight, clientHeight } = scrollRoot
-			const footerPx = getFooterPixels()
-			const distanceFromContent = scrollHeight - footerPx - scrollTop - clientHeight
-
-			const turnEndVisible = distanceFromContent <= 80
-
-			if (turnEndVisible) {
-				disableAutoScrollRef.current = false
-				setShowScrollToBottom(false)
-			} else if (scrollHeight <= prevScrollHeightForHandlerRef.current) {
-				disableAutoScrollRef.current = true
-				setShowScrollToBottom(true)
+	useEffect(
+		() => () => {
+			if (scrollFollowRafRef.current != null) {
+				cancelAnimationFrame(scrollFollowRafRef.current)
 			}
-
-			prevScrollHeightForHandlerRef.current = scrollHeight
-			setIsAtBottom(distanceFromContent <= 50)
-		}
-
-		scrollRoot.addEventListener("scroll", handleScroll, { passive: true })
-		return () => {
-			scrollRoot.removeEventListener("scroll", handleScroll)
-		}
-	}, [scrollRoot, getFooterPixels])
+		},
+		[],
+	)
 
 	return {
-		virtuosoRef,
 		scrollContainerRef,
 		disableAutoScrollRef,
 		scrollToBottomSmooth,
@@ -349,7 +397,8 @@ export function useScrollBehavior(
 		setIsAtBottom,
 		pendingScrollToMessage,
 		setPendingScrollToMessage,
-		handleRangeChanged,
 		onScrollerRef,
 	}
 }
+
+type ScrollBehavior_CSS = "auto" | "smooth"
