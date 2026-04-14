@@ -13,6 +13,8 @@ import { SkycodeDefaultTool } from "@shared/tools"
 import { SkycodeAskResponse } from "@shared/WebviewMessage"
 import * as vscode from "vscode"
 import { isGPT5ModelFamily, modelDoesntSupportWebp, getModelCapabilityTier, getSessionLimitsForModel } from "@/utils/model-utils"
+import { getApiSettingsMode } from "@shared/storage/types"
+import type { ApiProviderInfo } from "@core/api"
 import { EXPLORATION_ONLY_TOOLS } from "@shared/tools"
 import { ToolUse } from "../assistant-message"
 import { ContextManager } from "../context/context-management/ContextManager"
@@ -547,20 +549,29 @@ export class ToolExecutor {
 		}
 	}
 
+	private getProviderInfo(): ApiProviderInfo {
+		const model = this.api.getModel()
+		const apiConfig = this.stateManager.getApiConfiguration()
+		const mode = this.stateManager.getGlobalSettingsKey("mode")
+		const providerId = (getApiSettingsMode(mode) === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
+		return { model, providerId, mode }
+	}
+
 	/**
 	 * Tracks tool calls for session budget and anti-loop detection.
 	 * For weak/medium models, injects warnings when approaching limits
 	 * or when stuck in exploration loops.
 	 */
 	private trackToolCallForSessionBudget(block: ToolUse): void {
-		const modelId = this.api.getModel().id
-		const tier = getModelCapabilityTier(modelId)
+		const providerInfo = this.getProviderInfo()
+		const modelId = providerInfo.model.id
+		const tier = getModelCapabilityTier(modelId, providerInfo)
 
 		if (tier === "strong") {
 			return
 		}
 
-		const limits = getSessionLimitsForModel(modelId)
+		const limits = getSessionLimitsForModel(modelId, providerInfo)
 
 		this.taskState.turnToolCallCount++
 

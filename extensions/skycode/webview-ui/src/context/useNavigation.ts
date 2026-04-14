@@ -57,7 +57,7 @@ export function useNavigation(): NavigationState & NavigationActions {
 	const hideSettings = useCallback(() => {
 		setShowSettings(false)
 		setSettingsTargetSection(undefined)
-		StateServiceClient.refreshBanners(EmptyRequest.create({})).catch(() => {})
+		StateServiceClient.refreshBanners(EmptyRequest.create({})).catch((err) => console.error("Failed to refresh banners:", err))
 	}, [])
 	const hideHistory = useCallback(() => setShowHistory(false), [])
 	const hideAccount = useCallback(() => setShowAccount(false), [])

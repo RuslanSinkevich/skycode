@@ -2502,9 +2502,10 @@ export class Task {
 		// If the model has used many API requests, force context compaction even if
 		// token-based threshold hasn't been reached (weak models degrade before filling context).
 		if (!shouldCompact) {
-			const modelTier = getModelCapabilityTier(this.api.getModel().id)
+			const currentProviderInfo = this.getCurrentProviderInfo()
+			const modelTier = getModelCapabilityTier(currentProviderInfo.model.id, currentProviderInfo)
 			if (modelTier !== "strong") {
-				const limits = getSessionLimitsForModel(this.api.getModel().id)
+				const limits = getSessionLimitsForModel(currentProviderInfo.model.id, currentProviderInfo)
 				if (this.taskState.apiRequestCount > 0 && this.taskState.apiRequestCount % limits.forceCompactAfterSteps === 0) {
 					shouldCompact = true
 				}
