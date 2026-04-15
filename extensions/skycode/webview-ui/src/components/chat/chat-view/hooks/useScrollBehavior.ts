@@ -20,7 +20,9 @@ import { TurnData } from "../utils/messageUtils"
  * of the viewport.  We never auto-scroll *into* the footer.
  *
  * Last-turn pinning: when a new turn appears, we scroll so its top aligns
- * with the viewport top, then re-enable auto-scroll once the layout settles.
+ * with the viewport top. Auto-scroll stays off (disableAutoScrollRef) until
+ * the user scrolls near the content bottom or uses scroll-to-bottom — so
+ * streaming height changes do not snap the view to the bottom.
  */
 
 const NEAR_BOTTOM_PX = 80
@@ -364,7 +366,9 @@ export function useScrollBehavior(
 
 				requestAnimationFrame(() => {
 					isPinningRef.current = false
-					disableAutoScrollRef.current = false
+					// Keep disableAutoScrollRef true: user is reading from the pinned top;
+					// handleScroll re-enables follow when they scroll near the bottom.
+					setShowScrollToBottom(true)
 					if (scroller) {
 						prevScrollHeightRef.current = scroller.scrollHeight
 					}
