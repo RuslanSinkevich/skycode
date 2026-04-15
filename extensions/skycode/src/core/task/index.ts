@@ -579,6 +579,12 @@ export class Task {
 		if (this.taskState.abort && type !== "resume_task" && type !== "resume_completed_task") {
 			throw new Error("Skycode instance aborted")
 		}
+		const providerInfo = this.getCurrentProviderInfo()
+		const modelInfo: SkycodeMessageModelInfo = {
+			providerId: providerInfo.providerId,
+			modelId: providerInfo.model.id,
+			mode: providerInfo.mode,
+		}
 		let askTs: number
 		if (partial !== undefined) {
 			const skycodeMessages = this.messageStateHandler.getSkycodeMessages()
@@ -613,6 +619,7 @@ export class Task {
 						ask: type,
 						text,
 						partial,
+						modelInfo,
 					})
 					await this.postStateToWebview()
 					throw new Error("Current ask promise was ignored 2")
@@ -647,6 +654,7 @@ export class Task {
 						type: "ask",
 						ask: type,
 						text,
+						modelInfo,
 					})
 					await this.postStateToWebview()
 				}
@@ -660,6 +668,7 @@ export class Task {
 				type: "ask",
 				ask: type,
 				text,
+				modelInfo,
 			})
 			await this.postStateToWebview()
 		}

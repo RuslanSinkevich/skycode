@@ -38,7 +38,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
 	inputValue,
 	messageHandlers,
 }) => {
-	const { mode } = useExtensionState()
+	const { mode: currentMode } = useExtensionState()
 
 	// Get reasoning content and response status for api_req_started messages
 	const reasoningData = useMemo(() => {
@@ -91,7 +91,9 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
 		)
 	}
 
-	// Regular message
+	// Regular message — use mode captured on the message (same as model/provider at send time), not the global toggle
+	const rowMode = messageOrGroup.modelInfo?.mode ?? currentMode
+
 	return (
 		<div
 			className={cn({
@@ -106,7 +108,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
 				key={messageOrGroup.ts}
 				lastModifiedMessage={modifiedMessages.at(-1)}
 				message={messageOrGroup}
-				mode={mode}
+				mode={rowMode}
 				onCancelCommand={() => messageHandlers.executeButtonAction("cancel")}
 				onHeightChange={onHeightChange}
 				onSetQuote={onSetQuote}
