@@ -15,3 +15,33 @@ export enum ModelFamily {
 	XS = "xs",
 	NATIVE_NEXT_GEN = "native-next-gen", // Uses native tool calling
 }
+
+export type ModelCapabilityTier = "strong" | "medium" | "weak"
+
+export interface WeakModelSessionLimits {
+	maxToolCallsPerTurn: number
+	maxConsecutiveReadOnlyTools: number
+	forceCompactAfterSteps: number
+	contextWindowUsageRatio: number
+}
+
+export const MODEL_SESSION_LIMITS: Record<ModelCapabilityTier, WeakModelSessionLimits> = {
+	strong: {
+		maxToolCallsPerTurn: Infinity,
+		maxConsecutiveReadOnlyTools: Infinity,
+		forceCompactAfterSteps: Infinity,
+		contextWindowUsageRatio: 0.8,
+	},
+	medium: {
+		maxToolCallsPerTurn: 40,
+		maxConsecutiveReadOnlyTools: 8,
+		forceCompactAfterSteps: 25,
+		contextWindowUsageRatio: 0.65,
+	},
+	weak: {
+		maxToolCallsPerTurn: 20,
+		maxConsecutiveReadOnlyTools: 5,
+		forceCompactAfterSteps: 12,
+		contextWindowUsageRatio: 0.5,
+	},
+}

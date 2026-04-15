@@ -225,12 +225,20 @@ export class DiffSystem implements vscode.Disposable {
     );
   }
 
+  private _pendingContextScheduled = false;
+
   /**
    * Update VS Code context key 'skycode.hasPendingHunks' for keybinding when-clauses.
+   * Coalesced via queueMicrotask to avoid N setContext calls during a batch.
    */
   private updatePendingContext(): void {
-    const hasPending = this.store.getPendingCount() > 0;
-    vscode.commands.executeCommand('setContext', 'skycode.hasPendingHunks', hasPending);
+    if (this._pendingContextScheduled) return;
+    this._pendingContextScheduled = true;
+    queueMicrotask(() => {
+      this._pendingContextScheduled = false;
+      const hasPending = this.store.getPendingCount() > 0;
+      vscode.commands.executeCommand('setContext', 'skycode.hasPendingHunks', hasPending);
+    });
   }
 
   private registerCommands(): void {
@@ -497,15 +505,18 @@ export class DiffSystem implements vscode.Disposable {
 
   // ==================== Apply changes ====================
 
+  /** Tracks documents already loaded during this session to skip redundant openTextDocument calls */
+  private readonly _loadedDocs = new Set<string>();
+
   /**
    * Ensure the document is loaded in memory (for WorkspaceEdit in HunkApplier).
-   * Does NOT show the file in the editor — the user opens it manually
-   * or by clicking the diff card in chat (Cursor-like behavior).
-   * View Zones will be created automatically when the file becomes visible
-   * (via onDidChangeVisibleTextEditors).
+   * Skips if already loaded in this session.
    */
   private async ensureDocumentLoaded(fsPath: string): Promise<void> {
+    const key = fsPath.toLowerCase();
+    if (this._loadedDocs.has(key)) return;
     await vscode.workspace.openTextDocument(fsPath);
+    this._loadedDocs.add(key);
   }
 
   private ensureResponseGroup(): string {
@@ -1200,6 +1211,19 @@ export class DiffSystem implements vscode.Disposable {
 
   async resumeRendering(): Promise<void> {
     await this.renderer.flush();
+  }
+
+  /**
+   * Begin a batch of file edits. While in batch mode:
+   * - HunkApplier defers doc.save() (single save at end instead of N)
+   * - Call endBatch() when done to flush the deferred save.
+   */
+  beginBatch(): void {
+    this.hunkApplier.beginBatch();
+  }
+
+  async endBatch(): Promise<void> {
+    await this.hunkApplier.endBatch();
   }
 
   // ==================== Expose store for advanced consumers ====================

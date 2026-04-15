@@ -13,7 +13,8 @@ import { convertProtoMcpServersToMcpServers } from "@shared/proto-conversions/mc
 import { fromProtobufModels } from "@shared/proto-conversions/models/typeConversion"
 import { convertProtoToSkycodeMessage } from "@shared/proto-conversions/skycode-message"
 import type React from "react"
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
+import { useNavigation } from "./useNavigation"
 import { Environment } from "../../../src/config"
 import {
 	basetenDefaultModelId,
@@ -125,93 +126,34 @@ export const ExtensionStateContext = createContext<ExtensionStateContextType | u
 export const ExtensionStateContextProvider: React.FC<{
 	children: React.ReactNode
 }> = ({ children }) => {
-	// UI view state
-	const [showMcp, setShowMcp] = useState(false)
-	const [mcpTab, setMcpTab] = useState<McpViewTab | undefined>(undefined)
-	const [showSettings, setShowSettings] = useState(false)
-	const [settingsTargetSection, setSettingsTargetSection] = useState<string | undefined>(undefined)
-	const [showHistory, setShowHistory] = useState(false)
-	const [showAccount, setShowAccount] = useState(false)
-	const [showWorktrees, setShowWorktrees] = useState(false)
-	const [showAnnouncement, setShowAnnouncement] = useState(false)
-	const [showChatModelSelector, setShowChatModelSelector] = useState(false)
-
-	// Helper for MCP view
-	const closeMcpView = useCallback(() => {
-		setShowMcp(false)
-		setMcpTab(undefined)
-	}, [setShowMcp, setMcpTab])
-
-	// Hide functions
-	const hideSettings = useCallback(() => {
-		setShowSettings(false)
-		setSettingsTargetSection(undefined)
-		StateServiceClient.refreshBanners(EmptyRequest.create({})).catch(() => {})
-	}, [])
-	const hideHistory = useCallback(() => setShowHistory(false), [setShowHistory])
-	const hideAccount = useCallback(() => setShowAccount(false), [setShowAccount])
-	const hideWorktrees = useCallback(() => setShowWorktrees(false), [setShowWorktrees])
-	const hideAnnouncement = useCallback(() => setShowAnnouncement(false), [setShowAnnouncement])
-	const hideChatModelSelector = useCallback(() => setShowChatModelSelector(false), [setShowChatModelSelector])
-
-	// Navigation functions
-	const navigateToMcp = useCallback(
-		(tab?: McpViewTab) => {
-			setShowSettings(false)
-			setShowHistory(false)
-			setShowAccount(false)
-			setShowWorktrees(false)
-			if (tab) {
-				setMcpTab(tab)
-			}
-			setShowMcp(true)
-		},
-		[setShowMcp, setMcpTab, setShowSettings, setShowHistory, setShowAccount, setShowWorktrees],
-	)
-
-	const navigateToSettings = useCallback(
-		(targetSection?: string) => {
-			setShowHistory(false)
-			closeMcpView()
-			setShowAccount(false)
-			setShowWorktrees(false)
-			setSettingsTargetSection(targetSection)
-			setShowSettings(true)
-		},
-		[closeMcpView],
-	)
-
-	const navigateToHistory = useCallback(() => {
-		setShowSettings(false)
-		closeMcpView()
-		setShowAccount(false)
-		setShowWorktrees(false)
-		setShowHistory(true)
-	}, [setShowSettings, closeMcpView, setShowAccount, setShowWorktrees, setShowHistory])
-
-	const navigateToAccount = useCallback(() => {
-		setShowSettings(false)
-		closeMcpView()
-		setShowHistory(false)
-		setShowWorktrees(false)
-		setShowAccount(true)
-	}, [setShowSettings, closeMcpView, setShowHistory, setShowWorktrees, setShowAccount])
-
-	const navigateToWorktrees = useCallback(() => {
-		setShowSettings(false)
-		closeMcpView()
-		setShowHistory(false)
-		setShowAccount(false)
-		setShowWorktrees(true)
-	}, [setShowSettings, closeMcpView, setShowHistory, setShowAccount, setShowWorktrees])
-
-	const navigateToChat = useCallback(() => {
-		setShowSettings(false)
-		closeMcpView()
-		setShowHistory(false)
-		setShowAccount(false)
-		setShowWorktrees(false)
-	}, [setShowSettings, closeMcpView, setShowHistory, setShowAccount, setShowWorktrees])
+	const {
+		showMcp,
+		mcpTab,
+		showSettings,
+		settingsTargetSection,
+		showHistory,
+		showAccount,
+		showWorktrees,
+		showAnnouncement,
+		showChatModelSelector,
+		setShowMcp,
+		setMcpTab,
+		closeMcpView,
+		hideSettings,
+		hideHistory,
+		hideAccount,
+		hideWorktrees,
+		hideAnnouncement,
+		hideChatModelSelector,
+		navigateToMcp,
+		navigateToSettings,
+		navigateToHistory,
+		navigateToAccount,
+		navigateToWorktrees,
+		navigateToChat,
+		setShowAnnouncement,
+		setShowChatModelSelector,
+	} = useNavigation()
 
 	const [state, setState] = useState<ExtensionState>({
 		version: "",
@@ -285,6 +227,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		indexingProgress: undefined,
 		// Skycode AI: Lightweight mode for weak models
 		lightweightMode: false,
+		promptProfile: undefined,
 		// Skycode AI: Edit tools settings
 		useSimplifiedEditTools: true,
 		validateSyntaxBeforeApply: false,
@@ -402,7 +345,6 @@ export const ExtensionStateContextProvider: React.FC<{
 						})
 					} catch (error) {
 						console.error("Error parsing state JSON:", error)
-						console.log("[DEBUG] ERR getting state", error)
 					}
 				}
 				// [SKYCODE-PERF] Removed noisy per-state-update log that was spamming console
@@ -410,9 +352,7 @@ export const ExtensionStateContextProvider: React.FC<{
 			onError: (error) => {
 				console.error("Error in state subscription:", error)
 			},
-			onComplete: () => {
-				console.log("State subscription completed")
-			},
+			onComplete: () => {},
 		})
 
 		// Subscribe to MCP button clicked events with webview type
@@ -420,15 +360,12 @@ export const ExtensionStateContextProvider: React.FC<{
 			{},
 			{
 				onResponse: () => {
-					console.log("[DEBUG] Received mcpButtonClicked event from gRPC stream")
-					navigateToMcp()
+				navigateToMcp()
 				},
 				onError: (error) => {
 					console.error("Error in mcpButtonClicked subscription:", error)
 				},
-				onComplete: () => {
-					console.log("mcpButtonClicked subscription completed")
-				},
+			onComplete: () => {},
 			},
 		)
 
@@ -438,15 +375,12 @@ export const ExtensionStateContextProvider: React.FC<{
 			{
 				onResponse: () => {
 					// When history button is clicked, navigate to history view
-					console.log("[DEBUG] Received history button clicked event from gRPC stream")
-					navigateToHistory()
+				navigateToHistory()
 				},
 				onError: (error) => {
 					console.error("Error in history button clicked subscription:", error)
 				},
-				onComplete: () => {
-					console.log("History button clicked subscription completed")
-				},
+			onComplete: () => {},
 			},
 		)
 
@@ -456,8 +390,7 @@ export const ExtensionStateContextProvider: React.FC<{
 			{
 				onResponse: () => {
 					// When chat button is clicked, navigate to chat
-					console.log("[DEBUG] Received chat button clicked event from gRPC stream")
-					navigateToChat()
+				navigateToChat()
 				},
 				onError: (error) => {
 					console.error("Error in chat button subscription:", error)
@@ -469,17 +402,14 @@ export const ExtensionStateContextProvider: React.FC<{
 		// Subscribe to MCP servers updates
 		mcpServersSubscriptionRef.current = McpServiceClient.subscribeToMcpServers(EmptyRequest.create(), {
 			onResponse: (response) => {
-				console.log("[DEBUG] Received MCP servers update from gRPC stream")
-				if (response.mcpServers) {
+			if (response.mcpServers) {
 					setMcpServers(convertProtoMcpServersToMcpServers(response.mcpServers))
 				}
 			},
 			onError: (error) => {
 				console.error("Error in MCP servers subscription:", error)
 			},
-			onComplete: () => {
-				console.log("MCP servers subscription completed")
-			},
+			onComplete: () => {},
 		})
 
 		// Set up settings button clicked subscription
@@ -491,9 +421,7 @@ export const ExtensionStateContextProvider: React.FC<{
 			onError: (error) => {
 				console.error("Error in settings button clicked subscription:", error)
 			},
-			onComplete: () => {
-				console.log("Settings button clicked subscription completed")
-			},
+			onComplete: () => {},
 		})
 
 		// Set up worktrees button clicked subscription
@@ -507,9 +435,7 @@ export const ExtensionStateContextProvider: React.FC<{
 				onError: (error) => {
 					console.error("Error in worktrees button clicked subscription:", error)
 				},
-				onComplete: () => {
-					console.log("Worktrees button clicked subscription completed")
-				},
+			onComplete: () => {},
 			},
 		)
 
@@ -541,23 +467,18 @@ export const ExtensionStateContextProvider: React.FC<{
 			onError: (error) => {
 				console.error("Error in partialMessage subscription:", error)
 			},
-			onComplete: () => {
-				console.log("[DEBUG] partialMessage subscription completed")
-			},
+			onComplete: () => {},
 		})
 
 		// Subscribe to MCP marketplace catalog updates
 		mcpMarketplaceUnsubscribeRef.current = McpServiceClient.subscribeToMcpMarketplaceCatalog(EmptyRequest.create({}), {
 			onResponse: (catalog) => {
-				console.log("[DEBUG] Received MCP marketplace catalog update from gRPC stream")
-				setMcpMarketplaceCatalog(catalog)
+			setMcpMarketplaceCatalog(catalog)
 			},
 			onError: (error) => {
 				console.error("Error in MCP marketplace catalog subscription:", error)
 			},
-			onComplete: () => {
-				console.log("MCP marketplace catalog subscription completed")
-			},
+			onComplete: () => {},
 		})
 
 		// Subscribe to OpenRouter models updates
@@ -572,9 +493,7 @@ export const ExtensionStateContextProvider: React.FC<{
 			onError: (error) => {
 				console.error("Error in OpenRouter models subscription:", error)
 			},
-			onComplete: () => {
-				console.log("OpenRouter models subscription completed")
-			},
+			onComplete: () => {},
 		})
 
 		// Subscribe to LiteLLM models updates
@@ -586,16 +505,12 @@ export const ExtensionStateContextProvider: React.FC<{
 			onError: (error) => {
 				console.error("Error in LiteLLM models subscription:", error)
 			},
-			onComplete: () => {
-				console.log("LiteLLM models subscription completed")
-			},
+			onComplete: () => {},
 		})
 
 		// Initialize webview using gRPC
 		UiServiceClient.initializeWebview(EmptyRequest.create({}))
-			.then(() => {
-				console.log("[DEBUG] Webview initialization completed via gRPC")
-			})
+			.then(() => {})
 			.catch((error) => {
 				console.error("Failed to initialize webview via gRPC:", error)
 			})
@@ -604,15 +519,12 @@ export const ExtensionStateContextProvider: React.FC<{
 		accountButtonClickedSubscriptionRef.current = UiServiceClient.subscribeToAccountButtonClicked(EmptyRequest.create(), {
 			onResponse: () => {
 				// When account button is clicked, navigate to account view
-				console.log("[DEBUG] Received account button clicked event from gRPC stream")
 				navigateToAccount()
 			},
 			onError: (error) => {
 				console.error("Error in account button clicked subscription:", error)
 			},
-			onComplete: () => {
-				console.log("Account button clicked subscription completed")
-			},
+			onComplete: () => {},
 		})
 
 		// Fetch available terminal profiles on launch
@@ -774,7 +686,38 @@ export const ExtensionStateContextProvider: React.FC<{
 		refreshLiteLlmModels,
 	])
 
-	const contextValue: ExtensionStateContextType = {
+	const stableSetters = useRef({
+		setShouldShowAnnouncement: (value: boolean) =>
+			setState((prev) => ({ ...prev, shouldShowAnnouncement: value })),
+		setGlobalSkycodeRulesToggles: (toggles: Record<string, boolean>) =>
+			setState((prev) => ({ ...prev, globalSkycodeRulesToggles: toggles })),
+		setLocalSkycodeRulesToggles: (toggles: Record<string, boolean>) =>
+			setState((prev) => ({ ...prev, localSkycodeRulesToggles: toggles })),
+		setLocalCursorRulesToggles: (toggles: Record<string, boolean>) =>
+			setState((prev) => ({ ...prev, localCursorRulesToggles: toggles })),
+		setLocalWindsurfRulesToggles: (toggles: Record<string, boolean>) =>
+			setState((prev) => ({ ...prev, localWindsurfRulesToggles: toggles })),
+		setLocalAgentsRulesToggles: (toggles: Record<string, boolean>) =>
+			setState((prev) => ({ ...prev, localAgentsRulesToggles: toggles })),
+		setLocalWorkflowToggles: (toggles: Record<string, boolean>) =>
+			setState((prev) => ({ ...prev, localWorkflowToggles: toggles })),
+		setGlobalWorkflowToggles: (toggles: Record<string, boolean>) =>
+			setState((prev) => ({ ...prev, globalWorkflowToggles: toggles })),
+		setGlobalSkillsToggles: (toggles: Record<string, boolean>) =>
+			setState((prev) => ({ ...prev, globalSkillsToggles: toggles })),
+		setLocalSkillsToggles: (toggles: Record<string, boolean>) =>
+			setState((prev) => ({ ...prev, localSkillsToggles: toggles })),
+		setRemoteRulesToggles: (toggles: Record<string, boolean>) =>
+			setState((prev) => ({ ...prev, remoteRulesToggles: toggles })),
+		setRemoteWorkflowToggles: (toggles: Record<string, boolean>) =>
+			setState((prev) => ({ ...prev, remoteWorkflowToggles: toggles })),
+		setUserInfo: (userInfo?: UserInfo) =>
+			setState((prev) => ({ ...prev, userInfo })),
+		setDictationSettings: (value: DictationSettings) =>
+			setState((prev) => ({ ...prev, dictationSettings: value })),
+	}).current
+
+	const contextValue = useMemo<ExtensionStateContextType>(() => ({
 		...state,
 		didHydrateState,
 		showWelcome,
@@ -832,90 +775,40 @@ export const ExtensionStateContextProvider: React.FC<{
 		setShowWelcome,
 		setOnboardingModels,
 		setShowChatModelSelector,
-		setShouldShowAnnouncement: (value) =>
-			setState((prevState) => ({
-				...prevState,
-				shouldShowAnnouncement: value,
-			})),
-		setMcpServers: (mcpServers: McpServer[]) => setMcpServers(mcpServers),
-		setRequestyModels: (models: Record<string, ModelInfo>) => setRequestyModels(models),
-		setGroqModels: (models: Record<string, ModelInfo>) => setGroqModels(models),
-		setBasetenModels: (models: Record<string, ModelInfo>) => setBasetenModels(models),
-		setHuggingFaceModels: (models: Record<string, ModelInfo>) => setHuggingFaceModels(models),
-		setMcpMarketplaceCatalog: (catalog: McpMarketplaceCatalog) => setMcpMarketplaceCatalog(catalog),
+		setMcpServers,
+		setRequestyModels,
+		setGroqModels,
+		setBasetenModels,
+		setHuggingFaceModels,
+		setMcpMarketplaceCatalog,
 		setShowMcp,
 		closeMcpView,
-		setGlobalSkycodeRulesToggles: (toggles) =>
-			setState((prevState) => ({
-				...prevState,
-				globalSkycodeRulesToggles: toggles,
-			})),
-		setLocalSkycodeRulesToggles: (toggles) =>
-			setState((prevState) => ({
-				...prevState,
-				localSkycodeRulesToggles: toggles,
-			})),
-		setLocalCursorRulesToggles: (toggles) =>
-			setState((prevState) => ({
-				...prevState,
-				localCursorRulesToggles: toggles,
-			})),
-		setLocalWindsurfRulesToggles: (toggles) =>
-			setState((prevState) => ({
-				...prevState,
-				localWindsurfRulesToggles: toggles,
-			})),
-		setLocalAgentsRulesToggles: (toggles) =>
-			setState((prevState) => ({
-				...prevState,
-				localAgentsRulesToggles: toggles,
-			})),
-		setLocalWorkflowToggles: (toggles) =>
-			setState((prevState) => ({
-				...prevState,
-				localWorkflowToggles: toggles,
-			})),
-		setGlobalWorkflowToggles: (toggles) =>
-			setState((prevState) => ({
-				...prevState,
-				globalWorkflowToggles: toggles,
-			})),
-		setGlobalSkillsToggles: (toggles) =>
-			setState((prevState) => ({
-				...prevState,
-				globalSkillsToggles: toggles,
-			})),
-		setLocalSkillsToggles: (toggles) =>
-			setState((prevState) => ({
-				...prevState,
-				localSkillsToggles: toggles,
-			})),
-		setRemoteRulesToggles: (toggles) =>
-			setState((prevState) => ({
-				...prevState,
-				remoteRulesToggles: toggles,
-			})),
-		setRemoteWorkflowToggles: (toggles) =>
-			setState((prevState) => ({
-				...prevState,
-				remoteWorkflowToggles: toggles,
-			})),
 		setMcpTab,
 		setTotalTasksSize,
+		setExpandTaskHeader,
 		refreshOpenRouterModels,
 		refreshVercelAiGatewayModels,
 		refreshHicapModels,
 		refreshLiteLlmModels,
 		onRelinquishControl,
-		setUserInfo: (userInfo?: UserInfo) => setState((prevState) => ({ ...prevState, userInfo })),
 		expandTaskHeader,
-		setExpandTaskHeader,
-		setDictationSettings: (value: DictationSettings) =>
-			setState((prevState) => ({
-				...prevState,
-				dictationSettings: value,
-			})),
-	}
+		...stableSetters,
+	}), [
+		state, didHydrateState, showWelcome, onboardingModels,
+		openRouterModels, vercelAiGatewayModels, hicapModels, liteLlmModels,
+		openAiModels, requestyModels, groqModelsState, basetenModelsState,
+		huggingFaceModels, mcpServers, mcpMarketplaceCatalog, totalTasksSize,
+		availableTerminalProfiles, showMcp, mcpTab, showSettings,
+		settingsTargetSection, showHistory, showAccount, showWorktrees,
+		showAnnouncement, showChatModelSelector, expandTaskHeader,
+		navigateToMcp, navigateToSettings, navigateToHistory,
+		navigateToAccount, navigateToWorktrees, navigateToChat,
+		hideSettings, hideHistory, hideAccount, hideWorktrees,
+		hideAnnouncement, hideChatModelSelector, closeMcpView,
+		setShowAnnouncement, setShowChatModelSelector,
+		refreshOpenRouterModels, refreshVercelAiGatewayModels,
+		refreshHicapModels, refreshLiteLlmModels, onRelinquishControl,
+	])
 
 	return <ExtensionStateContext.Provider value={contextValue}>{children}</ExtensionStateContext.Provider>
 }

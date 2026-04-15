@@ -84,14 +84,18 @@ export class FireworksHandler implements ApiHandler {
 			}
 
 			if (chunk.usage) {
+				const promptTokens = chunk.usage.prompt_tokens || 0
+				// @ts-ignore-next-line
+				const cachedTokens = chunk.usage.prompt_cache_hit_tokens || 0
+				// @ts-ignore-next-line
+				const cacheMissTokens = chunk.usage.prompt_cache_miss_tokens || 0
+				// prompt_tokens total includes cache hits/misses (DeepSeek-style); we subtract hits so input+cache is not double-counted. See https://api-docs.deepseek.com/guides/kv_cache
 				yield {
 					type: "usage",
-					inputTokens: chunk.usage.prompt_tokens || 0, // (deepseek reports total input AND cache reads/writes, see context caching: https://api-docs.deepseek.com/guides/kv_cache) where the input tokens is the sum of the cache hits/misses, while anthropic reports them as separate tokens. This is important to know for 1) context management truncation algorithm, and 2) cost calculation (NOTE: we report both input and cache stats but for now set input price to 0 since all the cost calculation will be done using cache hits/misses)
+					inputTokens: promptTokens - cachedTokens,
 					outputTokens: chunk.usage.completion_tokens || 0,
-					// @ts-ignore-next-line
-					cacheReadTokens: chunk.usage.prompt_cache_hit_tokens || 0,
-					// @ts-ignore-next-line
-					cacheWriteTokens: chunk.usage.prompt_cache_miss_tokens || 0,
+					cacheReadTokens: cachedTokens,
+					cacheWriteTokens: cacheMissTokens,
 				}
 			}
 		}

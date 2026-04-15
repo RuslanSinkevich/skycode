@@ -1,6 +1,7 @@
-import { ModelFamily } from "@/shared/prompts"
+import { ModelFamily, MODEL_SESSION_LIMITS } from "@/shared/prompts"
 import { Logger } from "@/shared/services/Logger"
 import type { SkycodeTool } from "@/shared/tools"
+import { getModelCapabilityTier } from "@/utils/model-utils"
 import { SkycodeToolSet } from ".."
 import { getSystemPromptComponents } from "../components"
 import { registerSkycodeToolSets } from "../tools"
@@ -69,6 +70,10 @@ export class PromptRegistry {
 	}
 
 	getModelFamily(context: SystemPromptContext) {
+		if (this.variants.size === 0) {
+			this.loadVariants()
+		}
+
 		// Lightweight mode: force XS variant for weak models (user-toggled)
 		if (context.lightweightMode) {
 			Logger.log("Lightweight mode enabled, forcing XS variant")
@@ -98,10 +103,14 @@ export class PromptRegistry {
 	async get(context: SystemPromptContext): Promise<string> {
 		await this.load()
 
-		// Loop through all registered variants to find the first one that matches
 		const family = this.getModelFamily(context)
-
-		// Fallback to generic variant if no match found
+		const modelId = context.providerInfo?.model?.id ?? "unknown"
+		const tier = getModelCapabilityTier(modelId, context.providerInfo)
+		const tierLimits = MODEL_SESSION_LIMITS[tier]
+		Logger.log(
+			`[Prompt Profile] model="${modelId}" variant="${family}" tier="${tier}" ` +
+				`limits={tools:${tierLimits.maxToolCallsPerTurn}, readOnly:${tierLimits.maxConsecutiveReadOnlyTools}, compact:${tierLimits.forceCompactAfterSteps}}`,
+		)
 
 		const variant = this.variants.get(family)
 

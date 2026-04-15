@@ -1,5 +1,6 @@
 import { ApiHandlerModel, ApiProviderInfo } from "@core/api"
 import { AnthropicModelId, anthropicModels } from "@/shared/api"
+import { ModelCapabilityTier, MODEL_SESSION_LIMITS, WeakModelSessionLimits } from "@/shared/prompts"
 
 const CLAUDE_VERSION_MATCH_REGEX = /[-_ ]([\d](?:\.[05])?)[-_ ]?/
 
@@ -197,6 +198,50 @@ export function isNativeToolCallingConfig(providerInfo: ApiProviderInfo, enableN
 	}
 	const modelId = providerInfo.model.id.toLowerCase()
 	return isNextGenModelFamily(modelId)
+}
+
+/**
+ * Determines capability tier based on model family and provider.
+ * Quantized local models and weak cloud models get stricter session limits.
+ */
+export function getModelCapabilityTier(modelId: string, providerInfo?: ApiProviderInfo): ModelCapabilityTier {
+	const id = normalize(modelId)
+
+	if (isNextGenModelFamily(id)) {
+		return "strong"
+	}
+
+	// Local quantized models are weak by definition
+	if (providerInfo && isLocalModel(providerInfo)) {
+		if (isQuantizedModel(id)) {
+			return "weak"
+		}
+		return "medium"
+	}
+
+	// Qwen, Hermes, Devstral cloud — medium tier
+	if (isQwenModelFamily(id) || isHermesModelFamily(id) || isDevstralModelFamily(id)) {
+		return "medium"
+	}
+
+	// GLM — medium
+	if (isGLMModelFamily(id)) {
+		return "medium"
+	}
+
+	return "strong"
+}
+
+/**
+ * Detects quantized models by common naming patterns (q4, q5, q8, gguf, etc.)
+ */
+function isQuantizedModel(modelId: string): boolean {
+	return /[_-](q[2-8][_-]|gguf|gptq|awq|exl2|fp16|fp8|int[48])/.test(modelId)
+}
+
+export function getSessionLimitsForModel(modelId: string, providerInfo?: ApiProviderInfo): WeakModelSessionLimits {
+	const tier = getModelCapabilityTier(modelId, providerInfo)
+	return MODEL_SESSION_LIMITS[tier]
 }
 
 function normalize(text: string): string {

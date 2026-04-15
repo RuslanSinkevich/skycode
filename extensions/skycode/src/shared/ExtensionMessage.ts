@@ -128,6 +128,8 @@ export interface ExtensionState {
 	enableParallelToolCalling?: boolean
 	// Skycode AI: Lightweight mode for weak models
 	lightweightMode?: boolean
+	// Skycode AI: Active prompt profile info (computed, read-only in UI)
+	promptProfile?: { variant: string; tier: string; maxToolCalls: number; maxReadOnly: number; compactEvery: number }
 	// Skycode AI: Edit tools settings
 	useSimplifiedEditTools?: boolean
 	validateSyntaxBeforeApply?: boolean

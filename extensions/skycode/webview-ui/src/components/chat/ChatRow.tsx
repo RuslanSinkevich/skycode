@@ -9,7 +9,7 @@ import {
 	SkycodeSayGenerateExplanation,
 	SkycodeSayTool,
 } from "@shared/ExtensionMessage"
-import { BooleanRequest, StringRequest } from "@shared/proto/skycode/common"
+import { BooleanRequest } from "@shared/proto/skycode/common"
 import { Mode } from "@shared/storage/types"
 import deepEqual from "fast-deep-equal"
 import {
@@ -18,23 +18,15 @@ import {
 	CheckIcon,
 	CircleSlashIcon,
 	CircleXIcon,
-	FileCode2Icon,
 	FilePlus2Icon,
-	FoldVerticalIcon,
-	ImageUpIcon,
 	LightbulbIcon,
-	Link2Icon,
 	LoaderCircleIcon,
-	PencilIcon,
 	RefreshCwIcon,
-	SearchIcon,
 	SettingsIcon,
-	SquareArrowOutUpRightIcon,
-	SquareMinusIcon,
 	TerminalIcon,
 	TriangleAlertIcon,
 } from "lucide-react"
-import { MouseEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSize } from "react-use"
 import { OptionsButtons } from "@/components/chat/OptionsButtons"
 import { WithCopyButton } from "@/components/common/CopyButton"
@@ -44,11 +36,10 @@ import McpToolRow from "@/components/mcp/configuration/tabs/installed/server-row
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
 import { cn } from "@/lib/utils"
-import { FileServiceClient, UiServiceClient } from "@/services/grpc-client"
+import { UiServiceClient } from "@/services/grpc-client"
 import { findMatchingResourceOrTemplate, getMcpServerDisplayName } from "@/utils/mcp"
-import CodeAccordian, { cleanPathPrefix } from "../common/CodeAccordian"
+import CodeAccordian from "../common/CodeAccordian"
 import { CommandOutputContent, CommandOutputRow } from "./CommandOutputRow"
-import { DiffEditRow } from "./DiffEditRow"
 import ErrorRow from "./ErrorRow"
 import HookMessage from "./HookMessage"
 import { MarkdownRow } from "./MarkdownRow"
@@ -57,9 +48,10 @@ import PlanCompletionOutputRow from "./PlanCompletionOutputRow"
 import QuoteButton from "./QuoteButton"
 import ReportBugPreview from "./ReportBugPreview"
 import { RequestStartRow } from "./RequestStartRow"
-import SearchResultsDisplay from "./SearchResultsDisplay"
 import { ThinkingRow } from "./ThinkingRow"
+import { ToolRow } from "./ToolRow"
 import UserMessage from "./UserMessage"
+import { useQuoteButton } from "./useQuoteButton"
 
 const HEADER_CLASSNAMES = "flex items-center gap-2.5 mb-3"
 
@@ -69,7 +61,7 @@ interface ChatRowProps {
 	onToggleExpand: (ts: number) => void
 	lastModifiedMessage?: SkycodeMessage
 	isLast: boolean
-	onHeightChange: (isTaller: boolean) => void
+	onHeightChange?: (isTaller: boolean) => void
 	inputValue?: string
 	sendMessageFromChatRow?: (text: string, images: string[], files: string[]) => void
 	onSetQuote: (text: string) => void
@@ -80,12 +72,7 @@ interface ChatRowProps {
 	isRequestInProgress?: boolean
 }
 
-export interface QuoteButtonState {
-	visible: boolean
-	top: number
-	left: number
-	selectedText: string
-}
+export type { QuoteButtonState } from "./useQuoteButton"
 
 interface ChatRowContentProps extends Omit<ChatRowProps, "onHeightChange"> {}
 
@@ -106,13 +93,10 @@ const ChatRow = memo(
 		)
 
 		useEffect(() => {
-			// used for partials command output etc.
-			// NOTE: it's important we don't distinguish between partial or complete here since our scroll effects in chatview need to handle height change during partial -> complete
-			const isInitialRender = prevHeightRef.current === 0 // prevents scrolling when new element is added since we already scroll for that
-			// height starts off at Infinity
+			const isInitialRender = prevHeightRef.current === 0
 			if (isLast && height !== 0 && height !== Infinity && height !== prevHeightRef.current) {
 				if (!isInitialRender) {
-					onHeightChange(height > prevHeightRef.current)
+					onHeightChange?.(height > prevHeightRef.current)
 				}
 				prevHeightRef.current = height
 			}
@@ -154,14 +138,9 @@ export const ChatRowContent = memo(
 		} = useExtensionState()
 		const [_seeNewChangesDisabled, setSeeNewChangesDisabled] = useState(false)
 		const [_explainChangesDisabled, setExplainChangesDisabled] = useState(false)
-		const [quoteButtonState, setQuoteButtonState] = useState<QuoteButtonState>({
-			visible: false,
-			top: 0,
-			left: 0,
-			selectedText: "",
-		})
 		const contentRef = useRef<HTMLDivElement>(null)
 		const markdownRenderedRef = useRef<HTMLDivElement>(null)
+		const { quoteButtonState, handleQuoteClick, handleMouseUp } = useQuoteButton(contentRef, onSetQuote)
 
 		// Command output expansion state (for all messages, but only used by command messages)
 		const [isOutputFullyExpanded, setIsOutputFullyExpanded] = useState(false)
@@ -234,77 +213,6 @@ export const ChatRowContent = memo(
 				setExplainChangesDisabled(false)
 			})
 		}, [onRelinquishControl])
-
-		// --- Quote Button Logic ---
-		// MOVE handleQuoteClick INSIDE ChatRowContent
-		const handleQuoteClick = useCallback(() => {
-			onSetQuote(quoteButtonState.selectedText)
-			window.getSelection()?.removeAllRanges() // Clear the browser selection
-			setQuoteButtonState({ visible: false, top: 0, left: 0, selectedText: "" })
-		}, [onSetQuote, quoteButtonState.selectedText]) // <-- Use onSetQuote from props
-
-		const handleMouseUp = useCallback((event: MouseEvent<HTMLDivElement>) => {
-			// Get the target element immediately, before the timeout
-			const targetElement = event.target as Element
-			const isClickOnButton = !!targetElement.closest(".quote-button-class")
-
-			// After current JS turn (selection updates); no setTimeout.
-			queueMicrotask(() => {
-				// Check the selection state once the browser has updated it
-				const selection = window.getSelection()
-				const selectedText = selection?.toString().trim() ?? ""
-
-				let shouldShowButton = false
-				let buttonTop = 0
-				let buttonLeft = 0
-				let textToQuote = ""
-
-				// Condition 1: Check if there's a valid, non-collapsed selection within bounds
-				// Ensure contentRef.current still exists in case component unmounted during timeout
-				if (selectedText && contentRef.current && selection && selection.rangeCount > 0 && !selection.isCollapsed) {
-					const range = selection.getRangeAt(0)
-					const rangeRect = range.getBoundingClientRect()
-					// Re-check ref inside timeout and ensure containerRect is valid
-					const containerRect = contentRef.current?.getBoundingClientRect()
-
-					if (containerRect) {
-						// Check if containerRect was successfully obtained
-						const tolerance = 5 // Allow for a small pixel overflow (e.g., for margins)
-						const isSelectionWithin =
-							rangeRect.top >= containerRect.top &&
-							rangeRect.left >= containerRect.left &&
-							rangeRect.bottom <= containerRect.bottom + tolerance && // Added tolerance
-							rangeRect.right <= containerRect.right
-
-						if (isSelectionWithin) {
-							shouldShowButton = true // Mark that we should show the button
-							const buttonHeight = 30
-							// Calculate the raw top position relative to the container, placing it above the selection
-							const calculatedTop = rangeRect.top - containerRect.top - buttonHeight - 5 // Subtract button height and a small margin
-							// Allow the button to potentially have a negative top value
-							buttonTop = calculatedTop
-							buttonLeft = Math.max(0, rangeRect.left - containerRect.left) // Still prevent going left of container
-							textToQuote = selectedText
-						}
-					}
-				}
-
-				// Decision: Set the state based on whether we should show or hide
-				if (shouldShowButton) {
-					// Scenario A: Valid selection exists -> Show button
-					setQuoteButtonState({
-						visible: true,
-						top: buttonTop,
-						left: buttonLeft,
-						selectedText: textToQuote,
-					})
-				} else if (!isClickOnButton) {
-					// Scenario B: No valid selection AND click was NOT on button -> Hide button
-					setQuoteButtonState({ visible: false, top: 0, left: 0, selectedText: "" })
-				}
-				// Scenario C (Click WAS on button): Do nothing here, handleQuoteClick takes over.
-			})
-		}, []) // Dependencies remain empty
 
 		const [icon, title] = useMemo(() => {
 			switch (type) {
@@ -390,13 +298,6 @@ export const ChatRowContent = memo(
 			}
 		}, [message.say, message.text])
 
-		// Helper function to check if file is an image
-		const isImageFile = (filePath: string): boolean => {
-			const imageExtensions = [".png", ".jpg", ".jpeg", ".webp"]
-			const extension = filePath.toLowerCase().split(".").pop()
-			return extension ? imageExtensions.includes(`.${extension}`) : false
-		}
-
 		if (conditionalRulesInfo) {
 			const names = conditionalRulesInfo.rules.map((r: { name: string }) => r.name).join(", ")
 			return (
@@ -408,335 +309,15 @@ export const ChatRowContent = memo(
 		}
 
 		if (tool) {
-			const colorMap = {
-				red: "var(--vscode-errorForeground)",
-				yellow: "var(--vscode-editorWarning-foreground)",
-				green: "var(--vscode-charts-green)",
-			}
-			const toolIcon = (name: string, color?: string, rotation?: number, title?: string) => (
-				<span
-					className={`codicon codicon-${name} ph-no-capture`}
-					style={{
-						color: color ? colorMap[color as keyof typeof colorMap] || color : "var(--vscode-foreground)",
-						marginBottom: "-1.5px",
-						transform: rotation ? `rotate(${rotation}deg)` : undefined,
-					}}
-					title={title}></span>
+			return (
+				<ToolRow
+					tool={tool}
+					message={message}
+					backgroundEditEnabled={backgroundEditEnabled ?? false}
+					isExpanded={isExpanded}
+					onToggleExpand={handleToggle}
+				/>
 			)
-
-			switch (tool.tool) {
-				case "editedExistingFile":
-					const content = tool?.content || ""
-					const isApplyingPatch = content?.startsWith("%%bash") && !content.endsWith("*** End Patch\nEOF")
-					const editToolTitle = isApplyingPatch ? t("chat.createsPatchesForFile") : t("chat.wantsToEditFile")
-					return (
-						<div>
-							<div className={HEADER_CLASSNAMES}>
-								<PencilIcon className="size-2" />
-								{tool.operationIsLocatedInWorkspace === false &&
-									toolIcon("sign-out", "yellow", -90, t("chat.fileOutsideWorkspace"))}
-								<span style={{ fontWeight: "bold" }}>{editToolTitle}</span>
-							</div>
-							{backgroundEditEnabled && tool.path && tool.content ? (
-								<DiffEditRow
-									isLoading={message.partial}
-									patch={tool.content}
-									path={tool.path}
-									startLineNumbers={tool.startLineNumbers}
-								/>
-							) : (
-								<CodeAccordian
-									// isLoading={message.partial}
-									code={tool.content}
-									isExpanded={isExpanded}
-									onToggleExpand={handleToggle}
-									path={tool.path!}
-								/>
-							)}
-						</div>
-					)
-				case "fileDeleted":
-					return (
-						<div>
-							<div className={HEADER_CLASSNAMES}>
-								<SquareMinusIcon className="size-2" />
-								{tool.operationIsLocatedInWorkspace === false &&
-									toolIcon("sign-out", "yellow", -90, t("chat.fileOutsideWorkspace"))}
-								<span style={{ fontWeight: "bold" }}>{t("chat.wantsToDeleteFile")}</span>
-							</div>
-							<CodeAccordian
-								// isLoading={message.partial}
-								code={tool.content}
-								isExpanded={isExpanded}
-								onToggleExpand={handleToggle}
-								path={tool.path!}
-							/>
-						</div>
-					)
-				case "newFileCreated":
-					return (
-						<div>
-							<div className={HEADER_CLASSNAMES}>
-								<FilePlus2Icon className="size-2" />
-								{tool.operationIsLocatedInWorkspace === false &&
-									toolIcon("sign-out", "yellow", -90, t("chat.fileOutsideWorkspace"))}
-								<span className="font-bold">{t("chat.wantsToCreateFile")}</span>
-							</div>
-							{backgroundEditEnabled && tool.path && tool.content ? (
-								<DiffEditRow
-									isLoading={message.partial}
-									patch={tool.content}
-									path={tool.path}
-									startLineNumbers={tool.startLineNumbers}
-								/>
-							) : (
-								<CodeAccordian
-									code={tool.content!}
-									isExpanded={isExpanded}
-									isLoading={message.partial}
-									onToggleExpand={handleToggle}
-									path={tool.path!}
-								/>
-							)}
-						</div>
-					)
-				case "readFile":
-					const isImage = isImageFile(tool.path || "")
-					return (
-						<div>
-							<div className={HEADER_CLASSNAMES}>
-								{isImage ? <ImageUpIcon className="size-2" /> : <FileCode2Icon className="size-2" />}
-								{tool.operationIsLocatedInWorkspace === false &&
-									toolIcon("sign-out", "yellow", -90, t("chat.fileOutsideWorkspace"))}
-								<span className="font-bold">{t("chat.wantsToReadFile")}</span>
-							</div>
-							<div className="bg-code rounded-sm overflow-hidden border border-editor-group-border">
-								<div
-									className={cn("text-description flex items-center cursor-pointer select-none py-2 px-2.5", {
-										"cursor-default select-text": isImage,
-									})}
-									onClick={() => {
-										if (!isImage) {
-											FileServiceClient.openFile(StringRequest.create({ value: tool.content })).catch(
-												(err) => console.error("Failed to open file:", err),
-											)
-										}
-									}}>
-									{tool.path?.startsWith(".") && <span>.</span>}
-									{tool.path && !tool.path.startsWith(".") && <span>/</span>}
-									<span className="ph-no-capture whitespace-nowrap overflow-hidden text-ellipsis mr-2 text-left [direction: rtl]">
-										{cleanPathPrefix(tool.path ?? "") + "\u200E"}
-									</span>
-									<div className="grow" />
-									{!isImage && <SquareArrowOutUpRightIcon className="size-2" />}
-								</div>
-							</div>
-						</div>
-					)
-				case "listFilesTopLevel":
-					return (
-						<div>
-							<div className={HEADER_CLASSNAMES}>
-								{toolIcon("folder-opened")}
-								{tool.operationIsLocatedInWorkspace === false &&
-									toolIcon("sign-out", "yellow", -90, t("chat.outsideWorkspace"))}
-								<span style={{ fontWeight: "bold" }}>
-									{message.type === "ask" ? t("chat.wantsToListTopLevelFiles") : t("chat.listedTopLevelFiles")}
-								</span>
-							</div>
-							<CodeAccordian
-								code={tool.content!}
-								isExpanded={isExpanded}
-								language="shell-session"
-								onToggleExpand={handleToggle}
-								path={tool.path!}
-							/>
-						</div>
-					)
-				case "listFilesRecursive":
-					return (
-						<div>
-							<div className={HEADER_CLASSNAMES}>
-								{toolIcon("folder-opened")}
-								{tool.operationIsLocatedInWorkspace === false &&
-									toolIcon("sign-out", "yellow", -90, t("chat.outsideWorkspace"))}
-								<span style={{ fontWeight: "bold" }}>
-									{message.type === "ask"
-										? t("chat.wantsToListFilesRecursive")
-										: t("chat.listedFilesRecursive")}
-								</span>
-							</div>
-							<CodeAccordian
-								code={tool.content!}
-								isExpanded={isExpanded}
-								language="shell-session"
-								onToggleExpand={handleToggle}
-								path={tool.path!}
-							/>
-						</div>
-					)
-				case "listCodeDefinitionNames":
-					return (
-						<div>
-							<div className={HEADER_CLASSNAMES}>
-								{toolIcon("file-code")}
-								{tool.operationIsLocatedInWorkspace === false &&
-									toolIcon("sign-out", "yellow", -90, t("chat.fileOutsideWorkspace"))}
-								<span style={{ fontWeight: "bold" }}>
-									{message.type === "ask"
-										? t("chat.wantsToListCodeDefinitions")
-										: t("chat.listedCodeDefinitions")}
-								</span>
-							</div>
-							<CodeAccordian
-								code={tool.content!}
-								isExpanded={isExpanded}
-								onToggleExpand={handleToggle}
-								path={tool.path!}
-							/>
-						</div>
-					)
-				case "glob":
-					return (
-						<div>
-							<div className={HEADER_CLASSNAMES}>
-								{toolIcon("search")}
-								{tool.operationIsLocatedInWorkspace === false &&
-									toolIcon("sign-out", "yellow", -90, t("chat.outsideWorkspace"))}
-								<span style={{ fontWeight: "bold" }}>
-									{message.type === "ask" ? t("chat.wantsToSearchByPattern") : t("chat.foundFilesByPattern")}
-								</span>
-							</div>
-							<CodeAccordian
-								code={tool.content!}
-								isExpanded={isExpanded}
-								language="shell-session"
-								onToggleExpand={handleToggle}
-								path={tool.path!}
-							/>
-						</div>
-					)
-				case "searchFiles":
-					return (
-						<div>
-							<div className={HEADER_CLASSNAMES}>
-								{toolIcon("search")}
-								{tool.operationIsLocatedInWorkspace === false &&
-									toolIcon("sign-out", "yellow", -90, t("chat.outsideWorkspace"))}
-								<span className="font-bold">
-									{t("chat.wantsToSearchInFolder")} <code className="break-all">{tool.regex}</code>:
-								</span>
-							</div>
-							<SearchResultsDisplay
-								content={tool.content!}
-								filePattern={tool.filePattern}
-								isExpanded={isExpanded}
-								onToggleExpand={handleToggle}
-								path={tool.path!}
-							/>
-						</div>
-					)
-				case "summarizeTask":
-					return (
-						<div>
-							<div className={HEADER_CLASSNAMES}>
-								<FoldVerticalIcon className="size-2" />
-								<span className="font-bold">{t("chat.condensingHistory")}</span>
-							</div>
-							<div className="bg-code overflow-hidden border border-editor-group-border rounded-[3px]">
-								<div
-									aria-label={isExpanded ? t("chat.collapseSummary") : t("chat.expandSummary")}
-									className="text-description py-2 px-2.5 cursor-pointer select-none"
-									onClick={handleToggle}
-									onKeyDown={(e) => {
-										if (e.key === "Enter" || e.key === " ") {
-											e.preventDefault()
-											e.stopPropagation()
-											handleToggle()
-										}
-									}}
-									tabIndex={0}>
-									{isExpanded ? (
-										<div>
-											<div className="flex items-center mb-2">
-												<span className="font-bold mr-1">{t("chat.summary")}:</span>
-												<div className="grow" />
-												<span className="codicon codicon-chevron-up my-0.5 shrink-0" />
-											</div>
-											<span className="ph-no-capture break-words whitespace-pre-wrap">{tool.content}</span>
-										</div>
-									) : (
-										<div className="flex items-center">
-											<span className="ph-no-capture whitespace-nowrap overflow-hidden text-ellipsis text-left flex-1 mr-2 [direction:rtl]">
-												{tool.content + "\u200E"}
-											</span>
-											<span className="codicon codicon-chevron-down my-0.5 shrink-0" />
-										</div>
-									)}
-								</div>
-							</div>
-						</div>
-					)
-				case "webFetch":
-					return (
-						<div>
-							<div className={HEADER_CLASSNAMES}>
-								<Link2Icon className="size-2" />
-								{tool.operationIsLocatedInWorkspace === false &&
-									toolIcon("sign-out", "yellow", -90, t("chat.externalUrl"))}
-								<span className="font-bold">
-									{message.type === "ask" ? t("chat.wantsToFetchUrl") : t("chat.fetchedUrl")}
-								</span>
-							</div>
-							<div
-								className="bg-code rounded-xs overflow-hidden border border-editor-group-border py-2 px-2.5 cursor-pointer select-none"
-								onClick={() => {
-									// Open the URL in the default browser using gRPC
-									if (tool.path) {
-										UiServiceClient.openUrl(StringRequest.create({ value: tool.path })).catch((err) => {
-											console.error("Failed to open URL:", err)
-										})
-									}
-								}}>
-								<span className="ph-no-capture whitespace-nowrap overflow-hidden text-ellipsis mr-2 [direction:rtl] text-left text-link underline">
-									{tool.path + "\u200E"}
-								</span>
-							</div>
-						</div>
-					)
-				case "webSearch":
-					return (
-						<div>
-							<div className={HEADER_CLASSNAMES}>
-								<SearchIcon className="size-2 rotate-90" />
-								{tool.operationIsLocatedInWorkspace === false &&
-									toolIcon("sign-out", "yellow", -90, t("chat.externalSearch"))}
-								<span className="font-bold">
-									{message.type === "ask" ? t("chat.wantsToWebSearch") : t("chat.webSearched")}
-								</span>
-							</div>
-							<div className="bg-code border border-editor-group-border overflow-hidden rounded-xs select-text py-[9px] px-2.5">
-								<span className="ph-no-capture whitespace-nowrap overflow-hidden text-ellipsis mr-2 text-left [direction:rtl]">
-									{tool.path + "\u200E"}
-								</span>
-							</div>
-						</div>
-					)
-				case "useSkill":
-					return (
-						<div>
-							<div className={HEADER_CLASSNAMES}>
-								<LightbulbIcon className="size-2" />
-								<span className="font-bold">{t("chat.loadedSkill")}</span>
-							</div>
-							<div className="bg-code border border-editor-group-border overflow-hidden rounded-xs py-[9px] px-2.5">
-								<span className="ph-no-capture font-medium">{tool.path}</span>
-							</div>
-						</div>
-					)
-				default:
-					return <InvisibleSpacer />
-			}
 		}
 
 		// Reset output expansion state when command stops (completes or is cancelled)

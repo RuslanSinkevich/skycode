@@ -20,7 +20,7 @@ interface BrowserSessionRowProps {
 	onToggleExpand: (messageTs: number) => void
 	lastModifiedMessage?: SkycodeMessage
 	isLast: boolean
-	onHeightChange: (isTaller: boolean) => void
+	onHeightChange?: (isTaller: boolean) => void
 	onSetQuote: (text: string) => void
 }
 
@@ -482,7 +482,7 @@ const BrowserSessionRow = memo((props: BrowserSessionRowProps) => {
 		const isInitialRender = prevHeightRef.current === 0
 		if (isLast && height !== 0 && height !== Infinity && height !== prevHeightRef.current) {
 			if (!isInitialRender) {
-				onHeightChange(height > prevHeightRef.current)
+				onHeightChange?.(height > prevHeightRef.current)
 			}
 			prevHeightRef.current = height
 		}

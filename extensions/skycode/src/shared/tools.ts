@@ -62,3 +62,16 @@ export const READ_ONLY_TOOLS = [
 	SkycodeDefaultTool.READ_DIAGNOSTICS,
 	SkycodeDefaultTool.GLOB,
 ] as const
+
+// Exploration-only tools — used for anti-loop detection in weak models.
+// If the model calls only these tools N times in a row without any edits/commands,
+// it's likely stuck in an investigation loop.
+export const EXPLORATION_ONLY_TOOLS: readonly string[] = [
+	SkycodeDefaultTool.LIST_FILES,
+	SkycodeDefaultTool.FILE_READ,
+	SkycodeDefaultTool.SEARCH,
+	SkycodeDefaultTool.LIST_CODE_DEF,
+	SkycodeDefaultTool.CODEBASE_SEARCH,
+	SkycodeDefaultTool.GLOB,
+	SkycodeDefaultTool.READ_DIAGNOSTICS,
+] as const

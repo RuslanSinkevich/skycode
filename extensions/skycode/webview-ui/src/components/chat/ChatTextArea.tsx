@@ -1,51 +1,23 @@
-import { mentionRegex, mentionRegexGlobal } from "@shared/context-mentions"
-import { EmptyRequest, StringRequest } from "@shared/proto/skycode/common"
-import { FileSearchRequest, FileSearchType } from "@shared/proto/skycode/file"
-import { UpdateApiConfigurationRequest } from "@shared/proto/skycode/models"
-import { PlanActMode, TogglePlanActModeRequest } from "@shared/proto/skycode/state"
-import { convertApiConfigurationToProto } from "@shared/proto-conversions/models/api-configuration-conversion"
-import { type SlashCommand } from "@shared/slashCommands"
-import { Mode } from "@shared/storage/types"
+import { EmptyRequest } from "@shared/proto/skycode/common"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import { AtSignIcon, PlusIcon } from "lucide-react"
 import type React from "react"
-import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { forwardRef, useCallback, useEffect, useRef, useState } from "react"
 import DynamicTextArea from "react-textarea-autosize"
 import { useWindowSize } from "react-use"
 import ContextMenu from "@/components/chat/ContextMenu"
 import ModelPickerModal from "@/components/chat/ModelPickerModal"
 import SlashCommandMenu from "@/components/chat/SlashCommandMenu"
 import Thumbnails from "@/components/common/Thumbnails"
-import { getModeSpecificFields, normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { usePlatform } from "@/context/PlatformContext"
 import { useSkycodeAuth } from "@/context/SkycodeAuthContext"
 import { useI18n } from "@/i18n"
 import { cn } from "@/lib/utils"
-import { FileServiceClient, ModelsServiceClient, StateServiceClient, TaskServiceClient } from "@/services/grpc-client"
-import {
-	ContextMenuOptionType,
-	getContextMenuOptionIndex,
-	getContextMenuOptions,
-	insertMention,
-	insertMentionDirectly,
-	removeMention,
-	type SearchResult,
-	shouldShowContextMenu,
-} from "@/utils/context-mentions"
+import { TaskServiceClient } from "@/services/grpc-client"
+import { ContextMenuOptionType } from "@/utils/context-mentions"
 import { useMetaKeyDetection, useShortcut } from "@/utils/hooks"
-import { isSafari } from "@/utils/platformUtils"
-import {
-	getMatchingSlashCommands,
-	insertSlashCommand,
-	removeSlashCommand,
-	shouldShowSlashCommandsMenu,
-	slashCommandDeleteRegex,
-	slashCommandRegexGlobal,
-	validateSlashCommand,
-} from "@/utils/slash-commands"
-import { validateApiConfiguration, validateModelId } from "@/utils/validate"
 import SkycodeRulesToggleModal from "../skycode-rules/SkycodeRulesToggleModal"
 import {
 	MODE_COLORS,
@@ -58,11 +30,11 @@ import {
 } from "./chat-text-area/ChatTextArea.styles"
 import ModeSwitcher from "./chat-text-area/ModeSwitcher"
 import { useChatAttachments } from "./chat-text-area/useChatAttachments"
+import { useInputHandlers } from "./chat-text-area/useInputHandlers"
+import { useModelSelector } from "./chat-text-area/useModelSelector"
+import { useTextHighlight } from "./chat-text-area/useTextHighlight"
 import ServersToggleModal from "./ServersToggleModal"
 import VoiceRecorder from "./VoiceRecorder"
-
-// Set to "File" option by default
-const DEFAULT_CONTEXT_MENU_OPTION = getContextMenuOptionIndex(ContextMenuOptionType.File)
 
 interface ChatTextAreaProps {
 	inputValue: string
@@ -83,13 +55,6 @@ interface ChatTextAreaProps {
 	isAiWorking?: boolean
 	/** Cancel the currently running task */
 	onCancel?: () => void
-}
-
-interface GitCommit {
-	type: ContextMenuOptionType.Git
-	value: string
-	label: string
-	description: string
 }
 
 const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
@@ -131,45 +96,72 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		} = useExtensionState()
 		const { skycodeUser } = useSkycodeAuth()
 		const [isTextAreaFocused, setIsTextAreaFocused] = useState(false)
-		const [gitCommits, setGitCommits] = useState<GitCommit[]>([])
 		const [isVoiceRecording, setIsVoiceRecording] = useState(false)
 		const [isVoiceProcessing, setIsVoiceProcessing] = useState(false)
-		const [showSlashCommandsMenu, setShowSlashCommandsMenu] = useState(false)
-		const [selectedSlashCommandsIndex, setSelectedSlashCommandsIndex] = useState(0)
-		const [slashCommandsQuery, setSlashCommandsQuery] = useState("")
-		const slashCommandsMenuContainerRef = useRef<HTMLDivElement>(null)
-
 		const [thumbnailsHeight, setThumbnailsHeight] = useState(0)
 		const [textAreaBaseHeight, setTextAreaBaseHeight] = useState<number | undefined>(undefined)
-		const [showContextMenu, setShowContextMenu] = useState(false)
 		const [cursorPosition, setCursorPosition] = useState(0)
-		const [searchQuery, setSearchQuery] = useState("")
-		const textAreaRef = useRef<HTMLTextAreaElement | null>(null)
-		const [isMouseDownOnMenu, setIsMouseDownOnMenu] = useState(false)
-		const highlightLayerRef = useRef<HTMLDivElement>(null)
-		const [selectedMenuIndex, setSelectedMenuIndex] = useState(-1)
 		const [selectedType, setSelectedType] = useState<ContextMenuOptionType | null>(null)
-		const [justDeletedSpaceAfterMention, setJustDeletedSpaceAfterMention] = useState(false)
-		const [justDeletedSpaceAfterSlashCommand, setJustDeletedSpaceAfterSlashCommand] = useState(false)
-		const [intendedCursorPosition, setIntendedCursorPosition] = useState<number | null>(null)
-		const contextMenuContainerRef = useRef<HTMLDivElement>(null)
+
+		const { highlightLayerRef, textAreaRef, updateHighlights } = useTextHighlight({
+			inputValue,
+			localWorkflowToggles,
+			globalWorkflowToggles,
+			remoteWorkflowToggles,
+			remoteGlobalWorkflows: remoteConfigSettings?.remoteGlobalWorkflows,
+		})
+
+		const {
+			showContextMenu,
+			setShowContextMenu,
+			showSlashCommandsMenu,
+			selectedSlashCommandsIndex,
+			setSelectedSlashCommandsIndex,
+			slashCommandsQuery,
+			searchQuery,
+			selectedMenuIndex,
+			setSelectedMenuIndex,
+			fileSearchResults,
+			searchLoading,
+			queryItems,
+			intendedCursorPosition,
+			setIntendedCursorPosition,
+			pendingInsertions,
+			setPendingInsertions,
+			isMouseDownOnMenu,
+			contextMenuContainerRef,
+			slashCommandsMenuContainerRef,
+			handleKeyDown,
+			handleInputChange,
+			handleMentionSelect,
+			handleSlashCommandsSelect,
+			handleBlur,
+			handleMenuMouseDown,
+			handleKeyUp,
+			updateCursorPosition,
+		} = useInputHandlers({
+			inputValue,
+			setInputValue,
+			cursorPosition,
+			setCursorPosition,
+			sendingDisabled,
+			onSend,
+			textAreaRef,
+			localWorkflowToggles,
+			globalWorkflowToggles,
+			remoteWorkflowToggles,
+			remoteConfigSettings,
+			selectedType,
+			setSelectedType,
+		})
 
 		const modelSelectorRef = useRef<HTMLDivElement>(null)
 		const { width: viewportWidth, height: viewportHeight } = useWindowSize()
 		const buttonRef = useRef<HTMLDivElement>(null)
 		const [_arrowPosition, setArrowPosition] = useState(0)
 		const [_menuPosition, setMenuPosition] = useState(0)
-		const [pendingInsertions, setPendingInsertions] = useState<string[]>([])
-		const _shiftHoldTimerRef = useRef<NodeJS.Timeout | null>(null)
-
-		const [fileSearchResults, setFileSearchResults] = useState<SearchResult[]>([])
-		const [searchLoading, setSearchLoading] = useState(false)
 		const [, metaKeyChar] = useMetaKeyDetection(platform)
 
-		// Add a ref to track previous menu state
-		const _prevShowModelSelector = useRef(showModelSelector)
-
-		// Drag & drop, paste, file/image attachment logic
 		const {
 			isDraggingOver,
 			showUnsupportedFileError,
@@ -194,544 +186,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			setPendingInsertions,
 		})
 
-		// Fetch git commits when Git is selected or when typing a hash
-		useEffect(() => {
-			if (selectedType === ContextMenuOptionType.Git || /^[a-f0-9]+$/i.test(searchQuery)) {
-				FileServiceClient.searchCommits(StringRequest.create({ value: searchQuery || "" }))
-					.then((response) => {
-						if (response.commits) {
-							const commits: GitCommit[] = response.commits.map(
-								(commit: { hash: string; shortHash: string; subject: string; author: string; date: string }) => ({
-									type: ContextMenuOptionType.Git,
-									value: commit.hash,
-									label: commit.subject,
-									description: `${commit.shortHash} by ${commit.author} on ${commit.date}`,
-								}),
-							)
-							setGitCommits(commits)
-						}
-					})
-					.catch((error) => {
-						console.error("Error searching commits:", error)
-					})
-			}
-		}, [selectedType, searchQuery])
-
-		const queryItems = useMemo(() => {
-			return [
-				{ type: ContextMenuOptionType.Problems, value: "problems" },
-				{ type: ContextMenuOptionType.Terminal, value: "terminal" },
-				...gitCommits,
-			]
-		}, [gitCommits])
-
-		useEffect(() => {
-			const handleClickOutside = (event: MouseEvent) => {
-				if (contextMenuContainerRef.current && !contextMenuContainerRef.current.contains(event.target as Node)) {
-					setShowContextMenu(false)
-				}
-			}
-
-			if (showContextMenu) {
-				document.addEventListener("mousedown", handleClickOutside)
-			}
-
-			return () => {
-				document.removeEventListener("mousedown", handleClickOutside)
-			}
-		}, [showContextMenu, setShowContextMenu])
-
-		useEffect(() => {
-			const handleClickOutsideSlashMenu = (event: MouseEvent) => {
-				if (
-					slashCommandsMenuContainerRef.current &&
-					!slashCommandsMenuContainerRef.current.contains(event.target as Node)
-				) {
-					setShowSlashCommandsMenu(false)
-				}
-			}
-
-			if (showSlashCommandsMenu) {
-				document.addEventListener("mousedown", handleClickOutsideSlashMenu)
-			}
-
-			return () => {
-				document.removeEventListener("mousedown", handleClickOutsideSlashMenu)
-			}
-		}, [showSlashCommandsMenu])
-
-		const handleMentionSelect = useCallback(
-			(type: ContextMenuOptionType, value?: string) => {
-				if (type === ContextMenuOptionType.NoResults) {
-					return
-				}
-
-				if (
-					type === ContextMenuOptionType.File ||
-					type === ContextMenuOptionType.Folder ||
-					type === ContextMenuOptionType.Git
-				) {
-					if (!value) {
-						setSelectedType(type)
-						setSearchQuery("")
-						setSelectedMenuIndex(0)
-
-						// Trigger search with the selected type
-						if (type === ContextMenuOptionType.File || type === ContextMenuOptionType.Folder) {
-							setSearchLoading(true)
-
-							// Map ContextMenuOptionType to FileSearchType enum
-							let searchType: FileSearchType | undefined
-							if (type === ContextMenuOptionType.File) {
-								searchType = FileSearchType.FILE
-							} else if (type === ContextMenuOptionType.Folder) {
-								searchType = FileSearchType.FOLDER
-							}
-
-							FileServiceClient.searchFiles(
-								FileSearchRequest.create({
-									query: "",
-									mentionsRequestId: "",
-									selectedType: searchType,
-								}),
-							)
-								.then((results) => {
-									setFileSearchResults((results.results || []) as SearchResult[])
-									setSearchLoading(false)
-								})
-								.catch((error) => {
-									console.error("Error searching files:", error)
-									setFileSearchResults([])
-									setSearchLoading(false)
-								})
-						}
-						return
-					}
-				}
-
-				setShowContextMenu(false)
-				setSelectedType(null)
-				const queryLength = searchQuery.length
-				setSearchQuery("")
-
-				if (textAreaRef.current) {
-					let insertValue = value || ""
-					if (type === ContextMenuOptionType.URL) {
-						insertValue = value || ""
-					} else if (type === ContextMenuOptionType.File || type === ContextMenuOptionType.Folder) {
-						insertValue = value || ""
-					} else if (type === ContextMenuOptionType.Problems) {
-						insertValue = "problems"
-					} else if (type === ContextMenuOptionType.Terminal) {
-						insertValue = "terminal"
-					} else if (type === ContextMenuOptionType.Git) {
-						insertValue = value || ""
-					}
-
-					const { newValue, mentionIndex } = insertMention(
-						textAreaRef.current.value,
-						cursorPosition,
-						insertValue,
-						queryLength,
-					)
-
-					setInputValue(newValue)
-					const newCursorPosition = newValue.indexOf(" ", mentionIndex + insertValue.length) + 1
-					setCursorPosition(newCursorPosition)
-					setIntendedCursorPosition(newCursorPosition)
-					// textAreaRef.current.focus()
-
-					// scroll to cursor
-					setTimeout(() => {
-						if (textAreaRef.current) {
-							textAreaRef.current.blur()
-							textAreaRef.current.focus()
-						}
-					}, 0)
-				}
-			},
-			[setInputValue, cursorPosition, searchQuery],
-		)
-
-		const handleSlashCommandsSelect = useCallback(
-			(command: SlashCommand) => {
-				setShowSlashCommandsMenu(false)
-				const queryLength = slashCommandsQuery.length
-				setSlashCommandsQuery("")
-
-				if (textAreaRef.current) {
-					const { newValue, commandIndex } = insertSlashCommand(
-						textAreaRef.current.value,
-						command.name,
-						queryLength,
-						cursorPosition,
-					)
-					const newCursorPosition = newValue.indexOf(" ", commandIndex + 1 + command.name.length) + 1
-
-					setInputValue(newValue)
-					setCursorPosition(newCursorPosition)
-					setIntendedCursorPosition(newCursorPosition)
-
-					setTimeout(() => {
-						if (textAreaRef.current) {
-							textAreaRef.current.blur()
-							textAreaRef.current.focus()
-						}
-					}, 0)
-				}
-			},
-			[setInputValue, slashCommandsQuery, cursorPosition],
-		)
-		const handleKeyDown = useCallback(
-			(event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-				if (showSlashCommandsMenu) {
-					if (event.key === "Escape") {
-						setShowSlashCommandsMenu(false)
-						setSlashCommandsQuery("")
-						return
-					}
-
-					if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-						event.preventDefault()
-						setSelectedSlashCommandsIndex((prevIndex) => {
-							const direction = event.key === "ArrowUp" ? -1 : 1
-							// Get commands with workflow toggles
-							const allCommands = getMatchingSlashCommands(
-								slashCommandsQuery,
-								localWorkflowToggles,
-								globalWorkflowToggles,
-								remoteWorkflowToggles,
-								remoteConfigSettings?.remoteGlobalWorkflows,
-							)
-
-							if (allCommands.length === 0) {
-								return prevIndex
-							}
-
-							// Calculate total command count
-							const totalCommandCount = allCommands.length
-
-							// Create wraparound navigation - moves from last item to first and vice versa
-							const newIndex = (prevIndex + direction + totalCommandCount) % totalCommandCount
-							return newIndex
-						})
-						return
-					}
-
-					if ((event.key === "Enter" || event.key === "Tab") && selectedSlashCommandsIndex !== -1) {
-						event.preventDefault()
-						const commands = getMatchingSlashCommands(
-							slashCommandsQuery,
-							localWorkflowToggles,
-							globalWorkflowToggles,
-							remoteWorkflowToggles,
-							remoteConfigSettings?.remoteGlobalWorkflows,
-						)
-						if (commands.length > 0) {
-							handleSlashCommandsSelect(commands[selectedSlashCommandsIndex])
-						}
-						return
-					}
-				}
-				if (showContextMenu) {
-					if (event.key === "Escape") {
-						setShowContextMenu(false)
-						setSelectedType(null)
-						setSelectedMenuIndex(DEFAULT_CONTEXT_MENU_OPTION)
-						setSearchQuery("")
-						return
-					}
-
-					if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-						event.preventDefault()
-						setSelectedMenuIndex((prevIndex) => {
-							const direction = event.key === "ArrowUp" ? -1 : 1
-							const options = getContextMenuOptions(searchQuery, selectedType, queryItems, fileSearchResults)
-							const optionsLength = options.length
-
-							if (optionsLength === 0) {
-								return prevIndex
-							}
-
-							// Find selectable options (non-URL types)
-							const selectableOptions = options.filter(
-								(option) =>
-									option.type !== ContextMenuOptionType.URL && option.type !== ContextMenuOptionType.NoResults,
-							)
-
-							if (selectableOptions.length === 0) {
-								return -1 // No selectable options
-							}
-
-							// Find the index of the next selectable option
-							const currentSelectableIndex = selectableOptions.indexOf(options[prevIndex])
-
-							const newSelectableIndex =
-								(currentSelectableIndex + direction + selectableOptions.length) % selectableOptions.length
-
-							// Find the index of the selected option in the original options array
-							return options.indexOf(selectableOptions[newSelectableIndex])
-						})
-						return
-					}
-					if ((event.key === "Enter" || event.key === "Tab") && selectedMenuIndex !== -1) {
-						event.preventDefault()
-						const selectedOption = getContextMenuOptions(searchQuery, selectedType, queryItems, fileSearchResults)[
-							selectedMenuIndex
-						]
-						if (
-							selectedOption &&
-							selectedOption.type !== ContextMenuOptionType.URL &&
-							selectedOption.type !== ContextMenuOptionType.NoResults
-						) {
-							// Use label if it contains workspace prefix, otherwise use value
-							const mentionValue = selectedOption.label?.includes(":") ? selectedOption.label : selectedOption.value
-							handleMentionSelect(selectedOption.type, mentionValue)
-						}
-						return
-					}
-				}
-
-				// Safari does not support InputEvent.isComposing (always false), so we need to fallback to keyCode === 229 for it
-				const isComposing = isSafari ? event.nativeEvent.keyCode === 229 : (event.nativeEvent?.isComposing ?? false)
-				if (event.key === "Enter" && !event.shiftKey && !isComposing) {
-					event.preventDefault()
-
-					if (!sendingDisabled) {
-						setIsTextAreaFocused(false)
-						onSend()
-					}
-				}
-
-				if (event.key === "Backspace" && !isComposing) {
-					const charBeforeCursor = inputValue[cursorPosition - 1]
-					const charAfterCursor = inputValue[cursorPosition + 1]
-
-					const charBeforeIsWhitespace =
-						charBeforeCursor === " " || charBeforeCursor === "\n" || charBeforeCursor === "\r\n"
-					const charAfterIsWhitespace =
-						charAfterCursor === " " || charAfterCursor === "\n" || charAfterCursor === "\r\n"
-
-					// Check if we're right after a space that follows a mention or slash command
-					if (
-						charBeforeIsWhitespace &&
-						inputValue.slice(0, cursorPosition - 1).match(new RegExp(mentionRegex.source + "$"))
-					) {
-						// File mention handling
-						const newCursorPosition = cursorPosition - 1
-						if (!charAfterIsWhitespace) {
-							event.preventDefault()
-							textAreaRef.current?.setSelectionRange(newCursorPosition, newCursorPosition)
-							setCursorPosition(newCursorPosition)
-						}
-						setCursorPosition(newCursorPosition)
-						setJustDeletedSpaceAfterMention(true)
-						setJustDeletedSpaceAfterSlashCommand(false)
-					} else if (charBeforeIsWhitespace && inputValue.slice(0, cursorPosition - 1).match(slashCommandDeleteRegex)) {
-						// New slash command handling
-						const newCursorPosition = cursorPosition - 1
-						if (!charAfterIsWhitespace) {
-							event.preventDefault()
-							textAreaRef.current?.setSelectionRange(newCursorPosition, newCursorPosition)
-							setCursorPosition(newCursorPosition)
-						}
-						setCursorPosition(newCursorPosition)
-						setJustDeletedSpaceAfterSlashCommand(true)
-						setJustDeletedSpaceAfterMention(false)
-					}
-					// Handle the second backspace press for mentions or slash commands
-					else if (justDeletedSpaceAfterMention) {
-						const { newText, newPosition } = removeMention(inputValue, cursorPosition)
-						if (newText !== inputValue) {
-							event.preventDefault()
-							setInputValue(newText)
-							setIntendedCursorPosition(newPosition)
-						}
-						setJustDeletedSpaceAfterMention(false)
-						setShowContextMenu(false)
-					} else if (justDeletedSpaceAfterSlashCommand) {
-						// New slash command deletion
-						const { newText, newPosition } = removeSlashCommand(inputValue, cursorPosition)
-						if (newText !== inputValue) {
-							event.preventDefault()
-							setInputValue(newText)
-							setIntendedCursorPosition(newPosition)
-						}
-						setJustDeletedSpaceAfterSlashCommand(false)
-						setShowSlashCommandsMenu(false)
-					}
-					// Default case - reset flags if none of the above apply
-					else {
-						setJustDeletedSpaceAfterMention(false)
-						setJustDeletedSpaceAfterSlashCommand(false)
-					}
-				}
-			},
-			[
-				onSend,
-				showContextMenu,
-				searchQuery,
-				selectedMenuIndex,
-				handleMentionSelect,
-				selectedType,
-				inputValue,
-				cursorPosition,
-				setInputValue,
-				justDeletedSpaceAfterMention,
-				queryItems,
-				fileSearchResults,
-				showSlashCommandsMenu,
-				selectedSlashCommandsIndex,
-				slashCommandsQuery,
-				handleSlashCommandsSelect,
-				sendingDisabled,
-			],
-		)
-
-		// Effect to set cursor position after state updates
-		useLayoutEffect(() => {
-			if (intendedCursorPosition !== null && textAreaRef.current) {
-				textAreaRef.current.setSelectionRange(intendedCursorPosition, intendedCursorPosition)
-				setIntendedCursorPosition(null) // Reset the state after applying
-			}
-		}, [inputValue, intendedCursorPosition])
-
-		useEffect(() => {
-			if (pendingInsertions.length === 0 || !textAreaRef.current) {
-				return
-			}
-
-			const path = pendingInsertions[0]
-			const currentTextArea = textAreaRef.current
-			const currentValue = currentTextArea.value
-			const currentCursorPos =
-				intendedCursorPosition ??
-				(currentTextArea.selectionStart >= 0 ? currentTextArea.selectionStart : currentValue.length)
-
-			const { newValue, mentionIndex } = insertMentionDirectly(currentValue, currentCursorPos, path)
-
-			setInputValue(newValue)
-
-			const newCursorPosition = mentionIndex + path.length + 2
-			setIntendedCursorPosition(newCursorPosition)
-
-			setPendingInsertions((prev) => prev.slice(1))
-		}, [pendingInsertions, setInputValue])
-
-		const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-
-		const currentSearchQueryRef = useRef<string>("")
-
-		const handleInputChange = useCallback(
-			(e: React.ChangeEvent<HTMLTextAreaElement>) => {
-				const newValue = e.target.value
-				const newCursorPosition = e.target.selectionStart
-				setInputValue(newValue)
-				setCursorPosition(newCursorPosition)
-				let showMenu = shouldShowContextMenu(newValue, newCursorPosition)
-				const showSlashCommandsMenu = shouldShowSlashCommandsMenu(newValue, newCursorPosition)
-
-				// we do not allow both menus to be shown at the same time
-				// the slash commands menu has precedence bc its a narrower component
-				if (showSlashCommandsMenu) {
-					showMenu = false
-				}
-
-				setShowSlashCommandsMenu(showSlashCommandsMenu)
-				setShowContextMenu(showMenu)
-
-				if (showSlashCommandsMenu) {
-					// Find the slash nearest to cursor (before cursor position)
-					const beforeCursor = newValue.slice(0, newCursorPosition)
-					const slashIndex = beforeCursor.lastIndexOf("/")
-					const query = newValue.slice(slashIndex + 1, newCursorPosition)
-					setSlashCommandsQuery(query)
-					setSelectedSlashCommandsIndex(0)
-				} else {
-					setSlashCommandsQuery("")
-					setSelectedSlashCommandsIndex(0)
-				}
-
-				if (showMenu) {
-					const lastAtIndex = newValue.lastIndexOf("@", newCursorPosition - 1)
-					const query = newValue.slice(lastAtIndex + 1, newCursorPosition)
-					setSearchQuery(query)
-					currentSearchQueryRef.current = query
-
-					if (query.length > 0) {
-						setSelectedMenuIndex(0)
-
-						// Clear any existing timeout
-						if (searchTimeoutRef.current) {
-							clearTimeout(searchTimeoutRef.current)
-						}
-
-						setSearchLoading(true)
-
-						const searchType =
-							selectedType === ContextMenuOptionType.File
-								? FileSearchType.FILE
-								: selectedType === ContextMenuOptionType.Folder
-									? FileSearchType.FOLDER
-									: undefined
-
-						// Parse workspace hint from query (e.g., "@frontend:/filename")
-						let workspaceHint: string | undefined
-						let searchQuery = query
-						const workspaceHintMatch = query.match(/^([\w-]+):\/(.*)$/)
-						if (workspaceHintMatch) {
-							workspaceHint = workspaceHintMatch[1]
-							searchQuery = workspaceHintMatch[2]
-						}
-
-						// Set a timeout to debounce the search requests
-						searchTimeoutRef.current = setTimeout(() => {
-							FileServiceClient.searchFiles(
-								FileSearchRequest.create({
-									query: searchQuery,
-									mentionsRequestId: query,
-									selectedType: searchType,
-									workspaceHint: workspaceHint,
-								}),
-							)
-								.then((results) => {
-									setFileSearchResults((results.results || []) as SearchResult[])
-									setSearchLoading(false)
-								})
-								.catch((error) => {
-									console.error("Error searching files:", error)
-									setFileSearchResults([])
-									setSearchLoading(false)
-								})
-						}, 200) // 200ms debounce
-					} else {
-						setSelectedMenuIndex(DEFAULT_CONTEXT_MENU_OPTION)
-					}
-				} else {
-					setSearchQuery("")
-					setSelectedMenuIndex(-1)
-					setFileSearchResults([])
-				}
-			},
-			[setInputValue, setFileSearchResults, selectedType],
-		)
-
-		useEffect(() => {
-			if (!showContextMenu) {
-				setSelectedType(null)
-			}
-		}, [showContextMenu])
-
-		const handleBlur = useCallback(() => {
-			// Only hide the context menu if the user didn't click on it
-			if (!isMouseDownOnMenu) {
-				setShowContextMenu(false)
-				setShowSlashCommandsMenu(false)
-			}
-			setIsTextAreaFocused(false)
-			onFocusChange?.(false) // Call prop on blur
-		}, [isMouseDownOnMenu, onFocusChange])
-
 		const handleThumbnailsHeightChange = useCallback((height: number) => {
 			setThumbnailsHeight(height)
 		}, [])
@@ -742,147 +196,19 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			}
 		}, [selectedImages, selectedFiles])
 
-		const handleMenuMouseDown = useCallback(() => {
-			setIsMouseDownOnMenu(true)
-		}, [])
+		const { modelDisplayName, switchToMode, onModeToggle } = useModelSelector({
+			mode,
+			apiConfiguration,
+			openRouterModels,
+			showModelSelector,
+			inputValue,
+			selectedImages,
+			selectedFiles,
+			setInputValue,
+			textAreaRef,
+		})
 
-		const updateHighlights = useCallback(() => {
-			if (!textAreaRef.current || !highlightLayerRef.current) {
-				return
-			}
-
-			let processedText = textAreaRef.current.value
-
-			processedText = processedText
-				.replace(/\n$/, "\n\n")
-				.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c] || c)
-				// highlight @mentions
-				.replace(mentionRegexGlobal, '<mark class="mention-context-textarea-highlight">$&</mark>')
-
-			// Highlight only the FIRST valid /slash-command in the text
-			// Only one slash command is processed per message, so we only highlight the first one
-			slashCommandRegexGlobal.lastIndex = 0
-			let hasHighlightedSlashCommand = false
-			processedText = processedText.replace(slashCommandRegexGlobal, (match, prefix, command) => {
-				// Only highlight the first valid slash command
-				if (hasHighlightedSlashCommand) {
-					return match
-				}
-
-				// Extract just the command name (without the slash)
-				const commandName = command.substring(1)
-				const isValidCommand = validateSlashCommand(
-					commandName,
-					localWorkflowToggles,
-					globalWorkflowToggles,
-					remoteWorkflowToggles,
-					remoteConfigSettings?.remoteGlobalWorkflows,
-				)
-
-				if (isValidCommand) {
-					hasHighlightedSlashCommand = true
-					// Keep the prefix (whitespace or empty) and wrap the command in highlight
-					return `${prefix}<mark class="mention-context-textarea-highlight">${command}</mark>`
-				}
-				return match
-			})
-
-			highlightLayerRef.current.innerHTML = processedText
-			highlightLayerRef.current.scrollTop = textAreaRef.current.scrollTop
-			highlightLayerRef.current.scrollLeft = textAreaRef.current.scrollLeft
-		}, [localWorkflowToggles, globalWorkflowToggles, remoteWorkflowToggles, remoteConfigSettings])
-
-		useLayoutEffect(() => {
-			updateHighlights()
-		}, [inputValue, updateHighlights])
-
-		const updateCursorPosition = useCallback(() => {
-			if (textAreaRef.current) {
-				setCursorPosition(textAreaRef.current.selectionStart)
-			}
-		}, [])
-
-		const handleKeyUp = useCallback(
-			(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-				if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(e.key)) {
-					updateCursorPosition()
-				}
-			},
-			[updateCursorPosition],
-		)
-
-		// Separate the API config submission logic
-		const submitApiConfig = useCallback(async () => {
-			const apiValidationResult = validateApiConfiguration(mode, apiConfiguration)
-			const modelIdValidationResult = validateModelId(mode, apiConfiguration, openRouterModels)
-
-			if (!apiValidationResult && !modelIdValidationResult && apiConfiguration) {
-				try {
-					await ModelsServiceClient.updateApiConfigurationProto(
-						UpdateApiConfigurationRequest.create({
-							apiConfiguration: convertApiConfigurationToProto(apiConfiguration),
-						}),
-					)
-				} catch (error) {
-					console.error("Failed to update API configuration:", error)
-				}
-			} else {
-				StateServiceClient.getLatestState(EmptyRequest.create())
-					.then(() => {
-						console.log("State refreshed")
-					})
-					.catch((error) => {
-						console.error("Error refreshing state:", error)
-					})
-			}
-		}, [apiConfiguration, openRouterModels])
-
-		const switchToMode = useCallback(
-			(targetMode: Mode) => {
-				if (targetMode === mode) return
-				let changeModeDelay = 0
-				if (showModelSelector) {
-					submitApiConfig()
-					changeModeDelay = 250
-				}
-				setTimeout(async () => {
-					const protoModeMap: Record<Mode, PlanActMode> = {
-						plan: PlanActMode.PLAN,
-						act: PlanActMode.ACT,
-						ask: PlanActMode.PAM_ASK,
-						debug: PlanActMode.DEBUG,
-						chat: PlanActMode.CHAT,
-					}
-					const response = await StateServiceClient.togglePlanActModeProto(
-						TogglePlanActModeRequest.create({
-							mode: protoModeMap[targetMode],
-							chatContent: {
-								message: inputValue.trim() ? inputValue : undefined,
-								images: selectedImages,
-								files: selectedFiles,
-							},
-						}),
-					)
-					setTimeout(() => {
-						if (response.value) {
-							setInputValue("")
-						}
-						textAreaRef.current?.focus()
-					}, 100)
-				}, changeModeDelay)
-			},
-			[mode, showModelSelector, submitApiConfig, inputValue, selectedImages, selectedFiles],
-		)
-
-		const onModeToggle = useCallback(() => {
-			// Keyboard shortcut cycles: plan → act → ask → debug → plan
-			const modeOrder: Mode[] = ["plan", "act", "ask", "debug"]
-			const currentIdx = modeOrder.indexOf(mode)
-			const nextMode = modeOrder[(currentIdx + 1) % modeOrder.length]
-			switchToMode(nextMode)
-		}, [mode, switchToMode])
-
-		useShortcut(usePlatform().togglePlanActKeys, onModeToggle, { disableTextInputs: false }) // important that we don't disable the text input here
+		useShortcut(usePlatform().togglePlanActKeys, onModeToggle, { disableTextInputs: false })
 
 		const handleContextButtonClick = useCallback(() => {
 			// Focus the textarea first
@@ -928,49 +254,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		const handleModelButtonClick = () => {
 			setShowModelSelector(!showModelSelector)
 		}
-
-		// Get model display name
-		const modelDisplayName = useMemo(() => {
-			const { selectedProvider, selectedModelId } = normalizeApiConfiguration(apiConfiguration, mode)
-			const {
-				vsCodeLmModelSelector,
-				togetherModelId,
-				lmStudioModelId,
-				ollamaModelId,
-				liteLlmModelId,
-				requestyModelId,
-				vercelAiGatewayModelId,
-			} = getModeSpecificFields(apiConfiguration, mode)
-			const unknownModel = "unknown"
-
-			if (!apiConfiguration) {
-				return unknownModel
-			}
-			switch (selectedProvider) {
-				case "skycode":
-					return `${selectedProvider}:${selectedModelId}`
-				case "openai":
-					return `openai-compat:${selectedModelId}`
-				case "vscode-lm":
-					return `vscode-lm:${vsCodeLmModelSelector ? `${vsCodeLmModelSelector.vendor ?? ""}/${vsCodeLmModelSelector.family ?? ""}` : unknownModel}`
-				case "together":
-					return `${selectedProvider}:${togetherModelId}`
-				case "lmstudio":
-					return `${selectedProvider}:${lmStudioModelId}`
-				case "ollama":
-					return `${selectedProvider}:${ollamaModelId}`
-				case "litellm":
-					return `${selectedProvider}:${liteLlmModelId}`
-				case "requesty":
-					return `${selectedProvider}:${requestyModelId}`
-				case "vercel-ai-gateway":
-					return `${selectedProvider}:${vercelAiGatewayModelId || selectedModelId}`
-				case "anthropic":
-				case "openrouter":
-				default:
-					return `${selectedProvider}:${selectedModelId}`
-			}
-		}, [apiConfiguration, mode])
 
 		// Calculate arrow position and menu position based on button location
 		useEffect(() => {
@@ -1082,7 +365,10 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						data-testid="chat-input"
 						maxRows={10}
 						minRows={3}
-						onBlur={handleBlur}
+						onBlur={() => {
+							handleBlur(onFocusChange)
+							setIsTextAreaFocused(false)
+						}}
 						onChange={(e) => {
 							handleInputChange(e)
 							updateHighlights()

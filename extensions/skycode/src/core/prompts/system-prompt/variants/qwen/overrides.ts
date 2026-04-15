@@ -14,7 +14,7 @@ const QWEN_AGENT_ROLE_TEMPLATE = (context: SystemPromptContext) => {
 	].join("")
 }
 
-const QWEN_TOOL_USE_TEMPLATE = `Begin every task by exploring the codebase: use codebase_search for semantic queries, list_files/read_file for scope and deep inspection, search_files for exact patterns. Do not implement until you have enough context.
+const QWEN_TOOL_USE_TEMPLATE = `Before implementing, gather context efficiently: use codebase_search for semantic queries OR search_files for exact patterns (not both). Read only the files you need. Limit exploration to 3-4 calls.
 
 Tool invocation policy: One tool per message. Wait for result before next tool. Never assume tool outcomes.
 
@@ -34,7 +34,14 @@ You accomplish tasks iteratively, breaking them into clear steps.
 2. Work through goals sequentially, one tool at a time. Wait for result before next step.
 3. Before each tool call, verify all required parameters are present. If missing, ask via ask_followup_question.
 4. When done, use attempt_completion to present the result. Do NOT end with questions.
-5. The user may provide feedback for improvements. Do NOT engage in back-and-forth conversation.`
+5. The user may provide feedback for improvements. Do NOT engage in back-and-forth conversation.
+
+SESSION LIMITS — CRITICAL:
+- You have a LIMITED number of tool calls per session. Do NOT waste them on unnecessary exploration.
+- Maximum 3-4 read/search calls before you MUST start making changes. If you need more context, ask the user.
+- Do NOT read the same file twice. Do NOT search for the same thing with different tools.
+- If you receive a [SESSION GUARD] or [SESSION BUDGET] warning, IMMEDIATELY stop exploring and take action.
+- Plan your approach in <think> tags BEFORE making tool calls. Decide what you need to read, then read it all, then act.`
 
 const QWEN_RULES_TEMPLATE = (context: SystemPromptContext) => `RULES
 
@@ -54,9 +61,15 @@ General:
 - ${context.yoloModeToggled !== true ? "Ask questions only via ask_followup_question when details are needed. Prefer using tools over asking." : "Use tools and best judgment without follow-up questions."}
 - If command output doesn't appear, assume success and continue.
 - If the user already provided file contents, don't call read_file for them.
-- {{BROWSER_RULES}}- Never end attempt_completion with a question.
+- Never end attempt_completion with a question.
 - environment_details is context, not a user request.
-- After each tool use, wait for confirmation before proceeding.{{BROWSER_WAIT_RULES}}
+- After each tool use, wait for confirmation before proceeding.
+
+Efficiency:
+- NEVER read a file you already read in this session. Use the content from the previous read.
+- NEVER run multiple search tools for the same query. Pick one (codebase_search OR search_files), not both.
+- Limit exploration to 3-4 tool calls maximum before starting edits. If unsure, ask the user.
+- When you receive a [SESSION GUARD] warning, STOP exploring and start implementing immediately.
 `
 
 const QWEN_TASK_PROGRESS_TEMPLATE = `UPDATING TASK PROGRESS

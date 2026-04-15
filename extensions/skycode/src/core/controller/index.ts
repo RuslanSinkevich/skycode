@@ -18,7 +18,7 @@ import { getBackendLocaleForPreferredLanguage, setBackendLocale, t } from "../..
 import type { HistoryItem } from "@shared/HistoryItem"
 import type { McpMarketplaceCatalog, McpMarketplaceItem } from "@shared/mcp"
 import type { Settings } from "@shared/storage/state-keys"
-import type { Mode } from "@shared/storage/types"
+import { getApiSettingsMode, type Mode } from "@shared/storage/types"
 import type { TelemetrySetting } from "@shared/TelemetrySetting"
 import type { UserInfo } from "@shared/UserInfo"
 import { fileExistsAtPath } from "@utils/fs"
@@ -40,7 +40,7 @@ import { featureFlagsService } from "@/services/feature-flags"
 import { getDistinctId } from "@/services/logging/distinctId"
 import { telemetryService } from "@/services/telemetry"
 import { BannerCardData } from "@/shared/skycode/banner"
-import { DEFAULT_INDEXING_CONFIG, type IndexingConfig, type IndexingMode } from "@/shared/IndexingTypes"
+import { DEFAULT_INDEXING_CONFIG, type IndexingConfig, type IndexingMode, type LocalModelId } from "@/shared/IndexingTypes"
 import { getAxiosSettings } from "@/shared/net"
 import { ShowMessageType } from "@/shared/proto/host/window"
 import { Logger } from "@/shared/services/Logger"
@@ -48,6 +48,7 @@ import { getLatestAnnouncementId } from "@/utils/announcements"
 import { sendAccountButtonClickedEvent } from "./ui/subscribeToAccountButtonClicked"
 import { getCwd, getDesktopDir } from "@/utils/path"
 import { PromptRegistry } from "../prompts/system-prompt"
+import { getModelCapabilityTier, getSessionLimitsForModel } from "@utils/model-utils"
 import {
 	ensureCacheDirectoryExists,
 	ensureMcpServersDirectoryExists,
@@ -1191,6 +1192,41 @@ export class Controller {
 			optOutOfRemoteConfig: this.stateManager.getGlobalSettingsKey("optOutOfRemoteConfig"),
 			// Skycode AI: Lightweight mode for weak models
 			lightweightMode: this.stateManager.getGlobalSettingsKey("lightweightMode"),
+			// Skycode AI: Active prompt profile (variant + tier + limits)
+			promptProfile: (() => {
+				try {
+					const apiConfig = this.stateManager.getApiConfiguration()
+					const mode = this.stateManager.getGlobalSettingsKey("mode")
+					const isPlan = getApiSettingsMode(mode) === "plan"
+					const providerId = (isPlan ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
+					const modeKey = isPlan ? "planMode" : "actMode"
+					const providerModelSuffix: Record<string, string> = {
+						openrouter: "OpenRouterModelId", skycode: "OpenRouterModelId",
+						openai: "OpenAiModelId", ollama: "OllamaModelId",
+						lmstudio: "LmStudioModelId", litellm: "LiteLlmModelId",
+						requesty: "RequestyModelId", together: "TogetherModelId",
+						fireworks: "FireworksModelId", groq: "GroqModelId",
+						baseten: "BasetenModelId", huggingface: "HuggingFaceModelId",
+						sapaicore: "SapAiCoreModelId", "huawei-cloud-maas": "HuaweiCloudMaasModelId",
+						oca: "OcaModelId", aihubmix: "AihubmixModelId",
+						hicap: "HicapModelId", nousResearch: "NousResearchModelId",
+						"vercel-ai-gateway": "VercelAiGatewayModelId",
+					}
+					const configModelId = (apiConfig as Record<string, unknown>)[`${modeKey}${providerModelSuffix[providerId] ?? "ApiModelId"}`] as string | undefined
+					const modelId = this.task?.api?.getModel()?.id ?? configModelId ?? "unknown"
+					const providerInfo = { model: { id: modelId, info: {} as ModelInfo }, providerId, mode }
+					const tier = getModelCapabilityTier(modelId, providerInfo)
+					const limits = getSessionLimitsForModel(modelId, providerInfo)
+					const registry = PromptRegistry.getInstance()
+					const variant = registry.getModelFamily({
+						providerInfo,
+						lightweightMode: this.stateManager.getGlobalSettingsKey("lightweightMode") === true,
+					} as any)
+					return { variant, tier, maxToolCalls: limits.maxToolCallsPerTurn, maxReadOnly: limits.maxConsecutiveReadOnlyTools, compactEvery: limits.forceCompactAfterSteps }
+				} catch {
+					return undefined
+				}
+			})(),
 			// Skycode AI: Edit tools settings (driven by lightweightMode)
 			useSimplifiedEditTools: this.stateManager.getGlobalSettingsKey("lightweightMode") === true,
 			validateSyntaxBeforeApply: vscode.workspace
@@ -1202,6 +1238,7 @@ export class Controller {
 				const cfg = vscode.workspace.getConfiguration("skycode.indexing")
 				return {
 					mode: cfg.get("mode", DEFAULT_INDEXING_CONFIG.mode) as IndexingMode,
+					localModel: cfg.get<LocalModelId>("localModel", DEFAULT_INDEXING_CONFIG.localModel),
 					remoteApiUrl: cfg.get("remoteApiUrl", DEFAULT_INDEXING_CONFIG.remoteApiUrl),
 					remoteApiKey: cfg.get("remoteApiKey", DEFAULT_INDEXING_CONFIG.remoteApiKey),
 					remoteModel: cfg.get("remoteModel", DEFAULT_INDEXING_CONFIG.remoteModel),

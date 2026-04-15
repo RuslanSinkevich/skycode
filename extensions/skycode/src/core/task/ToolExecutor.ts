@@ -12,7 +12,10 @@ import { SkycodeContent } from "@shared/messages/content"
 import { SkycodeDefaultTool } from "@shared/tools"
 import { SkycodeAskResponse } from "@shared/WebviewMessage"
 import * as vscode from "vscode"
-import { isGPT5ModelFamily, modelDoesntSupportWebp } from "@/utils/model-utils"
+import { isGPT5ModelFamily, modelDoesntSupportWebp, getModelCapabilityTier, getSessionLimitsForModel } from "@/utils/model-utils"
+import { getApiSettingsMode } from "@shared/storage/types"
+import type { ApiProviderInfo } from "@core/api"
+import { EXPLORATION_ONLY_TOOLS } from "@shared/tools"
 import { ToolUse } from "../assistant-message"
 import { ContextManager } from "../context/context-management/ContextManager"
 import { formatResponse } from "../prompts/responses"
@@ -461,8 +464,9 @@ export class ToolExecutor {
 				block.name &&
 				ToolExecutor.ASK_MODE_RESTRICTED_TOOLS.includes(block.name)
 			) {
-				this.taskState.consecutiveMistakeCount++
-				const errorMessage = `Инструмент '${block.name}' недоступен в режиме Ask. Этот режим предназначен только для чтения. Переключитесь в режим Act для выполнения действий.`
+			this.taskState.consecutiveMistakeCount++
+			// allow-any-unicode-next-line
+			const errorMessage = `Инструмент '${block.name}' недоступен в режиме Ask. Этот режим предназначен только для чтения. Переключитесь в режим Act для выполнения действий.`
 				await this.removeLastPartialMessageIfExistsWithType("say", "error")
 				await this.say("error", errorMessage)
 				if (!block.partial) {
@@ -477,8 +481,9 @@ export class ToolExecutor {
 				block.name &&
 				ToolExecutor.CHAT_MODE_RESTRICTED_TOOLS.includes(block.name)
 			) {
-				this.taskState.consecutiveMistakeCount++
-				const errorMessage = `Инструмент '${block.name}' недоступен в режиме Чат. Этот режим предназначен для общения. Переключитесь в режим Act для выполнения действий.`
+			this.taskState.consecutiveMistakeCount++
+			// allow-any-unicode-next-line
+			const errorMessage = `Инструмент '${block.name}' недоступен в режиме Чат. Этот режим предназначен для общения. Переключитесь в режим Act для выполнения действий.`
 				await this.removeLastPartialMessageIfExistsWithType("say", "error")
 				await this.say("error", errorMessage)
 				if (!block.partial) {
@@ -533,10 +538,76 @@ export class ToolExecutor {
 
 			// Handle complete blocks
 			await this.handleCompleteBlock(block, config)
+
+			// Session budget & anti-loop tracking for weak/medium models
+			this.trackToolCallForSessionBudget(block)
+
 			return true
 		} catch (error) {
 			await this.handleError(`executing ${block.name}`, error as Error, block)
 			return true
+		}
+	}
+
+	private getProviderInfo(): ApiProviderInfo {
+		const model = this.api.getModel()
+		const apiConfig = this.stateManager.getApiConfiguration()
+		const mode = this.stateManager.getGlobalSettingsKey("mode")
+		const providerId = (getApiSettingsMode(mode) === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
+		return { model, providerId, mode }
+	}
+
+	/**
+	 * Tracks tool calls for session budget and anti-loop detection.
+	 * For weak/medium models, injects warnings when approaching limits
+	 * or when stuck in exploration loops.
+	 */
+	private trackToolCallForSessionBudget(block: ToolUse): void {
+		const providerInfo = this.getProviderInfo()
+		const modelId = providerInfo.model.id
+		const tier = getModelCapabilityTier(modelId, providerInfo)
+
+		if (tier === "strong") {
+			return
+		}
+
+		const limits = getSessionLimitsForModel(modelId, providerInfo)
+
+		this.taskState.turnToolCallCount++
+
+		// Anti-loop: track consecutive exploration-only tools
+		if (block.name && EXPLORATION_ONLY_TOOLS.includes(block.name)) {
+			this.taskState.consecutiveReadOnlyToolCalls++
+		} else {
+			this.taskState.consecutiveReadOnlyToolCalls = 0
+		}
+
+		// Inject anti-loop nudge when too many read-only tools in a row
+		if (this.taskState.consecutiveReadOnlyToolCalls >= limits.maxConsecutiveReadOnlyTools) {
+			this.taskState.userMessageContent.push({
+				type: "text",
+				text: `[SESSION GUARD] You have used ${this.taskState.consecutiveReadOnlyToolCalls} exploration tools in a row without making any changes. Stop investigating and take action: either edit a file, run a command, or call attempt_completion. If you are stuck, call ask_followup_question.`,
+			})
+			this.taskState.consecutiveReadOnlyToolCalls = 0
+		}
+
+		// Session budget warning at 80% of limit
+		const budgetWarningThreshold = Math.floor(limits.maxToolCallsPerTurn * 0.8)
+		if (this.taskState.turnToolCallCount === budgetWarningThreshold) {
+			const remaining = limits.maxToolCallsPerTurn - this.taskState.turnToolCallCount
+			this.taskState.userMessageContent.push({
+				type: "text",
+				text: `[SESSION BUDGET] Warning: You have ${remaining} tool calls remaining in this session. Wrap up your current task and call attempt_completion soon.`,
+			})
+		}
+
+		// Hard limit: force completion
+		if (this.taskState.turnToolCallCount >= limits.maxToolCallsPerTurn) {
+			this.taskState.sessionBudgetExhausted = true
+			this.taskState.userMessageContent.push({
+				type: "text",
+				text: `[SESSION BUDGET EXHAUSTED] You have reached the maximum number of tool calls (${limits.maxToolCallsPerTurn}) for this session. You MUST call attempt_completion now with whatever progress you have made. Do NOT call any other tool.`,
+			})
 		}
 	}
 

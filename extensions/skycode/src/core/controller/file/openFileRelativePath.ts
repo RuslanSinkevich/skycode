@@ -41,12 +41,30 @@ export async function openFileRelativePath(_controller: Controller, request: Str
 			}
 		}
 
-		// Resolve the relative path to absolute path
-		const resolvedPath = workspaceResolver.resolveWorkspacePath(workspacePath, filePath, "Controller.openFileRelativePath")
-		const absolutePath = typeof resolvedPath === "string" ? resolvedPath : resolvedPath.absolutePath
+		// If path is already absolute, use it directly; otherwise resolve relative to workspace
+		const isAbsolute = /^[a-zA-Z]:[\\/]/.test(filePath) || filePath.startsWith("/")
+		let absolutePath: string
+		if (isAbsolute) {
+			absolutePath = filePath
+		} else {
+			const resolvedPath = workspaceResolver.resolveWorkspacePath(workspacePath, filePath, "Controller.openFileRelativePath")
+			absolutePath = typeof resolvedPath === "string" ? resolvedPath : resolvedPath.absolutePath
+		}
 
 		try {
 			const uri = vscode.Uri.file(absolutePath)
+
+			// Check if path is a directory — reveal in explorer instead of opening as text
+			try {
+				const stat = await vscode.workspace.fs.stat(uri)
+				if (stat.type === vscode.FileType.Directory) {
+					await vscode.commands.executeCommand("revealInExplorer", uri)
+					return Empty.create()
+				}
+			} catch {
+				// stat failed — try opening as file anyway
+			}
+
 			const options: vscode.TextDocumentShowOptions = {}
 
 			// If hunkId provided, resolve its current position from DiffStore (live, updated by PositionTracker)

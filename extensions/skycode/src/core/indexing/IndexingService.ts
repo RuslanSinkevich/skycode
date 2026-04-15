@@ -119,14 +119,23 @@ export class IndexingService implements vscode.Disposable {
 		if (newMode === "off") {
 			this.stop()
 		} else if (oldMode === "off" && newMode !== "off") {
-			void this.startIndexing()
+			void this.clearAndReindex()
 		} else if (oldMode !== newMode) {
-			void this.startIndexing()
+			void this.clearAndReindex()
 		} else if (newMode === "local" && oldLocalModel !== this.config.localModel) {
-			void this.startIndexing()
+			void this.clearAndReindex()
 		}
 
 		this.emitProgress()
+	}
+
+	/** Clear entire index and start fresh indexing */
+	private async clearAndReindex(): Promise<void> {
+		this.stop()
+		await this.storage.clear()
+		this.progress = { ...DEFAULT_INDEXING_PROGRESS }
+		this.emitProgress()
+		await this.startIndexing()
 	}
 
 	/** Get current config */
@@ -592,7 +601,7 @@ export class IndexingService implements vscode.Disposable {
 	async handleCommand(command: "reindex" | "clear" | "pause" | "resume"): Promise<void> {
 		switch (command) {
 			case "reindex":
-				await this.startIndexing()
+				await this.clearAndReindex()
 				break
 			case "clear":
 				await this.clearIndex()

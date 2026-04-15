@@ -16,12 +16,41 @@ import { PositionTracker } from './PositionTracker';
 import { SystemEditGuard } from './SystemEditGuard';
 
 export class HunkApplier {
+  /**
+   * When true, writeFile skips doc.save() — caller is responsible for
+   * calling flushSave() after the batch. Avoids N disk writes for N hunks.
+   */
+  private _deferSave = false;
+  private readonly _dirtyDocs = new Set<string>();
+
   constructor(
     private readonly store: DiffStore,
     private readonly snapshotStorage: FileSnapshotStorage,
     private readonly positionTracker: PositionTracker,
     private readonly editGuard: SystemEditGuard,
   ) {}
+
+  beginBatch(): void {
+    this._deferSave = true;
+  }
+
+  async endBatch(): Promise<void> {
+    this._deferSave = false;
+    const paths = [...this._dirtyDocs];
+    this._dirtyDocs.clear();
+    for (const fsPath of paths) {
+      try {
+        const doc = vscode.workspace.textDocuments.find(
+          (d) => d.uri.fsPath.toLowerCase() === fsPath.toLowerCase(),
+        );
+        if (doc?.isDirty) {
+          await doc.save();
+        }
+      } catch (e) {
+        console.error('[HunkApplier] endBatch save failed for', fsPath, e);
+      }
+    }
+  }
 
   /**
    * Replace lines in a file (Cursor-like).
@@ -235,9 +264,11 @@ export class HunkApplier {
 
   async readFile(fsPath: string): Promise<string> {
     try {
-      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(fsPath));
-      // Normalize CRLF→LF so split('\n') produces clean lines (no trailing \r).
-      // VS Code's document model restores the file's original EOL on save.
+      // Fast path: if doc is already loaded in memory, skip openTextDocument I/O
+      const cached = vscode.workspace.textDocuments.find(
+        (d) => d.uri.fsPath.toLowerCase() === fsPath.toLowerCase(),
+      );
+      const doc = cached ?? await vscode.workspace.openTextDocument(vscode.Uri.file(fsPath));
       return doc.getText().replace(/\r\n/g, '\n');
     } catch {
       if (!fs.existsSync(fsPath)) throw new Error(`File not found: ${fsPath}`);
@@ -261,7 +292,11 @@ export class HunkApplier {
         );
         edit.replace(uri, fullRange, content);
         await vscode.workspace.applyEdit(edit);
-        await openDoc.save();
+        if (this._deferSave) {
+          this._dirtyDocs.add(fsPath);
+        } else {
+          await openDoc.save();
+        }
       } else {
         fs.writeFileSync(fsPath, content, 'utf-8');
       }

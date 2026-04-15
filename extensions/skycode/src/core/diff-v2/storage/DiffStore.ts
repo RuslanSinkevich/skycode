@@ -30,12 +30,41 @@ export class DiffStore implements vscode.Disposable {
   private readonly _onDidChange = new vscode.EventEmitter<DiffStoreEvent>();
   readonly onDidChange = this._onDidChange.event;
 
+  // In-memory caches — avoid repeated JSON.parse from workspaceState on every read.
+  // Writes mutate the cache immediately and schedule a single persist via queueMicrotask.
+  private _rgCache: ResponseGroup[] | null = null;
+  private _fcCache: FileChangeRecord[] | null = null;
+  private _hunksCache: Hunk[] | null = null;
+  private readonly _dirtyKeys = new Set<string>();
+  private _persistScheduled = false;
+
   constructor(private readonly workspaceState: vscode.Memento) {}
+
+  private schedulePersist(): void {
+    if (this._persistScheduled) return;
+    this._persistScheduled = true;
+    queueMicrotask(() => {
+      this._persistScheduled = false;
+      for (const key of this._dirtyKeys) {
+        if (key === DiffStore.RG_KEY && this._rgCache) {
+          this.workspaceState.update(key, this._rgCache);
+        } else if (key === DiffStore.FC_KEY && this._fcCache) {
+          this.workspaceState.update(key, this._fcCache);
+        } else if (key === DiffStore.HUNKS_KEY && this._hunksCache) {
+          this.workspaceState.update(key, this._hunksCache);
+        }
+      }
+      this._dirtyKeys.clear();
+    });
+  }
 
   // ==================== ResponseGroups ====================
 
   private getRGs(): ResponseGroup[] {
-    return this.workspaceState.get<ResponseGroup[]>(DiffStore.RG_KEY, []);
+    if (!this._rgCache) {
+      this._rgCache = this.workspaceState.get<ResponseGroup[]>(DiffStore.RG_KEY, []);
+    }
+    return this._rgCache;
   }
 
   createResponseGroup(chatMessageTs: number, description?: string, taskId?: string): string {
@@ -50,7 +79,8 @@ export class DiffStore implements vscode.Disposable {
     };
     const all = this.getRGs();
     all.push(group);
-    this.workspaceState.update(DiffStore.RG_KEY, all);
+    this._dirtyKeys.add(DiffStore.RG_KEY);
+    this.schedulePersist();
     return id;
   }
 
@@ -100,7 +130,8 @@ export class DiffStore implements vscode.Disposable {
     if (idx !== -1) {
       all[idx].status = status;
       if (status !== 'active') all[idx].resolvedAt = Date.now();
-      this.workspaceState.update(DiffStore.RG_KEY, all);
+      this._dirtyKeys.add(DiffStore.RG_KEY);
+      this.schedulePersist();
       this._onDidChange.fire({ type: 'responseGroupChanged', responseGroupId: id });
     }
   }
@@ -108,7 +139,10 @@ export class DiffStore implements vscode.Disposable {
   // ==================== FileChanges ====================
 
   private getFCs(): FileChangeRecord[] {
-    return this.workspaceState.get<FileChangeRecord[]>(DiffStore.FC_KEY, []);
+    if (!this._fcCache) {
+      this._fcCache = this.workspaceState.get<FileChangeRecord[]>(DiffStore.FC_KEY, []);
+    }
+    return this._fcCache;
   }
 
   createFileChange(responseGroupId: string, fsPath: string, kind: FileChangeKind): string {
@@ -119,7 +153,8 @@ export class DiffStore implements vscode.Disposable {
     const fc: FileChangeRecord = { id, responseGroupId, fsPath, kind, status: 'pending' };
     const all = this.getFCs();
     all.push(fc);
-    this.workspaceState.update(DiffStore.FC_KEY, all);
+    this._dirtyKeys.add(DiffStore.FC_KEY);
+    this.schedulePersist();
     return id;
   }
 
@@ -143,7 +178,8 @@ export class DiffStore implements vscode.Disposable {
     const idx = all.findIndex((fc) => fc.id === id);
     if (idx !== -1) {
       all[idx].status = status;
-      this.workspaceState.update(DiffStore.FC_KEY, all);
+      this._dirtyKeys.add(DiffStore.FC_KEY);
+      this.schedulePersist();
     }
   }
 
@@ -152,14 +188,18 @@ export class DiffStore implements vscode.Disposable {
     const idx = all.findIndex((fc) => fc.id === id);
     if (idx !== -1) {
       all[idx].originalSnapshotId = snapshotId;
-      this.workspaceState.update(DiffStore.FC_KEY, all);
+      this._dirtyKeys.add(DiffStore.FC_KEY);
+      this.schedulePersist();
     }
   }
 
   // ==================== Hunks ====================
 
   private getHunksAll(): Hunk[] {
-    return this.workspaceState.get<Hunk[]>(DiffStore.HUNKS_KEY, []);
+    if (!this._hunksCache) {
+      this._hunksCache = this.workspaceState.get<Hunk[]>(DiffStore.HUNKS_KEY, []);
+    }
+    return this._hunksCache;
   }
 
   createHunk(params: CreateHunkParams): string {
@@ -167,7 +207,8 @@ export class DiffStore implements vscode.Disposable {
     const hunk: Hunk = { ...params, id, status: 'pending', createdAt: Date.now() };
     const all = this.getHunksAll();
     all.push(hunk);
-    this.workspaceState.update(DiffStore.HUNKS_KEY, all);
+    this._dirtyKeys.add(DiffStore.HUNKS_KEY);
+    this.schedulePersist();
 
     // If the ResponseGroup was marked as rejected/partial (e.g. by overlap auto-reject
     // clearing all previous hunks), reset it to 'active' since we now have a new pending hunk.
@@ -217,7 +258,8 @@ export class DiffStore implements vscode.Disposable {
       const hunk = all[idx];
       hunk.status = status;
       if (status !== 'pending') hunk.resolvedAt = Date.now();
-      this.workspaceState.update(DiffStore.HUNKS_KEY, all);
+      this._dirtyKeys.add(DiffStore.HUNKS_KEY);
+      this.schedulePersist();
       if (status !== 'pending') {
         this._onDidChange.fire({ type: 'hunkRemoved', hunkId: id, fsPath: hunk.fsPath });
       }
@@ -230,7 +272,8 @@ export class DiffStore implements vscode.Disposable {
     if (idx !== -1) {
       all[idx].currentStartLine = startLine;
       all[idx].currentEndLine = endLine;
-      this.workspaceState.update(DiffStore.HUNKS_KEY, all);
+      this._dirtyKeys.add(DiffStore.HUNKS_KEY);
+      this.schedulePersist();
       this._onDidChange.fire({
         type: 'hunkPositionChanged',
         hunkId: id,
@@ -259,16 +302,21 @@ export class DiffStore implements vscode.Disposable {
     hunk.addedLines = params.addedLines;
     hunk.type = params.type;
 
-    this.workspaceState.update(DiffStore.HUNKS_KEY, all);
+    this._dirtyKeys.add(DiffStore.HUNKS_KEY);
+    this.schedulePersist();
     this._onDidChange.fire({ type: 'hunkUpdated', hunk: { ...hunk } });
   }
 
   // ==================== Bulk ====================
 
   clearAll(): void {
+    this._rgCache = [];
+    this._fcCache = [];
+    this._hunksCache = [];
     this.workspaceState.update(DiffStore.RG_KEY, []);
     this.workspaceState.update(DiffStore.FC_KEY, []);
     this.workspaceState.update(DiffStore.HUNKS_KEY, []);
+    this._dirtyKeys.clear();
     this._onDidChange.fire({ type: 'cleared' });
   }
 
@@ -285,7 +333,9 @@ export class DiffStore implements vscode.Disposable {
     const removed = all.length - toKeep.length;
 
     if (removed > 0) {
-      this.workspaceState.update(DiffStore.RG_KEY, toKeep);
+      this._rgCache = toKeep;
+      this._dirtyKeys.add(DiffStore.RG_KEY);
+      this.schedulePersist();
       console.log(`[DiffStore] Cleaned up ${removed} orphaned ResponseGroups (kept ${toKeep.length} with pending hunks)`);
     }
   }

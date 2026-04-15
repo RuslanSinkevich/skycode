@@ -38,7 +38,7 @@ export abstract class ProtoBusClient {
 					} else if (message.grpc_response.error) {
 						reject(new Error(message.grpc_response.error))
 					} else {
-						console.error("Received ProtoBus message with no response or error ", JSON.stringify(message))
+						reject(new Error(`ProtoBus: ${this.serviceName}.${methodName} returned empty response`))
 					}
 				}
 			}
@@ -81,7 +81,7 @@ export abstract class ProtoBusClient {
 					// Only remove the event listener on error
 					window.removeEventListener("message", handleResponse)
 				} else {
-					console.error("Received ProtoBus message with no response or error ", JSON.stringify(message))
+					console.error("ProtoBus: streaming message with no response or error:", message)
 				}
 				if (message.grpc_response.is_streaming === false) {
 					if (callbacks.onComplete) {
@@ -112,7 +112,7 @@ export abstract class ProtoBusClient {
 					request_id: requestId,
 				},
 			})
-			console.log(`[DEBUG] Sent cancellation for request: ${requestId}`)
+			// cancellation sent
 		}
 	}
 }

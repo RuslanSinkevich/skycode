@@ -82,14 +82,17 @@ export class HicapHandler implements ApiHandler {
 			}
 
 			if (chunk.usage) {
+				const promptTokens = chunk.usage.prompt_tokens || 0
+				// @ts-ignore-next-line
+				const cachedTokens = chunk.usage.prompt_tokens_details?.cached_tokens || 0
+				// @ts-ignore-next-line
+				const cacheMissTokens = chunk.usage.prompt_cache_miss_tokens || 0
 				yield {
 					type: "usage",
-					inputTokens: chunk.usage.prompt_tokens || 0,
+					inputTokens: promptTokens - cachedTokens,
 					outputTokens: chunk.usage.completion_tokens || 0,
-					// @ts-ignore-next-line
-					cacheReadTokens: chunk.usage.prompt_tokens_details?.cached_tokens || 0,
-					// @ts-ignore-next-line
-					cacheWriteTokens: chunk.usage.prompt_cache_miss_tokens || 0,
+					cacheReadTokens: cachedTokens,
+					cacheWriteTokens: cacheMissTokens,
 				}
 			}
 		}

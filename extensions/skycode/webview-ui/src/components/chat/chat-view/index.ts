@@ -15,4 +15,3 @@ export * from "./types/chatTypes"
 // Export utilities
 export * from "./utils/markdownUtils"
 export * from "./utils/messageUtils"
-export * from "./utils/scrollUtils"

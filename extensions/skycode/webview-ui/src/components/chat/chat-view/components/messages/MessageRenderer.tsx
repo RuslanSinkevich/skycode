@@ -17,7 +17,7 @@ interface MessageRendererProps {
 	modifiedMessages: SkycodeMessage[]
 	expandedRows: Record<number, boolean>
 	onToggleExpand: (ts: number) => void
-	onHeightChange: (isTaller: boolean) => void
+	onHeightChange?: (isTaller: boolean) => void
 	onSetQuote: (quote: string | null) => void
 	inputValue: string
 	messageHandlers: MessageHandlers

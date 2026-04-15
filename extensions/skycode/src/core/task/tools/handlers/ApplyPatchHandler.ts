@@ -29,8 +29,8 @@ interface FileChange {
 	movePath?: string
 	/** Starting line numbers (1-indexed) for each chunk in the patch */
 	startLineNumbers?: number[]
-    // Added: chunks for view zones
-    chunks?: PatchChunk[]
+		// Added: chunks for view zones
+		chunks?: PatchChunk[]
 }
 
 interface Commit {
@@ -77,16 +77,16 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 	}
 
 	async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
-        // [SKYCODE-SKYCODE] Streaming preview logic simplified for Native View Zones.
-        // We could implement "live typing" effect later, but for now we just wait for the full block
-        // to avoid ViewZone flickering.
+				// [SKYCODE-SKYCODE] Streaming preview logic simplified for Native View Zones.
+				// We could implement "live typing" effect later, but for now we just wait for the full block
+				// to avoid ViewZone flickering.
 		return;
 	}
 
-    // [SKYCODE-SKYCODE] Removed previewPatchStream as we apply changes directly with ViewZones
+		// [SKYCODE-SKYCODE] Removed previewPatchStream as we apply changes directly with ViewZones
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
-        // [SKYCODE-SKYCODE] We ignore the old provider reset logic as we use NativeDiffManager
+				// [SKYCODE-SKYCODE] We ignore the old provider reset logic as we use NativeDiffManager
 		const rawInput = block.params.input
 
 		if (!rawInput) {
@@ -188,22 +188,22 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 					}
 				}
 
-                // [SKYCODE-SKYCODE] Apply changes + show inline diffs (Cursor-style)
+								// [SKYCODE-SKYCODE] Apply changes + show inline diffs (Cursor-style)
 				await this.prepareFileChangeWithNativeDiff(change, operationPath)
 				await this.handleApproval(config, block, message, rawInput)
 				// Changes stay pending — user accepts/rejects via inline buttons
 
-                // Track result
-                applyResults[originalPath] = {
-                    finalContent: change.newContent,
-                    autoFormattingEdits: "" // simplified for now
-                };
+								// Track result
+								applyResults[originalPath] = {
+										finalContent: change.newContent,
+										autoFormattingEdits: "" // simplified for now
+								};
 
-                // Handle file moves
-                if (change.type === PatchActionType.UPDATE && change.movePath) {
-                    await this.providerOps!.deleteFile(originalPath)
-                    applyResults[originalPath] = { deleted: true }
-                }
+								// Handle file moves
+								if (change.type === PatchActionType.UPDATE && change.movePath) {
+										await this.providerOps!.deleteFile(originalPath)
+										applyResults[originalPath] = { deleted: true }
+								}
 
 				finalResponses.push(messagePath)
 			}
@@ -241,87 +241,91 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 
 			return responseLines.join("\n")
 		} catch (error) {
-            // [SKYCODE-SKYCODE] Global revert if something crashes
-            // TODO: Better revert logic
+						// [SKYCODE-SKYCODE] Global revert if something crashes
+						// TODO: Better revert logic
 			throw error
 		} finally {
-            // Cleanup
+						// Cleanup
 		}
 	}
 
-    // [SKYCODE-SKYCODE] New methods for Native Diff System
+		// [SKYCODE-SKYCODE] New methods for Native Diff System
 
-    /**
-     * v4: Applies changes through DiffSystem (single path of writing).
-     *
-     * For UPDATE operations: each chunk goes through DiffSystem.replaceLines/deleteLines/addLines
-     * which handles pre-save, snapshot, overlap detection, and atomic writes via HunkApplier.
-     *
-     * For ADD/DELETE file operations: direct file system operations (not chunk-level diffs).
-     */
-    private async prepareFileChangeWithNativeDiff(change: FileChange, path: string): Promise<void> {
-        const uri = vscode.Uri.file(path);
+		/**
+		 * v4: Applies changes through DiffSystem (single path of writing).
+		 *
+		 * For UPDATE operations: each chunk goes through DiffSystem.replaceLines/deleteLines/addLines
+		 * which handles pre-save, snapshot, overlap detection, and atomic writes via HunkApplier.
+		 *
+		 * For ADD/DELETE file operations: direct file system operations (not chunk-level diffs).
+		 */
+		private async prepareFileChangeWithNativeDiff(change: FileChange, path: string): Promise<void> {
+				const uri = vscode.Uri.file(path);
 
-        switch (change.type) {
-            case PatchActionType.DELETE:
-                await vscode.workspace.fs.delete(uri);
-                return;
-            case PatchActionType.ADD:
-                if (!change.newContent) throw new DiffError(`Cannot create ${path} with no content`);
-                await vscode.workspace.fs.writeFile(uri, Buffer.from(change.newContent));
-                return;
-            case PatchActionType.UPDATE:
-                if (!change.newContent) throw new DiffError(`UPDATE change for ${path} has no new content`);
-                if (change.movePath) {
-                    // Move = create new file + delete old. New file gets full content.
-                    await vscode.workspace.fs.writeFile(vscode.Uri.file(change.movePath), Buffer.from(change.newContent));
-                    await vscode.workspace.fs.delete(uri);
-                    return;
-                }
-                break;
-        }
+				switch (change.type) {
+						case PatchActionType.DELETE:
+								await vscode.workspace.fs.delete(uri);
+								return;
+						case PatchActionType.ADD:
+								if (!change.newContent) throw new DiffError(`Cannot create ${path} with no content`);
+								await vscode.workspace.fs.writeFile(uri, Buffer.from(change.newContent));
+								return;
+						case PatchActionType.UPDATE:
+								if (!change.newContent) throw new DiffError(`UPDATE change for ${path} has no new content`);
+								if (change.movePath) {
+										// Move = create new file + delete old. New file gets full content.
+										await vscode.workspace.fs.writeFile(vscode.Uri.file(change.movePath), Buffer.from(change.newContent));
+										await vscode.workspace.fs.delete(uri);
+										return;
+								}
+								break;
+				}
 
-        // v5: Validate syntax before applying (Tree-sitter)
-        if (change.type === PatchActionType.UPDATE && change.oldContent && change.newContent && this.diffSystem) {
-            const syntaxError = await this.diffSystem.validateSyntax(path, change.oldContent, change.newContent);
-            if (syntaxError) {
-                throw new DiffError(syntaxError);
-            }
-        }
+				// v5: Validate syntax before applying (Tree-sitter)
+				if (change.type === PatchActionType.UPDATE && change.oldContent && change.newContent && this.diffSystem) {
+						const syntaxError = await this.diffSystem.validateSyntax(path, change.oldContent, change.newContent);
+						if (syntaxError) {
+								throw new DiffError(syntaxError);
+						}
+				}
 
-        // v4: Apply each chunk through DiffSystem (no direct file write)
-        if (change.type === PatchActionType.UPDATE && change.chunks && this.diffSystem) {
-            const targetPath = change.movePath || path;
-            let cumulativeOffset = 0;
+				// v4: Apply each chunk through DiffSystem (no direct file write)
+				if (change.type === PatchActionType.UPDATE && change.chunks && this.diffSystem) {
+						const targetPath = change.movePath || path;
+						let cumulativeOffset = 0;
 
-            for (const chunk of change.chunks) {
-                if (chunk.delLines.length === 0 && chunk.insLines.length === 0) continue;
+						this.diffSystem.suspendRendering();
+						this.diffSystem.beginBatch();
+						try {
+								for (const chunk of change.chunks) {
+										if (chunk.delLines.length === 0 && chunk.insLines.length === 0) continue;
 
-                // origIndex is 0-indexed, DiffSystem expects 1-indexed
-                const startLine = chunk.origIndex + 1 + cumulativeOffset;
+										// origIndex is 0-indexed, DiffSystem expects 1-indexed
+										const startLine = chunk.origIndex + 1 + cumulativeOffset;
 
-                if (chunk.delLines.length > 0 && chunk.insLines.length > 0) {
-                    // Replacement
-                    await this.diffSystem.replaceLines(
-                        targetPath,
-                        startLine,
-                        chunk.delLines,
-                        chunk.insLines,
-                    );
-                } else if (chunk.delLines.length > 0) {
-                    // Deletion
-                    await this.diffSystem.deleteLines(targetPath, startLine, chunk.delLines.length);
-                } else if (chunk.insLines.length > 0) {
-                    // Addition (insert after the line before origIndex)
-                    await this.diffSystem.addLines(targetPath, startLine - 1, chunk.insLines);
-                }
+										if (chunk.delLines.length > 0 && chunk.insLines.length > 0) {
+												await this.diffSystem.replaceLines(
+														targetPath,
+														startLine,
+														chunk.delLines,
+														chunk.insLines,
+												);
+										} else if (chunk.delLines.length > 0) {
+												await this.diffSystem.deleteLines(targetPath, startLine, chunk.delLines.length);
+										} else if (chunk.insLines.length > 0) {
+												await this.diffSystem.addLines(targetPath, startLine - 1, chunk.insLines);
+										}
 
-                cumulativeOffset += chunk.insLines.length - chunk.delLines.length;
-            }
-        }
-    }
+										cumulativeOffset += chunk.insLines.length - chunk.delLines.length;
+								}
+						} finally {
+								await this.diffSystem.endBatch();
+								await this.diffSystem.resumeRendering();
+						}
+				}
+		}
 
-    // revertFileChange removed — DiffSystem v3 handles revert via rejectAllForFile/rejectChange
+		// revertFileChange removed — DiffSystem v3 handles revert via rejectAllForFile/rejectChange
 
 	private preprocessLines(text: string): string[] {
 		let lines = text.split("\n").map((line) => line.replace(/\r$/, ""))
@@ -474,8 +478,8 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 						newContent: this.applyChunks(originalFiles[path]!, action.chunks, path),
 						movePath: action.movePath,
 						startLineNumbers,
-                        // Pass chunks for Native Diff logic
-                        chunks: action.chunks
+												// Pass chunks for Native Diff logic
+												chunks: action.chunks
 					}
 					break
 			}

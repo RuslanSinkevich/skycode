@@ -68,7 +68,7 @@ export function CustomPostHogProvider({ children }: { children: ReactNode }) {
 			// Then opt out of capturing other events
 			posthog.opt_out_capturing()
 		}
-	}, [isActive, isTelemetryEnabled, distinctId, version])
+	}, [isActive, isTelemetryEnabled, distinctId, version, userInfo])
 
 	return <PostHogProvider client={posthog}>{children}</PostHogProvider>
 }

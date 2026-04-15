@@ -507,6 +507,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
         let cumulativeOffset = 0;
 
         diffSystem.suspendRendering();
+        diffSystem.beginBatch();
         try {
             for (const block of diffBlocks) {
                 const adjustedLine = block.lineInOldFile + cumulativeOffset;
@@ -536,6 +537,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
                     'offset:', cumulativeOffset, 'hunkId:', hunkId?.slice(0, 8));
             }
         } finally {
+            await diffSystem.endBatch();
             await diffSystem.resumeRendering();
         }
 

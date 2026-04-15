@@ -381,19 +381,31 @@ interface ExploringSectionProps {
  */
 const ExploringSection = memo(({ items, isExploringLive, isLastBlock, compact, t, onExpandChange }: ExploringSectionProps) => {
 	const scrollRef = useRef<HTMLDivElement>(null)
-	/** User explicitly collapsed the tool list; ignore brief isExploringLive gaps between tools. */
-	const [userHidden, setUserHidden] = useState(false)
+	/** User explicitly collapsed the tool list; non-last blocks start collapsed. */
+	const [userHidden, setUserHidden] = useState(!isLastBlock)
 	const prevItemCountRef = useRef(items.length)
 
 	useEffect(() => {
-		if (items.length > prevItemCountRef.current || isExploringLive) {
+		if (isLastBlock && (items.length > prevItemCountRef.current || isExploringLive)) {
 			setUserHidden(false)
 		}
 		prevItemCountRef.current = items.length
-	}, [items.length, isExploringLive])
+	}, [items.length, isExploringLive, isLastBlock])
 
-	// Не последний в ходе (уже есть ответ агента ниже) — как раньше, только заголовок; последний — открыт при работе или пока пользователь не свернул (анти-моргание между тулами).
-	const isOpen = isLastBlock && (isExploringLive || !userHidden)
+	// Collapse when block is no longer the last one (new agent response appeared below)
+	const wasLastBlockRef = useRef(isLastBlock)
+	useEffect(() => {
+		if (wasLastBlockRef.current && !isLastBlock) {
+			setUserHidden(true)
+		}
+		wasLastBlockRef.current = isLastBlock
+	}, [isLastBlock])
+
+	// Последний блок: открыт при работе или пока пользователь не свернул.
+	// Не последний: свёрнут по умолчанию, но можно раскрыть вручную.
+	const isOpen = isLastBlock
+		? (isExploringLive || !userHidden)
+		: !userHidden
 
 	// Автоскролл к низу
 	useEffect(() => {
@@ -413,7 +425,10 @@ const ExploringSection = memo(({ items, isExploringLive, isLastBlock, compact, t
 
 	const handleOpenFile = useCallback((filePath: string) => {
 		if (!filePath) return
-		FileServiceClient.openFileRelativePath(StringRequest.create({ value: filePath })).catch((err) =>
+		// Strip trailing slashes — directories can't be opened as text documents
+		const cleanedPath = filePath.replace(/[/\\]+$/, "")
+		if (!cleanedPath) return
+		FileServiceClient.openFileRelativePath(StringRequest.create({ value: cleanedPath })).catch((err) =>
 			console.error("Failed to open file:", err),
 		)
 	}, [])
