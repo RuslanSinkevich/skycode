@@ -16,17 +16,23 @@ import { CodeActionTriggerType } from '../../../common/languages.js';
 import { IModelDecoration } from '../../../common/model.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { IMarkerDecorationsService } from '../../../common/services/markerDecorations.js';
+// --- SKYCODE_FORK_BEGIN: removed ApplyCodeActionReason import (unused after Copilot Fix button removal) ---
 import { getCodeActions, quickFixCommandId } from '../../codeAction/browser/codeAction.js';
+// --- SKYCODE_FORK_END ---
 import { CodeActionController } from '../../codeAction/browser/codeActionController.js';
 import { CodeActionKind, CodeActionSet, CodeActionTrigger, CodeActionTriggerSource } from '../../codeAction/common/types.js';
 import { MarkerController, NextMarkerAction } from '../../gotoError/browser/gotoError.js';
 import { HoverAnchor, HoverAnchorType, IEditorHoverParticipant, IEditorHoverRenderContext, IHoverPart, IRenderedHoverPart, IRenderedHoverParts, RenderedHoverParts } from './hoverTypes.js';
 import * as nls from '../../../../nls.js';
+import { IMenuService, MenuId, MenuItemAction } from '../../../../platform/actions/common/actions.js';
+import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
 import { ITextEditorOptions } from '../../../../platform/editor/common/editor.js';
 import { IMarker, IMarkerData, MarkerSeverity } from '../../../../platform/markers/common/markers.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { Progress } from '../../../../platform/progress/common/progress.js';
 // --- SKYCODE_FORK_BEGIN: removed unused ThemeIcon/Codicon imports (Copilot Fix button removed) ---
+// import { ThemeIcon } from '../../../../base/common/themables.js';
+// import { Codicon } from '../../../../base/common/codicons.js';
 // --- SKYCODE_FORK_END ---
 
 const $ = dom.$;
@@ -65,6 +71,8 @@ export class MarkerHoverParticipant implements IEditorHoverParticipant<MarkerHov
 		@IMarkerDecorationsService private readonly _markerDecorationsService: IMarkerDecorationsService,
 		@IOpenerService private readonly _openerService: IOpenerService,
 		@ILanguageFeaturesService private readonly _languageFeaturesService: ILanguageFeaturesService,
+		@IMenuService private readonly _menuService: IMenuService,
+		@IContextKeyService private readonly _contextKeyService: IContextKeyService,
 	) { }
 
 	public computeSync(anchor: HoverAnchor, lineDecorations: IModelDecoration[]): MarkerHover[] {
@@ -206,12 +214,38 @@ export class MarkerHoverParticipant implements IEditorHoverParticipant<MarkerHov
 			}
 		}
 
+		// Menu-contributed actions (e.g. fix with inline chat)
+		const menuActions: MenuItemAction[] = [];
+		for (const [, actions] of this._menuService.getMenuActions(MenuId.MarkerHoverStatusBar, this._contextKeyService)) {
+			for (const action of actions) {
+				if (action instanceof MenuItemAction && action.enabled) {
+					menuActions.push(action);
+				}
+			}
+		}
+		const renderMenuActions = () => {
+			for (const action of menuActions) {
+				context.statusBar.addAction({
+					label: action.label,
+					commandId: action.id,
+					iconClass: action.class,
+					run: () => {
+						context.hide();
+						this._editor.setSelection(Range.lift(markerHover.range));
+						action.run();
+					}
+				});
+			}
+		};
+
 		if (!this._editor.getOption(EditorOption.readOnly)) {
 			const quickfixPlaceholderElement = context.statusBar.append($('div'));
 			if (this.recentMarkerCodeActionsInfo) {
 				if (IMarkerData.makeKey(this.recentMarkerCodeActionsInfo.marker) === IMarkerData.makeKey(markerHover.marker)) {
 					if (!this.recentMarkerCodeActionsInfo.hasCodeActions) {
-						quickfixPlaceholderElement.textContent = nls.localize('noQuickFixes', "No quick fixes available");
+						if (menuActions.length === 0) {
+							quickfixPlaceholderElement.textContent = nls.localize('noQuickFixes', "No quick fixes available");
+						}
 					}
 				} else {
 					this.recentMarkerCodeActionsInfo = undefined;
@@ -230,7 +264,12 @@ export class MarkerHoverParticipant implements IEditorHoverParticipant<MarkerHov
 
 				if (!this.recentMarkerCodeActionsInfo.hasCodeActions) {
 					actions.dispose();
-					quickfixPlaceholderElement.textContent = nls.localize('noQuickFixes', "No quick fixes available");
+					if (menuActions.length === 0) {
+						quickfixPlaceholderElement.textContent = nls.localize('noQuickFixes', "No quick fixes available");
+					} else {
+						quickfixPlaceholderElement.style.display = 'none';
+					}
+					renderMenuActions();
 					return;
 				}
 				quickfixPlaceholderElement.style.display = 'none';
@@ -263,6 +302,9 @@ export class MarkerHoverParticipant implements IEditorHoverParticipant<MarkerHov
 
 				// --- SKYCODE_FORK_BEGIN: remove Copilot "Fix" button from error hover ---
 				// Skycode uses Quick Fix menu (Ctrl+.) with "Fix with Skycode" instead.
+				// Original block looked up `isAI` actions and added them to the hover
+				// status bar; removed to avoid duplicate Fix entry points.
+				renderMenuActions();
 				// --- SKYCODE_FORK_END ---
 
 				// Notify that the contents have changed given we added
@@ -271,7 +313,10 @@ export class MarkerHoverParticipant implements IEditorHoverParticipant<MarkerHov
 				context.onContentsChanged();
 
 			}, onUnexpectedError);
+		} else {
+			renderMenuActions();
 		}
+
 		return disposables;
 	}
 
