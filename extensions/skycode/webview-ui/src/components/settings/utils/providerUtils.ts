@@ -61,6 +61,8 @@ import {
 	openRouterDefaultModelInfo,
 	qwenCodeDefaultModelId,
 	qwenCodeModels,
+	qwenWebDefaultModelId,
+	qwenWebModels,
 	requestyDefaultModelId,
 	requestyDefaultModelInfo,
 	sambanovaDefaultModelId,
@@ -109,6 +111,8 @@ export function getModelsForProvider(
 			return apiConfiguration?.qwenApiLine === "china" ? mainlandQwenModels : internationalQwenModels
 		case "qwen-code":
 			return qwenCodeModels
+		case "qwen-web":
+			return qwenWebModels
 		case "doubao":
 			return doubaoModels
 		case "mistral":
@@ -248,6 +252,8 @@ export function normalizeApiConfiguration(
 			return getProviderData(qwenModels, qwenDefaultId)
 		case "qwen-code":
 			return getProviderData(qwenCodeModels, qwenCodeDefaultModelId)
+		case "qwen-web":
+			return getProviderData(qwenWebModels, qwenWebDefaultModelId)
 		case "doubao":
 			return getProviderData(doubaoModels, doubaoDefaultModelId)
 		case "mistral":

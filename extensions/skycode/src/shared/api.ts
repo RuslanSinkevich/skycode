@@ -18,6 +18,7 @@ export type ApiProvider =
 	| "deepseek"
 	| "qwen"
 	| "qwen-code"
+	| "qwen-web"
 	| "doubao"
 	| "mistral"
 	| "vscode-lm"
@@ -4263,6 +4264,68 @@ export const qwenCodeModels = {
 } as const satisfies Record<string, ModelInfo>
 export type QwenCodeModelId = keyof typeof qwenCodeModels
 export const qwenCodeDefaultModelId: QwenCodeModelId = "qwen3-coder-plus"
+
+// Qwen Web (chat.qwen.ai) — free via browser session token.
+// Not an official API. Token is extracted from localStorage on chat.qwen.ai.
+// Rate limits and session expiration apply. Prices set to 0 since it's free.
+export const qwenWebModels = {
+	"qwen3-max": {
+		maxTokens: 32_768,
+		contextWindow: 262_144,
+		supportsImages: false,
+		supportsPromptCache: false,
+		inputPrice: 0,
+		outputPrice: 0,
+		description: "Qwen3 Max via chat.qwen.ai (free, web session).",
+	},
+	"qwen3-coder-plus": {
+		maxTokens: 65_536,
+		contextWindow: 1_000_000,
+		supportsImages: false,
+		supportsPromptCache: false,
+		inputPrice: 0,
+		outputPrice: 0,
+		description: "Qwen3 Coder Plus via chat.qwen.ai (free, web session).",
+	},
+	"qwen3-vl-plus": {
+		maxTokens: 16_384,
+		contextWindow: 131_072,
+		supportsImages: true,
+		supportsPromptCache: false,
+		inputPrice: 0,
+		outputPrice: 0,
+		description: "Qwen3 VL Plus via chat.qwen.ai (free, web session).",
+	},
+	"qwen3-235b-a22b": {
+		maxTokens: 16_384,
+		contextWindow: 131_072,
+		supportsImages: false,
+		supportsPromptCache: false,
+		inputPrice: 0,
+		outputPrice: 0,
+		description: "Qwen3 235B-A22B via chat.qwen.ai (free, web session).",
+	},
+	"qwen-max-latest": {
+		maxTokens: 8_192,
+		contextWindow: 32_768,
+		supportsImages: false,
+		supportsPromptCache: false,
+		inputPrice: 0,
+		outputPrice: 0,
+		description: "Qwen Max Latest via chat.qwen.ai (free, web session).",
+	},
+	"qwq-32b": {
+		maxTokens: 16_384,
+		contextWindow: 131_072,
+		supportsImages: false,
+		supportsPromptCache: false,
+		inputPrice: 0,
+		outputPrice: 0,
+		description: "QwQ-32B (reasoning) via chat.qwen.ai (free, web session).",
+	},
+} as const satisfies Record<string, ModelInfo>
+export type QwenWebModelId = keyof typeof qwenWebModels
+export const qwenWebDefaultModelId: QwenWebModelId = "qwen3-max"
 
 // Minimax
 // https://www.minimax.io/platform/document/text_api_intro

@@ -47,7 +47,11 @@ export async function openFileRelativePath(_controller: Controller, request: Str
 		if (isAbsolute) {
 			absolutePath = filePath
 		} else {
-			const resolvedPath = workspaceResolver.resolveWorkspacePath(workspacePath, filePath, "Controller.openFileRelativePath")
+			const resolvedPath = workspaceResolver.resolveWorkspacePath(
+				workspacePath,
+				filePath,
+				"Controller.openFileRelativePath",
+			)
 			absolutePath = typeof resolvedPath === "string" ? resolvedPath : resolvedPath.absolutePath
 		}
 

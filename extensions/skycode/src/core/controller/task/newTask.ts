@@ -36,14 +36,14 @@ export async function newTask(controller: Controller, request: NewTaskRequest): 
 				return "act"
 			case PlanActMode.PAM_ASK:
 				return "ask"
-		case PlanActMode.DEBUG:
-			return "debug"
-		case PlanActMode.CHAT:
-			return "chat"
-		default:
-			return "act"
+			case PlanActMode.DEBUG:
+				return "debug"
+			case PlanActMode.CHAT:
+				return "chat"
+			default:
+				return "act"
+		}
 	}
-}
 
 	const filteredTaskSettings: Partial<Settings> = Object.fromEntries(
 		Object.entries({

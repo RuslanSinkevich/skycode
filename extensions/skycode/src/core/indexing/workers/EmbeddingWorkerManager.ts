@@ -9,7 +9,7 @@ import { Worker } from "node:worker_threads"
 import * as path from "node:path"
 import type { EmbeddingProvider } from "../types"
 import type { LocalModelId } from "../../../shared/IndexingTypes"
-import { getModelMeta, type EmbeddingModelMeta } from "../models/EmbeddingModelRegistry"
+import { resolveModelMetaForPath, type EmbeddingModelMeta } from "../models/EmbeddingModelRegistry"
 
 /** Max chars per text chunk — longer chunks are truncated before sending to the worker */
 const MAX_EMBED_CHARS = 2000
@@ -37,7 +37,7 @@ export class EmbeddingWorkerManager implements EmbeddingProvider {
 		private readonly extensionPath: string,
 		modelId: LocalModelId = "mini",
 	) {
-		this.modelMeta = getModelMeta(modelId)
+		this.modelMeta = resolveModelMetaForPath(extensionPath, modelId)
 	}
 
 	/**

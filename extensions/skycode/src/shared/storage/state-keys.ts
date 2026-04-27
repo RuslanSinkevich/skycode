@@ -321,6 +321,7 @@ const SECRETS_KEYS = [
 	"togetherApiKey",
 	"fireworksApiKey",
 	"qwenApiKey",
+	"qwenWebToken",
 	"doubaoApiKey",
 	"mistralApiKey",
 	"liteLlmApiKey",

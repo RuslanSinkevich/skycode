@@ -48,14 +48,14 @@ export async function updateSettingsCli(controller: Controller, request: UpdateS
 				return "act"
 			case PlanActMode.PAM_ASK:
 				return "ask"
-		case PlanActMode.DEBUG:
-			return "debug"
-		case PlanActMode.CHAT:
-			return "chat"
-		default:
-			return "act"
+			case PlanActMode.DEBUG:
+				return "debug"
+			case PlanActMode.CHAT:
+				return "chat"
+			default:
+				return "act"
+		}
 	}
-}
 
 	try {
 		if (request.environment !== undefined) {

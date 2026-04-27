@@ -1201,18 +1201,29 @@ export class Controller {
 					const providerId = (isPlan ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 					const modeKey = isPlan ? "planMode" : "actMode"
 					const providerModelSuffix: Record<string, string> = {
-						openrouter: "OpenRouterModelId", skycode: "OpenRouterModelId",
-						openai: "OpenAiModelId", ollama: "OllamaModelId",
-						lmstudio: "LmStudioModelId", litellm: "LiteLlmModelId",
-						requesty: "RequestyModelId", together: "TogetherModelId",
-						fireworks: "FireworksModelId", groq: "GroqModelId",
-						baseten: "BasetenModelId", huggingface: "HuggingFaceModelId",
-						sapaicore: "SapAiCoreModelId", "huawei-cloud-maas": "HuaweiCloudMaasModelId",
-						oca: "OcaModelId", aihubmix: "AihubmixModelId",
-						hicap: "HicapModelId", nousResearch: "NousResearchModelId",
+						openrouter: "OpenRouterModelId",
+						skycode: "OpenRouterModelId",
+						openai: "OpenAiModelId",
+						ollama: "OllamaModelId",
+						lmstudio: "LmStudioModelId",
+						litellm: "LiteLlmModelId",
+						requesty: "RequestyModelId",
+						together: "TogetherModelId",
+						fireworks: "FireworksModelId",
+						groq: "GroqModelId",
+						baseten: "BasetenModelId",
+						huggingface: "HuggingFaceModelId",
+						sapaicore: "SapAiCoreModelId",
+						"huawei-cloud-maas": "HuaweiCloudMaasModelId",
+						oca: "OcaModelId",
+						aihubmix: "AihubmixModelId",
+						hicap: "HicapModelId",
+						nousResearch: "NousResearchModelId",
 						"vercel-ai-gateway": "VercelAiGatewayModelId",
 					}
-					const configModelId = (apiConfig as Record<string, unknown>)[`${modeKey}${providerModelSuffix[providerId] ?? "ApiModelId"}`] as string | undefined
+					const configModelId = (apiConfig as Record<string, unknown>)[
+						`${modeKey}${providerModelSuffix[providerId] ?? "ApiModelId"}`
+					] as string | undefined
 					const modelId = this.task?.api?.getModel()?.id ?? configModelId ?? "unknown"
 					const providerInfo = { model: { id: modelId, info: {} as ModelInfo }, providerId, mode }
 					const tier = getModelCapabilityTier(modelId, providerInfo)
@@ -1222,7 +1233,13 @@ export class Controller {
 						providerInfo,
 						lightweightMode: this.stateManager.getGlobalSettingsKey("lightweightMode") === true,
 					} as any)
-					return { variant, tier, maxToolCalls: limits.maxToolCallsPerTurn, maxReadOnly: limits.maxConsecutiveReadOnlyTools, compactEvery: limits.forceCompactAfterSteps }
+					return {
+						variant,
+						tier,
+						maxToolCalls: limits.maxToolCallsPerTurn,
+						maxReadOnly: limits.maxConsecutiveReadOnlyTools,
+						compactEvery: limits.forceCompactAfterSteps,
+					}
 				} catch {
 					return undefined
 				}

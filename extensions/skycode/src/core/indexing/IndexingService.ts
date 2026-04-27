@@ -409,6 +409,10 @@ export class IndexingService implements vscode.Disposable {
 
 			// Phase 4: Embed in batches
 			console.log("[Skycode Indexing] Phase 4: Embedding", allChunks.length, "chunks in batches of", EMBED_BATCH_SIZE)
+			// If N consecutive batches fail (typically means model init is broken),
+			// abort the whole run instead of spamming thousands of identical errors.
+			const MAX_CONSECUTIVE_EMBED_FAILURES = 5
+			let consecutiveFailures = 0
 			for (let i = 0; i < allChunks.length; i += EMBED_BATCH_SIZE) {
 				if (token.isCancellationRequested) return
 				while (this.paused) {
@@ -422,10 +426,19 @@ export class IndexingService implements vscode.Disposable {
 				let embeddings: number[][]
 				try {
 					embeddings = await this.provider.embed(texts, "passage")
+					consecutiveFailures = 0
 				} catch (err: any) {
+					consecutiveFailures++
 					console.error("[Skycode Indexing] Embedding error at batch", i, ":", err)
-					// Don't fail entire indexing - skip this batch and continue
 					console.warn(`[Skycode Indexing] Skipping batch ${i} (${batch.length} chunks) due to embedding error`)
+					if (consecutiveFailures >= MAX_CONSECUTIVE_EMBED_FAILURES) {
+						const msg = `Embedding failed on ${consecutiveFailures} consecutive batches — aborting indexing. ${err?.message || err}`
+						console.error("[Skycode Indexing]", msg)
+						this.progress.status = "error"
+						this.progress.errorMessage = msg
+						this.emitProgress()
+						return
+					}
 					continue
 				}
 
