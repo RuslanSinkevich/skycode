@@ -93,6 +93,7 @@
 			}
 		}
 	],
+	"builtInExtensionsEnabledWithAutoUpdates": [],
 	"defaultChatAgent": {
 		"extensionId": "disabled.skycode-placeholder",
 		"chatExtensionId": "disabled.skycode-placeholder",

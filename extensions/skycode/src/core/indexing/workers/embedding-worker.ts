@@ -195,7 +195,9 @@ async function initModel(msg: InitMessage): Promise<void> {
 		const { env, pipeline: createPipeline } = await import(transformersUrl)
 
 		env.allowLocalModels = true
-		env.allowRemoteModels = false
+		// If `models/<hf-id>/` is missing (not shipped with the extension), load from Hugging Face
+		// on first use. When files exist under localModelPath, they are preferred.
+		env.allowRemoteModels = true
 		env.localModelPath = modelsDir
 
 		pipeline = await createPipeline("feature-extraction", huggingFaceId)

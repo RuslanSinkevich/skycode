@@ -7,21 +7,28 @@ import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { isEqualOrParent } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { IFileService } from '../../../../platform/files/common/files.js';
 import { PromptsType } from '../../../../workbench/contrib/chat/common/promptSyntax/promptTypes.js';
 import { IPromptsService, PromptsStorage } from '../../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
+import { BUILTIN_STORAGE } from '../../chat/common/builtinPromptsStorage.js';
 import { IMcpService } from '../../../../workbench/contrib/mcp/common/mcpTypes.js';
 import { IAICustomizationWorkspaceService, applyStorageSourceFilter, IStorageSourceFilter } from '../../../../workbench/contrib/chat/common/aiCustomizationWorkspaceService.js';
+import { parseHooksFromFile } from '../../../../workbench/contrib/chat/common/promptSyntax/hookCompatibility.js';
+import { IAgentPluginService } from '../../../../workbench/contrib/chat/common/plugins/agentPluginService.js';
+import { parse as parseJSONC } from '../../../../base/common/jsonc.js';
 
 export interface ISourceCounts {
 	readonly workspace: number;
 	readonly user: number;
 	readonly extension: number;
+	readonly builtin: number;
 }
 
-const storageToCountKey: Partial<Record<PromptsStorage, keyof ISourceCounts>> = {
+const storageToCountKey: Partial<Record<string, keyof ISourceCounts>> = {
 	[PromptsStorage.local]: 'workspace',
 	[PromptsStorage.user]: 'user',
 	[PromptsStorage.extension]: 'extension',
+	[BUILTIN_STORAGE]: 'builtin',
 };
 
 export function getSourceCountsTotal(counts: ISourceCounts, filter: IStorageSourceFilter): number {
@@ -45,6 +52,7 @@ export async function getSourceCounts(
 	filter: IStorageSourceFilter,
 	workspaceContextService: IWorkspaceContextService,
 	workspaceService: IAICustomizationWorkspaceService,
+	fileService?: IFileService,
 ): Promise<ISourceCounts> {
 	const items: { storage: PromptsStorage; uri: URI }[] = [];
 
@@ -64,10 +72,10 @@ export async function getSourceCounts(
 		// Must match loadItems: uses getPromptSlashCommands() filtering out skills
 		const commands = await promptsService.getPromptSlashCommands(CancellationToken.None);
 		for (const c of commands) {
-			if (c.promptPath.type === PromptsType.skill) {
+			if (c.type === PromptsType.skill) {
 				continue;
 			}
-			items.push({ storage: c.promptPath.storage, uri: c.promptPath.uri });
+			items.push({ storage: c.storage, uri: c.uri });
 		}
 	} else if (promptType === PromptsType.instructions) {
 		// Must match loadItems: uses listPromptFiles + listAgentInstructions
@@ -88,6 +96,28 @@ export async function getSourceCounts(
 				uri: file.uri,
 			});
 		}
+	} else if (promptType === PromptsType.hook && fileService) {
+		// Must match loadItems: parse individual hooks from each file
+		const hookFiles = await promptsService.listPromptFiles(PromptsType.hook, CancellationToken.None);
+		const activeRoot = workspaceService.getActiveProjectRoot();
+		for (const hookFile of hookFiles) {
+			try {
+				const content = await fileService.readFile(hookFile.uri);
+				const json = parseJSONC(content.value.toString());
+				const { hooks } = parseHooksFromFile(hookFile.uri, json, activeRoot, '');
+				if (hooks.size > 0) {
+					for (const [, entry] of hooks) {
+						for (let i = 0; i < entry.hooks.length; i++) {
+							items.push({ storage: hookFile.storage, uri: hookFile.uri });
+						}
+					}
+				} else {
+					items.push({ storage: hookFile.storage, uri: hookFile.uri });
+				}
+			} catch {
+				items.push({ storage: hookFile.storage, uri: hookFile.uri });
+			}
+		}
 	} else {
 		// hooks and anything else: uses listPromptFiles
 		const files = await promptsService.listPromptFiles(promptType, CancellationToken.None);
@@ -102,6 +132,7 @@ export async function getSourceCounts(
 		workspace: filtered.filter(i => i.storage === PromptsStorage.local).length,
 		user: filtered.filter(i => i.storage === PromptsStorage.user).length,
 		extension: filtered.filter(i => i.storage === PromptsStorage.extension).length,
+		builtin: filtered.filter(i => i.storage === BUILTIN_STORAGE).length,
 	};
 }
 
@@ -110,12 +141,14 @@ export async function getCustomizationTotalCount(
 	mcpService: IMcpService,
 	workspaceService: IAICustomizationWorkspaceService,
 	workspaceContextService: IWorkspaceContextService,
+	agentPluginService?: IAgentPluginService,
 ): Promise<number> {
-	const types: PromptsType[] = [PromptsType.agent, PromptsType.skill, PromptsType.instructions, PromptsType.prompt, PromptsType.hook];
+	const types: PromptsType[] = [PromptsType.agent, PromptsType.skill, PromptsType.instructions, PromptsType.hook];
 	const results = await Promise.all(types.map(type => {
 		const filter = workspaceService.getStorageSourceFilter(type);
 		return getSourceCounts(promptsService, type, filter, workspaceContextService, workspaceService)
 			.then(counts => getSourceCountsTotal(counts, filter));
 	}));
-	return results.reduce((sum, n) => sum + n, 0) + mcpService.servers.get().length;
+	const pluginCount = agentPluginService?.plugins.get().length ?? 0;
+	return results.reduce((sum, n) => sum + n, 0) + mcpService.servers.get().length + pluginCount;
 }

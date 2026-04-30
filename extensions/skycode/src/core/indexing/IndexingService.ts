@@ -118,7 +118,7 @@ export class IndexingService implements vscode.Disposable {
 
 		if (newMode === "off") {
 			this.stop()
-		} else if (oldMode === "off" && newMode !== "off") {
+		} else if (oldMode === "off") {
 			void this.clearAndReindex()
 		} else if (oldMode !== newMode) {
 			void this.clearAndReindex()
@@ -558,6 +558,24 @@ export class IndexingService implements vscode.Disposable {
 	}
 
 	/**
+	 * Delete `extensions/skycode/models/` (bundled / cached ONNX trees). Next indexing run
+	 * will re-fetch from Hugging Face if files are missing (requires network unless models are re-copied).
+	 */
+	async clearLocalEmbeddingCache(): Promise<void> {
+		this.stop()
+		const modelsDir = path.join(this.extensionPath, "models")
+		try {
+			await fs.promises.rm(modelsDir, { recursive: true, force: true })
+		} catch {
+			// missing or locked — still tell user to retry reindex
+		}
+		void vscode.window.showInformationMessage(
+			// allow-any-unicode-next-line
+			"Skycode: папка локальных моделей эмбеддингов (models/) очищена. Запустите переиндексацию; при отсутствии файлов модель загрузится с Hugging Face (нужен интернет).",
+		)
+	}
+
+	/**
 	 * Search the index with a text query.
 	 * The query is embedded using the current provider, then compared against all chunks.
 	 */
@@ -611,13 +629,16 @@ export class IndexingService implements vscode.Disposable {
 	/**
 	 * Handle a command from the webview or command palette.
 	 */
-	async handleCommand(command: "reindex" | "clear" | "pause" | "resume"): Promise<void> {
+	async handleCommand(command: "reindex" | "clear" | "pause" | "resume" | "clearEmbeddingCache"): Promise<void> {
 		switch (command) {
 			case "reindex":
 				await this.clearAndReindex()
 				break
 			case "clear":
 				await this.clearIndex()
+				break
+			case "clearEmbeddingCache":
+				await this.clearLocalEmbeddingCache()
 				break
 			case "pause":
 				this.pause()
