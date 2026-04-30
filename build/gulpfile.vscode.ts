@@ -664,6 +664,17 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 	return task;
 }
 
+function isPEFile(filePath: string): boolean {
+	const fd = fs.openSync(filePath, 'r');
+	try {
+		const header = Buffer.alloc(2);
+		fs.readSync(fd, header, 0, header.length, 0);
+		return header[0] === 0x4d && header[1] === 0x5a; // MZ
+	} finally {
+		fs.closeSync(fd);
+	}
+}
+
 function patchWin32DependenciesTask(destinationFolderName: string) {
 	const cwd = path.join(path.dirname(root), destinationFolderName);
 
@@ -680,8 +691,12 @@ function patchWin32DependenciesTask(destinationFolderName: string) {
 
 		const patchPromises = deps.map<Promise<unknown>>(async dep => {
 			const basename = path.basename(dep);
+			const fullPath = path.join(cwd, dep);
+			if (!isPEFile(fullPath)) {
+				return;
+			}
 
-			await rcedit(path.join(cwd, dep), {
+			await rcedit(fullPath, {
 				'file-version': baseVersion,
 				'version-string': {
 					'CompanyName': 'Microsoft Corporation',

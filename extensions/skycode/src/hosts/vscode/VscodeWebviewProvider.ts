@@ -206,6 +206,7 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 					const cmdMap: Record<string, string> = {
 						reindex: "skycode.indexing.reindex",
 						clear: "skycode.indexing.clear",
+						clearEmbeddingCache: "skycode.indexing.clearEmbeddingCache",
 						pause: "skycode.indexing.pause",
 						resume: "skycode.indexing.resume",
 					}

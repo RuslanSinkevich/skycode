@@ -157,6 +157,11 @@
 				"icon": "$(trash)"
 			},
 			{
+				"command": "skycode.indexing.clearEmbeddingCache",
+				"title": "Skycode: Удалить локальные файлы модели эмбеддингов",
+				"icon": "$(cloud-download)"
+			},
+			{
 				"command": "skycode.indexing.pause",
 				"title": "Skycode: Приостановить индексацию",
 				"icon": "$(debug-pause)"

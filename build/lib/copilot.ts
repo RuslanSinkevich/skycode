@@ -133,9 +133,28 @@ export function prepareBuiltInCopilotExtensionShims(platform: string, arch: stri
 		throw new Error(`[prepareBuiltInCopilotExtensionShims] Copilot SDK directory not found at ${copilotSdkBase}`);
 	}
 
+	const sdkPrebuildsDir = path.join(copilotSdkBase, 'prebuilds');
+	if (fs.existsSync(sdkPrebuildsDir)) {
+		for (const entry of fs.readdirSync(sdkPrebuildsDir)) {
+			if (entry !== platformArch) {
+				fs.rmSync(path.join(sdkPrebuildsDir, entry), { recursive: true, force: true });
+			}
+		}
+	}
+
 	const nodePtySource = path.join(appNodeModulesDir, 'node-pty', 'build', 'Release');
 	if (!fs.existsSync(nodePtySource)) {
-		throw new Error(`[prepareBuiltInCopilotExtensionShims] node-pty source not found at ${nodePtySource}`);
+		// Skycode/OSS: packaged app may omit node-pty natives (not rebuilt locally) while
+		// built-in Copilot shim step still runs. Terminal uses app-bundled pty elsewhere.
+		console.warn(`[prepareBuiltInCopilotExtensionShims] node-pty source not found at ${nodePtySource}, skipping pty shims`);
+	} else {
+		const nodePtyDest = path.join(copilotSdkBase, 'prebuilds', platformArch);
+		try {
+			fs.mkdirSync(nodePtyDest, { recursive: true });
+			fs.cpSync(nodePtySource, nodePtyDest, { recursive: true });
+		} catch (err) {
+			throw new Error(`[prepareBuiltInCopilotExtensionShims] Failed to copy node-pty for ${platformArch}: ${err}`);
+		}
 	}
 
 	const ripgrepSource = path.join(appNodeModulesDir, '@vscode', 'ripgrep', 'bin');
@@ -143,14 +162,10 @@ export function prepareBuiltInCopilotExtensionShims(platform: string, arch: stri
 		throw new Error(`[prepareBuiltInCopilotExtensionShims] ripgrep source not found at ${ripgrepSource}`);
 	}
 
-	const nodePtyDest = path.join(copilotSdkBase, 'prebuilds', platformArch);
 	const ripgrepDest = path.join(copilotSdkBase, 'ripgrep', 'bin', platformArch);
 	const shimMarkerPath = path.join(copilotBase, 'shims.txt');
 
 	try {
-		fs.mkdirSync(nodePtyDest, { recursive: true });
-		fs.cpSync(nodePtySource, nodePtyDest, { recursive: true });
-
 		fs.mkdirSync(ripgrepDest, { recursive: true });
 		fs.cpSync(ripgrepSource, ripgrepDest, { recursive: true });
 

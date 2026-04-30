@@ -1489,7 +1489,9 @@ export class Task {
 			isAborted: () => this.taskState.abort,
 			initiateStepLoop: (userContent) => this.initiateStepLoop(userContent as SkycodeUserContent[]),
 			sayTaskProgress: (text) => this.sayTaskProgress(text),
-			sayWorkflowStepStart: (data) => this.say("workflow_step_start", JSON.stringify(data)),
+			sayWorkflowStepStart: async (data) => {
+				await this.say("workflow_step_start", JSON.stringify(data))
+			},
 			setSilentStep: (silent) => {
 				this.taskState.isSilentStep = silent
 			},
