@@ -88,6 +88,27 @@ Promise-based ask/response замена pWaitFor. Early response queue реша�
   - Pipe/chain: ВСЕ сегменты должны быть safe
   - Redirect (>, >>) = всегда unsafe
 
+### URL safety (`src/services/browser/urlSafety.ts`)
+Защита от SSRF перед любыми исходящими HTTP-запросами, инициированными инструментами.
+
+`assertSafeUrl(rawUrl, opts?)`:
+- Принимает только `http` / `https` (настраивается).
+- Отклоняет URL с credentials (`user:pass@host`).
+- Отклоняет loopback / link-local / private / CGNAT / multicast IPv4 и IPv6.
+- Отклоняет cloud metadata (AWS/GCP/Azure `169.254.169.254`, `metadata.google.internal`).
+- Отклоняет `localhost`, `*.local`, `*.internal` и схожие hostnames.
+
+Интегрирован в:
+- `UrlContentFetcher.urlToMarkdown()` — перед `page.goto()`.
+- `WebFetchToolHandler.execute()` — ранний отказ до запуска Puppeteer.
+
+В случае отказа возвращает `UnsafeUrlError` — сообщение видно модели. Подробности политики безопасности — в корневом `SECURITY.md` на уровне монорепы.
+
+### Workspace containment и Zip Slip
+
+- `core/controller/file/openFileRelativePath` — `path.resolve()` + сверка с `vscode.workspace.workspaceFolders`. Открытие файла вне workspace отклоняется и логируется.
+- `services/browser/utils.downloadSkycodeChromium` — перед `zip.extractAllTo()` каждая запись архива проверяется на абсолютные пути и containment в корне распаковки.
+
 ### AutoApprove (`src/core/task/tools/autoApprove.ts`)
 Решает, нужно ли спрашивать пользователя перед выполнением инструмента.
 
@@ -149,4 +170,4 @@ globalStorage/snapshots/{responseGroupId}/{hash}.snapshot
 
 ---
 
-*Последнее обновление: 2026-03-02*
+*Последнее обновление: 2026-05-01*

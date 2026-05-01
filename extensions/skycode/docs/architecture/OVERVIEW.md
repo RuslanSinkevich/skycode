@@ -82,6 +82,15 @@ Skycode AI — это расширение VS Code, состоящее из тр
 - Управление инструментами и ресурсами
 - Auto-approval настройки
 
+### 7. Security subsystem
+
+- **`src/core/permissions/`** — CommandPermissionController + CommandSafetyClassifier (whitelist safe/unsafe для shell-команд).
+- **`src/services/browser/urlSafety.ts`** — SSRF-guard (`assertSafeUrl`). Интегрирован в `UrlContentFetcher` и `WebFetchToolHandler`. Отклоняет не-http(s), private/loopback/link-local/CGNAT IP, cloud metadata, `localhost`/`*.local`/`*.internal`.
+- **Workspace containment** — `openFileRelativePath` проверяет `path.resolve` против `workspaceFolders`; `downloadSkycodeChromium` защищает распаковку Chromium от Zip Slip.
+- **Webview channel hardening** — `VscodeWebviewProvider.executeVsCodeCommand` доступна только в `ExtensionMode.Development`; `updateIndexingConfig` работает через allowlist ключей.
+
+Подробности — в корневом `SECURITY.md` и `CHANGELOG.md` (на уровне монорепы).
+
 ## Потоки данных
 
 ### Выполнение задачи
@@ -158,4 +167,9 @@ Chat UI использует **TurnBlock** архитектуру:
 
 - [CORE.md](./CORE.md) — Детали core модуля
 - [PROMPTS.md](./PROMPTS.md) — Система промптов
+- [CONTEXT_MANAGEMENT.md](./CONTEXT_MANAGEMENT.md) — Управление контекстом
+- [../DIFF_SYSTEM.md](../DIFF_SYSTEM.md) — Diff-система v4
+- [../INDEXING_SYSTEM.md](../INDEXING_SYSTEM.md) — Индексация
+- [../VSCODE_FORK_PATCHES.md](../VSCODE_FORK_PATCHES.md) — патчи ядра VS Code
 - [../development/TOOLS.md](../development/TOOLS.md) — Добавление инструментов
+- [../../../../../SECURITY.md](../../../../../SECURITY.md) — Политика безопасности (корень монорепы)

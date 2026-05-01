@@ -301,4 +301,20 @@ SwitchMode: target_mode_id, explanation
 - **Ask Mode** — read-only, исследование кода, ответы на вопросы
 - **Chat Mode** — *(запланировано)* чистый диалог, инструменты только по явной просьбе
 
-*Последнее обновление: 2026-03-10*
+*Последнее обновление: 2026-05-01*
+
+---
+
+## 2026-05-01 — Security & hardening audit
+
+- [x] Полный аудит кодовой базы (архитектура, безопасность, качество, зависимости, документация)
+- [x] SSRF-гвард (`services/browser/urlSafety.ts`) + интеграция в `UrlContentFetcher` и `WebFetchToolHandler`
+- [x] Workspace containment в `openFileRelativePath`
+- [x] Zip Slip protection в `downloadSkycodeChromium`
+- [x] Hardening webview-канала: `executeVsCodeCommand` только в Development, `updateIndexingConfig` через allowlist
+- [x] XSS-санитизация markdown (`rehype-sanitize`) и `HistoryView.highlight` (HTML escape)
+- [x] Синхронизация `onnxruntime-node` с `onnxruntime-web` (^1.24.0)
+- [x] Перенос `@playwright/test` и `@tailwindcss/vite` в `devDependencies`, удаление `tailwindcss` из runtime extension
+- [x] Полный ребрендинг ОС-идентификаторов в `product.json` (Taskbar / Dock / service names)
+- [x] `SECURITY.md` и `CHANGELOG.md` на уровне монорепы
+- [x] Обновление публичной и внутренней документации

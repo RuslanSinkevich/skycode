@@ -1,3 +1,4 @@
+import * as path from "path"
 import * as vscode from "vscode"
 import { workspaceResolver } from "@core/workspace"
 import { getDiffSystem } from "@/core/diff-v2"
@@ -5,6 +6,20 @@ import { Empty, StringRequest } from "@shared/proto/skycode/common"
 import { getWorkspacePath } from "@utils/path"
 import { Logger } from "@/shared/services/Logger"
 import { Controller } from ".."
+
+/**
+ * Returns true when `absolutePath` is the same as, or lies inside, `rootPath`.
+ * Case-insensitive on Windows.
+ */
+function isPathInsideRoot(absolutePath: string, rootPath: string): boolean {
+	const normalizedTarget = path.resolve(absolutePath)
+	const normalizedRoot = path.resolve(rootPath)
+	const relative = path.relative(normalizedRoot, normalizedTarget)
+	if (relative === "" || relative === ".") {
+		return true
+	}
+	return !relative.startsWith("..") && !path.isAbsolute(relative)
+}
 
 /**
  * Opens a file in the editor by a relative path
@@ -42,10 +57,10 @@ export async function openFileRelativePath(_controller: Controller, request: Str
 		}
 
 		// If path is already absolute, use it directly; otherwise resolve relative to workspace
-		const isAbsolute = /^[a-zA-Z]:[\\/]/.test(filePath) || filePath.startsWith("/")
+		const isAbsolute = path.isAbsolute(filePath)
 		let absolutePath: string
 		if (isAbsolute) {
-			absolutePath = filePath
+			absolutePath = path.resolve(filePath)
 		} else {
 			const resolvedPath = workspaceResolver.resolveWorkspacePath(
 				workspacePath,
@@ -53,6 +68,17 @@ export async function openFileRelativePath(_controller: Controller, request: Str
 				"Controller.openFileRelativePath",
 			)
 			absolutePath = typeof resolvedPath === "string" ? resolvedPath : resolvedPath.absolutePath
+		}
+
+		// Containment check: the resolved file must live inside one of the known workspace folders.
+		// This blocks attempts from the webview / tool callers to open arbitrary absolute paths
+		// (e.g. "/etc/passwd", "C:\\Users\\<user>\\.ssh\\id_rsa") or to traverse out via "..".
+		const workspaceFolders = vscode.workspace.workspaceFolders ?? []
+		const rootCandidates = [workspacePath, ...workspaceFolders.map((f) => f.uri.fsPath)]
+		const isInsideWorkspace = rootCandidates.some((root) => root && isPathInsideRoot(absolutePath, root))
+		if (!isInsideWorkspace) {
+			Logger.warn(`openFileRelativePath: rejected path outside workspace: ${absolutePath}`)
+			return Empty.create()
 		}
 
 		try {

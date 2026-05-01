@@ -60,6 +60,9 @@ old_docs/**
 !node_modules/@vscode/codicons/dist/codicon.css
 !node_modules/@vscode/codicons/dist/codicon.ttf
 
+# Include native ONNX runtime used by @xenova/transformers for local embeddings
+!node_modules/onnxruntime-node/**
+
 # Include default themes JSON files used in getTheme
 !src/integrations/theme/default-themes/**
 

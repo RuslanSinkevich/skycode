@@ -1,24 +1,43 @@
 # VS Code Fork: Список патчей ядра
 
 > Все наши правки помечены маркерами `SKYCODE_FORK_BEGIN` / `SKYCODE_FORK_END` или `[SKYCODE]`.
-> При обновлении upstream: `git grep "SKYCODE_FORK\|[SKYCODE]" -- src/ build/` покажет все наши изменения.
-> Обновлено: 2026-03-02
+> При обновлении upstream: `git grep "SKYCODE_FORK\|[SKYCODE]" -- src/ build/ product.json` покажет все наши изменения.
+> Upstream база: **1.117.0**
+> Последнее обновление: 2026-05-01
+
+Публичная краткая версия этого файла живёт в `docs/development/fork-patches.md` (корень монорепы). Этот документ — **canonical**; публичный синхронизируется с него.
 
 ---
 
 ## Изменённые файлы ядра
 
 ### 1. `product.json`
-**Что:** Брендинг + конфигурация
+**Что:** Брендинг + идентификаторы ОС + конфигурация
+
+Брендинг:
 - `nameShort` / `nameLong` → "Skycode"
 - `applicationName` → "skycode"
 - `dataFolderName` → ".skycode"
 - `urlProtocol` → "skycode"
+- `win32DirName` / `win32NameVersion` / `win32RegValueName` → "Skycode"
+- `win32MutexName` → "skycode"
+- `linuxIconName` → "skycode"
+
+Идентификаторы ОС (критично для Taskbar / Dock / service registration):
+- `win32AppUserModelId` → "SkycodeAI.Skycode" (было `Microsoft.CodeOSS`)
+- `darwinBundleIdentifier` → "ru.skycode-ai.skycode" (было `com.visualstudio.code.oss`)
+- `win32TunnelServiceMutex` → "skycode-tunnelservice"
+- `win32TunnelMutex` → "skycode-tunnel"
+- `serverApplicationName` → "skycode-server"
+- `serverDataFolderName` → ".skycode-server"
+- `tunnelApplicationName` → "skycode-tunnel"
+
+Интеграция расширения:
 - `extensionAllowedProposedApi` → `["skycode.skycode"]` (для editorInsets)
 - `defaultChatAgent` → указывает на `disabled.skycode-placeholder` (отключает Copilot)
-- `configurationDefaults` → `chat.commandCenter.enabled: false`
+- `configurationDefaults` → `chat.commandCenter.enabled: false`, `chat.experimental.detectParticipant.enabled: false`
 
-**Риск конфликта при обновлении:** НИЗКИЙ — файл обычно не меняется радикально
+**Риск конфликта при обновлении:** НИЗКИЙ — файл обычно не меняется радикально. AppIds (`win32x64AppId` и др.) оставлены upstream-ными, чтобы установщик не конфликтовал с предыдущими сборками.
 
 ---
 
@@ -251,7 +270,18 @@ node --max-old-space-size=8192 node_modules\gulp\bin\gulp.js vscode-win32-x64-mi
 
 ## Чеклист после обновления
 
-- [ ] `product.json` — имя "Skycode", `extensionAllowedProposedApi` содержит `skycode.skycode`
+### `product.json`
+- [ ] `nameShort` / `nameLong` = "Skycode"
+- [ ] `applicationName` = "skycode", `dataFolderName` = ".skycode"
+- [ ] `win32AppUserModelId` = "SkycodeAI.Skycode" (не `Microsoft.CodeOSS`)
+- [ ] `darwinBundleIdentifier` = "ru.skycode-ai.skycode" (не `com.visualstudio.code.oss`)
+- [ ] `linuxIconName` = "skycode" (не `code-oss`)
+- [ ] `serverApplicationName` / `serverDataFolderName` / `tunnelApplicationName` — skycode-* (не `*-oss`)
+- [ ] `win32TunnelServiceMutex` / `win32TunnelMutex` — "skycode-*" (не `vscodeoss-*`)
+- [ ] `extensionAllowedProposedApi` содержит `skycode.skycode`
+- [ ] `defaultChatAgent.extensionId` = "disabled.skycode-placeholder"
+
+### Core patches
 - [ ] Copilot Chat view НЕ регистрируется (`chatParticipant.contribution.ts`)
 - [ ] `main.ts` — `argv.json` шаблон: `"locale": "ru"`, `getUserDefinedLocale` fallback → `'ru'`, `readArgvConfigSync` патчит существующий argv.json
 - [ ] `nls.ts` — `bootstrapBuiltInLanguagePack()` на месте
@@ -259,14 +289,23 @@ node --max-old-space-size=8192 node_modules\gulp\bin\gulp.js vscode-win32-x64-mi
 - [ ] `extHostCodeInsets.ts` — нет `+1` к line
 - [ ] `chatSetupContributions.ts` — `ChatCodeActionsProvider` удалён из импорта, `codeActionsProviderDisposables.clear()`
 - [ ] `markerHoverParticipant.ts` — импорты `ApplyCodeActionReason`, `ThemeIcon`, `Codicon` удалены
+- [ ] `extensionSignatureVerificationService.ts` — `verify()` всегда возвращает trusted result
+- [ ] `chat.contribution.ts` — `ChatStatusBarEntry` не регистрируется
+
+### Build hygiene
 - [ ] `build/filters.ts` — `!extensions/skycode/**`
 - [ ] `build/hygiene.ts` — `stripComments()` + unicode в комментариях разрешён
+
+### Extensions
 - [ ] `extensions/vscode-language-pack-ru/` на месте
 - [ ] `extensions/skycode/package.json` → views в `workbench.panel.chat`
 - [ ] `extensions/skycode/.vscodeignore` — `bin/`, `proto/`, `scripts/`, `vendor/whisper/` исключены
-- [ ] Сборка проходит без ошибок
+
+### Smoke
+- [ ] Сборка проходит без ошибок (`npm run compile` в extension, `.\scripts\code.bat` для форка)
 - [ ] Skycode.exe запускается, панель Skycode открыта
 - [ ] UI на русском языке с первого запуска (без перезапуска)
+- [ ] Taskbar/Jump List на Windows показывает Skycode, а не Code OSS
 
 ---
 
@@ -330,3 +369,47 @@ node --max-old-space-size=8192 node_modules\gulp\bin\gulp.js vscode-win32-x64-mi
 - SearchEngine: hybrid retrieval (semantic + keyword) + rerank
 - Инструмент агента `codebase_search` (tool spec + handler + регистрация в prompt variants)
 - UI таб "Индексация" в настройках Skycode
+
+---
+
+## Post-audit security hardening (2026-05-01)
+
+По результатам полного аудита кодовой базы внесён ряд правок. Подробности — в корневом [`CHANGELOG.md`](../../../../CHANGELOG.md) и [`SECURITY.md`](../../../../SECURITY.md).
+
+Ключевые изменения:
+
+### Новый модуль `src/services/browser/urlSafety.ts`
+Лексическая проверка URL перед обращением к внешним ресурсам. Отклоняет:
+- Схемы кроме `http`/`https` (опционально настраиваемо).
+- Loopback / link-local / private / CGNAT / multicast IPv4 и IPv6 (включая AWS metadata `169.254.169.254`).
+- Hostname'ы `localhost`, `*.local`, `*.internal` и т.п.
+- URL с credentials (`user:pass@host`).
+
+Интегрирован в:
+- `services/browser/UrlContentFetcher.urlToMarkdown` — `page.goto()` теперь получает уже прошедший проверку URL.
+- `core/task/tools/handlers/WebFetchToolHandler.execute` — ранний отказ до запуска браузера; возвращает `UnsafeUrlError` в модель.
+
+### Workspace containment
+`core/controller/file/openFileRelativePath`: абсолютный путь нормализуется (`path.resolve`) и сверяется с `vscode.workspace.workspaceFolders`. Попытка открыть что-либо вне workspace логируется и отклоняется.
+
+### Webview channel hardening
+`hosts/vscode/VscodeWebviewProvider`:
+- `executeVsCodeCommand` принимается только при `context.extensionMode === Development`.
+- `updateIndexingConfig` разрешает только ключи из `ALLOWED_INDEXING_CONFIG_KEYS` (совпадает с `package.json > contributes`).
+
+### Zip Slip
+`services/browser/utils.ts → downloadSkycodeChromium`: перед `extractAllTo` каждая запись архива проверяется на абсолютные пути и containment внутри `extractDir`.
+
+### Markdown + ModelPicker XSS
+- `webview-ui/components/common/MarkdownBlock.tsx` — в pipeline `react-remark` после `rehype-raw` добавлен `rehype-sanitize` с whitelist для классов подсветки (`language-*`, `hljs-*`). Зависимость `rehype-sanitize ^6` добавлена в `webview-ui/package.json`.
+- `webview-ui/components/history/HistoryView.tsx` — функция `highlight`, используемая модель-пикерами, теперь HTML-escape'ит входные подстроки и имя класса перед построением разметки для `dangerouslySetInnerHTML`.
+
+### Зависимости
+- `onnxruntime-node` синхронизирован с `onnxruntime-web` (`^1.14.0` → `^1.24.0`).
+- `@playwright/test` и `@tailwindcss/vite` перемещены из `dependencies` в `devDependencies` (build/e2e-только).
+- `tailwindcss` удалён из runtime-деп extension (живёт в `webview-ui`).
+
+### Документация
+- Создан `SECURITY.md` (disclosure process, scope, hardening notes для пользователей).
+- Создан `CHANGELOG.md` (канонический changelog; Unreleased-секция описывает все правки выше).
+- `.gitignore` дополнен: `evals.env`, `_ts_over_*.txt`, `gulp-prod*.log`, `build_*.log`.

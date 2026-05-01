@@ -8,6 +8,20 @@ import type { ExtensionMessage } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import { WebviewMessage } from "@/shared/WebviewMessage"
 
+/**
+ * Allowlist of `skycode.indexing.*` keys the webview can modify.
+ * Must match entries declared in `package.json > contributes.configuration.properties`.
+ */
+const ALLOWED_INDEXING_CONFIG_KEYS = new Set<string>([
+	"mode",
+	"localModel",
+	"remoteApiUrl",
+	"remoteApiKey",
+	"remoteModel",
+	"maxFileSize",
+	"ignoredPatterns",
+])
+
 /*
 https://github.com/microsoft/vscode-webview-ui-toolkit-samples/blob/main/default/weather-webview/src/providers/WeatherViewProvider.ts
 https://github.com/KumarVariable/vscode-extension-sidebar-html/blob/master/src/customSidebarViewProvider.ts
@@ -175,7 +189,12 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 				break
 			}
 			case "executeVsCodeCommand": {
-				// [DEV TOOLS] Execute VS Code command directly from webview
+				// [DEV TOOLS] Execute VS Code command directly from webview.
+				// Only allowed in Development mode to avoid giving the webview a general command-exec channel in release builds.
+				if (this.context.extensionMode !== vscode.ExtensionMode.Development) {
+					Logger.warn(`[executeVsCodeCommand] ignored in non-development mode`)
+					break
+				}
 				if (message.executeVsCodeCommand) {
 					const { command, args } = message.executeVsCodeCommand
 					try {
@@ -188,9 +207,15 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 				break
 			}
 			case "updateIndexingConfig": {
-				// [SKYCODE-SKYCODE] Update indexing configuration from webview
+				// [SKYCODE-SKYCODE] Update indexing configuration from webview.
+				// Only known, user-settable indexing keys are accepted — protects against
+				// a compromised webview writing arbitrary configuration entries.
 				if (message.indexingConfigUpdate) {
 					const { key, value } = message.indexingConfigUpdate
+					if (!ALLOWED_INDEXING_CONFIG_KEYS.has(key)) {
+						Logger.warn(`[Indexing] rejected config key: ${key}`)
+						break
+					}
 					try {
 						const cfg = vscode.workspace.getConfiguration("skycode.indexing")
 						await cfg.update(key, value, vscode.ConfigurationTarget.Global)

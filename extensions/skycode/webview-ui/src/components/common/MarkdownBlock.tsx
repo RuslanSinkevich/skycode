@@ -6,6 +6,7 @@ import React, { memo, useEffect, useRef, useState } from "react"
 import { useRemark } from "react-remark"
 import rehypeHighlight, { Options } from "rehype-highlight"
 import rehypeRaw from "rehype-raw"
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize"
 import type { Node } from "unist"
 import { visit } from "unist-util-visit"
 import MermaidBlock from "@/components/common/MermaidBlock"
@@ -423,6 +424,21 @@ const MarkdownBlock = memo(({ markdown, compact, showCursor }: MarkdownBlockProp
 		],
 		rehypePlugins: [
 			rehypeRaw as any,
+			// Sanitize the raw HTML that rehype-raw parsed.
+			// Model output can contain arbitrary HTML — this strips scripts, event handlers,
+			// javascript: URLs, dangerous tags, etc., while keeping useful formatting.
+			[
+				rehypeSanitize,
+				{
+					...defaultSchema,
+					attributes: {
+						...defaultSchema.attributes,
+						// Preserve syntax-highlight classes added by rehype-highlight below.
+						code: [...(defaultSchema.attributes?.code || []), ["className", /^language-/, /^hljs(-.*)?$/]],
+						span: [...(defaultSchema.attributes?.span || []), ["className", /^hljs(-.*)?$/]],
+					},
+				},
+			] as any,
 			rehypeHighlight as any,
 			{
 				// languages: {},
