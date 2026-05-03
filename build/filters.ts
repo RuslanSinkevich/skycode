@@ -123,6 +123,8 @@ export const indentationFilter = Object.freeze<string[]>([
 	'!**/codicon/**',
 	'!**/fixtures/**',
 	'!**/lib/**',
+	// Skycode: vendored @xenova/transformers (space-indented upstream style)
+	'!extensions/skycode/vendor/**',
 	'!extensions/**/dist/**',
 	'!extensions/**/out/**',
 	'!extensions/**/snippets/**',

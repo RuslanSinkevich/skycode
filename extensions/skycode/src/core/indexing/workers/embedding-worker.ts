@@ -231,6 +231,13 @@ async function computeEmbeddings(id: number, texts: string[], textType?: "query"
 			? texts.map((t) => `${textType}: ${t}`)
 			: texts
 
+		// Why per-text instead of a batched forward pass?
+		// transformers.js + WASM has unstable peak memory when batching texts of
+		// different lengths: padding to the longest text in the batch makes
+		// attention compute O(N²·B) and can OOM the worker silently on real-world
+		// inputs (Skycode itself crashed during indexing). Per-text is slower per
+		// call but predictable. Tokenization/model overhead is partially amortized
+		// because the pipeline keeps tokenizer + model warm across calls.
 		for (let i = 0; i < prefixed.length; i++) {
 			const output = await pipeline([prefixed[i]], {
 				pooling: "mean",

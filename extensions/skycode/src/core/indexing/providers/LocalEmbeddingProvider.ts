@@ -2,8 +2,9 @@
  * LocalEmbeddingProvider — generates embeddings locally using transformers.js (WASM).
  * Uses the paraphrase-multilingual-MiniLM-L12-v2 model which produces 384-dimensional vectors.
  *
- * Based on Continue's TransformersJsEmbeddingsProvider.
- * No native modules needed — runs entirely in WASM.
+ * @deprecated This runs the model on the extension host and is no longer wired into
+ * EmbeddingRouter. Use EmbeddingWorkerManager (which runs in a Worker Thread) instead.
+ * This file is kept as a reference fallback in case the worker bundle cannot be loaded.
  */
 import * as path from "node:path"
 import type { EmbeddingProvider } from "../types"
@@ -72,10 +73,10 @@ export class LocalEmbeddingProvider implements EmbeddingProvider {
 
 		const results: number[][] = []
 
-		// Process one chunk at a time to avoid blocking the extension host
+		// Per-text loop (see embedding-worker.ts for rationale: WASM peak memory is
+		// unstable when batching variable-length inputs, can crash the host).
 		for (let i = 0; i < texts.length; i++) {
-			const originalText = texts[i]
-			const text = this.truncateForEmbedding(originalText)
+			const text = this.truncateForEmbedding(texts[i])
 
 			try {
 				const output = await extractor([text], {
@@ -85,15 +86,12 @@ export class LocalEmbeddingProvider implements EmbeddingProvider {
 
 				results.push(...output.tolist())
 			} catch (err: any) {
-				// If embedding fails for a chunk, skip it but log the error
 				console.warn(`[Skycode Indexing] Failed to embed chunk ${i} (${text.length} chars):`, err.message)
-				// Push zero vector as placeholder to maintain array alignment
 				results.push(new Array(this.dimensions).fill(0))
 			}
 
-			// Yield to event loop between chunks (prevents UI freezing)
 			if (i % 5 === 0) {
-				await new Promise((resolve) => setTimeout(resolve, 1))
+				await new Promise((resolve) => setImmediate(resolve))
 			}
 		}
 

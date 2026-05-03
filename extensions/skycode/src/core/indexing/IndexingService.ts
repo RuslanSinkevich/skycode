@@ -22,13 +22,17 @@ import type { EmbeddingProvider, ChunkRow } from "./types"
 import { IndexStorage } from "./storage/IndexStorage"
 import { vectorSearch } from "./storage/VectorSearch"
 
-/** Batch size for embedding requests */
+/** Batch size for embedding requests. Larger batches give better WASM throughput
+ * because tokenization and model init overhead is amortized. 32 was chosen to fit
+ * comfortably in the WASM memory page for MiniLM-L12 @ 2000 chars/chunk. */
 const EMBED_BATCH_SIZE = 32
 
-/** Delay between batches to not hog CPU (ms) */
-const BATCH_DELAY_MS = 50
 /** Debounce for file watcher change bursts (ms) */
 const FILE_CHANGE_DEBOUNCE_MS = 700
+/** Yield to the event loop between batches (ms). Set to 0 because embedding runs in
+ * a Worker Thread — the extension host is not blocked by the compute itself.
+ * A minimal `setImmediate`-style yield lets FileSystemWatcher and UI events interleave. */
+const BATCH_YIELD_MS = 0
 /** Resolve current embedding model HuggingFace ID from config */
 function getCurrentEmbeddingModel(config: IndexingConfig): string {
 	if (config.mode === "local") {
@@ -355,7 +359,9 @@ export class IndexingService implements vscode.Disposable {
 				files.push(file)
 				walkCount++
 				if (walkCount % 100 === 0) {
-					await new Promise((r) => setTimeout(r, 1))
+					// setImmediate yields faster than setTimeout(..,1) which on Windows
+					// can round up to ~15ms due to the system timer granularity.
+					await new Promise((r) => setImmediate(r))
 				}
 			}
 
@@ -394,11 +400,12 @@ export class IndexingService implements vscode.Disposable {
 					// Skip unreadable files
 				}
 
-				// Emit progress and yield every 20 files
+				// Emit progress and yield every 20 files. setImmediate yields faster than
+				// setTimeout(..,1) which can round to ~15ms on Windows.
 				if (i % 20 === 0) {
 					this.progress.chunksTotal = allChunks.length
 					this.emitProgress()
-					await new Promise((r) => setTimeout(r, 1))
+					await new Promise((r) => setImmediate(r))
 				}
 			}
 
@@ -481,8 +488,14 @@ export class IndexingService implements vscode.Disposable {
 				}
 				this.emitProgress()
 
-				// Yield to event loop
-				await new Promise((r) => setTimeout(r, BATCH_DELAY_MS))
+				// Yield minimally to let FileSystemWatcher/UI events interleave. The worker
+				// thread is running embedding compute on its own thread, so we don't need
+				// a throttle delay here — just a setImmediate-style yield.
+				if (BATCH_YIELD_MS > 0) {
+					await new Promise((r) => setTimeout(r, BATCH_YIELD_MS))
+				} else {
+					await new Promise((r) => setImmediate(r))
+				}
 			}
 
 			// Phase 5: Finalize
