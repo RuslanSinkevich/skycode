@@ -44,210 +44,226 @@ interface ToolItemData {
 
 // ==================== Главный компонент ====================
 
-export const ProcessBlock = memo(({ messages, isLast, lastModifiedMessage, onExpandChange, onHeightChange }: ProcessBlockProps) => {
-	const { t } = useI18n()
-	const isLastBlock = isLast === true
-	const rootRef = useRef<HTMLDivElement>(null)
-	const prevMeasuredHeightRef = useRef(0)
+export const ProcessBlock = memo(
+	({ messages, isLast, lastModifiedMessage, onExpandChange, onHeightChange }: ProcessBlockProps) => {
+		const { t } = useI18n()
+		const isLastBlock = isLast === true
+		const rootRef = useRef<HTMLDivElement>(null)
+		const prevMeasuredHeightRef = useRef(0)
 
-	// Разделяем сообщения на reasoning и инструменты
-	const { reasoningTexts, toolItems, thinkingStartTime } = useMemo(() => {
-		const reasoning: string[] = []
-		const tools: ToolItemData[] = []
-		let firstTs: number | undefined
+		// Разделяем сообщения на reasoning и инструменты
+		const { reasoningTexts, toolItems, thinkingStartTime } = useMemo(() => {
+			const reasoning: string[] = []
+			const tools: ToolItemData[] = []
+			let firstTs: number | undefined
 
-		for (const msg of messages) {
-			// Пропускаем служебные
-			if (msg.say === "api_req_started" || msg.say === "checkpoint_created") {
-				// Запоминаем самый ранний timestamp для таймера
-				if (!firstTs) firstTs = msg.ts
-				continue
-			}
+			for (const msg of messages) {
+				// Пропускаем служебные
+				if (msg.say === "api_req_started" || msg.say === "checkpoint_created") {
+					// Запоминаем самый ранний timestamp для таймера
+					if (!firstTs) firstTs = msg.ts
+					continue
+				}
 
-			// Reasoning — в блок думалки
-			if (msg.say === "reasoning" && msg.text) {
-				reasoning.push(msg.text)
-				if (!firstTs) firstTs = msg.ts
-				continue
-			}
+				// Reasoning — в блок думалки
+				if (msg.say === "reasoning" && msg.text) {
+					reasoning.push(msg.text)
+					if (!firstTs) firstTs = msg.ts
+					continue
+				}
 
-			// Текст AI для пользователя — пропускаем, он рендерится как отдельный ChatRow
-			if (msg.say === "text") {
-				continue
-			}
+				// Текст AI для пользователя — пропускаем, он рендерится как отдельный ChatRow
+				if (msg.say === "text") {
+					continue
+				}
 
-			// Инструменты — в блок исследования
-			if (isLowStakesTool(msg)) {
-				const isCommand = msg.say === "command" || msg.ask === "command"
-				if (isCommand) {
-					tools.push({
-						label: `$ ${(msg.text || "command").substring(0, 80)}`,
-						icon: TerminalSquareIcon,
-						filePath: undefined,
-						isActive: !!msg.partial,
-						toolType: "cmd",
-					})
-				} else {
-					const tool = parseToolSafe(msg.text)
-					const info = getToolItemInfo(tool, t)
-					tools.push({
-						label: info.label,
-						icon: info.icon,
-						filePath: info.filePath,
-						isActive: !!msg.partial,
-						toolType: info.toolType,
-					})
+				// Инструменты — в блок исследования
+				if (isLowStakesTool(msg)) {
+					const isCommand = msg.say === "command" || msg.ask === "command"
+					if (isCommand) {
+						tools.push({
+							label: `$ ${(msg.text || "command").substring(0, 80)}`,
+							icon: TerminalSquareIcon,
+							filePath: undefined,
+							isActive: !!msg.partial,
+							toolType: "cmd",
+						})
+					} else {
+						const tool = parseToolSafe(msg.text)
+						const info = getToolItemInfo(tool, t)
+						tools.push({
+							label: info.label,
+							icon: info.icon,
+							filePath: info.filePath,
+							isActive: !!msg.partial,
+							toolType: info.toolType,
+						})
+					}
 				}
 			}
-		}
 
-		return {
-			reasoningTexts: reasoning,
-			toolItems: tools,
-			thinkingStartTime: firstTs,
-		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [messages, messages.length, messages[messages.length - 1]?.text?.length, messages[messages.length - 1]?.partial])
-
-	const hasReasoning = reasoningTexts.length > 0
-	const hasTools = toolItems.length > 0
-
-	/** Reasoning phase: streaming reasoning or waiting for first reasoning token (no tools yet). */
-	const isReasoningLive = useMemo(() => {
-		if (!isLastBlock) return false
-		if (messages.some((m) => m.say === "reasoning" && m.partial === true)) return true
-		return (
-			messages.some((m) => m.say === "api_req_started") &&
-			!hasReasoning &&
-			!hasTools
-		)
-	}, [isLastBlock, messages, hasReasoning, hasTools])
-
-	/** Tool / API phase: open request or a tool/command still streaming. */
-	const isExploringLive = useMemo(() => {
-		if (!isLastBlock) return false
-		if (toolItems.some((item) => item.isActive)) return true
-		for (let i = messages.length - 1; i >= 0; i--) {
-			const m = messages[i]
-			if (m.say === "api_req_started" && m.text) {
-				try {
-					const info = JSON.parse(m.text)
-					if (info.cost === undefined) return true
-				} catch { /* skip */ }
+			return {
+				reasoningTexts: reasoning,
+				toolItems: tools,
+				thinkingStartTime: firstTs,
 			}
-		}
-		return false
-	}, [isLastBlock, messages, toolItems])
+			// eslint-disable-next-line react-hooks/exhaustive-deps
+		}, [messages, messages.length, messages[messages.length - 1]?.text?.length, messages[messages.length - 1]?.partial])
 
-	// Между api_req_started и первым reasoning / тулом
-	const isWaitingForFirstReasoning =
-		isLastBlock &&
-		messages.some((m) => m.say === "api_req_started") &&
-		!hasReasoning &&
-		!hasTools
+		const hasReasoning = reasoningTexts.length > 0
+		const hasTools = toolItems.length > 0
 
-	// Ошибка API: последний блок + lastModifiedMessage = api_req_failed
-	const apiErrorMessage = useMemo(() => {
-		if (!isLastBlock || !lastModifiedMessage) return undefined
-		if (lastModifiedMessage.ask === "api_req_failed") return lastModifiedMessage.text
-		return undefined
-	}, [isLastBlock, lastModifiedMessage])
+		/** Reasoning phase: streaming reasoning or waiting for first reasoning token (no tools yet). */
+		const isReasoningLive = useMemo(() => {
+			if (!isLastBlock) return false
+			if (messages.some((m) => m.say === "reasoning" && m.partial === true)) return true
+			return messages.some((m) => m.say === "api_req_started") && !hasReasoning && !hasTools
+		}, [isLastBlock, messages, hasReasoning, hasTools])
 
-	// Streaming error inside api_req_started
-	const streamingErrorMessage = useMemo(() => {
-		if (!isLastBlock) return undefined
-		const lastApiReq = [...messages].reverse().find((m) => m.say === "api_req_started" && m.text)
-		if (!lastApiReq?.text) return undefined
-		try {
-			const info = JSON.parse(lastApiReq.text)
-			return info.streamingFailedMessage
-		} catch { return undefined }
-	}, [isLastBlock, messages])
-
-	const hasError = !!(apiErrorMessage || streamingErrorMessage)
-
-	const isVisible = hasReasoning || hasTools || isWaitingForFirstReasoning || hasError
-
-	useLayoutEffect(() => {
-		if (!isVisible || !onHeightChange || !isLastBlock) {
-			if (!isVisible) {
-				prevMeasuredHeightRef.current = 0
+		/** Tool / API phase: open request or a tool/command still streaming. */
+		const isExploringLive = useMemo(() => {
+			if (!isLastBlock) return false
+			if (toolItems.some((item) => item.isActive)) return true
+			for (let i = messages.length - 1; i >= 0; i--) {
+				const m = messages[i]
+				if (m.say === "api_req_started" && m.text) {
+					try {
+						const info = JSON.parse(m.text)
+						if (info.cost === undefined) return true
+					} catch {
+						/* skip */
+					}
+				}
 			}
-			return
-		}
-		const el = rootRef.current
-		if (!el) {
-			return
-		}
-		let prev = prevMeasuredHeightRef.current
-		const ro = new ResizeObserver(() => {
-			const h = el.getBoundingClientRect().height
-			if (!Number.isFinite(h) || h <= 0) {
+			return false
+		}, [isLastBlock, messages, toolItems])
+
+		// Между api_req_started и первым reasoning / тулом
+		const isWaitingForFirstReasoning =
+			isLastBlock && messages.some((m) => m.say === "api_req_started") && !hasReasoning && !hasTools
+
+		// Ошибка API: последний блок + lastModifiedMessage = api_req_failed
+		const apiErrorMessage = useMemo(() => {
+			if (!isLastBlock || !lastModifiedMessage) return undefined
+			if (lastModifiedMessage.ask === "api_req_failed") return lastModifiedMessage.text
+			return undefined
+		}, [isLastBlock, lastModifiedMessage])
+
+		// Streaming error inside api_req_started
+		const streamingErrorMessage = useMemo(() => {
+			if (!isLastBlock) return undefined
+			const lastApiReq = [...messages].reverse().find((m) => m.say === "api_req_started" && m.text)
+			if (!lastApiReq?.text) return undefined
+			try {
+				const info = JSON.parse(lastApiReq.text)
+				return info.streamingFailedMessage
+			} catch {
+				return undefined
+			}
+		}, [isLastBlock, messages])
+
+		const hasError = !!(apiErrorMessage || streamingErrorMessage)
+
+		const isVisible = hasReasoning || hasTools || isWaitingForFirstReasoning || hasError
+
+		// Track height changes to trigger scroll, with debounce to avoid jitter.
+		// ResizeObserver fires on every chunk — debounce consolidates them into one scroll.
+		useLayoutEffect(() => {
+			if (!isVisible || !onHeightChange || !isLastBlock) {
+				if (!isVisible) {
+					prevMeasuredHeightRef.current = 0
+				}
 				return
 			}
-			if (prev === 0) {
+			const el = rootRef.current
+			if (!el) {
+				return
+			}
+
+			let prev = prevMeasuredHeightRef.current
+			let debounceTimer: ReturnType<typeof setTimeout> | null = null
+
+			const measureAndReport = () => {
+				debounceTimer = null
+				const node = rootRef.current
+				if (!node) return
+				const h = node.getBoundingClientRect().height
+				if (!Number.isFinite(h) || h <= 0) return
+				if (prev === 0) {
+					prev = h
+					prevMeasuredHeightRef.current = h
+					return
+				}
+				if (Math.abs(h - prev) <= 1) return
+				onHeightChange(h > prev)
 				prev = h
 				prevMeasuredHeightRef.current = h
-				return
 			}
-			if (Math.abs(h - prev) < 1) {
-				return
+
+			const ro = new ResizeObserver(() => {
+				if (debounceTimer !== null) {
+					clearTimeout(debounceTimer)
+				}
+				debounceTimer = setTimeout(measureAndReport, 80)
+			})
+
+			ro.observe(el)
+			return () => {
+				ro.disconnect()
+				if (debounceTimer !== null) {
+					clearTimeout(debounceTimer)
+				}
 			}
-			onHeightChange(h > prev)
-			prev = h
-			prevMeasuredHeightRef.current = h
-		})
-		ro.observe(el)
-		return () => ro.disconnect()
-	}, [isVisible, isLastBlock, onHeightChange])
+		}, [isVisible, isLastBlock, onHeightChange])
 
-	if (!isVisible) {
-		return null
-	}
+		if (!isVisible) {
+			return null
+		}
 
-	// Оба блока видны одновременно → уменьшаем высоту каждого чтобы влезали
-	const hasBothSections = (hasReasoning || isWaitingForFirstReasoning) && hasTools
+		// Оба блока видны одновременно → уменьшаем высоту каждого чтобы влезали
+		const hasBothSections = (hasReasoning || isWaitingForFirstReasoning) && hasTools
 
-	return (
-		<div className="space-y-0.5" ref={rootRef}>
-			{/* Блок думалки — reasoning + промежуточный текст */}
-			{(hasReasoning || isWaitingForFirstReasoning) && (
-				<ThinkingSection
-					compact={hasBothSections}
-					content={reasoningTexts.join("\n\n")}
-					isReasoningLive={isReasoningLive}
-					onExpandChange={onExpandChange}
-					startTime={thinkingStartTime}
-					t={t}
-				/>
-			)}
-
-			{/* Блок исследования — инструменты */}
-			{hasTools && (
-				<ExploringSection
-					compact={hasBothSections}
-					isExploringLive={isExploringLive}
-					isLastBlock={isLastBlock}
-					items={toolItems}
-					onExpandChange={onExpandChange}
-					t={t}
-				/>
-			)}
-
-			{/* Ошибка API */}
-			{hasError && (
-				<div className="px-4 py-1">
-					<ErrorRow
-						apiReqStreamingFailedMessage={streamingErrorMessage}
-						apiRequestFailedMessage={apiErrorMessage}
-						errorType="error"
-						message={lastModifiedMessage || messages[messages.length - 1]}
+		return (
+			<div className="space-y-0.5" ref={rootRef}>
+				{/* Блок думалки — reasoning + промежуточный текст */}
+				{(hasReasoning || isWaitingForFirstReasoning) && (
+					<ThinkingSection
+						compact={hasBothSections}
+						content={reasoningTexts.join("\n\n")}
+						isReasoningLive={isReasoningLive}
+						onExpandChange={onExpandChange}
+						startTime={thinkingStartTime}
+						t={t}
 					/>
-				</div>
-			)}
-		</div>
-	)
-})
+				)}
+
+				{/* Блок исследования — инструменты */}
+				{hasTools && (
+					<ExploringSection
+						compact={hasBothSections}
+						isExploringLive={isExploringLive}
+						isLastBlock={isLastBlock}
+						items={toolItems}
+						onExpandChange={onExpandChange}
+						t={t}
+					/>
+				)}
+
+				{/* Ошибка API */}
+				{hasError && (
+					<div className="px-4 py-1">
+						<ErrorRow
+							apiReqStreamingFailedMessage={streamingErrorMessage}
+							apiRequestFailedMessage={apiErrorMessage}
+							errorType="error"
+							message={lastModifiedMessage || messages[messages.length - 1]}
+						/>
+					</div>
+				)}
+			</div>
+		)
+	},
+)
 
 ProcessBlock.displayName = "ProcessBlock"
 
@@ -326,8 +342,12 @@ const ThinkingSection = memo(({ content, isReasoningLive, compact, startTime, t,
 
 	// Высота контента: compact немного меньше, но не в 2 раза
 	const maxHeightClass = isReasoningLive
-		? compact ? "max-h-[80px]" : "max-h-[100px]"
-		: compact ? "max-h-[160px]" : "max-h-[200px]"
+		? compact
+			? "max-h-[80px]"
+			: "max-h-[100px]"
+		: compact
+			? "max-h-[160px]"
+			: "max-h-[200px]"
 
 	return (
 		<div className="px-4 py-0.5">
@@ -335,9 +355,7 @@ const ThinkingSection = memo(({ content, isReasoningLive, compact, startTime, t,
 				className="flex items-center gap-1.5 text-[12px] text-description opacity-60 hover:opacity-80 cursor-pointer w-full text-left"
 				onClick={handleToggle}
 				type="button">
-				<ChevronRightIcon
-					className={cn("size-3 shrink-0 transition-transform duration-150", { "rotate-90": isOpen })}
-				/>
+				<ChevronRightIcon className={cn("size-3 shrink-0 transition-transform duration-150", { "rotate-90": isOpen })} />
 				{/* Иконка мозга + анимация пульса пока активен */}
 				<BrainIcon className={cn("size-3 shrink-0", { "animate-pulse": isReasoningLive })} />
 				<span className="truncate">{title}</span>
@@ -403,9 +421,7 @@ const ExploringSection = memo(({ items, isExploringLive, isLastBlock, compact, t
 
 	// Последний блок: открыт при работе или пока пользователь не свернул.
 	// Не последний: свёрнут по умолчанию, но можно раскрыть вручную.
-	const isOpen = isLastBlock
-		? (isExploringLive || !userHidden)
-		: !userHidden
+	const isOpen = isLastBlock ? isExploringLive || !userHidden : !userHidden
 
 	// Автоскролл к низу
 	useEffect(() => {
@@ -438,8 +454,12 @@ const ExploringSection = memo(({ items, isExploringLive, isLastBlock, compact, t
 
 	// Высота контента: compact → меньше
 	const maxHeightClass = isExploringLive
-		? compact ? "max-h-[80px]" : "max-h-[100px]"
-		: compact ? "max-h-[160px]" : "max-h-[280px]"
+		? compact
+			? "max-h-[80px]"
+			: "max-h-[100px]"
+		: compact
+			? "max-h-[160px]"
+			: "max-h-[280px]"
 
 	return (
 		<div className="px-4 py-0.5">
@@ -447,9 +467,7 @@ const ExploringSection = memo(({ items, isExploringLive, isLastBlock, compact, t
 				className="flex items-center gap-1.5 text-[12px] text-description opacity-60 hover:opacity-80 cursor-pointer w-full text-left"
 				onClick={handleToggle}
 				type="button">
-				<ChevronRightIcon
-					className={cn("size-3 shrink-0 transition-transform duration-150", { "rotate-90": isOpen })}
-				/>
+				<ChevronRightIcon className={cn("size-3 shrink-0 transition-transform duration-150", { "rotate-90": isOpen })} />
 				<span className="truncate">{summary}</span>
 			</button>
 
@@ -461,12 +479,7 @@ const ExploringSection = memo(({ items, isExploringLive, isLastBlock, compact, t
 					)}
 					ref={scrollRef}>
 					{items.map((item, idx) => (
-						<ToolItem
-							isActive={item.isActive}
-							item={item}
-							key={idx}
-							onOpenFile={handleOpenFile}
-						/>
+						<ToolItem isActive={item.isActive} item={item} key={idx} onOpenFile={handleOpenFile} />
 					))}
 				</div>
 			)}
@@ -507,11 +520,7 @@ ToolItem.displayName = "ToolItem"
 // ==================== Хелперы ====================
 
 /** Локализованное саммари для блока исследования */
-function getLocalizedSummary(
-	items: ToolItemData[],
-	isActive: boolean,
-	t: (key: string) => string,
-): string {
+function getLocalizedSummary(items: ToolItemData[], isActive: boolean, t: (key: string) => string): string {
 	// Считаем типы тулов по toolType
 	const counts: Record<ToolType, number> = { read: 0, edit: 0, create: 0, delete: 0, cmd: 0, search: 0, web: 0 }
 

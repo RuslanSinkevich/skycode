@@ -56,8 +56,12 @@ export function useScrollBehavior(
 	const userInteractingRef = useRef(false)
 	const turnsRef = useRef(turns)
 	turnsRef.current = turns
+	// Initialised lazily on first mount so the "new turn pinning" effect doesn't fire on the
+	// very first render when a chat is reopened with pre-existing messages — that was causing
+	// the view to jump to the middle (start of the latest turn) instead of staying at the bottom.
 	const prevTurnCountRef = useRef(turns.length)
 	const prevMessagesLengthRef = useRef(messages.length)
+	const isFirstRenderRef = useRef(true)
 	const resizeObserverRef = useRef<ResizeObserver | null>(null)
 	const scrollFollowRafRef = useRef<number | null>(null)
 	const wheelTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -125,11 +129,20 @@ export function useScrollBehavior(
 			let turnIndex = -1
 			for (let t = 0; t < turns.length; t++) {
 				const turn = turns[t]
-				if (turn.userMessage.ts === targetMessage.ts) { turnIndex = t; break }
+				if (turn.userMessage.ts === targetMessage.ts) {
+					turnIndex = t
+					break
+				}
 				for (const item of turn.items) {
 					if (Array.isArray(item)) {
-						if (item.some((m) => m.ts === targetMessage.ts)) { turnIndex = t; break }
-					} else if (item.ts === targetMessage.ts) { turnIndex = t; break }
+						if (item.some((m) => m.ts === targetMessage.ts)) {
+							turnIndex = t
+							break
+						}
+					} else if (item.ts === targetMessage.ts) {
+						turnIndex = t
+						break
+					}
 				}
 				if (turnIndex !== -1) break
 			}
@@ -274,8 +287,7 @@ export function useScrollBehavior(
 			if (Date.now() < programmaticScrollUntilRef.current && !userInteractingRef.current) return
 
 			const footerPx = getFooterPixels()
-			const distanceFromContent =
-				scroller.scrollHeight - footerPx - scroller.scrollTop - scroller.clientHeight
+			const distanceFromContent = scroller.scrollHeight - footerPx - scroller.scrollTop - scroller.clientHeight
 
 			const nearBottom = distanceFromContent <= NEAR_BOTTOM_PX
 
@@ -306,6 +318,11 @@ export function useScrollBehavior(
 
 		const ro = new ResizeObserver(() => {
 			if (isPinningRef.current || disableAutoScrollRef.current) return
+			// Don't fight the user mid-gesture. Even one frame of forced scroll-down
+			// while the user is dragging upward feels like a glitch. Tool blocks
+			// (research / thinking) auto-expand and shrink under the user's hand,
+			// so this guard matters for them in particular.
+			if (userInteractingRef.current) return
 
 			const curHeight = scroller.scrollHeight
 			const prevHeight = prevScrollHeightRef.current
@@ -343,9 +360,36 @@ export function useScrollBehavior(
 		prevTurnCountRef.current = curTurnCount
 		prevMessagesLengthRef.current = curMsgLen
 
+		// First render: chat is being (re)opened with pre-existing history.
+		// Don't pin to the latest turn (that's how we used to land in the middle).
+		// Instead, jump to the bottom on the next frame so the user sees the live
+		// area, then mark refs as initialised. We wait one rAF for the DOM to lay out.
+		if (isFirstRenderRef.current) {
+			isFirstRenderRef.current = false
+			const scroller = scrollerRef.current
+			if (scroller) {
+				requestAnimationFrame(() => {
+					const sc = scrollerRef.current
+					if (!sc) return
+					const maxScroll = getContentMaxScroll(sc)
+					sc.scrollTop = maxScroll
+					prevScrollHeightRef.current = sc.scrollHeight
+				})
+			}
+			return
+		}
+
 		if (curMsgLen <= prevMsgLen) return
 
 		if (curTurnCount > prevTurnCount) {
+			// If the user has already scrolled away from the live area, do NOT yank them
+			// back to the new turn — that's the "research tool throws me to the bottom"
+			// complaint. They'll see the scroll-to-bottom button instead.
+			if (disableAutoScrollRef.current) {
+				setShowScrollToBottom(true)
+				return
+			}
+
 			const scroller = scrollerRef.current
 			if (!scroller) return
 
@@ -354,9 +398,7 @@ export function useScrollBehavior(
 
 			// Wait for DOM to render the new turn element
 			requestAnimationFrame(() => {
-				const lastTurnEl = scroller.querySelector(
-					`[data-turn-index="${curTurnCount - 1}"]`,
-				) as HTMLElement | null
+				const lastTurnEl = scroller.querySelector(`[data-turn-index="${curTurnCount - 1}"]`) as HTMLElement | null
 
 				if (lastTurnEl) {
 					programmaticScrollUntilRef.current = Date.now() + 200

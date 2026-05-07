@@ -230,15 +230,33 @@
   - Убрана зависимость от серверного бэкенда и авторизации
   - Подробный план: [implementation/IMPL-15-local-web-tools.md](./implementation/IMPL-15-local-web-tools.md)
 
+- [x] **Inline Edit (Ctrl+Shift+K)** — IMPL-09 ✅ (2026-04)
+  - Редактирование выделенного кода без чата
+  - `core/inline-edit/InlineEditController.ts`: компактный prompt (file path, language, before/after, selection, instruction), стрим из ApiHandler в `DiffSystem.replaceLines()`
+  - Команда `skycode.inlineEdit`, биндинг `Ctrl+Shift+K` / `Cmd+Shift+K`
+  - Использует ту же DiffSystem (Accept/Reject inline)
+
+- [x] **Workflow Engine (multi-step)** — IMPL-14 ✅ (2026-04)
+  - `core/workflow/`: `WorkflowOrchestrator` + `WorkflowParser`, YAML-сценарии
+  - История разговора шарится между шагами
+  - UI: таб «Сценарии» в настройках, run/edit/templates
+  - `task.initiateStepLoop()` в обход полного task-loop, anti-recursion guard
+
+- [x] **Селектор локальной embedding-модели** ✅ (2026-04)
+  - `mini` (MiniLM-L12, 384d), `base` (E5-base, 768d), `large` (E5-large, 1024d)
+  - Реестр в `core/indexing/models/EmbeddingModelRegistry.ts`
+  - Авто-prefix для E5 (`query: ` / `passage: `)
+  - Скачивание `base`/`large` при первом использовании через transformers.js
+
+- [x] **Qwen Web провайдер** ✅ (2026-04)
+  - Мост к `chat.qwen.ai` через session-token (free tier; не официальный API)
+  - `core/api/providers/qwen-web.ts`, единственная точка интеграции — `case "qwen-web"` в `core/api/index.ts`
+
 - [ ] **Shell Diff Tracking** — IMPL-16 (~6-20ч)
   - Shell-команды меняют файлы молча, diff-система не видит изменения
   - Snapshot до/после + unified diff + новый тип `external_modification`
   - Accept/Reject для shell-изменений, откат через git checkout
   - Подробный план: [implementation/IMPL-16-shell-diff-tracking.md](./implementation/IMPL-16-shell-diff-tracking.md)
-
-- [ ] **Inline Edit (Ctrl+K)** — IMPL-09 (~8-16ч)
-  - Редактирование выделенного кода без чата
-  - Подробный план: [implementation/IMPL-09-inline-edit.md](./implementation/IMPL-09-inline-edit.md)
 
 - [ ] **Chat Mode** — пятый режим: чистый диалог без проактивного исследования проекта
   - Модель просто разговаривает, не лезет в файлы без явной просьбы
@@ -301,4 +319,27 @@ SwitchMode: target_mode_id, explanation
 - **Ask Mode** — read-only, исследование кода, ответы на вопросы
 - **Chat Mode** — *(запланировано)* чистый диалог, инструменты только по явной просьбе
 
-*Последнее обновление: 2026-03-10*
+*Последнее обновление: 2026-05-07*
+
+---
+
+## 2026-05-01 — Security & hardening audit
+
+- [x] Полный аудит кодовой базы (архитектура, безопасность, качество, зависимости, документация)
+- [x] SSRF-гвард (`services/browser/urlSafety.ts`) + интеграция в `UrlContentFetcher` и `WebFetchToolHandler`
+- [x] Workspace containment в `openFileRelativePath`
+- [x] Zip Slip protection в `downloadSkycodeChromium`
+- [x] Hardening webview-канала: `executeVsCodeCommand` только в Development, `updateIndexingConfig` через allowlist
+- [x] XSS-санитизация markdown (`rehype-sanitize`) и `HistoryView.highlight` (HTML escape)
+- [x] Синхронизация `onnxruntime-node` с `onnxruntime-web` (^1.24.0)
+- [x] Перенос `@playwright/test` и `@tailwindcss/vite` в `devDependencies`, удаление `tailwindcss` из runtime extension
+- [x] Полный ребрендинг ОС-идентификаторов в `product.json` (Taskbar / Dock / service names)
+- [x] `SECURITY.md` и `CHANGELOG.md` на уровне монорепы
+- [x] Обновление публичной и внутренней документации
+
+## 2026-05-07 — Документация и стабилизация
+
+- [x] Зафиксировать в публичных и внутренних доках: Inline Edit (Ctrl+Shift+K), Workflow Engine, селектор локальных embedding-моделей (mini/base/large), Qwen Web провайдер
+- [x] Обновить структуру `src/core/` (workflow, inline-edit, locks, slash-commands, commands)
+- [x] Перевести Inline Edit и Workflow из «Запланировано» в «Выполнено»
+- [x] Корневой `CHANGELOG.md`: блоки `Added` / `Fixed` для текущего цикла

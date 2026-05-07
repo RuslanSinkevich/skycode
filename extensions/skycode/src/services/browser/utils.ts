@@ -100,6 +100,18 @@ async function downloadSkycodeChromium(
 		await fs.mkdir(extractDir, { recursive: true })
 
 		const zip = new AdmZip(Buffer.from(response.data))
+		const resolvedExtractDir = path.resolve(extractDir)
+		for (const entry of zip.getEntries()) {
+			const entryName = entry.entryName.replace(/\\/g, "/")
+			if (path.isAbsolute(entryName) || entryName.includes("..")) {
+				throw new Error(`Archive contains unsafe path: ${entry.entryName}`)
+			}
+			const target = path.resolve(resolvedExtractDir, entryName)
+			const relative = path.relative(resolvedExtractDir, target)
+			if (relative.startsWith("..") || path.isAbsolute(relative)) {
+				throw new Error(`Archive entry escapes extract dir: ${entry.entryName}`)
+			}
+		}
 		zip.extractAllTo(extractDir, true)
 
 		if (os.platform() !== "win32") {

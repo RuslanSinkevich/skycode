@@ -195,7 +195,9 @@ async function initModel(msg: InitMessage): Promise<void> {
 		const { env, pipeline: createPipeline } = await import(transformersUrl)
 
 		env.allowLocalModels = true
-		env.allowRemoteModels = false
+		// If `models/<hf-id>/` is missing (not shipped with the extension), load from Hugging Face
+		// on first use. When files exist under localModelPath, they are preferred.
+		env.allowRemoteModels = true
 		env.localModelPath = modelsDir
 
 		pipeline = await createPipeline("feature-extraction", huggingFaceId)
@@ -229,6 +231,13 @@ async function computeEmbeddings(id: number, texts: string[], textType?: "query"
 			? texts.map((t) => `${textType}: ${t}`)
 			: texts
 
+		// Why per-text instead of a batched forward pass?
+		// transformers.js + WASM has unstable peak memory when batching texts of
+		// different lengths: padding to the longest text in the batch makes
+		// attention compute O(N²·B) and can OOM the worker silently on real-world
+		// inputs (Skycode itself crashed during indexing). Per-text is slower per
+		// call but predictable. Tokenization/model overhead is partially amortized
+		// because the pipeline keeps tokenizer + model warm across calls.
 		for (let i = 0; i < prefixed.length; i++) {
 			const output = await pipeline([prefixed[i]], {
 				pooling: "mean",

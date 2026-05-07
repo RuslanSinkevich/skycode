@@ -2,11 +2,11 @@ import { anthropicModels, CLAUDE_SONNET_1M_SUFFIX } from "@shared/api"
 import { Mode } from "@shared/storage/types"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
+import AnthropicModelCombobox from "../AnthropicModelCombobox"
 import { ApiKeyField } from "../common/ApiKeyField"
 import { BaseUrlField } from "../common/BaseUrlField"
 import { ContextWindowSwitcher } from "../common/ContextWindowSwitcher"
 import { ModelInfoView } from "../common/ModelInfoView"
-import { ModelSelector } from "../common/ModelSelector"
 import ThinkingBudgetSlider from "../ThinkingBudgetSlider"
 import { normalizeApiConfiguration } from "../utils/providerUtils"
 import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
@@ -17,10 +17,14 @@ export const SUPPORTED_ANTHROPIC_THINKING_MODELS = [
 	"claude-sonnet-4-20250514",
 	`claude-sonnet-4-20250514${CLAUDE_SONNET_1M_SUFFIX}`,
 	"claude-opus-4-5-20251101",
+	"claude-opus-4-7",
+	"claude-opus-4-7-1m",
 	"claude-opus-4-20250514",
 	"claude-opus-4-1-20250805",
 	"claude-sonnet-4-5-20250929",
 	`claude-sonnet-4-5-20250929${CLAUDE_SONNET_1M_SUFFIX}`,
+	"claude-sonnet-4-5@20250929",
+	`claude-sonnet-4-5@20250929${CLAUDE_SONNET_1M_SUFFIX}`,
 	"claude-haiku-4-5-20251001",
 ]
 
@@ -67,16 +71,25 @@ export const AnthropicProvider = ({ showModelOptions, isPopup, currentMode }: An
 
 			{showModelOptions && (
 				<>
-					<ModelSelector
-						label={t("provider.model")}
-						models={anthropicModels}
-						onChange={(e) =>
-							handleModeFieldChange(
-								{ plan: "planModeApiModelId", act: "actModeApiModelId" },
-								e.target.value,
-								currentMode,
-							)
+					<label className="block mb-1" htmlFor="anthropic-model-search">
+						<span className="font-medium">{t("provider.model")}</span>
+					</label>
+					<AnthropicModelCombobox
+						onModelChange={(modelId) =>
+							handleModeFieldChange({ plan: "planModeApiModelId", act: "actModeApiModelId" }, modelId, currentMode)
 						}
+						presetModelIds={Object.keys(anthropicModels)}
+						placeholder={t("provider.anthropicModelComboboxPlaceholder")}
+						selectedModelId={selectedModelId}
+					/>
+					<p className="text-xs mt-1 mb-2.5 text-(--vscode-descriptionForeground)">
+						{t("provider.anthropicModelIdHint")}
+					</p>
+
+					<ContextWindowSwitcher
+						base1mModelId="claude-opus-4-7-1m"
+						base200kModelId="claude-opus-4-7"
+						onModelChange={handleModelChange}
 						selectedModelId={selectedModelId}
 					/>
 
@@ -84,6 +97,14 @@ export const AnthropicProvider = ({ showModelOptions, isPopup, currentMode }: An
 					<ContextWindowSwitcher
 						base1mModelId={`claude-sonnet-4-5-20250929${CLAUDE_SONNET_1M_SUFFIX}`}
 						base200kModelId="claude-sonnet-4-5-20250929"
+						onModelChange={handleModelChange}
+						selectedModelId={selectedModelId}
+					/>
+
+					{/* Same model, id style used by Vertex and some third-party gateways */}
+					<ContextWindowSwitcher
+						base1mModelId={`claude-sonnet-4-5@20250929${CLAUDE_SONNET_1M_SUFFIX}`}
+						base200kModelId="claude-sonnet-4-5@20250929"
 						onModelChange={handleModelChange}
 						selectedModelId={selectedModelId}
 					/>

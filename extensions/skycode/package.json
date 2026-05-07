@@ -157,6 +157,11 @@
 				"icon": "$(trash)"
 			},
 			{
+				"command": "skycode.indexing.clearEmbeddingCache",
+				"title": "Skycode: Удалить локальные файлы модели эмбеддингов",
+				"icon": "$(cloud-download)"
+			},
+			{
 				"command": "skycode.indexing.pause",
 				"title": "Skycode: Приостановить индексацию",
 				"icon": "$(debug-pause)"
@@ -544,23 +549,23 @@
 					"default": false,
 					"description": "Блокировать применение изменений если они добавляют синтаксические ошибки (рекомендуется)"
 				},
-			"skycode.useSimplifiedEditTools": {
-				"type": "boolean",
-				"default": false,
-				"description": "Использовать упрощённые инструменты редактирования (deleteBlock, replaceText). Управляется через 'Облегчённый режим' в настройках провайдера."
-			},
-			"skycode.blockLargeFileRewrites": {
-				"type": "boolean",
-				"default": false,
-				"description": "Блокировать write_to_file если изменяется слишком большая часть файла. По умолчанию выключено — модель сама решает."
-			},
-			"skycode.largeRewriteThreshold": {
-				"type": "number",
-				"default": 0.6,
-				"minimum": 0.1,
-				"maximum": 1.0,
-				"description": "Порог (0.1–1.0) для blockLargeFileRewrites. Например 0.6 = блокировка при изменении >60% строк файла."
-			},
+				"skycode.useSimplifiedEditTools": {
+					"type": "boolean",
+					"default": false,
+					"description": "Использовать упрощённые инструменты редактирования (deleteBlock, replaceText). Управляется через 'Облегчённый режим' в настройках провайдера."
+				},
+				"skycode.blockLargeFileRewrites": {
+					"type": "boolean",
+					"default": false,
+					"description": "Блокировать write_to_file если изменяется слишком большая часть файла. По умолчанию выключено — модель сама решает."
+				},
+				"skycode.largeRewriteThreshold": {
+					"type": "number",
+					"default": 0.6,
+					"minimum": 0.1,
+					"maximum": 1,
+					"description": "Порог (0.1–1.0) для blockLargeFileRewrites. Например 0.6 = блокировка при изменении >60% строк файла."
+				},
 				"skycode.indexing.mode": {
 					"type": "string",
 					"enum": [
@@ -576,26 +581,26 @@
 					],
 					"description": "Режим индексации кодовой базы для семантического поиска"
 				},
-			"skycode.indexing.localModel": {
-				"type": "string",
-				"enum": [
-					"mini",
-					"base",
-					"large"
-				],
-				"default": "mini",
-				"enumDescriptions": [
-					"Быстрая (~23 МБ) — базовая мультиязычная поддержка",
-					"Сбалансированная (~278 МБ) — хороший мультиязычный поиск, скачивается при первом использовании",
-					"Качественная (~562 МБ) — лучший мультиязычный поиск, скачивается при первом использовании"
-				],
-				"description": "Локальная модель эмбеддингов для индексации (mini — быстрая, base/large — лучше качество, но больше размер)"
-			},
-			"skycode.indexing.remoteApiUrl": {
-				"type": "string",
-				"default": "",
-				"description": "URL удалённого API для эмбеддингов (формат OpenAI: https://api.openai.com/v1/embeddings)"
-			},
+				"skycode.indexing.localModel": {
+					"type": "string",
+					"enum": [
+						"mini",
+						"base",
+						"large"
+					],
+					"default": "mini",
+					"enumDescriptions": [
+						"Быстрая (~23 МБ) — базовая мультиязычная поддержка",
+						"Сбалансированная (~278 МБ) — хороший мультиязычный поиск, скачивается при первом использовании",
+						"Качественная (~562 МБ) — лучший мультиязычный поиск, скачивается при первом использовании"
+					],
+					"description": "Локальная модель эмбеддингов для индексации (mini — быстрая, base/large — лучше качество, но больше размер)"
+				},
+				"skycode.indexing.remoteApiUrl": {
+					"type": "string",
+					"default": "",
+					"description": "URL удалённого API для эмбеддингов (формат OpenAI: https://api.openai.com/v1/embeddings)"
+				},
 				"skycode.indexing.remoteApiKey": {
 					"type": "string",
 					"default": "",
@@ -711,6 +716,8 @@
 		"@biomejs/biome": "^2.1.4",
 		"@bufbuild/buf": "^1.54.0",
 		"@changesets/cli": "^2.27.12",
+		"@playwright/test": "^1.55.1",
+		"@tailwindcss/vite": "^4.1.14",
 		"@types/adm-zip": "^0.5.7",
 		"@types/better-sqlite3": "^7.6.13",
 		"@types/chai": "^5.0.1",
@@ -754,8 +761,8 @@
 		"typescript": "^5.4.5"
 	},
 	"dependencies": {
-		"@anthropic-ai/sdk": "^0.37.0",
-		"@anthropic-ai/vertex-sdk": "^0.6.4",
+		"@anthropic-ai/sdk": "0.92.0",
+		"@anthropic-ai/vertex-sdk": "0.16.0",
 		"@aws-sdk/client-bedrock-runtime": "^3.922.0",
 		"@aws-sdk/credential-providers": "^3.922.0",
 		"@azure/identity": "^4.13.0",
@@ -786,12 +793,10 @@
 		"@opentelemetry/sdk-trace-base": "^2.1.0",
 		"@opentelemetry/sdk-trace-node": "^1.30.1",
 		"@opentelemetry/semantic-conventions": "^1.37.0",
-		"@playwright/test": "^1.55.1",
 		"@sap-ai-sdk/ai-api": "^2.1.0",
 		"@sap-ai-sdk/orchestration": "^2.1.0",
 		"@sap-cloud-sdk/connectivity": "^4.2.0",
 		"@streamparser/json": "^0.0.22",
-		"@tailwindcss/vite": "^4.1.14",
 		"@types/uuid": "^10.0.0",
 		"@vscode/codicons": "^0.0.36",
 		"adm-zip": "^0.5.16",
@@ -823,7 +828,7 @@
 		"nice-grpc": "^2.1.12",
 		"node-machine-id": "^1.1.12",
 		"ollama": "^0.5.13",
-		"onnxruntime-node": "^1.14.0",
+		"onnxruntime-node": "^1.24.0",
 		"onnxruntime-web": "^1.24.1",
 		"open": "^10.1.2",
 		"open-graph-scraper": "^6.9.0",
@@ -843,7 +848,6 @@
 		"shell-quote": "^1.8.3",
 		"simple-git": "^3.27.0",
 		"strip-ansi": "^7.1.2",
-		"tailwindcss": "^4.1.14",
 		"tree-sitter-wasms": "^0.1.11",
 		"ts-morph": "^25.0.1",
 		"turndown": "^7.2.0",

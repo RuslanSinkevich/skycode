@@ -4,6 +4,7 @@ import * as cheerio from "cheerio"
 import { Browser, Page } from "puppeteer-core"
 import TurndownService from "turndown"
 import * as vscode from "vscode"
+import { assertSafeUrl } from "./urlSafety"
 import { ensureChromiumExists } from "./utils"
 
 export class UrlContentFetcher {
@@ -46,12 +47,13 @@ export class UrlContentFetcher {
 		if (!this.browser || !this.page) {
 			throw new Error("Browser not initialized")
 		}
+		const safeUrl = assertSafeUrl(url)
 		/*
 		- networkidle2 is equivalent to playwright's networkidle where it waits until there are no more than 2 network connections for at least 500 ms.
 		- domcontentloaded is when the basic DOM is loaded
 		this should be sufficient for most doc sites
 		*/
-		await this.page.goto(url, {
+		await this.page.goto(safeUrl.toString(), {
 			timeout: 10_000,
 			waitUntil: ["domcontentloaded", "networkidle2"],
 		})

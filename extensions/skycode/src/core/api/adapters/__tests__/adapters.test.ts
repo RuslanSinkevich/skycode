@@ -1,3 +1,4 @@
+import { DIRECT_TOOL_USE_CALLER } from "@/shared/messages/message-interchange"
 import { describe, it } from "mocha"
 import "should"
 import { Anthropic } from "@anthropic-ai/sdk"
@@ -400,7 +401,10 @@ EOF`,
 					if (Array.isArray(message.content)) {
 						for (const block of message.content) {
 							if (block.type === "tool_use") {
-								toolUseBlocks.push(block)
+								toolUseBlocks.push({
+									...block,
+									caller: block.caller ?? DIRECT_TOOL_USE_CALLER,
+								})
 							}
 						}
 					}
@@ -910,7 +914,10 @@ EOF`,
 					if (Array.isArray(message.content)) {
 						for (const block of message.content) {
 							if (block.type === "tool_use") {
-								toolUseBlocks.push(block)
+								toolUseBlocks.push({
+									...block,
+									caller: block.caller ?? DIRECT_TOOL_USE_CALLER,
+								})
 							}
 						}
 					}

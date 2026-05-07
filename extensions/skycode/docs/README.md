@@ -49,6 +49,10 @@ AI-ассистент для разработки, интегрированны�
 ### VS Code Fork
 - [VSCODE_FORK_PATCHES.md](./VSCODE_FORK_PATCHES.md) — Патчи ядра VS Code
 
+### Безопасность и история
+- [../../../../SECURITY.md](../../../../SECURITY.md) — политика безопасности (как сообщать о уязвимостях)
+- [../../../../CHANGELOG.md](../../../../CHANGELOG.md) — история изменений (Keep a Changelog)
+
 ### Правила для AI агента
 - [agent-rules/general.md](./agent-rules/general.md) — Общие правила
 - [agent-rules/network.md](./agent-rules/network.md) — Сетевые правила
@@ -88,4 +92,4 @@ skycode/
 
 ## Лицензия
 
-Проприетарная лицензия. Все права защищены.
+[Apache License 2.0](../../../LICENSE). VS Code-основа — MIT (`../../../LICENSE.txt`).

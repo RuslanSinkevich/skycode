@@ -2,7 +2,7 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import * as diff from "diff"
 import * as path from "path"
 import { Mode } from "@/shared/storage/types"
-import { SkycodeIgnoreController, LOCK_TEXT_SYMBOL } from "../ignore/SkycodeIgnoreController"
+import { LOCK_TEXT_SYMBOL, SkycodeIgnoreController } from "../ignore/SkycodeIgnoreController"
 
 export const formatResponse = {
 	duplicateFileReadNotice: () =>

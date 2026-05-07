@@ -239,8 +239,31 @@ function isQuantizedModel(modelId: string): boolean {
 	return /[_-](q[2-8][_-]|gguf|gptq|awq|exl2|fp16|fp8|int[48])/.test(modelId)
 }
 
-export function getSessionLimitsForModel(modelId: string, providerInfo?: ApiProviderInfo): WeakModelSessionLimits {
+export interface CustomSessionBudgetSettings {
+	sessionBudgetMode: "auto" | "custom"
+	customMaxToolCallsPerTurn: number
+	customMaxConsecutiveReadOnlyTools: number
+	customForceCompactAfterSteps: number
+}
+
+export function getSessionLimitsForModel(
+	modelId: string,
+	providerInfo?: ApiProviderInfo,
+	customSettings?: CustomSessionBudgetSettings,
+): WeakModelSessionLimits {
 	const tier = getModelCapabilityTier(modelId, providerInfo)
+
+	// If user set custom mode, merge custom values over the tier defaults
+	if (customSettings?.sessionBudgetMode === "custom") {
+		const base = MODEL_SESSION_LIMITS[tier]
+		return {
+			maxToolCallsPerTurn: customSettings.customMaxToolCallsPerTurn,
+			maxConsecutiveReadOnlyTools: customSettings.customMaxConsecutiveReadOnlyTools,
+			forceCompactAfterSteps: customSettings.customForceCompactAfterSteps,
+			contextWindowUsageRatio: base.contextWindowUsageRatio,
+		}
+	}
+
 	return MODEL_SESSION_LIMITS[tier]
 }
 

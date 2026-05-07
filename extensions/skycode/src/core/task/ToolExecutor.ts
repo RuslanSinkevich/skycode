@@ -571,7 +571,13 @@ export class ToolExecutor {
 			return
 		}
 
-		const limits = getSessionLimitsForModel(modelId, providerInfo)
+		const customSettings = {
+			sessionBudgetMode: this.stateManager.getGlobalSettingsKey("sessionBudgetMode"),
+			customMaxToolCallsPerTurn: this.stateManager.getGlobalSettingsKey("customMaxToolCallsPerTurn"),
+			customMaxConsecutiveReadOnlyTools: this.stateManager.getGlobalSettingsKey("customMaxConsecutiveReadOnlyTools"),
+			customForceCompactAfterSteps: this.stateManager.getGlobalSettingsKey("customForceCompactAfterSteps"),
+		}
+		const limits = getSessionLimitsForModel(modelId, providerInfo, customSettings)
 
 		this.taskState.turnToolCallCount++
 

@@ -1,4 +1,5 @@
 import { Anthropic } from "@anthropic-ai/sdk"
+import { isBase64ImageSource } from "@/shared/messages/message-interchange"
 import {
 	type ContentBlock as BedrockContentBlock,
 	ConversationRole as BedrockConversationRole,
@@ -301,12 +302,16 @@ namespace Gemini {
 				if (block.type === "text") {
 					parts.push({ text: block.text })
 				} else if (block.type === "image") {
-					parts.push({
-						inlineData: {
-							mimeType: block.source.media_type,
-							data: block.source.data,
-						},
-					})
+					if (isBase64ImageSource(block.source)) {
+						parts.push({
+							inlineData: {
+								mimeType: block.source.media_type,
+								data: block.source.data,
+							},
+						})
+					} else {
+						parts.push({ text: `[image url: ${block.source.url}]` })
+					}
 				}
 			}
 		}

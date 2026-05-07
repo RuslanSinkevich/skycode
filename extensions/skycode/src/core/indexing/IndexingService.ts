@@ -22,13 +22,17 @@ import type { EmbeddingProvider, ChunkRow } from "./types"
 import { IndexStorage } from "./storage/IndexStorage"
 import { vectorSearch } from "./storage/VectorSearch"
 
-/** Batch size for embedding requests */
+/** Batch size for embedding requests. Larger batches give better WASM throughput
+ * because tokenization and model init overhead is amortized. 32 was chosen to fit
+ * comfortably in the WASM memory page for MiniLM-L12 @ 2000 chars/chunk. */
 const EMBED_BATCH_SIZE = 32
 
-/** Delay between batches to not hog CPU (ms) */
-const BATCH_DELAY_MS = 50
 /** Debounce for file watcher change bursts (ms) */
 const FILE_CHANGE_DEBOUNCE_MS = 700
+/** Yield to the event loop between batches (ms). Set to 0 because embedding runs in
+ * a Worker Thread — the extension host is not blocked by the compute itself.
+ * A minimal `setImmediate`-style yield lets FileSystemWatcher and UI events interleave. */
+const BATCH_YIELD_MS = 0
 /** Resolve current embedding model HuggingFace ID from config */
 function getCurrentEmbeddingModel(config: IndexingConfig): string {
 	if (config.mode === "local") {
@@ -118,7 +122,7 @@ export class IndexingService implements vscode.Disposable {
 
 		if (newMode === "off") {
 			this.stop()
-		} else if (oldMode === "off" && newMode !== "off") {
+		} else if (oldMode === "off") {
 			void this.clearAndReindex()
 		} else if (oldMode !== newMode) {
 			void this.clearAndReindex()
@@ -355,7 +359,9 @@ export class IndexingService implements vscode.Disposable {
 				files.push(file)
 				walkCount++
 				if (walkCount % 100 === 0) {
-					await new Promise((r) => setTimeout(r, 1))
+					// setImmediate yields faster than setTimeout(..,1) which on Windows
+					// can round up to ~15ms due to the system timer granularity.
+					await new Promise((r) => setImmediate(r))
 				}
 			}
 
@@ -394,11 +400,12 @@ export class IndexingService implements vscode.Disposable {
 					// Skip unreadable files
 				}
 
-				// Emit progress and yield every 20 files
+				// Emit progress and yield every 20 files. setImmediate yields faster than
+				// setTimeout(..,1) which can round to ~15ms on Windows.
 				if (i % 20 === 0) {
 					this.progress.chunksTotal = allChunks.length
 					this.emitProgress()
-					await new Promise((r) => setTimeout(r, 1))
+					await new Promise((r) => setImmediate(r))
 				}
 			}
 
@@ -409,6 +416,10 @@ export class IndexingService implements vscode.Disposable {
 
 			// Phase 4: Embed in batches
 			console.log("[Skycode Indexing] Phase 4: Embedding", allChunks.length, "chunks in batches of", EMBED_BATCH_SIZE)
+			// If N consecutive batches fail (typically means model init is broken),
+			// abort the whole run instead of spamming thousands of identical errors.
+			const MAX_CONSECUTIVE_EMBED_FAILURES = 5
+			let consecutiveFailures = 0
 			for (let i = 0; i < allChunks.length; i += EMBED_BATCH_SIZE) {
 				if (token.isCancellationRequested) return
 				while (this.paused) {
@@ -422,10 +433,19 @@ export class IndexingService implements vscode.Disposable {
 				let embeddings: number[][]
 				try {
 					embeddings = await this.provider.embed(texts, "passage")
+					consecutiveFailures = 0
 				} catch (err: any) {
+					consecutiveFailures++
 					console.error("[Skycode Indexing] Embedding error at batch", i, ":", err)
-					// Don't fail entire indexing - skip this batch and continue
 					console.warn(`[Skycode Indexing] Skipping batch ${i} (${batch.length} chunks) due to embedding error`)
+					if (consecutiveFailures >= MAX_CONSECUTIVE_EMBED_FAILURES) {
+						const msg = `Embedding failed on ${consecutiveFailures} consecutive batches — aborting indexing. ${err?.message || err}`
+						console.error("[Skycode Indexing]", msg)
+						this.progress.status = "error"
+						this.progress.errorMessage = msg
+						this.emitProgress()
+						return
+					}
 					continue
 				}
 
@@ -468,8 +488,14 @@ export class IndexingService implements vscode.Disposable {
 				}
 				this.emitProgress()
 
-				// Yield to event loop
-				await new Promise((r) => setTimeout(r, BATCH_DELAY_MS))
+				// Yield minimally to let FileSystemWatcher/UI events interleave. The worker
+				// thread is running embedding compute on its own thread, so we don't need
+				// a throttle delay here — just a setImmediate-style yield.
+				if (BATCH_YIELD_MS > 0) {
+					await new Promise((r) => setTimeout(r, BATCH_YIELD_MS))
+				} else {
+					await new Promise((r) => setImmediate(r))
+				}
 			}
 
 			// Phase 5: Finalize
@@ -545,6 +571,24 @@ export class IndexingService implements vscode.Disposable {
 	}
 
 	/**
+	 * Delete `extensions/skycode/models/` (bundled / cached ONNX trees). Next indexing run
+	 * will re-fetch from Hugging Face if files are missing (requires network unless models are re-copied).
+	 */
+	async clearLocalEmbeddingCache(): Promise<void> {
+		this.stop()
+		const modelsDir = path.join(this.extensionPath, "models")
+		try {
+			await fs.promises.rm(modelsDir, { recursive: true, force: true })
+		} catch {
+			// missing or locked — still tell user to retry reindex
+		}
+		void vscode.window.showInformationMessage(
+			// allow-any-unicode-next-line
+			"Skycode: папка локальных моделей эмбеддингов (models/) очищена. Запустите переиндексацию; при отсутствии файлов модель загрузится с Hugging Face (нужен интернет).",
+		)
+	}
+
+	/**
 	 * Search the index with a text query.
 	 * The query is embedded using the current provider, then compared against all chunks.
 	 */
@@ -598,13 +642,16 @@ export class IndexingService implements vscode.Disposable {
 	/**
 	 * Handle a command from the webview or command palette.
 	 */
-	async handleCommand(command: "reindex" | "clear" | "pause" | "resume"): Promise<void> {
+	async handleCommand(command: "reindex" | "clear" | "pause" | "resume" | "clearEmbeddingCache"): Promise<void> {
 		switch (command) {
 			case "reindex":
 				await this.clearAndReindex()
 				break
 			case "clear":
 				await this.clearIndex()
+				break
+			case "clearEmbeddingCache":
+				await this.clearLocalEmbeddingCache()
 				break
 			case "pause":
 				this.pause()

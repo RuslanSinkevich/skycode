@@ -13,7 +13,7 @@ export interface WebviewMessage {
 		value: any
 	}
 	// Indexing: execute command
-	indexingCommandAction?: "reindex" | "clear" | "pause" | "resume"
+	indexingCommandAction?: "reindex" | "clear" | "pause" | "resume" | "clearEmbeddingCache"
 }
 
 export type GrpcRequest = {

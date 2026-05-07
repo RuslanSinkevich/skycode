@@ -116,29 +116,29 @@ export async function activate(context: vscode.ExtensionContext) {
 	)
 
 	// [SKYCODE-SKYCODE] Legacy NativeDiffManager - ОТКЛЮЧЕН
-    // Используем только DiffSystem V2 (Proposed API - editorInsets)
-    // const nativeDiffManager = new NativeDiffManager(context);
+	// Используем только DiffSystem V2 (Proposed API - editorInsets)
+	// const nativeDiffManager = new NativeDiffManager(context);
 
-    // [SKYCODE-SKYCODE] Initialize DiffSystem V2 (Proposed API - editorInsets)
-    // clearOnStartup = false — сохраняем pending diffs между перезапусками
-    let diffSystemV2: DiffSystem | null = null;
-    try {
-        diffSystemV2 = await initDiffSystem(context, false);
-        console.log('[Skycode] DiffSystem V2 initialized successfully (cleared old diffs)');
-    } catch (error) {
-        console.warn('[Skycode] DiffSystem V2 failed to initialize (Proposed API may not be available):', error);
-    }
+	// [SKYCODE-SKYCODE] Initialize DiffSystem V2 (Proposed API - editorInsets)
+	// clearOnStartup = false — сохраняем pending diffs между перезапусками
+	let diffSystemV2: DiffSystem | null = null
+	try {
+		diffSystemV2 = await initDiffSystem(context, false)
+		console.log("[Skycode] DiffSystem V2 initialized successfully (cleared old diffs)")
+	} catch (error) {
+		console.warn("[Skycode] DiffSystem V2 failed to initialize (Proposed API may not be available):", error)
+	}
 
-    const webview = (await initialize(context)) as VscodeWebviewProvider
+	const webview = (await initialize(context)) as VscodeWebviewProvider
 
-    // Sync pending changes count to webview when Accept/Reject happens in editor
-    if (diffSystemV2) {
-        context.subscriptions.push(
-            getPendingChangesStorage().onDidChange(() => {
-                webview.controller.postStateToWebview();
-            })
-        );
-    }
+	// Sync pending changes count to webview when Accept/Reject happens in editor
+	if (diffSystemV2) {
+		context.subscriptions.push(
+			getPendingChangesStorage().onDidChange(() => {
+				webview.controller.postStateToWebview()
+			}),
+		)
+	}
 
 	// [SKYCODE-SKYCODE] Initialize Codebase Indexing System
 	let indexingService: import("./core/indexing").IndexingService | null = null
@@ -291,8 +291,8 @@ export async function activate(context: vscode.ExtensionContext) {
 	claiming an uri-scheme for which your provider then returns text contents. The scheme must be
 	provided when registering a provider and cannot change afterwards.
 	- Note how the provider doesn't create uris for virtual documents - its role is to provide contents
-	 given such an uri. In return, content providers are wired into the open document logic so that
-	 providers are always considered.
+	given such an uri. In return, content providers are wired into the open document logic so that
+	providers are always considered.
 	https://code.visualstudio.com/api/extension-guides/virtual-documents
 	*/
 	const diffContentProvider = new (class implements vscode.TextDocumentContentProvider {
@@ -647,6 +647,9 @@ ${ctx.cellJson || "{}"}
 		vscode.commands.registerCommand("skycode.indexing.resume", () => {
 			if (indexingService) indexingService.handleCommand("resume")
 		}),
+		vscode.commands.registerCommand("skycode.indexing.clearEmbeddingCache", async () => {
+			if (indexingService) await indexingService.handleCommand("clearEmbeddingCache")
+		}),
 	)
 
 	// [SKYCODE-SKYCODE] Indexing status bar item
@@ -660,26 +663,37 @@ ${ctx.cellJson || "{}"}
 				case "indexing": {
 					const phase = progress.phase ?? "idle"
 					if (phase === "loading_model") {
+						// allow-any-unicode-next-line
 						indexingStatusBar.text = `$(sync~spin) Skycode: Загрузка модели...`
+						// allow-any-unicode-next-line
 						indexingStatusBar.tooltip = "Загружается ML-модель для эмбеддинга"
 					} else if (phase === "embedding") {
 						const pct = progress.chunksTotal > 0 ? Math.round((progress.chunksIndexed / progress.chunksTotal) * 100) : 0
+						// allow-any-unicode-next-line
 						indexingStatusBar.text = `$(sync~spin) Skycode: Эмбеддинг ${progress.chunksIndexed}/${progress.chunksTotal} (${pct}%)`
+						// allow-any-unicode-next-line
 						indexingStatusBar.tooltip = `Эмбеддинг чанков: ${progress.chunksIndexed}/${progress.chunksTotal}`
 					} else if (phase === "saving") {
+						// allow-any-unicode-next-line
 						indexingStatusBar.text = `$(sync~spin) Skycode: Сохранение индекса...`
+						// allow-any-unicode-next-line
 						indexingStatusBar.tooltip = "Запись индекса на диск"
 					} else {
+						// allow-any-unicode-next-line
 						indexingStatusBar.text = `$(sync~spin) Skycode: Обход ${progress.filesIndexed}/${progress.filesTotal}`
 						indexingStatusBar.tooltip = progress.currentFile
+							// allow-any-unicode-next-line
 							? `Индексируется: ${progress.currentFile}`
+							// allow-any-unicode-next-line
 							: "Обход файлов..."
 					}
 					indexingStatusBar.show()
 					break
 				}
 				case "complete":
+					// allow-any-unicode-next-line
 					indexingStatusBar.text = `$(database) Skycode: ${progress.chunksIndexed} чанков`
+					// allow-any-unicode-next-line
 					indexingStatusBar.tooltip = "Индекс кодовой базы готов. Нажмите для переиндексации."
 					indexingStatusBar.show()
 					// Hide after 10 seconds if complete
@@ -690,12 +704,16 @@ ${ctx.cellJson || "{}"}
 					}, 10000)
 					break
 				case "error":
+					// allow-any-unicode-next-line
 					indexingStatusBar.text = `$(error) Skycode: Ошибка индексации`
+					// allow-any-unicode-next-line
 					indexingStatusBar.tooltip = progress.errorMessage || "Произошла ошибка при индексации"
 					indexingStatusBar.show()
 					break
 				case "paused":
+					// allow-any-unicode-next-line
 					indexingStatusBar.text = `$(debug-pause) Skycode: Пауза`
+					// allow-any-unicode-next-line
 					indexingStatusBar.tooltip = "Индексация приостановлена"
 					indexingStatusBar.show()
 					break

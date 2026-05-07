@@ -61,6 +61,8 @@ import {
 	openRouterDefaultModelInfo,
 	qwenCodeDefaultModelId,
 	qwenCodeModels,
+	qwenWebDefaultModelId,
+	qwenWebModels,
 	requestyDefaultModelId,
 	requestyDefaultModelInfo,
 	sambanovaDefaultModelId,
@@ -109,6 +111,8 @@ export function getModelsForProvider(
 			return apiConfiguration?.qwenApiLine === "china" ? mainlandQwenModels : internationalQwenModels
 		case "qwen-code":
 			return qwenCodeModels
+		case "qwen-web":
+			return qwenWebModels
 		case "doubao":
 			return doubaoModels
 		case "mistral":
@@ -185,12 +189,20 @@ export function normalizeApiConfiguration(
 
 	const modelId = currentMode === "plan" ? apiConfiguration?.planModeApiModelId : apiConfiguration?.actModeApiModelId
 
-	const getProviderData = (models: Record<string, ModelInfo>, defaultId: string) => {
+	const getProviderData = (
+		models: Record<string, ModelInfo>,
+		defaultId: string,
+		options?: { preserveUnknownModelId?: boolean },
+	) => {
 		let selectedModelId: string
 		let selectedModelInfo: ModelInfo
 		if (modelId && modelId in models) {
 			selectedModelId = modelId
 			selectedModelInfo = models[modelId]
+		} else if (modelId && options?.preserveUnknownModelId) {
+			// Custom / proxy model id not in the built-in catalog — still send to API; use default for UI metadata only
+			selectedModelId = modelId
+			selectedModelInfo = models[defaultId]
 		} else {
 			selectedModelId = defaultId
 			selectedModelInfo = models[defaultId]
@@ -204,7 +216,7 @@ export function normalizeApiConfiguration(
 
 	switch (provider) {
 		case "anthropic":
-			return getProviderData(anthropicModels, anthropicDefaultModelId)
+			return getProviderData(anthropicModels, anthropicDefaultModelId, { preserveUnknownModelId: true })
 		case "claude-code":
 			return getProviderData(claudeCodeModels, claudeCodeDefaultModelId)
 		case "bedrock":
@@ -248,6 +260,8 @@ export function normalizeApiConfiguration(
 			return getProviderData(qwenModels, qwenDefaultId)
 		case "qwen-code":
 			return getProviderData(qwenCodeModels, qwenCodeDefaultModelId)
+		case "qwen-web":
+			return getProviderData(qwenWebModels, qwenWebDefaultModelId)
 		case "doubao":
 			return getProviderData(doubaoModels, doubaoDefaultModelId)
 		case "mistral":
@@ -500,7 +514,7 @@ export function normalizeApiConfiguration(
 						: nousResearchModels[nousResearchDefaultModelId],
 			}
 		default:
-			return getProviderData(anthropicModels, anthropicDefaultModelId)
+			return getProviderData(anthropicModels, anthropicDefaultModelId, { preserveUnknownModelId: true })
 	}
 }
 

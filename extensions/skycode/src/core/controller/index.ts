@@ -1,5 +1,6 @@
 import type { Anthropic } from "@anthropic-ai/sdk"
 import { buildApiHandler } from "@core/api"
+import { sanitizeTruncatedPlaceholder } from "@shared/proto-conversions/skycode-message"
 import { getHooksEnabledSafe } from "@core/hooks/hooks-utils"
 import { tryAcquireTaskLockWithRetry } from "@core/task/TaskLockUtils"
 import { detectWorkspaceRoots } from "@core/workspace/detection"
@@ -1059,7 +1060,7 @@ export class Controller {
 		const autoCondenseThreshold = this.stateManager.getGlobalSettingsKey("autoCondenseThreshold")
 
 		const currentTaskItem = this.task?.taskId ? (taskHistory || []).find((item) => item.id === this.task?.taskId) : undefined
-		const skycodeMessages = this.task?.messageStateHandler.getSkycodeMessages() || []
+		const skycodeMessages = (this.task?.messageStateHandler.getSkycodeMessages() || []).map(sanitizeTruncatedPlaceholder)
 		const currentSessionId = this.sessionManager.activeSessionId ?? undefined
 		// [SKYCODE] TEMPORARILY DISABLED — legacy Cline checkpoint error message
 		const checkpointManagerErrorMessage = undefined // was: this.task?.taskState.checkpointManagerErrorMessage
@@ -1201,18 +1202,29 @@ export class Controller {
 					const providerId = (isPlan ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 					const modeKey = isPlan ? "planMode" : "actMode"
 					const providerModelSuffix: Record<string, string> = {
-						openrouter: "OpenRouterModelId", skycode: "OpenRouterModelId",
-						openai: "OpenAiModelId", ollama: "OllamaModelId",
-						lmstudio: "LmStudioModelId", litellm: "LiteLlmModelId",
-						requesty: "RequestyModelId", together: "TogetherModelId",
-						fireworks: "FireworksModelId", groq: "GroqModelId",
-						baseten: "BasetenModelId", huggingface: "HuggingFaceModelId",
-						sapaicore: "SapAiCoreModelId", "huawei-cloud-maas": "HuaweiCloudMaasModelId",
-						oca: "OcaModelId", aihubmix: "AihubmixModelId",
-						hicap: "HicapModelId", nousResearch: "NousResearchModelId",
+						openrouter: "OpenRouterModelId",
+						skycode: "OpenRouterModelId",
+						openai: "OpenAiModelId",
+						ollama: "OllamaModelId",
+						lmstudio: "LmStudioModelId",
+						litellm: "LiteLlmModelId",
+						requesty: "RequestyModelId",
+						together: "TogetherModelId",
+						fireworks: "FireworksModelId",
+						groq: "GroqModelId",
+						baseten: "BasetenModelId",
+						huggingface: "HuggingFaceModelId",
+						sapaicore: "SapAiCoreModelId",
+						"huawei-cloud-maas": "HuaweiCloudMaasModelId",
+						oca: "OcaModelId",
+						aihubmix: "AihubmixModelId",
+						hicap: "HicapModelId",
+						nousResearch: "NousResearchModelId",
 						"vercel-ai-gateway": "VercelAiGatewayModelId",
 					}
-					const configModelId = (apiConfig as Record<string, unknown>)[`${modeKey}${providerModelSuffix[providerId] ?? "ApiModelId"}`] as string | undefined
+					const configModelId = (apiConfig as Record<string, unknown>)[
+						`${modeKey}${providerModelSuffix[providerId] ?? "ApiModelId"}`
+					] as string | undefined
 					const modelId = this.task?.api?.getModel()?.id ?? configModelId ?? "unknown"
 					const providerInfo = { model: { id: modelId, info: {} as ModelInfo }, providerId, mode }
 					const tier = getModelCapabilityTier(modelId, providerInfo)
@@ -1222,7 +1234,13 @@ export class Controller {
 						providerInfo,
 						lightweightMode: this.stateManager.getGlobalSettingsKey("lightweightMode") === true,
 					} as any)
-					return { variant, tier, maxToolCalls: limits.maxToolCallsPerTurn, maxReadOnly: limits.maxConsecutiveReadOnlyTools, compactEvery: limits.forceCompactAfterSteps }
+					return {
+						variant,
+						tier,
+						maxToolCalls: limits.maxToolCallsPerTurn,
+						maxReadOnly: limits.maxConsecutiveReadOnlyTools,
+						compactEvery: limits.forceCompactAfterSteps,
+					}
 				} catch {
 					return undefined
 				}

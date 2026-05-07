@@ -1,5 +1,6 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
+import { isBase64ImageSource } from "@/shared/messages/message-interchange"
 
 /**
  * Converts Anthropic messages to OpenAI format and merges consecutive messages with the same role.
@@ -26,9 +27,12 @@ export function convertToR1Format(messages: Anthropic.Messages.MessageParam[]): 
 				}
 				if (part.type === "image") {
 					hasImages = true
+					const url = isBase64ImageSource(part.source)
+						? `data:${part.source.media_type};base64,${part.source.data}`
+						: part.source.url
 					imageParts.push({
 						type: "image_url",
-						image_url: { url: `data:${part.source.media_type};base64,${part.source.data}` },
+						image_url: { url },
 					})
 				}
 			})

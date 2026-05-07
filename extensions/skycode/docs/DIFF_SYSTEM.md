@@ -179,20 +179,20 @@ Overlapping/adjacent hunks auto-reject'ятся bottom-to-top перед при�
 
 ## Тесты
 
-**217 тестов** покрывают всю DiffSystem:
+Покрытие Vitest по DiffSystem (9 suites внутри `src/core/diff-v2/`, плюс смежные handlers/session).
 
-| Компонент | Тесты |
-|-----------|-------|
-| SystemEditGuard | 10 |
-| ApprovalGate | 18 |
-| PositionTracker | 13 |
-| DiffStore | 36 |
-| FileSnapshotStorage | 27 |
-| HunkApplier | 26 (включая bad AI input) |
-| HunkReverter | 22 |
-| DiffSystem (интеграция) | 37 |
-| WriteToFileToolHandler | 17 |
-| KeyboardNavigation | 11 |
+| Компонент | Suite | Тесты |
+|-----------|-------|-------|
+| SystemEditGuard | `SystemEditGuard.test.ts` | 10 |
+| PositionTracker | `PositionTracker.test.ts` | 13 |
+| DiffStore | `DiffStore.test.ts` | 36 |
+| FileSnapshotStorage | `FileSnapshotStorage.test.ts` | 27 |
+| HunkApplier | `HunkApplier.test.ts` | 26 (включая bad AI input) |
+| HunkReverter | `HunkReverter.test.ts` | 25 |
+| DiffSystem (интеграция) | `DiffSystem.test.ts` + `DiffSystem.validateSyntax.test.ts` | 56 |
+| KeyboardNavigation | `KeyboardNavigation.test.ts` | 11 |
+| WriteToFileToolHandler | `task/tools/handlers/__tests__/WriteToFileToolHandler.test.ts` | 17 |
+| ApprovalGate | `session/ApprovalGate.test.ts` | 18 |
 
 Запуск: `npm run test:unit -- --grep "DiffSystem|DiffStore|Hunk|Snapshot|Position|Guard|Gate|Navigation|WriteToFile"`
 
@@ -222,4 +222,4 @@ Overlapping/adjacent hunks auto-reject'ятся bottom-to-top перед при�
 
 ---
 
-*Последнее обновление: 2026-02-24 — v4 architecture*
+*Последнее обновление: 2026-05-01 — v4 architecture*

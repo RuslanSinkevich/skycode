@@ -51,21 +51,25 @@ export class Tensor {
    * @param {[DataType, DataArray, number[]]|[import('onnxruntime-common').Tensor]} args
    */
   constructor(...args) {
+    // [SKYCODE] onnxruntime-common 1.25+ exposes `location` as a prototype getter,
+    // so Object.assign drops it. Native binding then throws "Tensor.location must be a string".
+    // Copy `location` explicitly from the source ONNXTensor.
+    let onnxTensor;
     if (args[0] instanceof ONNXTensor) {
-      // Create shallow copy
-      Object.assign(this, args[0]);
+      onnxTensor = args[0];
+      Object.assign(this, onnxTensor);
     } else {
-      // Create new tensor
-      Object.assign(
-        this,
-        new ONNXTensor(
-          /** @type {DataType} */ (args[0]),
-          /** @type {Exclude<import('./maths.js').AnyTypedArray, Uint8ClampedArray>} */ (
-            args[1]
-          ),
-          args[2],
+      onnxTensor = new ONNXTensor(
+        /** @type {DataType} */ (args[0]),
+        /** @type {Exclude<import('./maths.js').AnyTypedArray, Uint8ClampedArray>} */ (
+          args[1]
         ),
+        args[2],
       );
+      Object.assign(this, onnxTensor);
+    }
+    if (typeof this.location !== "string") {
+      this.location = onnxTensor.location ?? "cpu";
     }
 
     return new Proxy(this, {

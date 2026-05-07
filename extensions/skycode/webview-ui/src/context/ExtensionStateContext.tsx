@@ -455,7 +455,9 @@ export const ExtensionStateContextProvider: React.FC<{
 						const lastIndex = findLastIndex(prevState.skycodeMessages, (msg) => msg.ts === partialMessage.ts)
 						if (lastIndex !== -1) {
 							const newSkycodeMessages = [...prevState.skycodeMessages]
-							newSkycodeMessages[lastIndex] = partialMessage
+							const prev = newSkycodeMessages[lastIndex]
+							// Merge so streaming updates don't replace the whole message and drop fields not in proto (e.g. modelInfo on ask/plan cards)
+							newSkycodeMessages[lastIndex] = { ...prev, ...partialMessage }
 							return { ...prevState, skycodeMessages: newSkycodeMessages }
 						}
 						return prevState

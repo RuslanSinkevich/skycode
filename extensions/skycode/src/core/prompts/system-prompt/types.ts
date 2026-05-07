@@ -135,7 +135,7 @@ export interface SystemPromptContext {
 	readonly machineId?: string
 	readonly useSimplifiedEditTools?: boolean
 	readonly lightweightMode?: boolean
-	readonly mode?: "plan" | "act" | "ask" | "debug"
+	readonly mode?: "plan" | "act" | "ask" | "debug" | "chat"
 }
 
 /**

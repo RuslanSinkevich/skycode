@@ -1,7 +1,8 @@
-import type { ModelInfo } from "@shared/api"
+import type { ApiProvider, ModelInfo } from "@shared/api"
+import { ALL_AUTO_PROVIDER_LABELS, type AutoProviderResult, pickAutoProvider } from "@shared/api-auto-select"
 import type { OnboardingModel, OnboardingModelGroup, OpenRouterModelInfo } from "@shared/proto/index.skycode"
 import { AlertCircleIcon, CircleCheckIcon, CircleIcon, ListIcon, LoaderCircleIcon, StarIcon, ZapIcon } from "lucide-react"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import SkycodeLogoWhite from "@/assets/SkycodeLogoWhite"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -228,11 +229,97 @@ const UserTypeSelectionStep = ({ userType, onSelectUserType }: UserTypeSelection
 	</div>
 )
 
+type ProviderSelectionProps = {
+	autoResult: AutoProviderResult
+	selectedProvider: ApiProvider
+	onSelectProvider: (provider: ApiProvider) => void
+}
+
+/**
+ * Provider step. Top: the auto-detected suggestion. Below: the full list as override.
+ * If auto-detection didn't find anything (reason="default"), the list is expanded by default.
+ */
+const ProviderSelectionStep = ({ autoResult, selectedProvider, onSelectProvider }: ProviderSelectionProps) => {
+	const isOverridden = selectedProvider !== autoResult.provider
+	const detected = autoResult.reason !== "default"
+	const [showList, setShowList] = useState(!detected || isOverridden)
+
+	const reasonLabel: Record<AutoProviderResult["reason"], string> = {
+		auth: "signed in",
+		"api-key": "API key found",
+		local: "local runtime",
+		default: "no key detected",
+	}
+
+	return (
+		<div className="flex flex-col w-full items-center">
+			<div className="flex w-full max-w-lg flex-col gap-3 my-2">
+				{detected && (
+					<Item className="bg-input-background/50 border border-input-foreground/30 w-full">
+						<ItemMedia className="[&_svg]:stroke-button-background" variant="icon">
+							<CircleCheckIcon className="stroke-1.5" />
+						</ItemMedia>
+						<ItemContent className="w-full">
+							<ItemTitle className="flex items-center gap-2">
+								<span>{autoResult.label}</span>
+								<Badge variant="info">auto · {reasonLabel[autoResult.reason]}</Badge>
+							</ItemTitle>
+							<ItemDescription>
+								Selected automatically from your existing settings. Click below to pick a different provider.
+							</ItemDescription>
+						</ItemContent>
+					</Item>
+				)}
+
+				{!showList && (
+					<Button className="w-full" onClick={() => setShowList(true)} variant="secondary">
+						Change provider…
+					</Button>
+				)}
+
+				{showList && (
+					<div className="flex w-full flex-col gap-2">
+						{ALL_AUTO_PROVIDER_LABELS.map((option) => {
+							const isSelected = selectedProvider === option.provider
+							const isAuto = autoResult.provider === option.provider && detected
+							return (
+								<Item
+									className={cn("cursor-pointer hover:cursor-pointer w-full", {
+										"bg-input-background/50 border border-input-foreground/30": isSelected,
+									})}
+									key={option.provider}
+									onClick={() => onSelectProvider(option.provider)}>
+									<ItemMedia className="[&_svg]:stroke-button-background" variant="icon">
+										{isSelected ? (
+											<CircleCheckIcon className="stroke-1.5" />
+										) : (
+											<CircleIcon className="stroke-1" />
+										)}
+									</ItemMedia>
+									<ItemContent className="w-full">
+										<ItemTitle className="flex items-center gap-2">
+											<span>{option.label}</span>
+											{isAuto && <Badge variant="info">auto-detected</Badge>}
+										</ItemTitle>
+									</ItemContent>
+								</Item>
+							)
+						})}
+					</div>
+				)}
+			</div>
+		</div>
+	)
+}
+
 type OnboardingStepContentProps = {
 	step: number
 	userType: NEW_USER_TYPE | undefined
+	autoResult: AutoProviderResult
+	selectedProvider: ApiProvider
 	selectedModelId: string
 	onSelectUserType: (type: NEW_USER_TYPE) => void
+	onSelectProvider: (provider: ApiProvider) => void
 	onSelectModel: (modelId: string) => void
 	searchTerm: string
 	setSearchTerm: (term: string) => void
@@ -243,8 +330,11 @@ type OnboardingStepContentProps = {
 const OnboardingStepContent = ({
 	step,
 	userType,
+	autoResult,
+	selectedProvider,
 	selectedModelId,
 	onSelectUserType,
+	onSelectProvider,
 	onSelectModel,
 	searchTerm,
 	setSearchTerm,
@@ -254,39 +344,64 @@ const OnboardingStepContent = ({
 	if (step === 0) {
 		return <UserTypeSelectionStep onSelectUserType={onSelectUserType} userType={userType} />
 	}
-	if (step === 2) {
-		return null
-	}
-	if (userType === NEW_USER_TYPE.FREE || userType === NEW_USER_TYPE.POWER) {
+	if (step === 1) {
 		return (
-			<ModelSelection
-				models={models}
-				onboardingModels={onboardingModels}
-				onSelectModel={onSelectModel}
-				searchTerm={searchTerm}
-				selectedModelId={selectedModelId}
-				setSearchTerm={setSearchTerm}
-				userType={userType}
+			<ProviderSelectionStep
+				autoResult={autoResult}
+				onSelectProvider={onSelectProvider}
+				selectedProvider={selectedProvider}
 			/>
 		)
 	}
-	// userType === NEW_USER_TYPE.BYOK
-	return <ApiConfigurationSection />
+	// Шаг 3 = "Almost there"
+	if (step === 3) {
+		return null
+	}
+	// Шаг 2 = выбор модели или конфигурация
+	if (userType === NEW_USER_TYPE.BYOK) {
+		return <ApiConfigurationSection />
+	}
+	// FREE/Power пользователи видят выбор модели
+	const currentUserType = userType === NEW_USER_TYPE.FREE ? NEW_USER_TYPE.FREE : NEW_USER_TYPE.POWER
+	return (
+		<ModelSelection
+			models={models}
+			onboardingModels={onboardingModels}
+			onSelectModel={onSelectModel}
+			searchTerm={searchTerm}
+			selectedModelId={selectedModelId}
+			setSearchTerm={setSearchTerm}
+			userType={currentUserType}
+		/>
+	)
 }
 
 const OnboardingView = ({ onboardingModels }: { onboardingModels: OnboardingModelGroup }) => {
 	const { t } = useI18n()
 	const { handleFieldsChange } = useApiConfigurationHandlers()
-	const { openRouterModels, hideSettings, hideAccount, setShowWelcome } = useExtensionState()
+	const { apiConfiguration, openRouterModels, hideSettings, hideAccount, setShowWelcome } = useExtensionState()
+
+	// Auto-detect a provider from the user's existing settings (env keys, prior config, account auth).
+	// Recomputed only when configuration shape actually changes — UI stays stable while typing.
+	const autoResult = useMemo<AutoProviderResult>(() => pickAutoProvider(apiConfiguration), [apiConfiguration])
 
 	const [stepNumber, setStepNumber] = useState(0)
 	const [isActionLoading, setIsActionLoading] = useState(false)
 	const [userType, setUserType] = useState<NEW_USER_TYPE>(NEW_USER_TYPE.FREE)
+	const [selectedProvider, setSelectedProvider] = useState<ApiProvider>(autoResult.provider)
 
 	const [selectedModelId, setSelectedModelId] = useState("")
 	const [searchTerm, setSearchTerm] = useState("")
 
 	const models = useMemo(() => getSkycodeUIOnboardingGroups(onboardingModels), [onboardingModels])
+
+	// Keep selection in sync if auto-detection result changes (e.g. user signs in mid-onboarding).
+	// Only update if the user hasn't manually overridden yet (i.e. selection still matches previous auto result).
+	const lastAutoRef = useRef<ApiProvider>(autoResult.provider)
+	useEffect(() => {
+		setSelectedProvider((current) => (current === lastAutoRef.current ? autoResult.provider : current))
+		lastAutoRef.current = autoResult.provider
+	}, [autoResult.provider])
 
 	useEffect(() => {
 		setSearchTerm("")
@@ -308,10 +423,15 @@ const OnboardingView = ({ onboardingModels }: { onboardingModels: OnboardingMode
 		StateServiceClient.captureOnboardingProgress({ step: 0, action })
 	}, [])
 
+	const onProviderClick = useCallback((provider: ApiProvider) => {
+		setSelectedProvider(provider)
+		StateServiceClient.captureOnboardingProgress({ step: 1, action: `provider_${provider}` })
+	}, [])
+
 	const onModelClick = useCallback((modelSelected: string) => {
 		setSelectedModelId(modelSelected)
-		// User selection is available in step 1 only
-		StateServiceClient.captureOnboardingProgress({ step: 1, modelSelected, action: "model_selected" })
+		// User selection is available in step 2 only
+		StateServiceClient.captureOnboardingProgress({ step: 2, modelSelected, action: "model_selected" })
 	}, [])
 
 	const finishOnboarding = useCallback(
@@ -323,43 +443,53 @@ const OnboardingView = ({ onboardingModels }: { onboardingModels: OnboardingMode
 					actModeOpenRouterModelId: selectedModelId,
 					planModeOpenRouterModelInfo: openRouterModels[selectedModelId],
 					actModeOpenRouterModelInfo: openRouterModels[selectedModelId],
-					planModeApiProvider: "skycode",
-					actModeApiProvider: "skycode",
 				})
 			}
+			// Always set the selected provider
+			await handleFieldsChange({
+				planModeApiProvider: selectedProvider,
+				actModeApiProvider: selectedProvider,
+			})
 			hideAccount()
 			hideSettings()
 			const action = "onboarding_completed"
 			StateServiceClient.captureOnboardingProgress({ step, modelSelected, action, completed: true })
 		},
-		[hideAccount, hideSettings, handleFieldsChange, selectedModelId, openRouterModels],
+		[hideAccount, hideSettings, handleFieldsChange, selectedModelId, openRouterModels, selectedProvider],
 	)
 
 	const handleFooterAction = useCallback(
 		async (action: "signin" | "next" | "back" | "done" | "signup") => {
 			switch (action) {
 				case "signup":
-					setStepNumber(stepNumber + 1)
+					setStepNumber(3) // Almost there
 					setIsActionLoading(true)
 					await AccountServiceClient.accountLoginClicked({})
 						.catch(() => {})
 						.finally(() => setIsActionLoading(false))
-					await finishOnboarding(true, stepNumber + 1)
+					await finishOnboarding(true, 3)
 					break
 				case "signin":
 					setIsActionLoading(true)
 					await AccountServiceClient.accountLoginClicked({})
 						.catch(() => {})
 						.finally(() => setIsActionLoading(false))
-					await finishOnboarding(true, stepNumber + 1)
+					await finishOnboarding(true, 3)
 					break
 				case "next":
 					StateServiceClient.captureOnboardingProgress({ step: stepNumber + 1 })
-					setStepNumber(stepNumber + 1)
+					// Для BYOK на шаге 2 (выбор модели) сразу завершаем
+					if (stepNumber === 2 && userType === NEW_USER_TYPE.BYOK) {
+						await StateServiceClient.setWelcomeViewCompleted({ value: true }).catch(() => {})
+						setShowWelcome(false)
+						await finishOnboarding(false, 2)
+					} else {
+						setStepNumber(stepNumber + 1)
+					}
 					break
 				case "back":
 					StateServiceClient.captureOnboardingProgress({ step: stepNumber - 1 })
-					setStepNumber(stepNumber - 1)
+					setStepNumber(Math.max(0, stepNumber - 1))
 					break
 				case "done":
 					await StateServiceClient.setWelcomeViewCompleted({ value: true }).catch(() => {})
@@ -368,15 +498,23 @@ const OnboardingView = ({ onboardingModels }: { onboardingModels: OnboardingMode
 					break
 			}
 		},
-		[stepNumber, finishOnboarding, setShowWelcome],
+		[stepNumber, finishOnboarding, setShowWelcome, userType],
 	)
 
 	const stepDisplayInfo = useMemo(() => {
-		const step = stepNumber === 0 || stepNumber === 2 ? STEP_CONFIG[stepNumber] : null
-		const title = step ? step.title : userType ? STEP_CONFIG[userType].title : STEP_CONFIG[0].title
-		const description = step ? step.description : null
-		const buttons = step ? step.buttons : userType ? STEP_CONFIG[userType].buttons : STEP_CONFIG[0].buttons
-		return { title, description, buttons }
+		// Шаг 0, 1 имеют фиксированный конфиг
+		if (stepNumber === 0) {
+			return { title: STEP_CONFIG[0].title, description: STEP_CONFIG[0].description, buttons: STEP_CONFIG[0].buttons }
+		}
+		if (stepNumber === 1) {
+			return { title: STEP_CONFIG[1].title, description: STEP_CONFIG[1].description, buttons: STEP_CONFIG[1].buttons }
+		}
+		if (stepNumber === 3) {
+			return { title: STEP_CONFIG[3].title, description: STEP_CONFIG[3].description, buttons: STEP_CONFIG[3].buttons }
+		}
+		const title = userType ? STEP_CONFIG[userType].title : STEP_CONFIG[0].title
+		const buttons = userType ? STEP_CONFIG[userType].buttons : STEP_CONFIG[0].buttons
+		return { title, description: null, buttons }
 	}, [stepNumber, userType])
 
 	return (
@@ -395,12 +533,15 @@ const OnboardingView = ({ onboardingModels }: { onboardingModels: OnboardingMode
 
 				<div className="flex-1 w-full flex max-w-lg overflow-y-auto min-h-0">
 					<OnboardingStepContent
+						autoResult={autoResult}
 						models={openRouterModels}
 						onboardingModels={models}
 						onSelectModel={onModelClick}
+						onSelectProvider={onProviderClick}
 						onSelectUserType={onUserTypeClick}
 						searchTerm={searchTerm}
 						selectedModelId={selectedModelId}
+						selectedProvider={selectedProvider}
 						setSearchTerm={setSearchTerm}
 						step={stepNumber}
 						userType={userType}
@@ -419,7 +560,7 @@ const OnboardingView = ({ onboardingModels }: { onboardingModels: OnboardingMode
 						</Button>
 					))}
 
-					{stepNumber !== 2 && (
+					{stepNumber !== 3 && (
 						<div className="items-center justify-center flex text-sm text-foreground gap-2 mb-3 text-pretty">
 							<AlertCircleIcon className="shrink-0 size-2" /> {t("onboarding.changeLaterInSettings")}
 						</div>

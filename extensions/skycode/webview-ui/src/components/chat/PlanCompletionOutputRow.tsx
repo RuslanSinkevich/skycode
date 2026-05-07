@@ -16,16 +16,19 @@ interface PlanCompletionOutputProps {
 
 function getModeHeaderConfig(mode: Mode | undefined, t: (key: string) => string) {
 	switch (mode) {
-		case "chat":
-			return {
-				icon: <MessageCircleIcon className="size-2" />,
-				title: t("chat.modeResponse"),
-			}
 		case "plan":
-		default:
 			return {
 				icon: <NotepadTextIcon className="size-2" />,
 				title: t("chat.planCreated"),
+			}
+		case "chat":
+		case "ask":
+		case "act":
+		case "debug":
+		default:
+			return {
+				icon: <MessageCircleIcon className="size-2" />,
+				title: t("chat.modeResponse"),
 			}
 	}
 }
