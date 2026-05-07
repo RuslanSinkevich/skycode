@@ -17,8 +17,10 @@ IndexingService (оркестратор) — src/core/indexing/IndexingService.t
 ├── CodeChunker (разбивка на чанки)
 │   └── Tree-sitter chunking (с fallback на simple chunker)
 ├── EmbeddingRouter → выбор провайдера
-│   ├── LocalEmbeddingProvider (transformers.js WASM + paraphrase-multilingual-MiniLM-L12-v2)
+│   ├── LocalEmbeddingProvider (transformers.js WASM, модель выбирается через EmbeddingModelRegistry)
 │   └── RemoteEmbeddingProvider (OpenAI-compatible /v1/embeddings API)
+├── models/
+│   └── EmbeddingModelRegistry (mini / base / large + резолв meta по id)
 ├── Storage
 │   ├── IndexStorage (SQLite по умолчанию, JSON fallback при недоступном native)
 │   └── VectorSearch (brute-force cosine similarity на in-memory векторах)
@@ -39,6 +41,8 @@ src/core/indexing/
   EmbeddingRouter.ts           — фабрика провайдеров по конфигу
   progressCache.ts             — кэш прогресса индексации
   RepoMapGenerator.ts          — генерация карты репозитория
+  models/
+    EmbeddingModelRegistry.ts  — реестр локальных моделей (mini / base / large)
   providers/
     LocalEmbeddingProvider.ts  — transformers.js WASM (офлайн, без native-модулей)
     RemoteEmbeddingProvider.ts — HTTP клиент для OpenAI-совместимых API
@@ -66,6 +70,7 @@ models/all-MiniLM-L6-v2/                     — legacy модель (не ис�
 | Ключ | Тип | По умолчанию | Описание |
 |------|-----|-------------|----------|
 | `skycode.indexing.mode` | `"off" \| "local" \| "remote"` | `"local"` | Режим индексации |
+| `skycode.indexing.localModel` | `"mini" \| "base" \| "large"` | `"mini"` | Локальная embedding-модель |
 | `skycode.indexing.remoteApiUrl` | `string` | `""` | URL удалённого API |
 | `skycode.indexing.remoteApiKey` | `string` | `""` | API ключ |
 | `skycode.indexing.remoteModel` | `string` | `"text-embedding-3-small"` | Модель |
@@ -90,10 +95,17 @@ Fallback backend (если native SQLite недоступен в runtime):
 
 - **Библиотека**: `@xenova/transformers` (transformers.js)
 - **Backend**: WASM (без native-модулей, работает в любом окружении)
-- **Модель**: `paraphrase-multilingual-MiniLM-L12-v2` (мультиязычная, поддержка русского)
-- **Размерность**: 384
-- **Скорость**: ~50-100 чанков/сек
-- **Источник**: портировано из Continue (open-source IDE)
+- **Модель**: выбирается через `skycode.indexing.localModel` (registry: `core/indexing/models/EmbeddingModelRegistry.ts`).
+
+  | id | HuggingFace | Размерность | Размер | Prefix | Когда брать |
+  |----|------------|-------------|--------|--------|-------------|
+  | `mini` (default) | `Xenova/paraphrase-multilingual-MiniLM-L12-v2` | 384 | ~23 МБ | нет | Быстрая, базовая мультиязычная поддержка; встроена |
+  | `base` | `Xenova/multilingual-e5-base` | 768 | ~278 МБ | да (`query: ` / `passage: `) | Хороший recall, скачивается при первом использовании |
+  | `large` | `Xenova/multilingual-e5-large` | 1024 | ~562 МБ | да (`query: ` / `passage: `) | Лучшее качество, скачивается при первом использовании |
+
+- E5-prefix добавляется автоматически в `embedding-worker.ts` (см. `requiresPrefix`).
+- **Скорость**: ~50–100 чанков/сек на `mini`; на `base`/`large` медленнее.
+- **Источник**: портировано из Continue (open-source IDE), расширено реестром моделей.
 
 ### Удалённый
 
@@ -195,7 +207,7 @@ import jwt from 'jsonwebtoken'
 
 ## Ограничения текущей версии
 
-- **Модель**: `paraphrase-multilingual-MiniLM-L12-v2` — general-purpose мультиязычная, не специализирована на коде. Для лучшего качества можно подключить удалённый API с code-specific моделью.
+- **Модель**: даже `large` (E5) — general-purpose, не code-specific. Для лучшего качества можно подключить удалённый API с code-specific embedding-моделью.
 - **Поиск**: brute-force vector scan. На очень больших индексах (>100K чанков) нужен ANN backend.
 - **SQLite native**: зависит от совместимости Electron/Node ABI. При недоступности используется JSON fallback.
 - **Tree-sitter coverage**: качество зависит от доступности WASM парсеров для конкретного языка.
@@ -208,6 +220,12 @@ import jwt from 'jsonwebtoken'
 2. Добавить вариант в `EmbeddingRouter.ts`
 3. Добавить опцию в `skycode.indexing.mode` enum в `package.json`
 4. Добавить UI в `IndexingSettingsSection.tsx`
+
+### Добавить новую локальную модель
+
+1. Добавить запись в `REGISTRY` в `core/indexing/models/EmbeddingModelRegistry.ts` (id, huggingFaceId, dimensions, requiresPrefix).
+2. Добавить id в enum `skycode.indexing.localModel` и обновить `enumDescriptions` в `package.json`.
+3. Обновить селектор моделей в `IndexingSettingsSection.tsx`.
 
 ### Следующий шаг по производительности
 

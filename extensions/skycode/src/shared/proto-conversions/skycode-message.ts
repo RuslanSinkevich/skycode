@@ -1,5 +1,9 @@
-import { SkycodeAsk as AppSkycodeAsk, SkycodeMessage as AppSkycodeMessage, SkycodeSay as AppSkycodeSay } from "@shared/ExtensionMessage"
-import { SkycodeAsk, SkycodeMessageType, SkycodeSay, SkycodeMessage as ProtoSkycodeMessage } from "@shared/proto/skycode/ui"
+import {
+	SkycodeAsk as AppSkycodeAsk,
+	SkycodeMessage as AppSkycodeMessage,
+	SkycodeSay as AppSkycodeSay,
+} from "@shared/ExtensionMessage"
+import { SkycodeMessage as ProtoSkycodeMessage, SkycodeAsk, SkycodeMessageType, SkycodeSay } from "@shared/proto/skycode/ui"
 
 // Helper function to convert SkycodeAsk string to enum
 function convertSkycodeAskToProtoEnum(ask: AppSkycodeAsk | undefined): SkycodeAsk | undefined {

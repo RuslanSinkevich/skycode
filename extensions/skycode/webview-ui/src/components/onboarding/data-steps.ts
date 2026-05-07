@@ -19,6 +19,14 @@ export const STEP_CONFIG = {
 			{ text: "Login to Skycode", action: "signin", variant: "secondary" },
 		],
 	},
+	1: {
+		title: "Pick a provider",
+		description: "We've auto-detected one based on your settings — change it if needed.",
+		buttons: [
+			{ text: "Continue", action: "next", variant: "default" },
+			{ text: "Back", action: "back", variant: "secondary" },
+		],
+	},
 	[NEW_USER_TYPE.FREE]: {
 		title: "Select a free model",
 		buttons: [
@@ -40,7 +48,7 @@ export const STEP_CONFIG = {
 			{ text: "Back", action: "back", variant: "secondary" },
 		],
 	},
-	2: {
+	3: {
 		title: "Almost there!",
 		description: "Complete account creation in your browser. Then come back here to finish up.",
 		buttons: [{ text: "Back", action: "back", variant: "secondary" }],

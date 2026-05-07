@@ -835,6 +835,8 @@
 	"provider.bedrockCustomHint": "Выберите \"Custom\" при использовании Application Inference Profile в Bedrock. Введите ARN Application Inference Profile в поле Model ID.",
 	"provider.enterCustomModelId": "Введите custom model ID...",
 	"provider.modelId": "Model ID",
+	"provider.anthropicModelIdHint": "В API уходит эта строка как есть. Ошибка unknown model — у прокси другой каталог имён; возьмите id из их документации. Цены/контекст ниже — от пресета, если id нет во встроенном списке.",
+	"provider.anthropicModelComboboxPlaceholder": "ID модели — введите любой или выберите из списка…",
 	"provider.baseInferenceModel": "Базовая inference модель",
 	"provider.enterProjectId": "Введите Project ID...",
 	"provider.googleCloudProjectId": "Google Cloud Project ID",

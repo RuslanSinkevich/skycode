@@ -72,7 +72,8 @@ export type SkycodeAssistantContent =
 	| SkycodeAssistantThinkingBlock
 	| SkycodeAssistantRedactedThinkingBlock
 
-export type SkycodeContent = SkycodeUserContent | SkycodeAssistantContent
+/** Align with full Anthropic `ContentBlockParam` so stored messages stay compatible as the SDK adds block kinds. */
+export type SkycodeContent = Anthropic.ContentBlockParam
 
 /**
  * An extension of Anthropic.MessageParam that includes Skycode-specific fields.
@@ -86,7 +87,6 @@ export interface SkycodeStorageMessage extends Anthropic.MessageParam {
 	 */
 	id?: string
 	role: SkycodeMessageRole
-	content: SkycodePromptInputContent | SkycodeContent[]
 	/**
 	 * NOTE: model information used when generating this message.
 	 * Internal use for message conversion only.

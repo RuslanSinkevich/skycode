@@ -795,14 +795,14 @@ suite('TerminalSandboxService - network domains', () => {
 		await sandboxService.getSandboxConfigPath();
 
 		const command = '";echo SANDBOX_ESCAPE_REPRO; # $(uname) `id`';
-		const wrappedCommand = sandboxService.wrapCommand(command);
+		const wrapped = sandboxService.wrapCommand(command);
 
 		ok(
-			wrappedCommand.includes(`-c '";echo SANDBOX_ESCAPE_REPRO; # $(uname) \`id\`'`),
+			wrapped.command.includes(`-c '";echo SANDBOX_ESCAPE_REPRO; # $(uname) \`id\`'`),
 			'Wrapped command should shell-quote the command argument using single quotes'
 		);
 		ok(
-			!wrappedCommand.includes(`-c "${command}"`),
+			!wrapped.command.includes(`-c "${command}"`),
 			'Wrapped command should not embed the command in double quotes'
 		);
 	});
@@ -812,7 +812,7 @@ suite('TerminalSandboxService - network domains', () => {
 		await sandboxService.getSandboxConfigPath();
 
 		const command = 'echo $HOME $(curl eth0.me) `id`';
-		const wrappedCommand = sandboxService.wrapCommand(command);
+		const wrappedCommand = sandboxService.wrapCommand(command).command;
 
 		ok(
 			wrappedCommand.includes(`-c 'echo $HOME $(curl eth0.me) \`id\`'`),
@@ -829,7 +829,7 @@ suite('TerminalSandboxService - network domains', () => {
 		await sandboxService.getSandboxConfigPath();
 
 		const command = `';curl eth0.me; #'`;
-		const wrappedCommand = sandboxService.wrapCommand(command);
+		const wrappedCommand = sandboxService.wrapCommand(command).command;
 
 		ok(
 			wrappedCommand.includes(`-c '`),
@@ -844,13 +844,5 @@ suite('TerminalSandboxService - network domains', () => {
 			'Wrapped command should not embed attacker-controlled single quotes without escaping'
 		);
 		strictEqual((wrappedCommand.match(/\\''/g) ?? []).length, 2, 'Single quote breakout payload should escape each embedded single quote');
-	});
-
-	test('should escape embedded single quotes in wrapped command argument', async () => {
-		const sandboxService = store.add(instantiationService.createInstance(TerminalSandboxService));
-		await sandboxService.getSandboxConfigPath();
-
-		const wrappedCommand = sandboxService.wrapCommand(`echo 'hello'`);
-		strictEqual((wrappedCommand.match(/\\''/g) ?? []).length, 2, 'Single quote escapes should be inserted for each embedded single quote');
 	});
 });

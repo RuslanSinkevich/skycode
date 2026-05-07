@@ -9,15 +9,20 @@ src/core/
 ├── controller/    # gRPC обработчики, управление задачами
 ├── task/          # AI задачи: API запросы + выполнение инструментов
 ├── diff-v2/       # Inline Diff System V4 (snapshot-based)
-├── session/       # ApprovalGate (ask/response flow)
+├── session/       # ApprovalGate, Pipeline, SessionManager
 ├── indexing/      # Семантическая индексация (Tree-sitter + embeddings)
 ├── prompts/       # Система промптов (TemplateEngine + PromptBuilder)
 ├── api/           # API провайдеры (OpenAI, Anthropic, Gemini, ...)
 ├── workspace/     # Multi-root workspace resolver
 ├── context/       # Context management (файлы, правила, focus chain)
+├── workflow/      # Многошаговый YAML workflow engine (WorkflowOrchestrator)
+├── inline-edit/   # Ctrl+Shift+K — правка выделения без чата
 ├── hooks/         # Lifecycle hooks (TaskStart, TaskComplete, ...)
 ├── ignore/        # .skycodeignore controller
+├── locks/         # Кросс-вызовные локи (например, init эмбеддингов)
 ├── mentions/      # @-упоминания в чате
+├── slash-commands/# Парсинг slash-команд
+├── commands/      # Реализация VS Code команд
 └── permissions/   # Контроль доступа: CommandPermissionController + CommandSafetyClassifier
 ```
 
@@ -77,6 +82,22 @@ Promise-based ask/response замена pWaitFor. Early response queue реша�
 - Lightweight mode restrictions (XS models: no BASH, no FILE_EDIT)
 - Runtime tool blocking for weak models
 - EditNotebook (edit_notebook) — Jupyter .ipynb cell editing (insert/replace)
+
+### Inline Edit (`src/core/inline-edit/InlineEditController.ts`)
+Команда `skycode.inlineEdit` (`Ctrl+Shift+K` / `Cmd+Shift+K`). Доступна при непустом выделении:
+
+- Собирает `system + user` prompt (file path, язык, before/after context, выделение, инструкция).
+- Стримит ответ из текущего `ApiHandler`, накапливая текст.
+- Прокидывает результат через `DiffSystem.replaceLines()` — изменение появляется как обычный inline diff (Accept/Reject).
+- Независима от панели чата.
+
+### Workflow (`src/core/workflow/`)
+`WorkflowOrchestrator` выполняет многошаговые YAML-сценарии поверх стандартного agent loop:
+
+- Каждый включённый шаг инжектит step-prompt как user-message и вызывает `Task.initiateStepLoop()`.
+- История разговора общая для всех шагов — поздние шаги видят, что делал агент раньше.
+- `WorkflowParser` валидирует YAML; UI — таб «Сценарии» (load / edit / run, шаблоны).
+- Между шагами проверяется `task.isAborted()` — пользователь может отменить выполнение.
 
 ### Permissions (`src/core/permissions/`)
 Контроль доступа к действиям агента.
@@ -170,4 +191,4 @@ globalStorage/snapshots/{responseGroupId}/{hash}.snapshot
 
 ---
 
-*Последнее обновление: 2026-05-01*
+*Последнее обновление: 2026-05-07*

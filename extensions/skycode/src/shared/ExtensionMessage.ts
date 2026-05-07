@@ -148,6 +148,11 @@ export interface ExtensionState {
 	freeRequestLimit?: number
 	// Multi-step workflow
 	activeWorkflowName?: string
+	// Session Budget
+	sessionBudgetMode?: "auto" | "custom"
+	customMaxToolCallsPerTurn?: number
+	customMaxConsecutiveReadOnlyTools?: number
+	customForceCompactAfterSteps?: number
 }
 
 export interface SkycodeMessage {

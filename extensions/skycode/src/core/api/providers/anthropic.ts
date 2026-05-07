@@ -52,7 +52,9 @@ export class AnthropicHandler implements ApiHandler {
 		const modelId = model.id.endsWith(CLAUDE_SONNET_1M_SUFFIX) ? model.id.slice(0, -CLAUDE_SONNET_1M_SUFFIX.length) : model.id
 		const enable1mContextWindow = model.id.endsWith(CLAUDE_SONNET_1M_SUFFIX)
 
-		const budget_tokens = this.options.thinkingBudgetTokens || 0
+		const budget_raw = this.options.thinkingBudgetTokens
+		const budget_tokens =
+			typeof budget_raw === "number" && Number.isFinite(budget_raw) && budget_raw > 0 ? Math.floor(budget_raw) : 0
 
 		// Tools are available only when native tools are enabled.
 		const nativeToolsOn = tools?.length && tools?.length > 0
@@ -237,11 +239,19 @@ export class AnthropicHandler implements ApiHandler {
 		}
 	}
 
-	getModel(): { id: AnthropicModelId; info: ModelInfo } {
+	getModel(): { id: string; info: ModelInfo } {
 		const modelId = this.options.apiModelId
-		if (modelId && modelId in anthropicModels) {
-			const id = modelId as AnthropicModelId
-			return { id, info: anthropicModels[id] }
+		// If modelId is provided, use it even if it's not in the known models list (custom models)
+		if (modelId) {
+			if (modelId in anthropicModels) {
+				const id = modelId as AnthropicModelId
+				return { id, info: anthropicModels[id] }
+			}
+			// Custom model not in the list - use it with default info
+			return {
+				id: modelId,
+				info: anthropicModels[anthropicDefaultModelId],
+			}
 		}
 		return {
 			id: anthropicDefaultModelId,

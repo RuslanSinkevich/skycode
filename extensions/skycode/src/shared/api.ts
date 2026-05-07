@@ -147,7 +147,7 @@ export const hicapModelInfoSaneDefaults: HicapCompatibleModelInfo = {
 // Anthropic
 // https://docs.anthropic.com/en/docs/about-claude/models // prices updated 2025-01-02
 export type AnthropicModelId = keyof typeof anthropicModels
-export const anthropicDefaultModelId: AnthropicModelId = "claude-sonnet-4-5-20250929"
+export const anthropicDefaultModelId: AnthropicModelId = "claude-opus-4-7"
 export const ANTHROPIC_MIN_THINKING_BUDGET = 1_024
 export const ANTHROPIC_MAX_THINKING_BUDGET = 6_000
 export const anthropicModels = {
@@ -163,6 +163,30 @@ export const anthropicModels = {
 		cacheReadsPrice: 0.3,
 	},
 	"claude-sonnet-4-5-20250929:1m": {
+		maxTokens: 8192,
+		contextWindow: 1_000_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		inputPrice: 3.0,
+		outputPrice: 15.0,
+		cacheWritesPrice: 3.75,
+		cacheReadsPrice: 0.3,
+		tiers: CLAUDE_SONNET_1M_TIERS,
+	},
+	// Vertex / some OpenAI-compatible proxies use @date instead of Anthropic's -date suffix
+	"claude-sonnet-4-5@20250929": {
+		maxTokens: 8192,
+		contextWindow: 200_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		inputPrice: 3.0,
+		outputPrice: 15.0,
+		cacheWritesPrice: 3.75,
+		cacheReadsPrice: 0.3,
+	},
+	"claude-sonnet-4-5@20250929:1m": {
 		maxTokens: 8192,
 		contextWindow: 1_000_000,
 		supportsImages: true,
@@ -218,6 +242,30 @@ export const anthropicModels = {
 		outputPrice: 25.0,
 		cacheWritesPrice: 6.25,
 		cacheReadsPrice: 0.5,
+	},
+	// Gateway-style ids (common on third-party proxies)
+	"claude-opus-4-7": {
+		maxTokens: 8192,
+		contextWindow: 200_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		inputPrice: 5.0,
+		outputPrice: 25.0,
+		cacheWritesPrice: 6.25,
+		cacheReadsPrice: 0.5,
+	},
+	"claude-opus-4-7-1m": {
+		maxTokens: 8192,
+		contextWindow: 1_000_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		inputPrice: 5.0,
+		outputPrice: 25.0,
+		cacheWritesPrice: 6.25,
+		cacheReadsPrice: 0.5,
+		tiers: CLAUDE_SONNET_1M_TIERS,
 	},
 	"claude-opus-4-1-20250805": {
 		maxTokens: 8192,
@@ -298,7 +346,7 @@ export const anthropicModels = {
 
 // Claude Code
 export type ClaudeCodeModelId = keyof typeof claudeCodeModels
-export const claudeCodeDefaultModelId: ClaudeCodeModelId = "claude-sonnet-4-5-20250929"
+export const claudeCodeDefaultModelId: ClaudeCodeModelId = "claude-opus-4-7"
 export const claudeCodeModels = {
 	sonnet: {
 		...anthropicModels["claude-sonnet-4-5-20250929"],
@@ -327,6 +375,16 @@ export const claudeCodeModels = {
 	},
 	"claude-opus-4-5-20251101": {
 		...anthropicModels["claude-opus-4-5-20251101"],
+		supportsImages: false,
+		supportsPromptCache: false,
+	},
+	"claude-opus-4-7": {
+		...anthropicModels["claude-opus-4-7"],
+		supportsImages: false,
+		supportsPromptCache: false,
+	},
+	"claude-opus-4-7-1m": {
+		...anthropicModels["claude-opus-4-7-1m"],
 		supportsImages: false,
 		supportsPromptCache: false,
 	},

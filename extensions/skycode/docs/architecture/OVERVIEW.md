@@ -82,7 +82,20 @@ Skycode AI — это расширение VS Code, состоящее из тр
 - Управление инструментами и ресурсами
 - Auto-approval настройки
 
-### 7. Security subsystem
+### 7. Inline Edit (`src/core/inline-edit/InlineEditController.ts`)
+Команда `Ctrl+Shift+K` (`Cmd+Shift+K`) для правки выделения без чата:
+- Собирается компактный prompt (file path, language, before/after context, selected code, instruction)
+- Стрим из текущего `ApiHandler` идёт в `DiffSystem.replaceLines()` → отображается как обычный inline diff (Accept/Reject)
+- Не зависит от панели чата
+
+### 8. Workflow Orchestrator (`src/core/workflow/`)
+Последовательное выполнение YAML-сценариев поверх стандартного agent loop:
+- Каждый включённый шаг инжектит свой prompt как user-message и вызывает `Task.initiateStepLoop()`
+- История разговора шарится между шагами
+- `WorkflowParser` проверяет схему YAML; UI — таб «Сценарии»
+- Отмена между шагами по `task.isAborted()`
+
+### 9. Security subsystem
 
 - **`src/core/permissions/`** — CommandPermissionController + CommandSafetyClassifier (whitelist safe/unsafe для shell-команд).
 - **`src/services/browser/urlSafety.ts`** — SSRF-guard (`assertSafeUrl`). Интегрирован в `UrlContentFetcher` и `WebFetchToolHandler`. Отклоняет не-http(s), private/loopback/link-local/CGNAT IP, cloud metadata, `localhost`/`*.local`/`*.internal`.

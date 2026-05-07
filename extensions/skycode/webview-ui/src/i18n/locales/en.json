@@ -835,6 +835,8 @@
 	"provider.bedrockCustomHint": "Select \"Custom\" when using the Application Inference Profile in Bedrock. Enter the Application Inference Profile ARN in the Model ID field.",
 	"provider.enterCustomModelId": "Enter custom model ID...",
 	"provider.modelId": "Model ID",
+	"provider.anthropicModelIdHint": "The exact string is sent to your API. If the gateway returns \"unknown model\", use the alias your provider documents—not necessarily the same as Anthropic’s public id. Prices/context below follow the preset when the id is not in the built-in list.",
+	"provider.anthropicModelComboboxPlaceholder": "Model id — type any string or pick from the list…",
 	"provider.baseInferenceModel": "Base Inference Model",
 	"provider.enterProjectId": "Enter Project ID...",
 	"provider.googleCloudProjectId": "Google Cloud Project ID",
@@ -1175,5 +1177,20 @@
 	"workflow.validationError": "Only letters, numbers, dashes, and underscores are allowed",
 	"workflow.editWorkflow": "Edit scenario",
 	"workflow.runWorkflow": "Run scenario",
-	"workflow.steps_count": "{{count}} steps"
+	"workflow.steps_count": "{{count}} steps",
+
+	"settings.tabs.sessionBudget.name": "Session Budget",
+	"settings.tabs.sessionBudget.tooltip": "Session budget and compression settings",
+	"settings.tabs.sessionBudget.header": "Session Budget",
+	"sessionBudget.mode": "Session budget mode",
+	"sessionBudget.modeAuto": "Auto (tier-based)",
+	"sessionBudget.modeAutoDescription": "Limits are automatically determined based on the model's tier and capability level.",
+	"sessionBudget.modeCustom": "Custom limits",
+	"sessionBudget.modeCustomDescription": "Custom limits are applied, merged on top of the base tier defaults.",
+	"sessionBudget.maxToolCallsPerTurn": "Max tool calls per turn",
+	"sessionBudget.maxToolCallsPerTurnDescription": "Maximum number of tool calls the model can make in a single turn. Prevents runaway tool usage.",
+	"sessionBudget.maxConsecutiveReadOnly": "Max consecutive read-only tools",
+	"sessionBudget.maxConsecutiveReadOnlyDescription": "Maximum number of read-only tool calls in a row before forcing a write or compaction.",
+	"sessionBudget.forceCompactAfterSteps": "Force compact after steps",
+	"sessionBudget.forceCompactAfterStepsDescription": "Maximum number of steps before forcing a conversation compact. Prevents runaway token usage."
 }

@@ -132,12 +132,12 @@ export class StateManager {
 			await StateManager.instance.setupTaskHistoryWatcher()
 
 			StateManager.instance.isInitialized = true
+
+			return StateManager.instance
 		} catch (error) {
 			Logger.error("[StateManager] Failed to initialize:", error)
 			throw error
 		}
-
-		return StateManager.instance
 	}
 
 	public static get(): StateManager {

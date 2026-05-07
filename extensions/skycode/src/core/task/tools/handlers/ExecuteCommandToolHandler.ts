@@ -33,8 +33,8 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
-		let command: string | undefined = block.params.command
-		const requiresApprovalRaw: string | undefined = block.params.requires_approval
+		let command: string | undefined = block.params.command?.trim()
+		const requiresApprovalRaw: string | undefined = block.params.requires_approval?.trim()
 		const timeoutParam: string | undefined = block.params.timeout
 		let timeoutSeconds: number | undefined
 

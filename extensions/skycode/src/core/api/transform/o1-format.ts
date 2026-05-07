@@ -1,3 +1,4 @@
+import { DIRECT_TOOL_USE_CALLER, sdkMessageUsage } from "@/shared/messages/message-interchange"
 import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 import { Logger } from "@/shared/services/Logger"
@@ -381,6 +382,8 @@ export function convertO1ResponseToAnthropicMessage(
 			},
 		],
 		model: completion.model,
+		container: null,
+		stop_details: null,
 		stop_reason: (() => {
 			switch (completion.choices[0].finish_reason) {
 				case "stop":
@@ -395,12 +398,12 @@ export function convertO1ResponseToAnthropicMessage(
 			}
 		})(),
 		stop_sequence: null, // which custom stop_sequence was generated, if any (not applicable if you don't use stop_sequence)
-		usage: {
+		usage: sdkMessageUsage({
 			input_tokens: completion.usage?.prompt_tokens || 0,
 			output_tokens: completion.usage?.completion_tokens || 0,
 			cache_creation_input_tokens: null,
 			cache_read_input_tokens: null,
-		},
+		}),
 	}
 
 	if (toolCalls.length > 0) {
@@ -411,6 +414,7 @@ export function convertO1ResponseToAnthropicMessage(
 					id: `call_${index}_${Date.now()}`, // Generate a unique ID for each tool call
 					name: toolCall.tool,
 					input: toolCall.tool_input,
+					caller: DIRECT_TOOL_USE_CALLER,
 				}
 			}),
 		)

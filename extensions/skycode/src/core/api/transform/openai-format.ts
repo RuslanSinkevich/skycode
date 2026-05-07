@@ -9,6 +9,7 @@ import {
 	SkycodeTextContentBlock,
 	SkycodeUserToolResultContentBlock,
 } from "@/shared/messages/content"
+import { DIRECT_TOOL_USE_CALLER, isBase64ImageSource, sdkMessageUsage } from "@/shared/messages/message-interchange"
 import { Logger } from "@/shared/services/Logger"
 
 // OpenAI API has a maximum tool call ID length of 40 characters
@@ -109,7 +110,10 @@ export function convertToOpenAiMessages(
 										toolResultImages.push(part)
 										return "(see following user message for image)"
 									}
-									return part.text
+									if (part.type === "text") {
+										return part.text
+									}
+									return ""
 								})
 								.join("\n") ?? ""
 					} else {
@@ -136,7 +140,11 @@ export function convertToOpenAiMessages(
 						role: "user",
 						content: toolResultImages.map((part) => ({
 							type: "image_url",
-							image_url: { url: `data:${part.source.media_type};base64,${part.source.data}` },
+							image_url: {
+								url: isBase64ImageSource(part.source)
+									? `data:${part.source.media_type};base64,${part.source.data}`
+									: part.source.url,
+							},
 						})),
 					})
 				}
@@ -150,7 +158,9 @@ export function convertToOpenAiMessages(
 								return {
 									type: "image_url",
 									image_url: {
-										url: `data:${part.source.media_type};base64,${part.source.data}`,
+										url: isBase64ImageSource(part.source)
+											? `data:${part.source.media_type};base64,${part.source.data}`
+											: part.source.url,
 									},
 								}
 							}
@@ -394,6 +404,8 @@ export function convertToAnthropicMessage(completion: OpenAI.Chat.Completions.Ch
 			},
 		],
 		model: completion.model,
+		container: null,
+		stop_details: null,
 		stop_reason: (() => {
 			switch (completion.choices[0].finish_reason) {
 				case "stop":
@@ -408,12 +420,12 @@ export function convertToAnthropicMessage(completion: OpenAI.Chat.Completions.Ch
 			}
 		})(),
 		stop_sequence: null, // which custom stop_sequence was generated, if any (not applicable if you don't use stop_sequence)
-		usage: {
+		usage: sdkMessageUsage({
 			input_tokens: completion.usage?.prompt_tokens || 0,
 			output_tokens: completion.usage?.completion_tokens || 0,
 			cache_creation_input_tokens: null,
 			cache_read_input_tokens: null,
-		},
+		}),
 	}
 	try {
 		if (openAiMessage?.tool_calls?.length) {
@@ -432,6 +444,7 @@ export function convertToAnthropicMessage(completion: OpenAI.Chat.Completions.Ch
 							id: toolCall.id,
 							name: toolCall.function?.name || UNIQUE_ERROR_TOOL_NAME,
 							input: parsedInput,
+							caller: DIRECT_TOOL_USE_CALLER,
 						}
 					}),
 				)

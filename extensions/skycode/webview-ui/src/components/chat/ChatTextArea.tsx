@@ -414,11 +414,19 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							scrollbarWidth: "none",
 							// Since we have maxRows, when text is long enough it starts to overflow the bottom padding, appearing behind the thumbnails. To fix this, we use a transparent border to push the text up instead. (https://stackoverflow.com/questions/42631947/maintaining-a-padding-inside-of-text-area/52538410#52538410)
 							// borderTop: "9px solid transparent",
-							borderLeft: 0,
-							borderRight: 0,
-							borderTop: 0,
-							borderBottom: `${thumbnailsHeight}px solid transparent`,
-							borderColor: "transparent",
+							// Longhands only — borderBottom shorthand + borderColor triggers React 18 warnings.
+							borderLeftWidth: 0,
+							borderLeftStyle: "solid",
+							borderLeftColor: "transparent",
+							borderRightWidth: 0,
+							borderRightStyle: "solid",
+							borderRightColor: "transparent",
+							borderTopWidth: 0,
+							borderTopStyle: "solid",
+							borderTopColor: "transparent",
+							borderBottomWidth: thumbnailsHeight,
+							borderBottomStyle: "solid",
+							borderBottomColor: "transparent",
 							// borderRight: "54px solid transparent",
 							// borderLeft: "9px solid transparent", // NOTE: react-textarea-autosize doesn't calculate correct height when using borderLeft/borderRight so we need to use horizontal padding instead
 							// Instead of using boxShadow, we use a div with a border to better replicate the behavior when the textarea is focused

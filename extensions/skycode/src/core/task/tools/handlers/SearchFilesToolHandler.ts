@@ -273,7 +273,7 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
-		const relDirPath: string | undefined = block.params.path
+		const relDirPath: string = (block.params.path ?? "").trim() || "."
 		const regex: string | undefined = block.params.regex
 		const filePattern: string | undefined = block.params.file_pattern
 
@@ -282,14 +282,7 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 		const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
 		const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 
-		// Validate required parameters
-		const pathValidation = this.validator.assertRequiredParams(block, "path")
-		if (!pathValidation.ok) {
-			config.taskState.consecutiveMistakeCount++
-			return await config.callbacks.sayAndCreateMissingParamError(this.name, "path")
-		}
-
-		if (!regex) {
+		if (!regex?.trim()) {
 			config.taskState.consecutiveMistakeCount++
 			return await config.callbacks.sayAndCreateMissingParamError(this.name, "regex")
 		}
@@ -297,10 +290,10 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 		config.taskState.consecutiveMistakeCount = 0
 
 		// Parse workspace hint from the path
-		const { workspaceHint, relPath: parsedPath } = parseWorkspaceInlinePath(relDirPath!)
+		const { workspaceHint, relPath: parsedPath } = parseWorkspaceInlinePath(relDirPath)
 
 		// Determine which paths to search
-		const searchPaths = this.determineSearchPaths(config, parsedPath, workspaceHint, relDirPath!)
+		const searchPaths = this.determineSearchPaths(config, parsedPath, workspaceHint, relDirPath)
 
 		// Determine workspace context for telemetry
 		const primaryWorkspaceRoot = searchPaths[0]?.workspaceRoot
@@ -375,7 +368,7 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 			const blockedResults = `[Guardrail] Your search is too broad for the workspace root. Please:\n1. Use codebase_search first to find relevant directories.\n2. Then call search_files with a specific path and file_pattern.\nExample: search_files with path="src/core" and file_pattern="*.ts"`
 			const blockedMessage = JSON.stringify({
 				tool: "searchFiles",
-				path: getReadablePath(config.cwd, relDirPath!),
+				path: getReadablePath(config.cwd, relDirPath),
 				content: blockedResults,
 				regex: regex,
 				filePattern: effectiveFilePattern,
@@ -440,7 +433,7 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 
 		const sharedMessageProps = {
 			tool: "searchFiles",
-			path: getReadablePath(config.cwd, relDirPath!),
+			path: getReadablePath(config.cwd, relDirPath),
 			content: results,
 			regex: regex,
 			filePattern: effectiveFilePattern,
