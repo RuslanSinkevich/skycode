@@ -2376,9 +2376,15 @@ export class Task {
 	}
 
 	/**
-	 * Truncate large messages in the conversation tail (excluding the last N) after exhausted retries,
-	 * to keep the context window from overflowing on the next attempt. Last N messages stay intact so
-	 * the model still has fresh dialogue context.
+	 * Truncate large *plain-text* messages in the conversation tail (excluding the last N) after
+	 * exhausted retries, to keep the context window from overflowing on the next attempt.
+	 *
+	 * IMPORTANT: only messages whose `text` is free-form prose are touched. Many SkycodeMessage
+	 * variants store a serialized JSON payload in `text` (api_req_started -> SkycodeApiReqInfo,
+	 * tool / use_mcp_server / browser_action / api_req_failed / etc.) — replacing those with a
+	 * placeholder string would crash the webview at JSON.parse(message.text). The whitelist
+	 * below covers the only kinds where `text` is safe to overwrite. The last N messages stay
+	 * intact so the model still has fresh dialogue context.
 	 */
 	private async clearLargeSessionContext(): Promise<void> {
 		const skycodeMessages = this.messageStateHandler.getSkycodeMessages()
@@ -2390,6 +2396,26 @@ export class Task {
 			return
 		}
 
+		// `text` here is plain prose — safe to truncate.
+		const PLAIN_TEXT_SAYS: ReadonlySet<SkycodeSay> = new Set<SkycodeSay>([
+			"text",
+			"user_feedback",
+			"reasoning",
+			"completion_result",
+		])
+		// `text` here is plain prose — safe to truncate.
+		const PLAIN_TEXT_ASKS: ReadonlySet<SkycodeAsk> = new Set<SkycodeAsk>([
+			"followup",
+			"plan_mode_respond",
+			"completion_result",
+			"resume_task",
+			"resume_completed_task",
+		])
+
+		const isPlainText = (msg: SkycodeMessage) =>
+			(msg.type === "say" && PLAIN_TEXT_SAYS.has(msg.say as SkycodeSay)) ||
+			(msg.type === "ask" && PLAIN_TEXT_ASKS.has(msg.ask as SkycodeAsk))
+
 		const tailStart = skycodeMessages.length - keepLast
 		let truncatedCount = 0
 
@@ -2399,15 +2425,17 @@ export class Task {
 			}
 			const textLen = (msg.text || "").length
 			const imagesCount = msg.images?.length ?? 0
-			if (textLen <= maxSizeChars && imagesCount <= maxImages) {
+			const canTruncateText = textLen > maxSizeChars && isPlainText(msg)
+			const canTrimImages = imagesCount > maxImages
+			if (!canTruncateText && !canTrimImages) {
 				return msg
 			}
 			truncatedCount++
 			const next = { ...msg }
-			if (textLen > maxSizeChars) {
+			if (canTruncateText) {
 				next.text = `[Large message truncated: ${textLen} chars → ${maxSizeChars} chars. Full context available in task history.]`
 			}
-			if (imagesCount > maxImages) {
+			if (canTrimImages) {
 				next.images = msg.images?.slice(0, maxImages) ?? []
 			}
 			return next

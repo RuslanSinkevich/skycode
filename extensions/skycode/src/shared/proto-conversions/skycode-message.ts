@@ -164,9 +164,47 @@ function convertProtoEnumToSkycodeSay(say: SkycodeSay): AppSkycodeSay | undefine
 }
 
 /**
+ * Recovery for messages whose `text` was incorrectly replaced by a "[Large message truncated …]"
+ * placeholder by older versions of clearLargeSessionContext. Many SkycodeMessage variants store a
+ * serialized JSON payload in `text`; the webview then does JSON.parse(message.text) and crashes
+ * when it sees the placeholder. We restore those to an empty JSON object so parsing doesn't throw.
+ *
+ * Only `text` / `user_feedback` / `reasoning` / `completion_result` are safe to keep as prose.
+ */
+const TRUNCATED_PLACEHOLDER_PREFIX = "[Large message truncated:"
+const PLAIN_TEXT_SAYS_FOR_RECOVERY: ReadonlySet<string> = new Set([
+	"text",
+	"user_feedback",
+	"reasoning",
+	"completion_result",
+])
+const PLAIN_TEXT_ASKS_FOR_RECOVERY: ReadonlySet<string> = new Set([
+	"followup",
+	"plan_mode_respond",
+	"completion_result",
+	"resume_task",
+	"resume_completed_task",
+])
+
+export function sanitizeTruncatedPlaceholder(message: AppSkycodeMessage): AppSkycodeMessage {
+	const text = message.text
+	if (!text || !text.startsWith(TRUNCATED_PLACEHOLDER_PREFIX)) {
+		return message
+	}
+	const isPlain =
+		(message.type === "say" && PLAIN_TEXT_SAYS_FOR_RECOVERY.has(message.say as string)) ||
+		(message.type === "ask" && PLAIN_TEXT_ASKS_FOR_RECOVERY.has(message.ask as string))
+	if (isPlain) {
+		return message
+	}
+	return { ...message, text: "{}" }
+}
+
+/**
  * Convert application SkycodeMessage to proto SkycodeMessage
  */
-export function convertSkycodeMessageToProto(message: AppSkycodeMessage): ProtoSkycodeMessage {
+export function convertSkycodeMessageToProto(input: AppSkycodeMessage): ProtoSkycodeMessage {
+	const message = sanitizeTruncatedPlaceholder(input)
 	// For sending messages, we need to provide values for required proto fields
 	const askEnum = message.ask ? convertSkycodeAskToProtoEnum(message.ask) : undefined
 	const sayEnum = message.say ? convertSkycodeSayToProtoEnum(message.say) : undefined

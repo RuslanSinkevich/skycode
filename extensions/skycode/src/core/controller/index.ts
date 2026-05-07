@@ -1,5 +1,6 @@
 import type { Anthropic } from "@anthropic-ai/sdk"
 import { buildApiHandler } from "@core/api"
+import { sanitizeTruncatedPlaceholder } from "@shared/proto-conversions/skycode-message"
 import { getHooksEnabledSafe } from "@core/hooks/hooks-utils"
 import { tryAcquireTaskLockWithRetry } from "@core/task/TaskLockUtils"
 import { detectWorkspaceRoots } from "@core/workspace/detection"
@@ -1059,7 +1060,7 @@ export class Controller {
 		const autoCondenseThreshold = this.stateManager.getGlobalSettingsKey("autoCondenseThreshold")
 
 		const currentTaskItem = this.task?.taskId ? (taskHistory || []).find((item) => item.id === this.task?.taskId) : undefined
-		const skycodeMessages = this.task?.messageStateHandler.getSkycodeMessages() || []
+		const skycodeMessages = (this.task?.messageStateHandler.getSkycodeMessages() || []).map(sanitizeTruncatedPlaceholder)
 		const currentSessionId = this.sessionManager.activeSessionId ?? undefined
 		// [SKYCODE] TEMPORARILY DISABLED — legacy Cline checkpoint error message
 		const checkpointManagerErrorMessage = undefined // was: this.task?.taskState.checkpointManagerErrorMessage
