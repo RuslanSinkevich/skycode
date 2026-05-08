@@ -112,6 +112,16 @@ export function isQwenModelFamily(id: string): boolean {
 	return modelId.includes("qwen")
 }
 
+// Flagship Qwen models with strong reasoning, large context (>=131k) and high parameter count.
+// These deserve "strong" tier session limits, otherwise they get unnecessarily throttled
+// (e.g. qwen3-coder-plus has a 1M context but would only use 65% of it as medium tier).
+const STRONG_QWEN_MODEL_IDS = ["qwen3-max", "qwen3-coder-plus", "qwen3-235b-a22b"]
+
+export function isStrongQwenModel(id: string): boolean {
+	const modelId = normalize(id)
+	return STRONG_QWEN_MODEL_IDS.some((m) => modelId === m || modelId.endsWith(`/${m}`))
+}
+
 export function isHermesModelFamily(id: string): boolean {
 	const modelId = normalize(id)
 	return (

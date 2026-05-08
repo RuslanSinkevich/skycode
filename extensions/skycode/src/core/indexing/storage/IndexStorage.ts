@@ -16,6 +16,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import * as crypto from "node:crypto"
 import * as os from "node:os"
+import * as vscode from "vscode"
 import type { ChunkRow, IndexMetadata } from "../types"
 
 type SqliteDbLike = {
@@ -104,6 +105,13 @@ export class IndexStorage {
 			if (!this.backendWarningLogged) {
 				console.warn("[Skycode Indexing] SQLite unavailable, fallback to JSON storage:", error)
 				this.backendWarningLogged = true
+				// JSON backend rewrites the entire index on every save and is orders of
+				// magnitude slower than sqlite on big repos — surface this once so the
+				// user can fix the install (usually a missing native binding).
+				void vscode.window.showWarningMessage(
+					// allow-any-unicode-next-line
+					"Skycode: SQLite недоступен, используется медленный JSON backend. Переустановите расширение или сообщите в поддержку.",
+				)
 			}
 			if (!this.backendInfoLogged) {
 				console.log("[Skycode Indexing] Storage backend: json")
@@ -465,9 +473,7 @@ export class IndexStorage {
 
 		// Rebuild chunks array without entries for this file. The associated vector
 		// slots in `this.vectors` remain allocated but are no longer referenced; they
-		// will be garbage-collected on next full reindex. This matches the previous
-		// behaviour (no vector removal during incremental updates) while being O(N)
-		// instead of a full filter pass per file.
+		// will be garbage-collected on next full reindex (matches previous behaviour).
 		const toDelete = indices
 		const removed = toDelete.size
 		const newChunks: ChunkRow[] = []
@@ -477,7 +483,25 @@ export class IndexStorage {
 			}
 		}
 		this.chunks = newChunks
-		this.rebuildFileIndex()
+
+		// fileHashIndex is keyed by filePath only (not by chunk index), so a full
+		// rebuild after every removeFile() was wasted work — it's O(chunks) per
+		// delete, which is what made batch deletes during reindex visibly slow.
+		// Keep the hash map intact, just drop the deleted file's entry.
+		this.fileHashIndex.delete(filePath)
+
+		// fileChunkIndex DOES contain stale indices after the splice above; rebuild
+		// it from the new chunks array in a single pass.
+		this.fileChunkIndex.clear()
+		for (let i = 0; i < this.chunks.length; i++) {
+			const c = this.chunks[i]
+			let set = this.fileChunkIndex.get(c.filePath)
+			if (!set) {
+				set = new Set<number>()
+				this.fileChunkIndex.set(c.filePath, set)
+			}
+			set.add(i)
+		}
 		return removed
 	}
 

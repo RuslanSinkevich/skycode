@@ -12,7 +12,7 @@ import * as crypto from "node:crypto"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import * as vscode from "vscode"
-import type { IndexingConfig, IndexingMode, IndexingProgress, CodeChunk, IndexSearchResult, LocalModelId } from "@shared/IndexingTypes"
+import type { IndexingConfig, IndexingMode, IndexingProgress, CodeChunk, IndexSearchResult } from "@shared/IndexingTypes"
 import { DEFAULT_INDEXING_CONFIG, DEFAULT_INDEXING_PROGRESS } from "@shared/IndexingTypes"
 import { getModelMeta } from "./models/EmbeddingModelRegistry"
 import { walkFiles } from "./FileWalker"
@@ -22,10 +22,12 @@ import type { EmbeddingProvider, ChunkRow } from "./types"
 import { IndexStorage } from "./storage/IndexStorage"
 import { vectorSearch } from "./storage/VectorSearch"
 
-/** Batch size for embedding requests. Larger batches give better WASM throughput
- * because tokenization and model init overhead is amortized. 32 was chosen to fit
- * comfortably in the WASM memory page for MiniLM-L12 @ 2000 chars/chunk. */
-const EMBED_BATCH_SIZE = 32
+/** Batch size for embedding requests. The worker further splits each batch into
+ * sub-batches of 8 to keep peak WASM memory low; sending larger super-batches here
+ * just adds queueing latency without throughput gain. 16 keeps the worker fed
+ * (two sub-batches per super-batch) while halving the time-to-first-progress
+ * compared to 32. */
+const EMBED_BATCH_SIZE = 16
 
 /** Debounce for file watcher change bursts (ms) */
 const FILE_CHANGE_DEBOUNCE_MS = 700
@@ -33,12 +35,11 @@ const FILE_CHANGE_DEBOUNCE_MS = 700
  * a Worker Thread — the extension host is not blocked by the compute itself.
  * A minimal `setImmediate`-style yield lets FileSystemWatcher and UI events interleave. */
 const BATCH_YIELD_MS = 0
-/** Resolve current embedding model HuggingFace ID from config */
-function getCurrentEmbeddingModel(config: IndexingConfig): string {
-	if (config.mode === "local") {
-		return getModelMeta(config.localModel || "mini").huggingFaceId
-	}
-	return config.remoteModel || "text-embedding-3-small"
+/** Resolve current embedding model HuggingFace ID from config.
+ * After Tab 1 simplifies the registry, the local model is the only choice and
+ * `getModelMeta()` falls back to the default model when no id is provided. */
+function getCurrentEmbeddingModel(_config: IndexingConfig): string {
+	return getModelMeta(undefined).huggingFaceId
 }
 
 export class IndexingService implements vscode.Disposable {
@@ -51,6 +52,22 @@ export class IndexingService implements vscode.Disposable {
 	private paused = false
 	private disposables: vscode.Disposable[] = []
 	private readonly pendingFileChangeTimers = new Map<string, NodeJS.Timeout>()
+
+	/** Suppress watcher-driven incremental updates while a full reindex is running.
+	 * Events are accumulated and replayed once the full pass completes. */
+	private isFullIndexing = false
+	private readonly pendingChangesDuringFullIndex = new Set<string>()
+	private readonly pendingDeletesDuringFullIndex = new Set<string>()
+
+	/** Throttle state for emitProgress — webview state-rebuild is expensive,
+	 * so we cap fire rate at 4 Hz with a trailing flush. */
+	private lastEmitAt = 0
+	private lastEmitTimer: NodeJS.Timeout | null = null
+
+	/** Debounce timer for storage.finalize() during incremental updates. A burst
+	 * of file saves in an editor (or git checkout) would otherwise serialize a
+	 * full DB write per file. */
+	private finalizeTimer: NodeJS.Timeout | null = null
 
 	/** Event emitter for progress updates */
 	private readonly _onProgress = new vscode.EventEmitter<IndexingProgress>()
@@ -77,7 +94,10 @@ export class IndexingService implements vscode.Disposable {
 		this.disposables.push(configWatcher)
 	}
 
-	/** Read indexing config from VS Code settings */
+	/** Read indexing config from VS Code settings.
+	 * Only `mode`, `maxFileSize`, `ignoredPatterns` are user-configurable; legacy
+	 * fields (localModel/remote*) are left at defaults via spread for backward
+	 * compatibility while Tab 1 prunes them from the type. */
 	private readConfig(): IndexingConfig {
 		const cfg = vscode.workspace.getConfiguration("skycode.indexing")
 		const savedMaxFileSize = cfg.get<number | undefined>("maxFileSize")
@@ -86,17 +106,14 @@ export class IndexingService implements vscode.Disposable {
 		// This fixes the issue where large files were silently dropped from search results
 		let maxFileSize = cfg.get("maxFileSize", DEFAULT_INDEXING_CONFIG.maxFileSize)
 		if (savedMaxFileSize === 102400) {
-			maxFileSize = DEFAULT_INDEXING_CONFIG.maxFileSize // Use new value immediately
+			maxFileSize = DEFAULT_INDEXING_CONFIG.maxFileSize
 			void cfg.update("maxFileSize", DEFAULT_INDEXING_CONFIG.maxFileSize, vscode.ConfigurationTarget.Global)
 			console.log(`[Skycode Indexing] Auto-upgraded maxFileSize from 100KB to 512KB for better search coverage`)
 		}
 
 		return {
+			...DEFAULT_INDEXING_CONFIG,
 			mode: cfg.get<IndexingMode>("mode", DEFAULT_INDEXING_CONFIG.mode),
-			localModel: cfg.get<LocalModelId>("localModel", DEFAULT_INDEXING_CONFIG.localModel),
-			remoteApiUrl: cfg.get("remoteApiUrl", DEFAULT_INDEXING_CONFIG.remoteApiUrl),
-			remoteApiKey: cfg.get("remoteApiKey", DEFAULT_INDEXING_CONFIG.remoteApiKey),
-			remoteModel: cfg.get("remoteModel", DEFAULT_INDEXING_CONFIG.remoteModel),
 			maxFileSize,
 			ignoredPatterns: cfg.get("ignoredPatterns", DEFAULT_INDEXING_CONFIG.ignoredPatterns),
 		}
@@ -116,7 +133,6 @@ export class IndexingService implements vscode.Disposable {
 	/** React to config changes */
 	private onConfigChanged(): void {
 		const oldMode = this.config.mode
-		const oldLocalModel = this.config.localModel
 		this.config = this.readConfig()
 		const newMode = this.config.mode
 
@@ -126,11 +142,9 @@ export class IndexingService implements vscode.Disposable {
 			void this.clearAndReindex()
 		} else if (oldMode !== newMode) {
 			void this.clearAndReindex()
-		} else if (newMode === "local" && oldLocalModel !== this.config.localModel) {
-			void this.clearAndReindex()
 		}
 
-		this.emitProgress()
+		this.emitProgress(true)
 	}
 
 	/** Clear entire index and start fresh indexing */
@@ -229,9 +243,16 @@ export class IndexingService implements vscode.Disposable {
 		this.disposables.push(this.watcher)
 	}
 
-	/** Debounce change/create events to avoid re-indexing on rapid save bursts */
+	/** Debounce change/create events to avoid re-indexing on rapid save bursts.
+	 * While a full reindex is in progress, events are stashed and replayed at the
+	 * end — running them in parallel slows the full pass dramatically. */
 	private scheduleFileChange(uri: vscode.Uri): void {
 		const filePath = uri.fsPath
+		if (this.isFullIndexing) {
+			this.pendingDeletesDuringFullIndex.delete(filePath)
+			this.pendingChangesDuringFullIndex.add(filePath)
+			return
+		}
 		const existing = this.pendingFileChangeTimers.get(filePath)
 		if (existing) {
 			clearTimeout(existing)
@@ -242,6 +263,16 @@ export class IndexingService implements vscode.Disposable {
 			void this.onFileChanged(uri)
 		}, FILE_CHANGE_DEBOUNCE_MS)
 		this.pendingFileChangeTimers.set(filePath, timer)
+	}
+
+	/** Schedule a debounced finalize. Coalesces a burst of incremental writes
+	 * (typical: editor save sweep, git checkout) into one DB flush. */
+	private scheduleFinalize(): void {
+		if (this.finalizeTimer) return
+		this.finalizeTimer = setTimeout(() => {
+			this.finalizeTimer = null
+			void this.storage.finalize()
+		}, 2000)
 	}
 
 	/** Handle file change/create — re-index this file */
@@ -289,7 +320,7 @@ export class IndexingService implements vscode.Disposable {
 			}))
 
 			this.storage.addChunks(rows, embeddings)
-			await this.storage.finalize()
+			this.scheduleFinalize()
 		} catch {
 			// File might be binary, too large, or deleted
 		}
@@ -297,16 +328,21 @@ export class IndexingService implements vscode.Disposable {
 
 	/** Handle file deletion — remove from index */
 	private onFileDeleted(uri: vscode.Uri): void {
-		const pendingTimer = this.pendingFileChangeTimers.get(uri.fsPath)
+		const filePath = uri.fsPath
+		if (this.isFullIndexing) {
+			this.pendingChangesDuringFullIndex.delete(filePath)
+			this.pendingDeletesDuringFullIndex.add(filePath)
+			return
+		}
+		const pendingTimer = this.pendingFileChangeTimers.get(filePath)
 		if (pendingTimer) {
 			clearTimeout(pendingTimer)
-			this.pendingFileChangeTimers.delete(uri.fsPath)
+			this.pendingFileChangeTimers.delete(filePath)
 		}
 
-		const relPath = vscode.workspace.asRelativePath(uri.fsPath)
+		const relPath = vscode.workspace.asRelativePath(filePath)
 		this.storage.removeFile(relPath)
-		// Save async, don't block
-		void this.storage.finalize()
+		this.scheduleFinalize()
 	}
 
 	/**
@@ -330,7 +366,7 @@ export class IndexingService implements vscode.Disposable {
 				status: "error",
 				errorMessage: err.message,
 			}
-			this.emitProgress()
+			this.emitProgress(true)
 			return
 		}
 
@@ -347,7 +383,14 @@ export class IndexingService implements vscode.Disposable {
 			chunksTotal: 0,
 			chunksIndexed: 0,
 		}
-		this.emitProgress()
+		this.emitProgress(true)
+
+		// Mute incremental watcher work for the duration of the full pass; events
+		// are stashed and replayed in `finally` so the full reindex is not slowed
+		// by parallel embed-one-file requests.
+		this.isFullIndexing = true
+		this.pendingChangesDuringFullIndex.clear()
+		this.pendingDeletesDuringFullIndex.clear()
 
 		try {
 			// Phase 1: Walk and count files (yield every 100 files to not block event loop)
@@ -367,7 +410,7 @@ export class IndexingService implements vscode.Disposable {
 
 			this.progress.filesTotal = files.length
 			this.progress.phase = "chunking"
-			this.emitProgress()
+			this.emitProgress(true)
 			console.log("[Skycode Indexing] Phase 1 done:", files.length, "files found")
 
 			// Phase 2: Initialize storage
@@ -412,7 +455,7 @@ export class IndexingService implements vscode.Disposable {
 			this.progress.filesIndexed = files.length
 			this.progress.chunksTotal = allChunks.length
 			this.progress.phase = "loading_model"
-			this.emitProgress()
+			this.emitProgress(true)
 
 			// Phase 4: Embed in batches
 			console.log("[Skycode Indexing] Phase 4: Embedding", allChunks.length, "chunks in batches of", EMBED_BATCH_SIZE)
@@ -443,7 +486,7 @@ export class IndexingService implements vscode.Disposable {
 						console.error("[Skycode Indexing]", msg)
 						this.progress.status = "error"
 						this.progress.errorMessage = msg
-						this.emitProgress()
+						this.emitProgress(true)
 						return
 					}
 					continue
@@ -500,7 +543,7 @@ export class IndexingService implements vscode.Disposable {
 
 			// Phase 5: Finalize
 			this.progress.phase = "saving"
-			this.emitProgress()
+			this.emitProgress(true)
 			await this.storage.finalize()
 
 			const stats = this.storage.getStats()
@@ -513,7 +556,7 @@ export class IndexingService implements vscode.Disposable {
 				chunksIndexed: allChunks.length,
 				lastIndexedAt: stats.lastIndexedAt,
 			}
-			this.emitProgress()
+			this.emitProgress(true)
 
 			// Re-setup file watcher for incremental updates
 			this.setupFileWatcher()
@@ -525,7 +568,21 @@ export class IndexingService implements vscode.Disposable {
 					status: "error",
 					errorMessage: err.message,
 				}
-				this.emitProgress()
+				this.emitProgress(true)
+			}
+		} finally {
+			this.isFullIndexing = false
+			// Replay events that arrived during the full pass. Drains synchronously
+			// into the per-file debounced pipeline used in normal operation.
+			const changes = Array.from(this.pendingChangesDuringFullIndex)
+			const deletes = Array.from(this.pendingDeletesDuringFullIndex)
+			this.pendingChangesDuringFullIndex.clear()
+			this.pendingDeletesDuringFullIndex.clear()
+			for (const fsPath of deletes) {
+				this.onFileDeleted(vscode.Uri.file(fsPath))
+			}
+			for (const fsPath of changes) {
+				this.scheduleFileChange(vscode.Uri.file(fsPath))
 			}
 		}
 	}
@@ -535,7 +592,7 @@ export class IndexingService implements vscode.Disposable {
 		if (this.progress.status === "indexing") {
 			this.paused = true
 			this.progress.status = "paused"
-			this.emitProgress()
+			this.emitProgress(true)
 		}
 	}
 
@@ -544,7 +601,7 @@ export class IndexingService implements vscode.Disposable {
 		if (this.paused) {
 			this.paused = false
 			this.progress.status = "indexing"
-			this.emitProgress()
+			this.emitProgress(true)
 		}
 	}
 
@@ -567,7 +624,7 @@ export class IndexingService implements vscode.Disposable {
 		this.stop()
 		await this.storage.clear()
 		this.progress = { ...DEFAULT_INDEXING_PROGRESS }
-		this.emitProgress()
+		this.emitProgress(true)
 	}
 
 	/**
@@ -662,9 +719,33 @@ export class IndexingService implements vscode.Disposable {
 		}
 	}
 
-	/** Emit current progress to listeners */
-	private emitProgress(): void {
-		this._onProgress.fire({ ...this.progress })
+	/** Emit current progress to listeners.
+	 *
+	 * Throttled to ~4 Hz: rebuilding the webview state on every batch (50+ Hz at
+	 * peak) burned a measurable chunk of the extension host CPU during a full
+	 * indexing pass. Phase transitions and terminal states pass `force=true` to
+	 * guarantee the UI sees them immediately. */
+	private emitProgress(force = false): void {
+		const now = Date.now()
+		const elapsed = now - this.lastEmitAt
+		const THROTTLE_MS = 250
+
+		if (force || elapsed >= THROTTLE_MS) {
+			if (this.lastEmitTimer) {
+				clearTimeout(this.lastEmitTimer)
+				this.lastEmitTimer = null
+			}
+			this.lastEmitAt = now
+			this._onProgress.fire({ ...this.progress })
+			return
+		}
+
+		if (this.lastEmitTimer) return
+		this.lastEmitTimer = setTimeout(() => {
+			this.lastEmitTimer = null
+			this.lastEmitAt = Date.now()
+			this._onProgress.fire({ ...this.progress })
+		}, THROTTLE_MS - elapsed)
 	}
 
 	dispose(): void {
@@ -673,6 +754,14 @@ export class IndexingService implements vscode.Disposable {
 			clearTimeout(timer)
 		}
 		this.pendingFileChangeTimers.clear()
+		if (this.finalizeTimer) {
+			clearTimeout(this.finalizeTimer)
+			this.finalizeTimer = null
+		}
+		if (this.lastEmitTimer) {
+			clearTimeout(this.lastEmitTimer)
+			this.lastEmitTimer = null
+		}
 		this._onProgress.dispose()
 		for (const d of this.disposables) {
 			d.dispose()

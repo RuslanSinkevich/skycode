@@ -215,6 +215,16 @@ async function initModel(msg: InitMessage): Promise<void> {
 
 // ── Embedding computation ──────────────────────────────────────
 
+/**
+ * Sub-batch size for the batched forward pass.
+ * Texts are sorted by length and grouped in chunks of this size, so each
+ * sub-batch contains items of similar length and padding overhead is bounded.
+ * 8 was chosen as a compromise: large enough to amortize ONNX kernel launch
+ * overhead, small enough that O(N²·B) attention on the longest item in the
+ * sub-batch stays well below the worker's memory ceiling.
+ */
+const SUB_BATCH_SIZE = 8
+
 async function computeEmbeddings(id: number, texts: string[], textType?: "query" | "passage"): Promise<void> {
 	if (!pipeline) {
 		parentPort?.postMessage({
@@ -226,30 +236,69 @@ async function computeEmbeddings(id: number, texts: string[], textType?: "query"
 	}
 
 	try {
-		const results: number[][] = []
 		const prefixed = modelRequiresPrefix && textType
 			? texts.map((t) => `${textType}: ${t}`)
 			: texts
 
-		// Why per-text instead of a batched forward pass?
-		// transformers.js + WASM has unstable peak memory when batching texts of
-		// different lengths: padding to the longest text in the batch makes
-		// attention compute O(N²·B) and can OOM the worker silently on real-world
-		// inputs (Skycode itself crashed during indexing). Per-text is slower per
-		// call but predictable. Tokenization/model overhead is partially amortized
-		// because the pipeline keeps tokenizer + model warm across calls.
-		for (let i = 0; i < prefixed.length; i++) {
-			const output = await pipeline([prefixed[i]], {
-				pooling: "mean",
-				normalize: true,
-			})
-			results.push(...output.tolist())
+		// Sort indices by text length ascending so each sub-batch contains
+		// items of similar length. Padding to the longest item in a sub-batch
+		// drives both runtime and peak memory, so length-bucketing avoids the
+		// worst case where one long outlier inflates the whole batch.
+		const order = prefixed
+			.map((t, i) => ({ i, len: t.length }))
+			.sort((a, b) => a.len - b.len)
+			.map((x) => x.i)
+
+		const sortedResults: number[][] = new Array(prefixed.length)
+
+		for (let start = 0; start < order.length; start += SUB_BATCH_SIZE) {
+			const idxSlice = order.slice(start, start + SUB_BATCH_SIZE)
+			const subBatch = idxSlice.map((idx) => prefixed[idx])
+
+			let batchOk = false
+			try {
+				const output = await pipeline(subBatch, {
+					pooling: "mean",
+					normalize: true,
+				})
+				const vectors: number[][] = output.tolist()
+				if (vectors.length !== subBatch.length) {
+					throw new Error(
+						`Batched forward returned ${vectors.length} vectors for a sub-batch of ${subBatch.length}`,
+					)
+				}
+				for (let k = 0; k < idxSlice.length; k++) {
+					sortedResults[idxSlice[k]] = vectors[k]
+				}
+				batchOk = true
+			} catch (batchErr: any) {
+				// Batched forward can fail under memory pressure (RangeError /
+				// OOM) when a sub-batch contains an unusually long text after
+				// padding. Fall back to per-text for just this sub-batch — the
+				// worker stays alive and the rest of the request still benefits
+				// from batching.
+				console.warn(
+					`[Skycode Worker] Batched forward failed for sub-batch (size=${subBatch.length}), ` +
+						`falling back to per-text: ${batchErr?.message ?? batchErr}`,
+				)
+			}
+
+			if (!batchOk) {
+				for (let k = 0; k < idxSlice.length; k++) {
+					const single = await pipeline([subBatch[k]], {
+						pooling: "mean",
+						normalize: true,
+					})
+					const singleVec: number[][] = single.tolist()
+					sortedResults[idxSlice[k]] = singleVec[0]
+				}
+			}
 		}
 
 		parentPort?.postMessage({
 			type: "result",
 			id,
-			embeddings: results,
+			embeddings: sortedResults,
 		} satisfies EmbedResultMessage)
 	} catch (err: any) {
 		parentPort?.postMessage({
