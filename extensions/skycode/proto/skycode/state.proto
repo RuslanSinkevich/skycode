@@ -446,6 +446,12 @@ message UpdateSettingsRequest {
   optional bool block_on_syntax_errors = 44;
   // Lightweight mode: use simplified prompt for weak models
   optional bool lightweight_mode = 45;
+  // Session budget tier override + custom limits (see model-utils.ts).
+  // mode: "auto" | "strong" | "medium" | "weak" | "custom"
+  optional string session_budget_mode = 46;
+  optional int32 custom_max_tool_calls_per_turn = 47;
+  optional int32 custom_max_consecutive_read_only_tools = 48;
+  optional int32 custom_force_compact_after_steps = 49;
 }
 
 message UpdateTerminalConnectionTimeoutRequest {

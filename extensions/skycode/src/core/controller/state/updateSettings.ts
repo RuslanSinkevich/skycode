@@ -504,6 +504,33 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			controller.stateManager.setGlobalState("lightweightMode", !!request.lightweightMode)
 		}
 
+		// Session budget tier override + custom limits
+		if (request.sessionBudgetMode !== undefined && request.sessionBudgetMode !== "") {
+			const valid = ["auto", "strong", "medium", "weak", "custom"] as const
+			const m = request.sessionBudgetMode as (typeof valid)[number]
+			if ((valid as readonly string[]).includes(m)) {
+				controller.stateManager.setGlobalState("sessionBudgetMode", m)
+			}
+		}
+		if (request.customMaxToolCallsPerTurn !== undefined) {
+			controller.stateManager.setGlobalState(
+				"customMaxToolCallsPerTurn",
+				Math.max(1, Number(request.customMaxToolCallsPerTurn)),
+			)
+		}
+		if (request.customMaxConsecutiveReadOnlyTools !== undefined) {
+			controller.stateManager.setGlobalState(
+				"customMaxConsecutiveReadOnlyTools",
+				Math.max(1, Number(request.customMaxConsecutiveReadOnlyTools)),
+			)
+		}
+		if (request.customForceCompactAfterSteps !== undefined) {
+			controller.stateManager.setGlobalState(
+				"customForceCompactAfterSteps",
+				Math.max(1, Number(request.customForceCompactAfterSteps)),
+			)
+		}
+
 		if (request.optOutOfRemoteConfig !== undefined) {
 			const hadOptedOut = controller.stateManager.getGlobalSettingsKey("optOutOfRemoteConfig")
 			const isOptingOut = !!request.optOutOfRemoteConfig

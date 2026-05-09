@@ -32,16 +32,22 @@ export const MODEL_SESSION_LIMITS: Record<ModelCapabilityTier, WeakModelSessionL
 		forceCompactAfterSteps: Infinity,
 		contextWindowUsageRatio: 0.8,
 	},
+	// Medium tier — capable cloud models (Qwen, GLM, Hermes, Devstral, non-quantized
+	// local). The previous limits were too strict: a strong model on a complex task
+	// can easily blow through 40 tool calls in a single turn (lots of file reads +
+	// edits + commands), then the SESSION BUDGET EXHAUSTED guard force-completes
+	// the turn before the model is done. Doubled the budget; if a model is genuinely
+	// looping, the read-only-streak guard (12) catches it before runaway.
 	medium: {
-		maxToolCallsPerTurn: 40,
-		maxConsecutiveReadOnlyTools: 8,
-		forceCompactAfterSteps: 25,
-		contextWindowUsageRatio: 0.65,
+		maxToolCallsPerTurn: 80,
+		maxConsecutiveReadOnlyTools: 12,
+		forceCompactAfterSteps: 40,
+		contextWindowUsageRatio: 0.7,
 	},
 	weak: {
-		maxToolCallsPerTurn: 20,
-		maxConsecutiveReadOnlyTools: 5,
-		forceCompactAfterSteps: 12,
+		maxToolCallsPerTurn: 25,
+		maxConsecutiveReadOnlyTools: 6,
+		forceCompactAfterSteps: 15,
 		contextWindowUsageRatio: 0.5,
 	},
 }

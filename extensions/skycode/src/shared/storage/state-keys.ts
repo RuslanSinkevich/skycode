@@ -277,11 +277,15 @@ const USER_SETTINGS_FIELDS = {
 	optOutOfRemoteConfig: { default: false as boolean },
 	confirmDeleteFile: { default: false as boolean },
 
-	// Session Budget settings (user-overridable limits per tier)
-	sessionBudgetMode: { default: "auto" as "auto" | "custom" },
-	customMaxToolCallsPerTurn: { default: 40 as number },
-	customMaxConsecutiveReadOnlyTools: { default: 8 as number },
-	customForceCompactAfterSteps: { default: 25 as number },
+	// Session Budget settings (user-overridable limits per tier).
+	// "auto" — auto-detect tier from model id (default).
+	// "strong" / "medium" / "weak" — force the chosen preset for ALL models
+	// (handy when auto-detect underrates a model).
+	// "custom" — use the customMax* values below.
+	sessionBudgetMode: { default: "auto" as "auto" | "strong" | "medium" | "weak" | "custom" },
+	customMaxToolCallsPerTurn: { default: 80 as number },
+	customMaxConsecutiveReadOnlyTools: { default: 12 as number },
+	customForceCompactAfterSteps: { default: 40 as number },
 
 	// OpenTelemetry configuration
 	openTelemetryEnabled: { default: true as boolean },

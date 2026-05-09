@@ -227,6 +227,11 @@ export const ExtensionStateContextProvider: React.FC<{
 		indexingProgress: undefined,
 		// Skycode AI: Lightweight mode for weak models
 		lightweightMode: false,
+		// Skycode AI: Session budget defaults
+		sessionBudgetMode: "auto",
+		customMaxToolCallsPerTurn: 80,
+		customMaxConsecutiveReadOnlyTools: 12,
+		customForceCompactAfterSteps: 40,
 		promptProfile: undefined,
 		// Skycode AI: Edit tools settings
 		useSimplifiedEditTools: true,

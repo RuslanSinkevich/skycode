@@ -1193,6 +1193,11 @@ export class Controller {
 			optOutOfRemoteConfig: this.stateManager.getGlobalSettingsKey("optOutOfRemoteConfig"),
 			// Skycode AI: Lightweight mode for weak models
 			lightweightMode: this.stateManager.getGlobalSettingsKey("lightweightMode"),
+			// Skycode AI: Session budget — tier override + custom limits
+			sessionBudgetMode: this.stateManager.getGlobalSettingsKey("sessionBudgetMode"),
+			customMaxToolCallsPerTurn: this.stateManager.getGlobalSettingsKey("customMaxToolCallsPerTurn"),
+			customMaxConsecutiveReadOnlyTools: this.stateManager.getGlobalSettingsKey("customMaxConsecutiveReadOnlyTools"),
+			customForceCompactAfterSteps: this.stateManager.getGlobalSettingsKey("customForceCompactAfterSteps"),
 			// Skycode AI: Active prompt profile (variant + tier + limits)
 			promptProfile: (() => {
 				try {
@@ -1227,8 +1232,27 @@ export class Controller {
 					] as string | undefined
 					const modelId = this.task?.api?.getModel()?.id ?? configModelId ?? "unknown"
 					const providerInfo = { model: { id: modelId, info: {} as ModelInfo }, providerId, mode }
-					const tier = getModelCapabilityTier(modelId, providerInfo)
-					const limits = getSessionLimitsForModel(modelId, providerInfo)
+					// Read user's session budget override (auto / strong / medium / weak / custom).
+					// Without this, the prompt profile pill always shows the auto-detected tier
+					// even after the user explicitly chose a different one in Settings.
+					const sessionBudgetMode = this.stateManager.getGlobalSettingsKey("sessionBudgetMode") ?? "auto"
+					const customSettings = {
+						sessionBudgetMode,
+						customMaxToolCallsPerTurn:
+							this.stateManager.getGlobalSettingsKey("customMaxToolCallsPerTurn") ?? 80,
+						customMaxConsecutiveReadOnlyTools:
+							this.stateManager.getGlobalSettingsKey("customMaxConsecutiveReadOnlyTools") ?? 12,
+						customForceCompactAfterSteps:
+							this.stateManager.getGlobalSettingsKey("customForceCompactAfterSteps") ?? 40,
+					}
+					const tierOverride =
+						sessionBudgetMode === "strong" || sessionBudgetMode === "medium" || sessionBudgetMode === "weak"
+							? sessionBudgetMode
+							: "auto"
+					const detectedTier = getModelCapabilityTier(modelId, providerInfo, tierOverride)
+					const limits = getSessionLimitsForModel(modelId, providerInfo, customSettings)
+					// Show "custom" explicitly in the UI when limits are user-defined.
+					const tier = sessionBudgetMode === "custom" ? "custom" : detectedTier
 					const registry = PromptRegistry.getInstance()
 					const variant = registry.getModelFamily({
 						providerInfo,

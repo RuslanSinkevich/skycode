@@ -122,6 +122,21 @@ export function isStrongQwenModel(id: string): boolean {
 	return STRONG_QWEN_MODEL_IDS.some((m) => modelId === m || modelId.endsWith(`/${m}`))
 }
 
+// Flagship GLM models with comparable capability to next-gen flagships.
+// Without this, glm-4.6 (sonnet-class coding model) would be throttled to medium.
+const STRONG_GLM_MODEL_IDS = ["glm-4.6", "glm-4-6"]
+
+export function isStrongGlmModel(id: string): boolean {
+	const modelId = normalize(id)
+	return STRONG_GLM_MODEL_IDS.some((m) => modelId === m || modelId.endsWith(`/${m}`) || modelId.includes(m))
+}
+
+// Flagship Hermes — Hermes-4 405B is on par with strong-tier reasoning.
+export function isStrongHermesModel(id: string): boolean {
+	const modelId = normalize(id)
+	return modelId.includes("hermes-4-405b") || modelId.includes("hermes4-405b")
+}
+
 export function isHermesModelFamily(id: string): boolean {
 	const modelId = normalize(id)
 	return (
@@ -213,11 +228,27 @@ export function isNativeToolCallingConfig(providerInfo: ApiProviderInfo, enableN
 /**
  * Determines capability tier based on model family and provider.
  * Quantized local models and weak cloud models get stricter session limits.
+ *
+ * Tier override (set via the "Session Budget" setting) wins over auto-detect.
  */
-export function getModelCapabilityTier(modelId: string, providerInfo?: ApiProviderInfo): ModelCapabilityTier {
+export function getModelCapabilityTier(
+	modelId: string,
+	providerInfo?: ApiProviderInfo,
+	tierOverride?: ModelCapabilityTier | "auto",
+): ModelCapabilityTier {
+	if (tierOverride && tierOverride !== "auto") {
+		return tierOverride
+	}
+
 	const id = normalize(modelId)
 
 	if (isNextGenModelFamily(id)) {
+		return "strong"
+	}
+
+	// Flagship open-source models that previously sat in medium and got
+	// throttled at 40 tool calls. Promote them to strong.
+	if (isStrongQwenModel(id) || isStrongGlmModel(id) || isStrongHermesModel(id)) {
 		return "strong"
 	}
 
@@ -250,7 +281,10 @@ function isQuantizedModel(modelId: string): boolean {
 }
 
 export interface CustomSessionBudgetSettings {
-	sessionBudgetMode: "auto" | "custom"
+	/** "auto" — auto-detect tier from model id.
+	 *  "strong" / "medium" / "weak" — force that preset tier (recommended).
+	 *  "custom" — fully custom limits below. */
+	sessionBudgetMode: "auto" | "strong" | "medium" | "weak" | "custom"
 	customMaxToolCallsPerTurn: number
 	customMaxConsecutiveReadOnlyTools: number
 	customForceCompactAfterSteps: number
@@ -261,15 +295,23 @@ export function getSessionLimitsForModel(
 	providerInfo?: ApiProviderInfo,
 	customSettings?: CustomSessionBudgetSettings,
 ): WeakModelSessionLimits {
+	const mode = customSettings?.sessionBudgetMode ?? "auto"
+
+	// Preset tier override — easiest knob for "this model is stronger than
+	// auto-detect thinks, give it more rope".
+	if (mode === "strong" || mode === "medium" || mode === "weak") {
+		return MODEL_SESSION_LIMITS[mode]
+	}
+
 	const tier = getModelCapabilityTier(modelId, providerInfo)
 
-	// If user set custom mode, merge custom values over the tier defaults
-	if (customSettings?.sessionBudgetMode === "custom") {
+	// Fully custom limits — power-user mode.
+	if (mode === "custom") {
 		const base = MODEL_SESSION_LIMITS[tier]
 		return {
-			maxToolCallsPerTurn: customSettings.customMaxToolCallsPerTurn,
-			maxConsecutiveReadOnlyTools: customSettings.customMaxConsecutiveReadOnlyTools,
-			forceCompactAfterSteps: customSettings.customForceCompactAfterSteps,
+			maxToolCallsPerTurn: customSettings!.customMaxToolCallsPerTurn,
+			maxConsecutiveReadOnlyTools: customSettings!.customMaxConsecutiveReadOnlyTools,
+			forceCompactAfterSteps: customSettings!.customForceCompactAfterSteps,
 			contextWindowUsageRatio: base.contextWindowUsageRatio,
 		}
 	}

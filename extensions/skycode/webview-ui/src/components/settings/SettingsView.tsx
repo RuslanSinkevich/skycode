@@ -4,6 +4,7 @@ import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import {
 	DatabaseZap,
 	FlaskConical,
+	Gauge,
 	Layers,
 	type LucideIcon,
 	Mic,
@@ -35,6 +36,7 @@ import GeneralSettingsSection from "./sections/GeneralSettingsSection"
 import IndexingSettingsSection from "./sections/IndexingSettingsSection"
 import McpSection from "./sections/McpSection"
 import PermissionsSection from "./sections/PermissionsSection"
+import SessionBudgetSection from "./sections/SessionBudgetSection"
 import TerminalSettingsSection from "./sections/TerminalSettingsSection"
 import VoiceSection from "./sections/VoiceSection"
 
@@ -85,6 +87,13 @@ export const SETTINGS_TABS: SettingsTab[] = [
 		tooltipKey: "settings.tabs.context.tooltip",
 		headerKey: "settings.tabs.context.header",
 		icon: Layers,
+	},
+	{
+		id: "sessionBudget",
+		nameKey: "settings.tabs.sessionBudget.name",
+		tooltipKey: "settings.tabs.sessionBudget.tooltip",
+		headerKey: "settings.tabs.sessionBudget.header",
+		icon: Gauge,
 	},
 	{
 		id: "terminal",
@@ -153,6 +162,7 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 			permissions: PermissionsSection,
 			editing: EditingSection,
 			context: ContextSection,
+			sessionBudget: SessionBudgetSection,
 			general: GeneralSettingsSection,
 			browser: BrowserSettingsSection,
 			terminal: TerminalSettingsSection,

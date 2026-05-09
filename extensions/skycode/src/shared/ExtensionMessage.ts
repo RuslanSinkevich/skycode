@@ -149,7 +149,7 @@ export interface ExtensionState {
 	// Multi-step workflow
 	activeWorkflowName?: string
 	// Session Budget
-	sessionBudgetMode?: "auto" | "custom"
+	sessionBudgetMode?: "auto" | "strong" | "medium" | "weak" | "custom"
 	customMaxToolCallsPerTurn?: number
 	customMaxConsecutiveReadOnlyTools?: number
 	customForceCompactAfterSteps?: number
