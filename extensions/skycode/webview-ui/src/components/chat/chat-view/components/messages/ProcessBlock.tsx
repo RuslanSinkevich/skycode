@@ -495,11 +495,12 @@ const ToolItem = memo(
 	({ item, isActive, onOpenFile }: { item: ToolItemData; isActive: boolean; onOpenFile: (path: string) => void }) => {
 		const Icon = item.icon
 
+		const clickable = !!item.filePath
 		return (
 			<button
 				className={cn(
 					"flex items-center gap-1.5 py-0.5 min-w-0 w-full text-left bg-transparent border-0 p-0 text-inherit",
-					{ "cursor-pointer hover:opacity-80": !!item.filePath },
+					{ "cursor-pointer group": clickable },
 				)}
 				onClick={() => item.filePath && onOpenFile(item.filePath)}
 				type="button">
@@ -507,9 +508,11 @@ const ToolItem = memo(
 				{isActive ? (
 					<Loader2Icon className="size-3 shrink-0 opacity-70 animate-spin" />
 				) : (
-					Icon && <Icon className="size-3 shrink-0 opacity-70" />
+					Icon && <Icon className={cn("size-3 shrink-0 opacity-70", { "group-hover:opacity-100": clickable })} />
 				)}
-				<span className="truncate">{item.label}</span>
+				<span className={cn("truncate", { "group-hover:underline group-hover:opacity-100": clickable })}>
+					{item.label}
+				</span>
 			</button>
 		)
 	},

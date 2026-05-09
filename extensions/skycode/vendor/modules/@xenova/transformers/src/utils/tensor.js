@@ -72,6 +72,23 @@ export class Tensor {
       this.location = onnxTensor.location ?? "cpu";
     }
 
+    // [SKYCODE] onnxruntime-common 1.25+ exposes `data` as a prototype getter
+    // backed by `cpuData`. The `data;` class field above creates an OWN property
+    // = undefined on every instance, which shadows the prototype getter. After
+    // `Object.assign(this, onnxTensor)` we still have `this.data === undefined`
+    // (because `data` is not enumerable own on onnxTensor either, only `cpuData`
+    // is). The native onnxruntime binding then throws "Tensor.data must be a
+    // typed array for numeric tensor.". Copy it explicitly via the prototype
+    // getter so own `data` becomes the typed array.
+    if (this.data === undefined) {
+      try {
+        this.data = onnxTensor.data;
+      } catch {
+        // GPU-only tensors throw from the getter — leave `data` undefined for
+        // those. We never feed GPU tensors into the embedding pipeline.
+      }
+    }
+
     return new Proxy(this, {
       get: (obj, key) => {
         if (typeof key === "string") {

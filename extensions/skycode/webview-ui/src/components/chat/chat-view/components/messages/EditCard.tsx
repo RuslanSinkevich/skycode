@@ -103,7 +103,7 @@ export const EditCard = memo(({ message }: EditCardProps) => {
 
 			{/* Diff preview */}
 			{preview && (
-				<pre ref={previewRef} className="mt-1 text-[10px] leading-[15px] opacity-50 whitespace-pre-wrap break-words font-mono max-h-[200px] overflow-y-auto">
+				<pre ref={previewRef} className="mt-1 text-[10px] leading-[15px] opacity-50 whitespace-pre-wrap break-words font-mono max-h-[120px] overflow-y-auto">
 					{preview.map((line, i) => (
 						<div
 							className={cn({

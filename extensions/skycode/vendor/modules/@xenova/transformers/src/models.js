@@ -213,9 +213,17 @@ async function sessionRun(session, inputs) {
     output = replaceTensors(output);
     return output;
   } catch (e) {
-    // This usually occurs when the inputs are of the wrong type.
-    console.error(`An error occurred during model execution: "${e}".`);
-    console.error("Inputs given to model:", checkedInputs);
+    // [SKYCODE] Don't dump the full tensor objects to the console — under a
+    // failure storm (e.g. tokenizer/onnxruntime version mismatch) this can
+    // print thousands of multi-megabyte BigInt64Array dumps and freeze the
+    // extension host. Just log the input shapes for diagnostics.
+    const shapeSummary = Object.fromEntries(
+      Object.entries(checkedInputs).map(([k, v]) => [
+        k,
+        v && typeof v === "object" && "dims" in v ? `${v.type}[${v.dims.join("x")}]` : typeof v,
+      ]),
+    );
+    console.error(`An error occurred during model execution: "${e}".`, shapeSummary);
     throw e;
   }
 }

@@ -57,24 +57,27 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 					msOverflowStyle: "none",
 					overflowAnchor: "none",
 				}}>
-				{turns.map((turn, index) => (
-					<div data-turn-index={index} key={turn.userMessage.ts}>
-						<TurnBlock
-							expandedRows={expandedRows}
-							inputValue={inputValue}
-							messageHandlers={messageHandlers}
-							modifiedMessages={modifiedMessages}
-							onHeightChange={handleRowHeightChange}
-							onSetQuote={setActiveQuote}
-							onToggleExpand={toggleRowExpansion}
-							totalTurns={turns.length}
-							turn={turn}
-							turnIndex={index}
-						/>
-					</div>
-				))}
-				{/* Footer spacer — allows last turn to be pinned at viewport top */}
-				<div style={{ minHeight: "100vh" }} />
+				{/* Single content wrapper so ResizeObserver in useScrollBehavior tracks growth of the WHOLE conversation, not just the first turn. */}
+				<div data-chat-content-wrapper>
+					{turns.map((turn, index) => (
+						<div data-turn-index={index} key={turn.userMessage.ts}>
+							<TurnBlock
+								expandedRows={expandedRows}
+								inputValue={inputValue}
+								messageHandlers={messageHandlers}
+								modifiedMessages={modifiedMessages}
+								onHeightChange={handleRowHeightChange}
+								onSetQuote={setActiveQuote}
+								onToggleExpand={toggleRowExpansion}
+								totalTurns={turns.length}
+								turn={turn}
+								turnIndex={index}
+							/>
+						</div>
+					))}
+					{/* Footer spacer — allows last turn to be pinned at viewport top */}
+					<div style={{ minHeight: "100vh" }} />
+				</div>
 			</div>
 		</div>
 	)

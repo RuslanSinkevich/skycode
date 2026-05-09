@@ -62,6 +62,26 @@ interface ErrorMessage {
 
 let pipeline: any = null
 let modelRequiresPrefix = false
+let modelDimensions = 384
+
+// ── Input sanitisation ─────────────────────────────────────────
+
+/**
+ * Strip null bytes / lone surrogates / non-printable control chars.
+ * onnxruntime occasionally rejects tokenized input as "Tensor.data must be
+ * a typed array for numeric tensor" when the tokenizer emits something it
+ * can't materialise into a typed array — empty or all-control-char inputs
+ * are the usual culprits. Replace such inputs with a single space so the
+ * tokenizer still produces a valid (single-token) tensor and the caller
+ * gets a deterministic shape back, instead of crashing the whole batch.
+ */
+function sanitizeText(text: string): string {
+	if (typeof text !== "string") return " "
+	// Replace null bytes and ASCII control chars (except tab/newline/cr).
+	const cleaned = text.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, " ")
+	const trimmed = cleaned.trim()
+	return trimmed.length === 0 ? " " : trimmed
+}
 
 // ── Model download from Skycode CDN ────────────────────────────
 
@@ -202,6 +222,7 @@ async function initModel(msg: InitMessage): Promise<void> {
 
 		pipeline = await createPipeline("feature-extraction", huggingFaceId)
 		modelRequiresPrefix = requiresPrefix
+		modelDimensions = dimensions
 
 		parentPort?.postMessage({ type: "ready", dimensions } satisfies ReadyMessage)
 	} catch (err: any) {
@@ -236,9 +257,15 @@ async function computeEmbeddings(id: number, texts: string[], textType?: "query"
 	}
 
 	try {
+		// Sanitize first, then optionally prefix. Inputs that survive as
+		// pure whitespace / control characters get replaced with " " so
+		// the tokenizer can't trip onnxruntime's tensor validation.
+		const sanitized = texts.map(sanitizeText)
 		const prefixed = modelRequiresPrefix && textType
-			? texts.map((t) => `${textType}: ${t}`)
-			: texts
+			? sanitized.map((t) => `${textType}: ${t}`)
+			: sanitized
+
+		const zeroVec = (): number[] => new Array(modelDimensions).fill(0)
 
 		// Sort indices by text length ascending so each sub-batch contains
 		// items of similar length. Padding to the longest item in a sub-batch
@@ -274,9 +301,10 @@ async function computeEmbeddings(id: number, texts: string[], textType?: "query"
 			} catch (batchErr: any) {
 				// Batched forward can fail under memory pressure (RangeError /
 				// OOM) when a sub-batch contains an unusually long text after
-				// padding. Fall back to per-text for just this sub-batch — the
-				// worker stays alive and the rest of the request still benefits
-				// from batching.
+				// padding, or onnxruntime can reject the tokenizer output as
+				// "Tensor.data must be a typed array...". Fall back to per-text
+				// for just this sub-batch — the worker stays alive and the rest
+				// of the request still benefits from batching.
 				console.warn(
 					`[Skycode Worker] Batched forward failed for sub-batch (size=${subBatch.length}), ` +
 						`falling back to per-text: ${batchErr?.message ?? batchErr}`,
@@ -285,14 +313,32 @@ async function computeEmbeddings(id: number, texts: string[], textType?: "query"
 
 			if (!batchOk) {
 				for (let k = 0; k < idxSlice.length; k++) {
-					const single = await pipeline([subBatch[k]], {
-						pooling: "mean",
-						normalize: true,
-					})
-					const singleVec: number[][] = single.tolist()
-					sortedResults[idxSlice[k]] = singleVec[0]
+					try {
+						const single = await pipeline([subBatch[k]], {
+							pooling: "mean",
+							normalize: true,
+						})
+						const singleVec: number[][] = single.tolist()
+						sortedResults[idxSlice[k]] = singleVec[0] ?? zeroVec()
+					} catch (singleErr: any) {
+						// Don't let a single poisonous chunk kill the whole
+						// batch (and ultimately abort indexing after 5 such
+						// batches). Return a zero vector so IndexingService
+						// can skip it and keep going.
+						console.warn(
+							`[Skycode Worker] Per-text embedding failed for chunk len=${subBatch[k].length}: ` +
+								`${singleErr?.message ?? singleErr}`,
+						)
+						sortedResults[idxSlice[k]] = zeroVec()
+					}
 				}
 			}
+		}
+
+		// Final safety: replace any holes (shouldn't happen, but be defensive
+		// — IndexingService treats undefined as a hard failure of the batch).
+		for (let i = 0; i < sortedResults.length; i++) {
+			if (!sortedResults[i]) sortedResults[i] = zeroVec()
 		}
 
 		parentPort?.postMessage({

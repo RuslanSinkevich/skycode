@@ -4,25 +4,32 @@ import { ScrollBehavior } from "../types/chatTypes"
 import { TurnData } from "../utils/messageUtils"
 
 /**
- * Native-scroll chat scroll manager (no Virtuoso).
+ * Native-scroll chat scroll manager — tail mode.
  *
- * Modes:
- * 1. AUTO-SCROLL (default): viewport follows content growth — user always sees
- *    the bottom of the last turn.  Triggered by content height increase
- *    (ResizeObserver) and turn count change.
+ * Behaviour (Cursor-style):
+ *   1. New user turn → pin its top to the viewport top.
+ *      `scrollTop = lastTurnEl.offsetTop`. While AI streams a short answer
+ *      that still fits ABOVE the viewport bottom, scrollTop stays put — the
+ *      pinned user message is always on screen at the top.
+ *   2. As soon as the answer overflows the viewport bottom (i.e.
+ *      `scrollTop < maxScroll`), tail-mode kicks in: every content-growth
+ *      tick clamps `scrollTop` to `maxScroll`, so new chunks always appear
+ *      at the bottom edge of the viewport (exactly how a terminal log
+ *      follows tail).
+ *   3. The user scrolling/wheeling UP away from the bottom disables
+ *      auto-follow (and shows the "scroll to bottom" button). Scrolling
+ *      back near the bottom re-enables it.
+ *   4. The bottom 100vh footer-spacer (rendered in MessagesArea) lets the
+ *      pinned user message sit at viewport top even if the answer is tiny.
+ *      `getContentMaxScroll()` excludes the footer so we never auto-scroll
+ *      INTO empty footer space.
  *
- * 2. USER-SCROLL: activated when the user scrolls/wheels UP away from the
- *    content bottom.  Auto-scroll is paused until the user scrolls back down
- *    to the live area (or clicks "scroll to bottom").
- *
- * "Content bottom" = scrollHeight − footerHeight.
- * Footer is a spacer (100vh) so the last turn can be pinned to the top
- * of the viewport.  We never auto-scroll *into* the footer.
- *
- * Last-turn pinning: when a new turn appears, we scroll so its top aligns
- * with the viewport top. Auto-scroll stays off (disableAutoScrollRef) until
- * the user scrolls near the content bottom or uses scroll-to-bottom — so
- * streaming height changes do not snap the view to the bottom.
+ * Notes:
+ *   - No glide animation: any per-frame interpolation made fast streams
+ *     look like a 1-2s slow drift, which the user perceives as "the chat
+ *     was thrown to the bottom". Direct clamp = predictable tail behaviour.
+ *   - `prevScrollHeightRef` is intentionally not used to gate follow
+ *     decisions; we trust the live `scrollTop < maxScroll` test instead.
  */
 
 const NEAR_BOTTOM_PX = 80
@@ -49,26 +56,20 @@ export function useScrollBehavior(
 	const [isAtBottom, setIsAtBottom] = useState(true)
 	const [pendingScrollToMessage, setPendingScrollToMessage] = useState<number | null>(null)
 
-	// --- refs for internal bookkeeping ---
+	// --- internal refs ---
 	const scrollerRef = useRef<HTMLElement | null>(null)
-	const prevScrollHeightRef = useRef(0)
 	const isPinningRef = useRef(false)
 	const userInteractingRef = useRef(false)
 	const turnsRef = useRef(turns)
 	turnsRef.current = turns
-	// Initialised lazily on first mount so the "new turn pinning" effect doesn't fire on the
-	// very first render when a chat is reopened with pre-existing messages — that was causing
-	// the view to jump to the middle (start of the latest turn) instead of staying at the bottom.
 	const prevTurnCountRef = useRef(turns.length)
 	const prevMessagesLengthRef = useRef(messages.length)
 	const isFirstRenderRef = useRef(true)
 	const resizeObserverRef = useRef<ResizeObserver | null>(null)
-	const scrollFollowRafRef = useRef<number | null>(null)
 	const wheelTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-	// Grace: after programmatic scroll, ignore wheel/scroll events briefly
-	// so the browser's own scroll event from our scrollTo doesn't get
-	// misclassified as "user scrolling".
+	// Grace period after a programmatic scrollTo: ignore the resulting
+	// "scroll" event so it isn't misclassified as a user gesture.
 	const programmaticScrollUntilRef = useRef(0)
 
 	// ---------- helpers ----------
@@ -82,39 +83,47 @@ export function useScrollBehavior(
 		[getFooterPixels],
 	)
 
-	/** Scroll to content bottom (not into footer). */
-	const scrollToContentBottom = useCallback(
-		(scroller: HTMLElement, behavior: ScrollBehavior_CSS = "auto") => {
-			const maxScroll = getContentMaxScroll(scroller)
-			if (scroller.scrollTop < maxScroll) {
-				programmaticScrollUntilRef.current = Date.now() + 80
-				scroller.scrollTo({ top: maxScroll, behavior })
-			}
-			prevScrollHeightRef.current = scroller.scrollHeight
-		},
-		[getContentMaxScroll],
-	)
+	/** Tail-mode follow: if the answer has overflowed the viewport bottom
+	 *  (scrollTop < maxScroll), clamp scrollTop to maxScroll so the new
+	 *  content appears at the bottom edge. While the answer still fits
+	 *  above (scrollTop >= maxScroll, which is the case right after pinning
+	 *  the user message thanks to the footer-spacer), do NOTHING — keep
+	 *  the user message pinned at the top. */
+	const followIfOverflowing = useCallback(() => {
+		const scroller = scrollerRef.current
+		if (!scroller) return
+		if (isPinningRef.current) return
+		if (disableAutoScrollRef.current) return
+		if (userInteractingRef.current) return
+
+		const maxScroll = getContentMaxScroll(scroller)
+		if (scroller.scrollTop < maxScroll) {
+			programmaticScrollUntilRef.current = Date.now() + 80
+			scroller.scrollTop = maxScroll
+		}
+	}, [getContentMaxScroll])
 
 	// --- public API ---
 
 	const scrollToBottomAuto = useCallback(() => {
+		const scroller = scrollerRef.current
+		if (!scroller) return
 		disableAutoScrollRef.current = false
 		setShowScrollToBottom(false)
-		const scroller = scrollerRef.current
-		if (scroller) {
-			scrollToContentBottom(scroller, "auto")
-		}
-	}, [scrollToContentBottom])
+		const maxScroll = getContentMaxScroll(scroller)
+		programmaticScrollUntilRef.current = Date.now() + 80
+		scroller.scrollTop = maxScroll
+	}, [getContentMaxScroll])
 
 	const scrollToBottomSmooth = useCallback(() => {
-		if (scrollFollowRafRef.current != null) cancelAnimationFrame(scrollFollowRafRef.current)
-		scrollFollowRafRef.current = requestAnimationFrame(() => {
-			scrollFollowRafRef.current = null
-			const scroller = scrollerRef.current
-			if (!scroller || disableAutoScrollRef.current || isPinningRef.current) return
-			scrollToContentBottom(scroller, "auto")
-		})
-	}, [scrollToContentBottom])
+		const scroller = scrollerRef.current
+		if (!scroller) return
+		disableAutoScrollRef.current = false
+		setShowScrollToBottom(false)
+		const maxScroll = getContentMaxScroll(scroller)
+		programmaticScrollUntilRef.current = Date.now() + 200
+		scroller.scrollTo({ top: maxScroll, behavior: "smooth" })
+	}, [getContentMaxScroll])
 
 	// --- scrollToMessage ---
 
@@ -173,14 +182,16 @@ export function useScrollBehavior(
 	const toggleRowExpansion = useCallback(
 		(ts: number) => {
 			const isCollapsing = expandedRows[ts] ?? false
-
 			setExpandedRows((prev) => ({ ...prev, [ts]: !prev[ts] }))
 
 			if (!isCollapsing) {
+				// Expanding a row – the user is reading something specific,
+				// don't auto-yank them down.
 				disableAutoScrollRef.current = true
 				setShowScrollToBottom(true)
 			} else {
-				// collapsing — clamp scroll so we don't have empty space below content
+				// Collapsing → clamp scrollTop so we don't end up below the
+				// new (smaller) maxScroll.
 				requestAnimationFrame(() => {
 					requestAnimationFrame(() => {
 						const scroller = scrollerRef.current
@@ -189,7 +200,6 @@ export function useScrollBehavior(
 						if (scroller.scrollTop > maxScroll) {
 							scroller.scrollTop = maxScroll
 						}
-						prevScrollHeightRef.current = scroller.scrollHeight
 					})
 				})
 			}
@@ -197,41 +207,24 @@ export function useScrollBehavior(
 		[expandedRows, setExpandedRows, getContentMaxScroll],
 	)
 
-	// --- handleRowHeightChange (called by ChatRow for last message) ---
+	// --- handleRowHeightChange (called by the last ProcessBlock when its
+	//     own ResizeObserver detects a height change). Just delegates to
+	//     followIfOverflowing — we don't need separate logic here. ---
 
 	const handleRowHeightChange = useCallback(
-		(isTaller: boolean) => {
-			if (disableAutoScrollRef.current || isPinningRef.current) return
-			const scroller = scrollerRef.current
-			if (!scroller) return
-
-			if (isTaller) {
-				scrollToBottomSmooth()
-			} else {
-				requestAnimationFrame(() => {
-					const maxScroll = getContentMaxScroll(scroller)
-					if (scroller.scrollTop > maxScroll) {
-						scroller.scrollTop = maxScroll
-					}
-					prevScrollHeightRef.current = scroller.scrollHeight
-				})
-			}
+		(_isTaller: boolean) => {
+			followIfOverflowing()
 		},
-		[scrollToBottomSmooth, getContentMaxScroll],
+		[followIfOverflowing],
 	)
 
 	// ==================== Scroller ref callback ====================
 
 	const onScrollerRef = useCallback((ref: HTMLElement | null) => {
 		scrollerRef.current = ref
-		if (ref) {
-			prevScrollHeightRef.current = ref.scrollHeight
-		}
 	}, [])
 
 	// ==================== User interaction detection ====================
-	// We track wheel / touchstart / pointerdown on the scroller to know
-	// when the *user* (not our code) is driving scroll position.
 
 	useEffect(() => {
 		const scroller = scrollerRef.current
@@ -241,6 +234,8 @@ export function useScrollBehavior(
 			userInteractingRef.current = true
 
 			if (e.deltaY < 0) {
+				// User scrolled up → disable follow until they return near
+				// the bottom (handleScroll re-enables it).
 				disableAutoScrollRef.current = true
 				programmaticScrollUntilRef.current = 0
 				setShowScrollToBottom(true)
@@ -275,7 +270,7 @@ export function useScrollBehavior(
 		}
 	}, [scrollerRef.current])
 
-	// ==================== Scroll event — auto-scroll toggle ====================
+	// ==================== Scroll event — auto-scroll toggle / button ====================
 
 	useEffect(() => {
 		const scroller = scrollerRef.current
@@ -283,12 +278,15 @@ export function useScrollBehavior(
 
 		const handleScroll = () => {
 			if (isPinningRef.current) return
-
+			// Ignore browser-emitted scroll events from our own scrollTo.
 			if (Date.now() < programmaticScrollUntilRef.current && !userInteractingRef.current) return
 
 			const footerPx = getFooterPixels()
+			// Positive when scrollTop is ABOVE maxScroll (the answer hasn't
+			// reached viewport bottom yet). Negative when scrollTop is BELOW
+			// maxScroll (right after pinning a fresh turn — the footer keeps
+			// scrollTop above maxScroll).
 			const distanceFromContent = scroller.scrollHeight - footerPx - scroller.scrollTop - scroller.clientHeight
-
 			const nearBottom = distanceFromContent <= NEAR_BOTTOM_PX
 
 			if (nearBottom) {
@@ -299,7 +297,11 @@ export function useScrollBehavior(
 				setShowScrollToBottom(true)
 			}
 
-			setIsAtBottom(distanceFromContent <= AT_BOTTOM_PX)
+			// `isAtBottom` is consumed by InputSection to decide whether a
+			// growing textarea should pull the chat down. Only true when
+			// scrollTop is genuinely at/near the content bottom — never
+			// while the user message is freshly pinned (distance < 0).
+			setIsAtBottom(distanceFromContent >= 0 && distanceFromContent <= AT_BOTTOM_PX)
 		}
 
 		scroller.addEventListener("scroll", handleScroll, { passive: true })
@@ -312,32 +314,12 @@ export function useScrollBehavior(
 		const scroller = scrollerRef.current
 		if (!scroller) return
 
-		// Observe the first child (the actual content wrapper) if available,
-		// otherwise the scroller itself.
+		// Observe the dedicated chat-content wrapper (added in MessagesArea
+		// so growth of any turn is detected, not just the first child).
 		const target = scroller.firstElementChild ?? scroller
 
 		const ro = new ResizeObserver(() => {
-			if (isPinningRef.current || disableAutoScrollRef.current) return
-			// Don't fight the user mid-gesture. Even one frame of forced scroll-down
-			// while the user is dragging upward feels like a glitch. Tool blocks
-			// (research / thinking) auto-expand and shrink under the user's hand,
-			// so this guard matters for them in particular.
-			if (userInteractingRef.current) return
-
-			const curHeight = scroller.scrollHeight
-			const prevHeight = prevScrollHeightRef.current
-
-			if (curHeight > prevHeight) {
-				// Content grew → follow it
-				scrollToContentBottom(scroller, "auto")
-			} else if (curHeight < prevHeight) {
-				// Content shrank → clamp
-				const maxScroll = getContentMaxScroll(scroller)
-				if (scroller.scrollTop > maxScroll) {
-					scroller.scrollTop = maxScroll
-				}
-			}
-			prevScrollHeightRef.current = curHeight
+			followIfOverflowing()
 		})
 
 		ro.observe(target)
@@ -347,7 +329,7 @@ export function useScrollBehavior(
 			ro.disconnect()
 			resizeObserverRef.current = null
 		}
-	}, [scrollerRef.current, scrollToContentBottom, getContentMaxScroll])
+	}, [scrollerRef.current, followIfOverflowing])
 
 	// ==================== New turn pinning ====================
 
@@ -361,9 +343,8 @@ export function useScrollBehavior(
 		prevMessagesLengthRef.current = curMsgLen
 
 		// First render: chat is being (re)opened with pre-existing history.
-		// Don't pin to the latest turn (that's how we used to land in the middle).
-		// Instead, jump to the bottom on the next frame so the user sees the live
-		// area, then mark refs as initialised. We wait one rAF for the DOM to lay out.
+		// Don't pin to the latest turn, just jump to the bottom so the user
+		// lands in the live area.
 		if (isFirstRenderRef.current) {
 			isFirstRenderRef.current = false
 			const scroller = scrollerRef.current
@@ -373,7 +354,6 @@ export function useScrollBehavior(
 					if (!sc) return
 					const maxScroll = getContentMaxScroll(sc)
 					sc.scrollTop = maxScroll
-					prevScrollHeightRef.current = sc.scrollHeight
 				})
 			}
 			return
@@ -382,23 +362,20 @@ export function useScrollBehavior(
 		if (curMsgLen <= prevMsgLen) return
 
 		if (curTurnCount > prevTurnCount) {
-			// If the user has already scrolled away from the live area, do NOT yank them
-			// back to the new turn — that's the "research tool throws me to the bottom"
-			// complaint. They'll see the scroll-to-bottom button instead.
-			if (disableAutoScrollRef.current) {
-				setShowScrollToBottom(true)
-				return
-			}
-
+			// New turn = the user just sent a message. Pin its top to the
+			// viewport top so the user always sees their own message there.
 			const scroller = scrollerRef.current
 			if (!scroller) return
 
 			isPinningRef.current = true
-			disableAutoScrollRef.current = true
+			disableAutoScrollRef.current = false
+			setIsAtBottom(false)
+			setShowScrollToBottom(false)
 
-			// Wait for DOM to render the new turn element
 			requestAnimationFrame(() => {
-				const lastTurnEl = scroller.querySelector(`[data-turn-index="${curTurnCount - 1}"]`) as HTMLElement | null
+				const lastTurnEl = scroller.querySelector(
+					`[data-turn-index="${curTurnCount - 1}"]`,
+				) as HTMLElement | null
 
 				if (lastTurnEl) {
 					programmaticScrollUntilRef.current = Date.now() + 200
@@ -408,19 +385,13 @@ export function useScrollBehavior(
 
 				requestAnimationFrame(() => {
 					isPinningRef.current = false
-					// Keep disableAutoScrollRef true: user is reading from the pinned top;
-					// handleScroll re-enables follow when they scroll near the bottom.
-					setShowScrollToBottom(true)
-					if (scroller) {
-						prevScrollHeightRef.current = scroller.scrollHeight
-					}
 				})
 			})
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [messages.length, turns.length])
 
-	// ==================== Pending scroll to message ====================
+	// ==================== Pending scroll-to-message ====================
 
 	useEffect(() => {
 		if (pendingScrollToMessage !== null) {
@@ -438,9 +409,6 @@ export function useScrollBehavior(
 
 	useEffect(
 		() => () => {
-			if (scrollFollowRafRef.current != null) {
-				cancelAnimationFrame(scrollFollowRafRef.current)
-			}
 			if (wheelTimeoutRef.current != null) {
 				clearTimeout(wheelTimeoutRef.current)
 			}
@@ -465,5 +433,3 @@ export function useScrollBehavior(
 		onScrollerRef,
 	}
 }
-
-type ScrollBehavior_CSS = "auto" | "smooth"
