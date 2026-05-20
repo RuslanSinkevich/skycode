@@ -342,6 +342,8 @@
 	"button.save": "Save",
 	"button.executeCommand": "Run command",
 	"button.proceedInBackground": "Proceed in background",
+	"button.executing": "Running…",
+	"button.cancel": "Cancel",
 	"button.condenseChat": "Condense chat",
 	"button.reportBug": "Report bug",
 	"provider.baseUrl": "Base URL",

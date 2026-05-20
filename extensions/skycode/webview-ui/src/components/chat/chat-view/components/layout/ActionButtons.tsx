@@ -3,6 +3,7 @@ import type { Mode } from "@shared/storage/types"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import type React from "react"
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
 import { ButtonActionType, getButtonConfig } from "../../shared/buttonConfig"
 import type { ChatState, MessageHandlers } from "../../types/chatTypes"
@@ -34,6 +35,10 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 	const { t } = useI18n()
 	const { inputValue, selectedImages, selectedFiles, setSendingDisabled } = chatState
 	const [isProcessing, setIsProcessing] = useState(false)
+	// [SKYCODE] backgroundCommandRunning — флаг что команда уже одобрена и работает.
+	// Используется чтобы показать спиннер вместо кнопок "Выполнить/Отклонить",
+	// пока команда ещё не выдала первого вывода (например `sleep 15`).
+	const { backgroundCommandRunning } = useExtensionState()
 
 	// Memoize last messages to avoid unnecessary recalculations
 	const [lastMessage, secondLastMessage] = useMemo(() => {
@@ -113,6 +118,30 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 	const hasButtons = primaryText || secondaryText
 	const isStreaming = task.partial === true
 	const canInteract = enableButtons && !isProcessing
+
+	// [SKYCODE] Команда уже одобрена и идёт (но ещё нет вывода) — показываем спиннер вместо кнопок,
+	// чтобы пользователь видел что агент работает, а не завис.
+	const isApprovedCommandRunning =
+		backgroundCommandRunning &&
+		lastMessage?.type === "ask" &&
+		(lastMessage.ask === "command" || lastMessage.ask === "command_output")
+
+	if (isApprovedCommandRunning) {
+		return (
+			<div className="flex px-3.5">
+				<VSCodeButton appearance="primary" className="flex-1 mr-[6px]" disabled>
+					<span className="codicon codicon-loading codicon-modifier-spin mr-1.5" />
+					{t("button.executing")}
+				</VSCodeButton>
+				<VSCodeButton
+					appearance="secondary"
+					className="flex-1"
+					onClick={() => handleActionClick("cancel")}>
+					{t("button.cancel")}
+				</VSCodeButton>
+			</div>
+		)
+	}
 
 	if (!hasButtons) {
 		return null

@@ -342,6 +342,8 @@
 	"button.save": "Сохранить",
 	"button.executeCommand": "Выполнить команду",
 	"button.proceedInBackground": "Продолжить фоном",
+	"button.executing": "Выполняется…",
+	"button.cancel": "Отмена",
 	"button.condenseChat": "Сжать переписку",
 	"button.reportBug": "Сообщить об ошибке",
 	"provider.baseUrl": "Базовый URL",
