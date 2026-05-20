@@ -134,13 +134,15 @@ export async function buildEnvironmentDetails(
 	const busyTerminals = ctx.terminalManager.getTerminals(true)
 	const inactiveTerminals = ctx.terminalManager.getTerminals(false)
 
-	if (busyTerminals.length > 0 && ctx.taskState.didEditFile) {
-		await setTimeoutPromise(300)
-	}
+	// [SKYCODE] Раньше тут ждали до 15с пока терминал "остынет" — рудимент от Cline,
+	// нужный для блокирующего ask("command_output"). Теперь вывод стримится через say()
+	// и уже попал в историю сообщений, ждать смысла нет.
+	// Оставляем короткий 2с лимит на случай если процесс активно сыпет вывод прямо сейчас —
+	// чтобы успеть забрать его в getUnretrievedOutput для environment details.
 	if (busyTerminals.length > 0) {
 		await pWaitFor(() => busyTerminals.every((t) => !ctx.terminalManager.isProcessHot(t.id)), {
 			interval: 100,
-			timeout: 15_000,
+			timeout: 2_000,
 		}).catch(() => {})
 	}
 

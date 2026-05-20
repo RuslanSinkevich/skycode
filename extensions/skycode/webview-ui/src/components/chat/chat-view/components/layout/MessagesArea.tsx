@@ -1,5 +1,5 @@
 import { SkycodeMessage } from "@shared/ExtensionMessage"
-import React, { useCallback, useEffect, useRef } from "react"
+import React, { useCallback } from "react"
 import { ChatState, MessageHandlers, ScrollBehavior } from "../../types/chatTypes"
 import { TurnData } from "../../utils/messageUtils"
 import { TurnBlock } from "../messages/TurnBlock"
@@ -19,8 +19,11 @@ interface MessagesAreaProps {
  * Each TurnBlock = one user message (sticky header) + AI responses.
  * Sticky headers are pure CSS — no JS overlay, no translateY hacks.
  *
- * Footer spacer (100vh) lets the last turn scroll to the top of viewport
- * (Cursor-like "message at top" behavior). Its height never changes.
+ * Footer spacer is SIZED DYNAMICALLY by useScrollBehavior to exactly
+ * `clientHeight - lastTurnHeight` (clamped >= 0). That way the natural
+ * browser-enforced max scrollTop equals `lastTurn.offsetTop` — the user
+ * literally cannot scroll past the pinned last user message, and the
+ * pin position is always pixel-accurate.
  */
 export const MessagesArea: React.FC<MessagesAreaProps> = ({
 	task,
@@ -35,6 +38,7 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 		toggleRowExpansion,
 		handleRowHeightChange,
 		onScrollerRef,
+		onFooterRef,
 	} = scrollBehavior
 
 	const { expandedRows, inputValue, setActiveQuote } = chatState
@@ -75,8 +79,8 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 							/>
 						</div>
 					))}
-					{/* Footer spacer — allows last turn to be pinned at viewport top */}
-					<div style={{ minHeight: "100vh" }} />
+					{/* Footer spacer — height managed by useScrollBehavior.resizeFooter */}
+					<div data-chat-footer-spacer ref={onFooterRef} style={{ minHeight: 0, height: 0 }} />
 				</div>
 			</div>
 		</div>

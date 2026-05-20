@@ -15,8 +15,10 @@ import { applyModelContentFixes } from "../utils/ModelContentProcessor"
 import { showNotificationForApproval } from "../../utils"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
 
-// Default timeout for commands in yolo mode and background exec mode
-const DEFAULT_COMMAND_TIMEOUT_SECONDS = 30
+// [SKYCODE] Default hard timeout для ВСЕХ команд (раньше срабатывал только в yolo/backgroundExec).
+// По истечении: standalone — уходит в background, vscode terminal — процесс остаётся в терминале,
+// агент получает "ещё работает" и продолжает работу, не блокируясь.
+const DEFAULT_COMMAND_TIMEOUT_SECONDS = 120
 
 export class ExecuteCommandToolHandler implements IFullyManagedTool {
 	readonly name = SkycodeDefaultTool.BASH
@@ -56,21 +58,21 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 
 		config.taskState.consecutiveMistakeCount = 0
 
-        // [SKYCODE-SKYCODE] Hard Block for redundant 'open' commands
-        // We move this to the very top to prevent ANY confirmation or terminal spam.
-        const openCommands = ["code ", "code-insiders ", "cursor ", "open ", "xdg-open ", "notepad "];
-        const trimmedCommand = command.trim();
-        if (openCommands.some(cmd => trimmedCommand.startsWith(cmd))) {
-             await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "command");
-             await config.callbacks.say("command", command, undefined, undefined, false);
-             return "Command executed (simulated). File should be open in the editor.";
-        }
-
-		// Handling of timeout while in yolo mode or background exec mode
-		if (config.yoloModeToggled || config.vscodeTerminalExecutionMode === "backgroundExec") {
-			const parsed = timeoutParam ? parseInt(timeoutParam, 10) : NaN
-			timeoutSeconds = parsed > 0 ? parsed : DEFAULT_COMMAND_TIMEOUT_SECONDS
+		// [SKYCODE-SKYCODE] Hard Block for redundant 'open' commands
+		// We move this to the very top to prevent ANY confirmation or terminal spam.
+		const openCommands = ["code ", "code-insiders ", "cursor ", "open ", "xdg-open ", "notepad "]
+		const trimmedCommand = command.trim()
+		if (openCommands.some((cmd) => trimmedCommand.startsWith(cmd))) {
+			await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "command")
+			await config.callbacks.say("command", command, undefined, undefined, false)
+			return "Command executed (simulated). File should be open in the editor."
 		}
+
+		// [SKYCODE] Hard timeout всегда — модель может переопределить через параметр `timeout`,
+		// иначе используем DEFAULT_COMMAND_TIMEOUT_SECONDS. По истечении агент не блокируется
+		// (см. CommandOrchestrator: standalone → background, vscode → "ещё работает").
+		const parsedTimeout = timeoutParam ? parseInt(timeoutParam, 10) : NaN
+		timeoutSeconds = parsedTimeout > 0 ? parsedTimeout : DEFAULT_COMMAND_TIMEOUT_SECONDS
 
 		// Pre-process command for certain models
 		if (config.api.getModel().id.includes("gemini")) {
@@ -101,7 +103,7 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 		}
 
 		// Check command permission validation (SKYCODE_COMMAND_PERMISSIONS env var)
-        // [SKYCODE-SKYCODE] Security check stays active!
+		// [SKYCODE-SKYCODE] Security check stays active!
 		const permissionResult = config.services.commandPermissionController.validateCommand(actualCommand)
 		if (!permissionResult.allowed) {
 			let errorMessage: string

@@ -19,10 +19,14 @@ import { TurnData } from "../utils/messageUtils"
  *   3. The user scrolling/wheeling UP away from the bottom disables
  *      auto-follow (and shows the "scroll to bottom" button). Scrolling
  *      back near the bottom re-enables it.
- *   4. The bottom 100vh footer-spacer (rendered in MessagesArea) lets the
- *      pinned user message sit at viewport top even if the answer is tiny.
- *      `getContentMaxScroll()` excludes the footer so we never auto-scroll
- *      INTO empty footer space.
+ *   4. The bottom footer-spacer (rendered in MessagesArea) is SIZED
+ *      DYNAMICALLY here to `max(0, clientHeight - lastTurnHeight)`.
+ *      Consequence: the natural max scrollTop equals `lastTurn.offsetTop`
+ *      while the last turn fits the viewport, so the browser itself
+ *      forbids scrolling past the pinned user message (no more "the last
+ *      turn flew off the top into empty space"). When the last turn grows
+ *      beyond the viewport, footer collapses to 0 and tail-following
+ *      behaves as in any chat / terminal log.
  *
  * Notes:
  *   - No glide animation: any per-frame interpolation made fast streams
@@ -58,6 +62,7 @@ export function useScrollBehavior(
 
 	// --- internal refs ---
 	const scrollerRef = useRef<HTMLElement | null>(null)
+	const footerRef = useRef<HTMLElement | null>(null)
 	const isPinningRef = useRef(false)
 	const userInteractingRef = useRef(false)
 	const turnsRef = useRef(turns)
@@ -66,6 +71,7 @@ export function useScrollBehavior(
 	const prevMessagesLengthRef = useRef(messages.length)
 	const isFirstRenderRef = useRef(true)
 	const resizeObserverRef = useRef<ResizeObserver | null>(null)
+	const footerObserverRef = useRef<ResizeObserver | null>(null)
 	const wheelTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
 	// Grace period after a programmatic scrollTo: ignore the resulting
@@ -74,14 +80,43 @@ export function useScrollBehavior(
 
 	// ---------- helpers ----------
 
-	const getFooterPixels = useCallback(() => window.innerHeight, [])
+	/** Find the last turn element inside the scroller. */
+	const getLastTurnEl = useCallback((): HTMLElement | null => {
+		const scroller = scrollerRef.current
+		if (!scroller) return null
+		const turnEls = scroller.querySelectorAll<HTMLElement>("[data-turn-index]")
+		return turnEls.length ? turnEls[turnEls.length - 1] : null
+	}, [])
 
-	const getContentMaxScroll = useCallback(
-		(scroller: HTMLElement) => {
-			return Math.max(0, scroller.scrollHeight - getFooterPixels() - scroller.clientHeight)
-		},
-		[getFooterPixels],
-	)
+	/** Resize the footer-spacer so that the natural max scrollTop equals
+	 *  `lastTurn.offsetTop` while the last turn fits the viewport. When
+	 *  the last turn overflows, footer collapses to 0 and the user can
+	 *  scroll further down to follow the streaming tail. */
+	const resizeFooter = useCallback(() => {
+		const scroller = scrollerRef.current
+		const footer = footerRef.current
+		if (!scroller || !footer) return
+		const lastTurnEl = getLastTurnEl()
+		if (!lastTurnEl) {
+			footer.style.minHeight = "0px"
+			footer.style.height = "0px"
+			return
+		}
+		const lastTurnHeight = lastTurnEl.getBoundingClientRect().height
+		const desired = Math.max(0, scroller.clientHeight - lastTurnHeight)
+		const desiredPx = `${desired}px`
+		if (footer.style.minHeight !== desiredPx) {
+			footer.style.minHeight = desiredPx
+			footer.style.height = desiredPx
+		}
+	}, [getLastTurnEl])
+
+	const getContentMaxScroll = useCallback((scroller: HTMLElement) => {
+		// The footer is sized dynamically (see resizeFooter) so that the
+		// natural max scrollTop is exactly where we want the user to be
+		// allowed to scroll. No footer subtraction needed.
+		return Math.max(0, scroller.scrollHeight - scroller.clientHeight)
+	}, [])
 
 	/** Tail-mode follow: if the answer has overflowed the viewport bottom
 	 *  (scrollTop < maxScroll), clamp scrollTop to maxScroll so the new
@@ -224,6 +259,18 @@ export function useScrollBehavior(
 		scrollerRef.current = ref
 	}, [])
 
+	const onFooterRef = useCallback(
+		(ref: HTMLElement | null) => {
+			footerRef.current = ref
+			if (ref) {
+				// Size immediately so first paint never shows the wrong
+				// (huge) scrollable area.
+				resizeFooter()
+			}
+		},
+		[resizeFooter],
+	)
+
 	// ==================== User interaction detection ====================
 
 	useEffect(() => {
@@ -281,12 +328,10 @@ export function useScrollBehavior(
 			// Ignore browser-emitted scroll events from our own scrollTo.
 			if (Date.now() < programmaticScrollUntilRef.current && !userInteractingRef.current) return
 
-			const footerPx = getFooterPixels()
-			// Positive when scrollTop is ABOVE maxScroll (the answer hasn't
-			// reached viewport bottom yet). Negative when scrollTop is BELOW
-			// maxScroll (right after pinning a fresh turn — the footer keeps
-			// scrollTop above maxScroll).
-			const distanceFromContent = scroller.scrollHeight - footerPx - scroller.scrollTop - scroller.clientHeight
+			// With the dynamic footer, max scrollTop already equals either
+			// `lastTurn.offsetTop` (short answer) or end-of-last-turn (long
+			// answer). So we can use the natural distance to content end.
+			const distanceFromContent = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight
 			const nearBottom = distanceFromContent <= NEAR_BOTTOM_PX
 
 			if (nearBottom) {
@@ -298,15 +343,16 @@ export function useScrollBehavior(
 			}
 
 			// `isAtBottom` is consumed by InputSection to decide whether a
-			// growing textarea should pull the chat down. Only true when
-			// scrollTop is genuinely at/near the content bottom — never
-			// while the user message is freshly pinned (distance < 0).
-			setIsAtBottom(distanceFromContent >= 0 && distanceFromContent <= AT_BOTTOM_PX)
+			// growing textarea should pull the chat down. Right after
+			// pinning a fresh turn, scrollTop == maxScroll, so this is
+			// true — which is fine: scrollToBottomAuto re-targets the same
+			// position so no visible jump occurs.
+			setIsAtBottom(distanceFromContent <= AT_BOTTOM_PX)
 		}
 
 		scroller.addEventListener("scroll", handleScroll, { passive: true })
 		return () => scroller.removeEventListener("scroll", handleScroll)
-	}, [scrollerRef.current, getFooterPixels])
+	}, [scrollerRef.current])
 
 	// ==================== ResizeObserver — follow content growth ====================
 
@@ -319,6 +365,10 @@ export function useScrollBehavior(
 		const target = scroller.firstElementChild ?? scroller
 
 		const ro = new ResizeObserver(() => {
+			// Footer needs to be re-sized BEFORE we decide whether to tail.
+			// Otherwise tail-follow would clamp to a wrong maxScroll for one
+			// frame (visible "the answer jumps to the bottom for a tick").
+			resizeFooter()
 			followIfOverflowing()
 		})
 
@@ -329,7 +379,39 @@ export function useScrollBehavior(
 			ro.disconnect()
 			resizeObserverRef.current = null
 		}
-	}, [scrollerRef.current, followIfOverflowing])
+	}, [scrollerRef.current, followIfOverflowing, resizeFooter])
+
+	// ==================== Dynamic footer sizing ====================
+	//
+	// Re-targets a dedicated ResizeObserver at the CURRENT last turn each
+	// time the turn count changes. While the last turn streams new content
+	// the observer fires for every height change → footer shrinks by the
+	// same amount → scrollHeight is invariant → pinned scrollTop stays
+	// glued to lastTurn.offsetTop without any explicit re-scroll.
+
+	const lastTurnTs = turns.length ? turns[turns.length - 1].userMessage.ts : 0
+
+	useEffect(() => {
+		const scroller = scrollerRef.current
+		if (!scroller) return
+		const lastTurnEl = getLastTurnEl()
+		if (!lastTurnEl) return
+
+		resizeFooter()
+
+		const ro = new ResizeObserver(() => {
+			resizeFooter()
+		})
+		ro.observe(lastTurnEl)
+		ro.observe(scroller)
+		footerObserverRef.current = ro
+
+		return () => {
+			ro.disconnect()
+			footerObserverRef.current = null
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [turns.length, lastTurnTs, scrollerRef.current])
 
 	// ==================== New turn pinning ====================
 
@@ -352,6 +434,7 @@ export function useScrollBehavior(
 				requestAnimationFrame(() => {
 					const sc = scrollerRef.current
 					if (!sc) return
+					resizeFooter()
 					const maxScroll = getContentMaxScroll(sc)
 					sc.scrollTop = maxScroll
 				})
@@ -372,18 +455,28 @@ export function useScrollBehavior(
 			setIsAtBottom(false)
 			setShowScrollToBottom(false)
 
+			// Robust pin: compute the target offset via rects (independent
+			// of offsetParent quirks), size the footer first so that the
+			// browser clamps to the EXACT pinning position, then scroll.
+			// Repeat in a second rAF to absorb any late layout shifts from
+			// the freshly mounted turn (fonts loading, icons settling, …).
+			const pinOnce = () => {
+				const sc = scrollerRef.current
+				if (!sc) return
+				resizeFooter()
+				const lastTurnEl = getLastTurnEl()
+				if (!lastTurnEl) return
+				const scrollerRect = sc.getBoundingClientRect()
+				const turnRect = lastTurnEl.getBoundingClientRect()
+				const elTop = turnRect.top - scrollerRect.top + sc.scrollTop
+				programmaticScrollUntilRef.current = Date.now() + 200
+				sc.scrollTop = elTop
+			}
+
 			requestAnimationFrame(() => {
-				const lastTurnEl = scroller.querySelector(
-					`[data-turn-index="${curTurnCount - 1}"]`,
-				) as HTMLElement | null
-
-				if (lastTurnEl) {
-					programmaticScrollUntilRef.current = Date.now() + 200
-					const elTop = lastTurnEl.offsetTop - scroller.offsetTop
-					scroller.scrollTo({ top: elTop, behavior: "auto" })
-				}
-
+				pinOnce()
 				requestAnimationFrame(() => {
+					pinOnce()
 					isPinningRef.current = false
 				})
 			})
@@ -431,5 +524,6 @@ export function useScrollBehavior(
 		pendingScrollToMessage,
 		setPendingScrollToMessage,
 		onScrollerRef,
+		onFooterRef,
 	}
 }

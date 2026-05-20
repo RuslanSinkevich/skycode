@@ -26,10 +26,9 @@ const GENERIC: SkycodeToolSpec = {
 			name: "timeout",
 			required: false,
 			type: "integer",
-			contextRequirements: (context) => context.yoloModeToggled === true,
 			instruction:
-				"Integer representing the timeout in seconds for how long to run the terminal command, before timing out and continuing the task.",
-			usage: "30",
+				"Optional timeout in seconds. After this, the task continues without blocking — for standalone terminals the command keeps running in the background, for VSCode terminals it stays in the terminal. Default is 120s. Increase for long builds/installs/tests (e.g. 300 for npm install, 600 for heavy builds).",
+			usage: "120",
 		},
 	],
 }

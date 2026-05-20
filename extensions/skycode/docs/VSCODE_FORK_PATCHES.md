@@ -231,19 +231,12 @@ npm run build
 cd ..
 node esbuild.mjs
 
-# 3. Обфусцировать (8 ГБ RAM для node)
-node --max-old-space-size=8192 "C:\Users\Admin\AppData\Roaming\npm\node_modules\javascript-obfuscator\bin\javascript-obfuscator" dist/extension.js --output dist/extension.obf.js --compact true --string-array false --rename-globals false --identifier-names-generator hexadecimal --numbers-to-expressions true --simplify true --unicode-escape-sequence true
-Copy-Item dist\extension.obf.js dist\extension.js -Force
-Remove-Item dist\extension.obf.js
-
-# 4. Собрать VS Code
+# 3. Собрать VS Code
 cd ..\..
 node --max-old-space-size=8192 node_modules\gulp\bin\gulp.js vscode-win32-x64-min
 
-# 5. Результат в ../VSCode-win32-x64/Skycode.exe
+# 4. Результат в ../VSCode-win32-x64/Skycode.exe
 ```
-
-**Примечание по обфускации:** файл ~44 МБ, `string-array` и `split-strings` вызывают OOM или `URI malformed`. Рабочий набор: `--unicode-escape-sequence true --identifier-names-generator hexadecimal --numbers-to-expressions true --simplify true`.
 
 ---
 
@@ -262,7 +255,7 @@ node --max-old-space-size=8192 node_modules\gulp\bin\gulp.js vscode-win32-x64-mi
 **Что осталось в расширении (405 МБ):**
 - `models/` — 153 МБ (2 модели, только `model_quantized.onnx`)
 - `assets/voice/` — 149 МБ (whisper tiny zip)
-- `dist/` — 96 МБ (обфусцированный extension.js + tree-sitter wasm)
+- `dist/` — ~45 МБ (extension.js + tree-sitter wasm)
 - `webview-ui/build/` — 6 МБ (React UI)
 - `vendor/modules/` — 0.8 МБ (transformers.js)
 

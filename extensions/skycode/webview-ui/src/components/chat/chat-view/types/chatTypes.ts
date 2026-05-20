@@ -89,6 +89,7 @@ export interface ScrollBehavior {
 	pendingScrollToMessage: number | null
 	setPendingScrollToMessage: React.Dispatch<React.SetStateAction<number | null>>
 	onScrollerRef: (ref: HTMLElement | null) => void
+	onFooterRef: (ref: HTMLElement | null) => void
 }
 
 /**

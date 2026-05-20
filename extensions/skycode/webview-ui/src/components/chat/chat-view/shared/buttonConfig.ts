@@ -76,12 +76,15 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		primaryAction: "approve",
 		secondaryAction: "reject",
 	},
+	// [SKYCODE] command_output больше не блокирует (рудимент Cline убран).
+	// Вывод стримится через say(); кнопка Cancel показывается через api_req_active/partial
+	// (которые срабатывают пока агент работает) — отдельная конфигурация не нужна.
 	command_output: {
 		sendingDisabled: false,
-		enableButtons: true,
-		primaryText: "button.proceedInBackground",
+		enableButtons: false,
+		primaryText: undefined,
 		secondaryText: undefined,
-		primaryAction: "proceed",
+		primaryAction: undefined,
 		secondaryAction: undefined,
 	},
 
@@ -220,11 +223,8 @@ export function getButtonConfig(message: SkycodeMessage | undefined, _mode: Mode
 	const isStreaming = message.partial === true
 	const isError = message?.ask ? errorTypes.includes(message.ask) : false
 
-	// Special case: command_output should show "Proceed While Running" button even while streaming
-	// This allows terminal output to stream while still showing the action button
-	if (message.type === "ask" && message.ask === "command_output") {
-		return BUTTON_CONFIGS.command_output
-	}
+	// [SKYCODE] command_output как ask больше не приходит (CommandOrchestrator стримит через say).
+	// Spec-case удалён, дальше идёт стандартная обработка через partial/api_req_active.
 
 	// Handle partial/streaming messages first (most common during task execution)
 	// This must be checked before any other conditions to ensure streaming state takes precedence
@@ -258,8 +258,9 @@ export function getButtonConfig(message: SkycodeMessage | undefined, _mode: Mode
 			// Command execution
 			case "command":
 				return BUTTON_CONFIGS.command
+			// [SKYCODE] command_output как ask больше не используется
 			case "command_output":
-				return BUTTON_CONFIGS.command_output
+				return BUTTON_CONFIGS.partial
 
 			// Standard approvals
 			case "followup":
@@ -297,11 +298,8 @@ export function getButtonConfig(message: SkycodeMessage | undefined, _mode: Mode
 		return BUTTON_CONFIGS.api_req_active
 	}
 
-	// Special case: command_output say messages should show "Proceed While Running" button
-	// This allows terminal output to stream while still showing the action button
-	if (message.type === "say" && message.say === "command_output") {
-		return BUTTON_CONFIGS.command_output
-	}
+	// [SKYCODE] say.command_output идёт как обычный стрим — без отдельной кнопки.
+	// Cancel доступен через partial/api_req_active пока агент работает.
 
 	return BUTTON_CONFIGS.partial
 }
