@@ -87,7 +87,7 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 
 	return (
 		<div
-			className="p-2.5 pr-1 my-1 text-foreground rounded-xs"
+			className="p-2.5 pr-1 my-1 rounded-xs bg-input-background text-input-foreground border border-description/10"
 			onClick={handleClick}
 			onMouseEnter={() => setIsHovered(true)}
 			onMouseLeave={() => setIsHovered(false)}
