@@ -144,7 +144,7 @@ export class OcaHandler implements ApiHandler {
 	}
 
 	async calculateCost(
-		modelInfo: ModelInfo,
+		_modelInfo: ModelInfo,
 		inputTokens: number,
 		outputTokens: number,
 		_cacheWriteTokens?: number,
@@ -158,7 +158,7 @@ export class OcaHandler implements ApiHandler {
 
 	@withRetry()
 	async *createMessage(systemPrompt: string, messages: SkycodeStorageMessage[], tools?: OpenAITool[]): ApiStream {
-		if (this.options.ocaModelInfo?.apiFormat == ApiFormat.OPENAI_RESPONSES) {
+		if (this.options.ocaModelInfo?.apiFormat === ApiFormat.OPENAI_RESPONSES) {
 			yield* this.createMessageResponsesApi(systemPrompt, messages, tools)
 		} else {
 			yield* this.createMessageChatApi(systemPrompt, messages, tools)

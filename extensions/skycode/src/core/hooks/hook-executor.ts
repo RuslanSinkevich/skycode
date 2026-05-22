@@ -127,7 +127,7 @@ export async function executeHook<Name extends keyof Hooks>(options: HookExecuti
 			// NOTE: We keep backward compatibility by encoding metadata into the string.
 			// The CLI prints this as-is in verbose mode.
 			const prefixParts: string[] = []
-			if (meta?.source) prefixParts.push(meta.source)
+			if (meta?.source) { prefixParts.push(meta.source) }
 			prefixParts.push(stream)
 			// Use a shortened path for readability; full path is still available in hook_status.
 			if (meta?.scriptPath) {

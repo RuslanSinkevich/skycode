@@ -12,8 +12,7 @@ import * as fs from "node:fs"
 import * as https from "node:https"
 import * as http from "node:http"
 import { pathToFileURL } from "node:url"
-import { createUnzip } from "node:zlib"
-import { pipeline as streamPipeline, Writable } from "node:stream"
+import { Logger } from "@/shared/services/Logger"
 
 // ── Message types ──────────────────────────────────────────────
 
@@ -76,7 +75,7 @@ let modelDimensions = 384
  * gets a deterministic shape back, instead of crashing the whole batch.
  */
 function sanitizeText(text: string): string {
-	if (typeof text !== "string") return " "
+	if (typeof text !== "string") { return " " }
 	// Replace null bytes and ASCII control chars (except tab/newline/cr).
 	const cleaned = text.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, " ")
 	const trimmed = cleaned.trim()
@@ -112,7 +111,7 @@ async function ensureModelDownloaded(
 ): Promise<void> {
 	const modelDir = path.join(modelsDir, huggingFaceId)
 	const onnxPath = path.join(modelDir, "onnx", "model_quantized.onnx")
-	if (fs.existsSync(onnxPath)) return
+	if (fs.existsSync(onnxPath)) { return }
 
 	sendProgress("downloading", 0)
 	const res = await httpGet(downloadUrl)
@@ -156,7 +155,7 @@ async function extractZip(zipPath: string, destDir: string): Promise<void> {
 	let offset = 0
 	while (offset < buf.length) {
 		const sig = buf.readUInt32LE(offset)
-		if (sig !== 0x04034b50) break
+		if (sig !== 0x04034b50) { break }
 
 		const compMethod = buf.readUInt16LE(offset + 8)
 		const compSize = buf.readUInt32LE(offset + 18)
@@ -305,7 +304,7 @@ async function computeEmbeddings(id: number, texts: string[], textType?: "query"
 				// "Tensor.data must be a typed array...". Fall back to per-text
 				// for just this sub-batch — the worker stays alive and the rest
 				// of the request still benefits from batching.
-				console.warn(
+				Logger.warn(
 					`[Skycode Worker] Batched forward failed for sub-batch (size=${subBatch.length}), ` +
 						`falling back to per-text: ${batchErr?.message ?? batchErr}`,
 				)
@@ -325,7 +324,7 @@ async function computeEmbeddings(id: number, texts: string[], textType?: "query"
 						// batch (and ultimately abort indexing after 5 such
 						// batches). Return a zero vector so IndexingService
 						// can skip it and keep going.
-						console.warn(
+						Logger.warn(
 							`[Skycode Worker] Per-text embedding failed for chunk len=${subBatch[k].length}: ` +
 								`${singleErr?.message ?? singleErr}`,
 						)
@@ -338,7 +337,7 @@ async function computeEmbeddings(id: number, texts: string[], textType?: "query"
 		// Final safety: replace any holes (shouldn't happen, but be defensive
 		// — IndexingService treats undefined as a hard failure of the batch).
 		for (let i = 0; i < sortedResults.length; i++) {
-			if (!sortedResults[i]) sortedResults[i] = zeroVec()
+			if (!sortedResults[i]) { sortedResults[i] = zeroVec() }
 		}
 
 		parentPort?.postMessage({

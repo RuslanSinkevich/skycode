@@ -46,7 +46,7 @@ const PlanCompletionOutputRow = memo(({ text, headClassNames, mode }: PlanComple
 	const { icon, title } = getModeHeaderConfig(mode, t)
 
 	const containerStyle = useMemo<CSSProperties | undefined>(() => {
-		if (!modeColor) return undefined
+		if (!modeColor) { return undefined }
 		return {
 			borderColor: `color-mix(in srgb, ${modeColor} 40%, transparent)`,
 			backgroundColor: `color-mix(in srgb, ${modeColor} 6%, transparent)`,
@@ -54,14 +54,14 @@ const PlanCompletionOutputRow = memo(({ text, headClassNames, mode }: PlanComple
 	}, [modeColor])
 
 	const dividerStyle = useMemo<CSSProperties | undefined>(() => {
-		if (!modeColor) return undefined
+		if (!modeColor) { return undefined }
 		return {
 			borderTopColor: `color-mix(in srgb, ${modeColor} 20%, transparent)`,
 		}
 	}, [modeColor])
 
 	const titleStyle = useMemo<CSSProperties | undefined>(() => {
-		if (!modeColor) return undefined
+		if (!modeColor) { return undefined }
 		return { color: modeColor }
 	}, [modeColor])
 

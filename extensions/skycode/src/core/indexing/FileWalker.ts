@@ -6,6 +6,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import * as vscode from "vscode"
 import type { IndexingConfig } from "@shared/IndexingTypes"
+import { Logger } from "@/shared/services/Logger"
 
 /** A file discovered during the walk */
 export interface WalkedFile {
@@ -109,7 +110,7 @@ export async function* walkFiles(
 					const stat = await fs.promises.stat(absPath)
 					if (stat.size > config.maxFileSize) {
 						// Log skipped large files so the user can diagnose missing search results
-						console.log(`[Skycode Indexing] Skipped large file (${(stat.size / 1024).toFixed(0)}KB > ${(config.maxFileSize / 1024).toFixed(0)}KB): ${relPath}`)
+						Logger.log(`[Skycode Indexing] Skipped large file (${(stat.size / 1024).toFixed(0)}KB > ${(config.maxFileSize / 1024).toFixed(0)}KB): ${relPath}`)
 						continue
 					}
 					if (stat.size === 0) {
@@ -118,8 +119,6 @@ export async function* walkFiles(
 
 					yield { absPath, relPath, size: stat.size }
 				} catch {
-					// File may have been deleted between readdir and stat
-					continue
 				}
 			}
 		}

@@ -50,7 +50,7 @@ export class RuleContextBuilder {
 	 * Matches lines like: *** Add File: path/to/file.ts
 	 */
 	private static extractPathsFromApplyPatch(input: string): string[] {
-		if (typeof input !== "string" || !input) return []
+		if (typeof input !== "string" || !input) { return [] }
 
 		const paths: string[] = []
 		const fileHeaderRegex = /^\*\*\* (?:Add|Update|Delete) File: (.+?)(?:\n|$)/gm
@@ -96,7 +96,7 @@ export class RuleContextBuilder {
 		// (3) Files edited by Skycode during this task (completed operations):
 		// Parse say="tool" messages for tool results indicating file operations.
 		for (const msg of skycodeMessages) {
-			if (msg.type !== "say" || msg.say !== "tool" || !msg.text) continue
+			if (msg.type !== "say" || msg.say !== "tool" || !msg.text) { continue }
 			try {
 				const tool = JSON.parse(msg.text) as { tool?: string; path?: string }
 				if (
@@ -117,7 +117,7 @@ export class RuleContextBuilder {
 		// - The tool fails (intent was still expressed)
 		// - Files don't exist yet (new file creation)
 		for (const msg of skycodeMessages) {
-			if (msg.type !== "ask" || msg.ask !== "tool" || !msg.text) continue
+			if (msg.type !== "ask" || msg.ask !== "tool" || !msg.text) { continue }
 			try {
 				const tool = JSON.parse(msg.text) as {
 					tool?: string
@@ -144,11 +144,11 @@ export class RuleContextBuilder {
 		const normalized: string[] = []
 		for (const c of candidates) {
 			const posix = c.replace(/\\/g, "/").replace(/^\//, "")
-			if (!posix || posix === "/") continue
-			if (seen.has(posix)) continue
+			if (!posix || posix === "/") { continue }
+			if (seen.has(posix)) { continue }
 			seen.add(posix)
 			normalized.push(posix)
-			if (normalized.length >= RuleContextBuilder.MAX_RULE_PATH_CANDIDATES) break
+			if (normalized.length >= RuleContextBuilder.MAX_RULE_PATH_CANDIDATES) { break }
 		}
 		return normalized.sort()
 	}

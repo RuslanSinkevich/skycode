@@ -56,7 +56,9 @@ export async function subscribeToState(
  * @param state The state to send
  */
 export async function sendStateUpdate(state: ExtensionState): Promise<void> {
-	if (activeStateSubscriptions.size === 0) return
+	if (activeStateSubscriptions.size === 0) {
+		return
+	}
 
 	// [SKYCODE-PERF] Serialize once, send to all subscribers (was: JSON.stringify per subscriber)
 	const stateJson = JSON.stringify(state)

@@ -1,9 +1,10 @@
 import * as path from "path"
-import * as vscode from "vscode"
 import { workspaceResolver } from "@core/workspace"
 import { getDiffSystem } from "@/core/diff-v2"
 import { Empty, StringRequest } from "@shared/proto/skycode/common"
 import { getWorkspacePath } from "@utils/path"
+import { isDirectory } from "@utils/fs"
+import { HostProvider } from "@/hosts/host-provider"
 import { Logger } from "@/shared/services/Logger"
 import { Controller } from ".."
 
@@ -73,8 +74,8 @@ export async function openFileRelativePath(_controller: Controller, request: Str
 		// Containment check: the resolved file must live inside one of the known workspace folders.
 		// This blocks attempts from the webview / tool callers to open arbitrary absolute paths
 		// (e.g. "/etc/passwd", "C:\\Users\\<user>\\.ssh\\id_rsa") or to traverse out via "..".
-		const workspaceFolders = vscode.workspace.workspaceFolders ?? []
-		const rootCandidates = [workspacePath, ...workspaceFolders.map((f) => f.uri.fsPath)]
+		const { paths: workspacePaths } = await HostProvider.workspace.getWorkspacePaths({})
+		const rootCandidates = [workspacePath, ...workspacePaths]
 		const isInsideWorkspace = rootCandidates.some((root) => root && isPathInsideRoot(absolutePath, root))
 		if (!isInsideWorkspace) {
 			Logger.warn(`openFileRelativePath: rejected path outside workspace: ${absolutePath}`)
@@ -82,20 +83,11 @@ export async function openFileRelativePath(_controller: Controller, request: Str
 		}
 
 		try {
-			const uri = vscode.Uri.file(absolutePath)
-
 			// Check if path is a directory — reveal in explorer instead of opening as text
-			try {
-				const stat = await vscode.workspace.fs.stat(uri)
-				if (stat.type === vscode.FileType.Directory) {
-					await vscode.commands.executeCommand("revealInExplorer", uri)
-					return Empty.create()
-				}
-			} catch {
-				// stat failed — try opening as file anyway
+			if (await isDirectory(absolutePath)) {
+				await HostProvider.workspace.openInFileExplorerPanel({ path: absolutePath })
+				return Empty.create()
 			}
-
-			const options: vscode.TextDocumentShowOptions = {}
 
 			// If hunkId provided, resolve its current position from DiffStore (live, updated by PositionTracker)
 			if (hunkId) {
@@ -109,13 +101,10 @@ export async function openFileRelativePath(_controller: Controller, request: Str
 				}
 			}
 
-			// If line number specified, set selection to that line
-			if (lineNumber !== undefined && lineNumber > 0) {
-				const position = new vscode.Position(lineNumber - 1, 0) // Convert to 0-indexed
-				options.selection = new vscode.Range(position, position)
-			}
-
-			await vscode.window.showTextDocument(uri, options)
+			await HostProvider.window.showTextDocument({
+				path: absolutePath,
+				options: lineNumber !== undefined && lineNumber > 0 ? { selectionLine: lineNumber } : undefined,
+			})
 		} catch (error) {
 			Logger.error("Error opening file:", error)
 		}

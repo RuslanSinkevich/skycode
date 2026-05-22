@@ -302,15 +302,15 @@ function getToolGroupSummary(messages: SkycodeMessage[], t: (key: string) => str
 
 	const parts: string[] = []
 
-	if (counts.read > 0) parts.push(`${t("process.read")} ${counts.read}`)
-	if (counts.list > 0) parts.push(`${t("toolGroup.listed")} ${counts.list}`)
-	if (counts.edit > 0) parts.push(`${t("process.edited")} ${counts.edit}`)
-	if (counts.create > 0) parts.push(`${t("process.created")} ${counts.create}`)
-	if (counts.del > 0) parts.push(`${t("process.deleted")} ${counts.del}`)
-	if (counts.cmd > 0) parts.push(`${t("process.commands")} ${counts.cmd}`)
-	if (counts.search > 0) parts.push(`${t("process.search")} ${counts.search}`)
-	if (counts.web > 0) parts.push(`${t("process.web")} ${counts.web}`)
-	if (counts.def > 0) parts.push(`${t("toolGroup.definitions")} ${counts.def}`)
+	if (counts.read > 0) { parts.push(`${t("process.read")} ${counts.read}`) }
+	if (counts.list > 0) { parts.push(`${t("toolGroup.listed")} ${counts.list}`) }
+	if (counts.edit > 0) { parts.push(`${t("process.edited")} ${counts.edit}`) }
+	if (counts.create > 0) { parts.push(`${t("process.created")} ${counts.create}`) }
+	if (counts.del > 0) { parts.push(`${t("process.deleted")} ${counts.del}`) }
+	if (counts.cmd > 0) { parts.push(`${t("process.commands")} ${counts.cmd}`) }
+	if (counts.search > 0) { parts.push(`${t("process.search")} ${counts.search}`) }
+	if (counts.web > 0) { parts.push(`${t("process.web")} ${counts.web}`) }
+	if (counts.def > 0) { parts.push(`${t("toolGroup.definitions")} ${counts.def}`) }
 
 	return parts.length === 0 ? t("toolGroup.skycodeWorked") : `Skycode ${parts.join(", ")}`
 }

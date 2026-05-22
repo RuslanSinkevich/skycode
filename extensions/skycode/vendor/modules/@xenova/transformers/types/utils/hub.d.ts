@@ -162,5 +162,4 @@ declare class FileResponse {
    */
   json(): Promise<any>;
 }
-export {};
 //# sourceMappingURL=hub.d.ts.map

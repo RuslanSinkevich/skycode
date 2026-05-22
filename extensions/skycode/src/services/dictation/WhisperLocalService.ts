@@ -46,9 +46,9 @@ export class WhisperLocalService {
 
 	/** Path to bundled archive for the current platform (if available) */
 	private get bundledArchivePath(): string | null {
-		if (!this._extensionPath) return null
+		if (!this._extensionPath) { return null }
 		const model = WHISPER_MODELS[this.modelName]
-		if (!model?.bundled) return null
+		if (!model?.bundled) { return null }
 		const platform = os.platform()
 		const archivePath = path.join(this._extensionPath, "assets", "voice", platform, model.archive)
 		return fs.existsSync(archivePath) ? archivePath : null
@@ -73,7 +73,7 @@ export class WhisperLocalService {
 	get binaryPath(): string {
 		const platform = os.platform()
 		const info = PLATFORM_BINARIES[platform]
-		if (!info) throw new Error(`Unsupported platform: ${platform}`)
+		if (!info) { throw new Error(`Unsupported platform: ${platform}`) }
 		return path.join(this.whisperDir, info.binaryName)
 	}
 
@@ -81,14 +81,14 @@ export class WhisperLocalService {
 	get ffmpegPath(): string {
 		const platform = os.platform()
 		const info = PLATFORM_BINARIES[platform]
-		if (!info) throw new Error(`Unsupported platform: ${platform}`)
+		if (!info) { throw new Error(`Unsupported platform: ${platform}`) }
 		return path.join(this.whisperDir, info.ffmpegName)
 	}
 
 	/** Path to model file */
 	get modelPath(): string {
 		const model = WHISPER_MODELS[this.modelName]
-		if (!model) throw new Error(`Unknown model: ${this.modelName}`)
+		if (!model) { throw new Error(`Unknown model: ${this.modelName}`) }
 		return path.join(this.whisperDir, model.file)
 	}
 
@@ -121,7 +121,7 @@ export class WhisperLocalService {
 		const pathDirs = (process.env.PATH || "").split(path.delimiter)
 		for (const dir of pathDirs) {
 			const fullPath = path.join(dir, name)
-			if (fs.existsSync(fullPath)) return true
+			if (fs.existsSync(fullPath)) { return true }
 		}
 		return false
 	}
@@ -130,8 +130,9 @@ export class WhisperLocalService {
 	 * Get the best available ffmpeg path — ours or system.
 	 */
 	get effectiveFfmpegPath(): string {
-		if (this.isFfmpegReady) return this.ffmpegPath
-		if (this.hasSystemFfmpeg) return "ffmpeg" // system PATH
+		if (this.isFfmpegReady) { return this.ffmpegPath }
+		if (this.hasSystemFfmpeg) { return "ffmpeg" // system PATH
+}
 		return this.ffmpegPath // will fail if not downloaded yet
 	}
 
@@ -241,12 +242,12 @@ export class WhisperLocalService {
 	 * Uses bundled archive if available, otherwise downloads from CDN.
 	 */
 	async ensureReady(onProgress?: (message: string, pct?: number) => void): Promise<void> {
-		if (this.isReady) return
+		if (this.isReady) { return }
 
 		await this.ensureDir()
 
 		const model = WHISPER_MODELS[this.modelName]
-		if (!model) throw new Error(`Unknown model: ${this.modelName}`)
+		if (!model) { throw new Error(`Unknown model: ${this.modelName}`) }
 
 		const archivePath = path.join(this.whisperDir, model.archive)
 		const bundled = this.bundledArchivePath
@@ -277,11 +278,11 @@ export class WhisperLocalService {
 			}
 
 			if (platform !== "win32") {
-				if (fs.existsSync(this.binaryPath)) fs.chmodSync(this.binaryPath, 0o755)
-				if (fs.existsSync(this.ffmpegPath)) fs.chmodSync(this.ffmpegPath, 0o755)
+				if (fs.existsSync(this.binaryPath)) { fs.chmodSync(this.binaryPath, 0o755) }
+				if (fs.existsSync(this.ffmpegPath)) { fs.chmodSync(this.ffmpegPath, 0o755) }
 			}
 
-			if (fs.existsSync(archivePath)) fs.unlinkSync(archivePath)
+			if (fs.existsSync(archivePath)) { fs.unlinkSync(archivePath) }
 
 			if (!this.isReady) {
 				throw new Error("Archive extracted but required files not found")
@@ -291,7 +292,7 @@ export class WhisperLocalService {
 			onProgress?.("Voice components ready")
 		} catch (error) {
 			// Cleanup on failure
-			if (fs.existsSync(archivePath)) fs.unlinkSync(archivePath)
+			if (fs.existsSync(archivePath)) { fs.unlinkSync(archivePath) }
 			throw error
 		}
 	}

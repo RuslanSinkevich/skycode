@@ -247,27 +247,27 @@ export function getRemoteRulesTotalContentWithMetadata(
 
 	for (const rule of remoteRules) {
 		const isEnabled = rule.alwaysEnabled || remoteToggles[rule.name] !== false
-		if (!isEnabled) continue
+		if (!isEnabled) { continue }
 
 		const raw = (rule.contents || "").trim()
-		if (!raw) continue
+		if (!raw) { continue }
 
 		const { data, body, hadFrontmatter, parseError } = parseYamlFrontmatter(raw)
 		if (hadFrontmatter && parseError) {
 			// Fail open: include entire raw contents
-			if (combinedContent) combinedContent += "\n\n"
+			if (combinedContent) { combinedContent += "\n\n" }
 			combinedContent += `${rule.name}\n${raw}`
 			continue
 		}
 
 		const { passed, matchedConditions } = evaluateRuleConditionals(data, evaluationContext)
-		if (!passed) continue
+		if (!passed) { continue }
 
 		if (hadFrontmatter && Object.keys(matchedConditions).length > 0) {
 			activatedConditionalRules.push({ name: `${RULE_SOURCE_PREFIX.remote}:${rule.name}`, matchedConditions })
 		}
 
-		if (combinedContent) combinedContent += "\n\n"
+		if (combinedContent) { combinedContent += "\n\n" }
 		combinedContent += `${rule.name}\n${body.trim()}`
 	}
 

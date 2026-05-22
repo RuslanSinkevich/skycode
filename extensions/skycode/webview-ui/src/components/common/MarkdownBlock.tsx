@@ -342,8 +342,8 @@ function convertMarkdownTablesToHtml(md: string): string {
 				const alignCells = parsePipeLine(tableLines[1])
 				const aligns = alignCells.map((cell) => {
 					const trimmed = cell.trim()
-					if (trimmed.startsWith(":") && trimmed.endsWith(":")) return "center"
-					if (trimmed.endsWith(":")) return "right"
+					if (trimmed.startsWith(":") && trimmed.endsWith(":")) { return "center" }
+					if (trimmed.endsWith(":")) { return "right" }
 					return "left"
 				})
 
@@ -382,8 +382,8 @@ function convertMarkdownTablesToHtml(md: string): string {
 
 function parsePipeLine(line: string): string[] {
 	let trimmed = line.trim()
-	if (trimmed.startsWith("|")) trimmed = trimmed.slice(1)
-	if (trimmed.endsWith("|")) trimmed = trimmed.slice(0, -1)
+	if (trimmed.startsWith("|")) { trimmed = trimmed.slice(1) }
+	if (trimmed.endsWith("|")) { trimmed = trimmed.slice(0, -1) }
 	return trimmed.split("|")
 }
 

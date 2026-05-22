@@ -295,7 +295,7 @@ export function mel_filter_bank(
  * @returns {T} The padded array.
  */
 function padReflect(array, left, right) {
-  // @ts-ignore
+  // @ts-expect-error
   const padded = new array.constructor(array.length + left + right);
   const w = array.length - 1;
 

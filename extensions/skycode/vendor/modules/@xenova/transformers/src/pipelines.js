@@ -699,7 +699,7 @@ export class Text2TextGenerationPipeline
     ) {
       // TODO: move to Translation pipeline?
       // Currently put here to avoid code duplication
-      // @ts-ignore
+      // @ts-expect-error
       input_ids = tokenizer._build_translation_inputs(
         texts,
         tokenizer_options,
@@ -1637,7 +1637,7 @@ export class AutomaticSpeechRecognitionPipeline
           "Cannot specify `language`/`task`/`return_timestamps` and `forced_decoder_ids` at the same time.",
         );
       }
-      // @ts-ignore
+      // @ts-expect-error
       const decoder_prompt_ids = this.tokenizer.get_decoder_prompt_ids({
         language,
         task,
@@ -1732,7 +1732,7 @@ export class AutomaticSpeechRecognitionPipeline
       }
 
       // Merge text chunks
-      // @ts-ignore
+      // @ts-expect-error
       const [full_text, optional] = this.tokenizer._decode_asr(chunks, {
         time_precision,
         return_timestamps,
@@ -2001,7 +2001,7 @@ export class ImageSegmentationPipeline
     if (subtask !== null) {
       fn = this.subtasks_mapping[subtask];
     } else {
-      for (let [task, func] of Object.entries(this.subtasks_mapping)) {
+      for (const [task, func] of Object.entries(this.subtasks_mapping)) {
         if (func in this.processor.feature_extractor) {
           fn = this.processor.feature_extractor[func].bind(
             this.processor.feature_extractor,
@@ -2243,7 +2243,7 @@ export class ObjectDetectionPipeline
     const { pixel_values, pixel_mask } = await this.processor(preparedImages);
     const output = await this.model({ pixel_values, pixel_mask });
 
-    // @ts-ignore
+    // @ts-expect-error
     const processed =
       this.processor.feature_extractor.post_process_object_detection(
         output,
@@ -2397,7 +2397,7 @@ export class ZeroShotObjectDetectionPipeline
       // Run model with both text and pixel inputs
       const output = await this.model({ ...text_inputs, pixel_values });
 
-      // @ts-ignore
+      // @ts-expect-error
       const processed =
         this.processor.feature_extractor.post_process_object_detection(
           output,
@@ -2641,7 +2641,7 @@ export class TextToAudioPipeline
     });
 
     // NOTE: At this point, we are guaranteed that `speaker_embeddings` is a `Tensor`
-    // @ts-ignore
+    // @ts-expect-error
     const { waveform } = await this.model.generate_speech(
       input_ids,
       speaker_embeddings,
@@ -2702,7 +2702,7 @@ export class ImageToImagePipeline
     /** @type {RawImage[]} */
     const toReturn = [];
     for (const batch of outputs.reconstruction) {
-      const output = batch
+      const _output = batch
         .squeeze()
         .clamp_(0, 1)
         .mul_(255)
@@ -2779,7 +2779,7 @@ export class DepthEstimationPipeline
         "bilinear",
         false,
       );
-      const formatted = prediction
+      const _formatted = prediction
         .mul_(255 / max(prediction.data)[0])
         .to("uint8");
       toReturn.push({
@@ -3135,7 +3135,7 @@ export async function pipeline(
   // Helper method to construct pipeline
 
   // Apply aliases
-  // @ts-ignore
+  // @ts-expect-error
   task = TASK_ALIASES[task] ?? task;
 
   // Get pipeline info
@@ -3193,15 +3193,15 @@ async function loadItems(mapping, model, pretrainedOptions) {
 
   /**@type {Promise[]} */
   const promises = [];
-  for (let [name, cls] of mapping.entries()) {
-    if (!cls) continue;
+  for (const [name, cls] of mapping.entries()) {
+    if (!cls) { continue; }
 
     /**@type {Promise} */
     let promise;
     if (Array.isArray(cls)) {
       promise = new Promise(async (resolve, reject) => {
         let e;
-        for (let c of cls) {
+        for (const c of cls) {
           if (c === null) {
             // If null, we resolve it immediately, meaning the relevant
             // class was not found, but it is optional.
@@ -3229,7 +3229,7 @@ async function loadItems(mapping, model, pretrainedOptions) {
   await Promise.all(promises);
 
   // Then assign to result
-  for (let [name, promise] of Object.entries(result)) {
+  for (const [name, promise] of Object.entries(result)) {
     result[name] = await promise;
   }
 

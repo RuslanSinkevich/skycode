@@ -83,7 +83,7 @@ export function useScrollBehavior(
 	/** Find the last turn element inside the scroller. */
 	const getLastTurnEl = useCallback((): HTMLElement | null => {
 		const scroller = scrollerRef.current
-		if (!scroller) return null
+		if (!scroller) { return null }
 		const turnEls = scroller.querySelectorAll<HTMLElement>("[data-turn-index]")
 		return turnEls.length ? turnEls[turnEls.length - 1] : null
 	}, [])
@@ -95,7 +95,7 @@ export function useScrollBehavior(
 	const resizeFooter = useCallback(() => {
 		const scroller = scrollerRef.current
 		const footer = footerRef.current
-		if (!scroller || !footer) return
+		if (!scroller || !footer) { return }
 		const lastTurnEl = getLastTurnEl()
 		if (!lastTurnEl) {
 			footer.style.minHeight = "0px"
@@ -126,10 +126,10 @@ export function useScrollBehavior(
 	 *  the user message pinned at the top. */
 	const followIfOverflowing = useCallback(() => {
 		const scroller = scrollerRef.current
-		if (!scroller) return
-		if (isPinningRef.current) return
-		if (disableAutoScrollRef.current) return
-		if (userInteractingRef.current) return
+		if (!scroller) { return }
+		if (isPinningRef.current) { return }
+		if (disableAutoScrollRef.current) { return }
+		if (userInteractingRef.current) { return }
 
 		const maxScroll = getContentMaxScroll(scroller)
 		if (scroller.scrollTop < maxScroll) {
@@ -142,7 +142,7 @@ export function useScrollBehavior(
 
 	const scrollToBottomAuto = useCallback(() => {
 		const scroller = scrollerRef.current
-		if (!scroller) return
+		if (!scroller) { return }
 		disableAutoScrollRef.current = false
 		setShowScrollToBottom(false)
 		const maxScroll = getContentMaxScroll(scroller)
@@ -152,7 +152,7 @@ export function useScrollBehavior(
 
 	const scrollToBottomSmooth = useCallback(() => {
 		const scroller = scrollerRef.current
-		if (!scroller) return
+		if (!scroller) { return }
 		disableAutoScrollRef.current = false
 		setShowScrollToBottom(false)
 		const maxScroll = getContentMaxScroll(scroller)
@@ -188,7 +188,7 @@ export function useScrollBehavior(
 						break
 					}
 				}
-				if (turnIndex !== -1) break
+				if (turnIndex !== -1) { break }
 			}
 
 			if (turnIndex !== -1) {
@@ -198,7 +198,7 @@ export function useScrollBehavior(
 
 				requestAnimationFrame(() => {
 					const scroller = scrollerRef.current
-					if (!scroller) return
+					if (!scroller) { return }
 					const turnEl = scroller.querySelector(`[data-turn-index="${turnIndex}"]`) as HTMLElement | null
 					if (turnEl) {
 						programmaticScrollUntilRef.current = Date.now() + 200
@@ -230,7 +230,7 @@ export function useScrollBehavior(
 				requestAnimationFrame(() => {
 					requestAnimationFrame(() => {
 						const scroller = scrollerRef.current
-						if (!scroller) return
+						if (!scroller) { return }
 						const maxScroll = getContentMaxScroll(scroller)
 						if (scroller.scrollTop > maxScroll) {
 							scroller.scrollTop = maxScroll
@@ -275,7 +275,7 @@ export function useScrollBehavior(
 
 	useEffect(() => {
 		const scroller = scrollerRef.current
-		if (!scroller) return
+		if (!scroller) { return }
 
 		const onWheel = (e: WheelEvent) => {
 			userInteractingRef.current = true
@@ -288,7 +288,7 @@ export function useScrollBehavior(
 				setShowScrollToBottom(true)
 			}
 
-			if (wheelTimeoutRef.current) clearTimeout(wheelTimeoutRef.current)
+			if (wheelTimeoutRef.current) { clearTimeout(wheelTimeoutRef.current) }
 			wheelTimeoutRef.current = setTimeout(() => {
 				userInteractingRef.current = false
 			}, 150)
@@ -313,7 +313,7 @@ export function useScrollBehavior(
 			scroller.removeEventListener("pointerdown", markUserInteraction)
 			scroller.removeEventListener("touchend", clearUserInteraction)
 			scroller.removeEventListener("pointerup", clearUserInteraction)
-			if (wheelTimeoutRef.current) clearTimeout(wheelTimeoutRef.current)
+			if (wheelTimeoutRef.current) { clearTimeout(wheelTimeoutRef.current) }
 		}
 	}, [scrollerRef.current])
 
@@ -321,12 +321,12 @@ export function useScrollBehavior(
 
 	useEffect(() => {
 		const scroller = scrollerRef.current
-		if (!scroller) return
+		if (!scroller) { return }
 
 		const handleScroll = () => {
-			if (isPinningRef.current) return
+			if (isPinningRef.current) { return }
 			// Ignore browser-emitted scroll events from our own scrollTo.
-			if (Date.now() < programmaticScrollUntilRef.current && !userInteractingRef.current) return
+			if (Date.now() < programmaticScrollUntilRef.current && !userInteractingRef.current) { return }
 
 			// With the dynamic footer, max scrollTop already equals either
 			// `lastTurn.offsetTop` (short answer) or end-of-last-turn (long
@@ -358,7 +358,7 @@ export function useScrollBehavior(
 
 	useEffect(() => {
 		const scroller = scrollerRef.current
-		if (!scroller) return
+		if (!scroller) { return }
 
 		// Observe the dedicated chat-content wrapper (added in MessagesArea
 		// so growth of any turn is detected, not just the first child).
@@ -393,9 +393,9 @@ export function useScrollBehavior(
 
 	useEffect(() => {
 		const scroller = scrollerRef.current
-		if (!scroller) return
+		if (!scroller) { return }
 		const lastTurnEl = getLastTurnEl()
-		if (!lastTurnEl) return
+		if (!lastTurnEl) { return }
 
 		resizeFooter()
 
@@ -433,7 +433,7 @@ export function useScrollBehavior(
 			if (scroller) {
 				requestAnimationFrame(() => {
 					const sc = scrollerRef.current
-					if (!sc) return
+					if (!sc) { return }
 					resizeFooter()
 					const maxScroll = getContentMaxScroll(sc)
 					sc.scrollTop = maxScroll
@@ -442,13 +442,13 @@ export function useScrollBehavior(
 			return
 		}
 
-		if (curMsgLen <= prevMsgLen) return
+		if (curMsgLen <= prevMsgLen) { return }
 
 		if (curTurnCount > prevTurnCount) {
 			// New turn = the user just sent a message. Pin its top to the
 			// viewport top so the user always sees their own message there.
 			const scroller = scrollerRef.current
-			if (!scroller) return
+			if (!scroller) { return }
 
 			isPinningRef.current = true
 			disableAutoScrollRef.current = false
@@ -462,10 +462,10 @@ export function useScrollBehavior(
 			// the freshly mounted turn (fonts loading, icons settling, …).
 			const pinOnce = () => {
 				const sc = scrollerRef.current
-				if (!sc) return
+				if (!sc) { return }
 				resizeFooter()
 				const lastTurnEl = getLastTurnEl()
-				if (!lastTurnEl) return
+				if (!lastTurnEl) { return }
 				const scrollerRect = sc.getBoundingClientRect()
 				const turnRect = lastTurnEl.getBoundingClientRect()
 				const elTop = turnRect.top - scrollerRect.top + sc.scrollTop

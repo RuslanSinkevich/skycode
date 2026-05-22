@@ -248,7 +248,7 @@ describe('DiffStore', () => {
         addedLines: ['y'],
         type: 'replacement',
       })
-      if (status !== 'pending') store.updateHunkStatus(id, status)
+      if (status !== 'pending') { store.updateHunkStatus(id, status) }
       return id
     }
 

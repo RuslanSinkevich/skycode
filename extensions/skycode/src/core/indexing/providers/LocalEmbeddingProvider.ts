@@ -8,6 +8,7 @@
  */
 import * as path from "node:path"
 import type { EmbeddingProvider } from "../types"
+import { Logger } from "@/shared/services/Logger"
 
 /** Singleton pipeline instance */
 class EmbeddingsPipeline {
@@ -25,7 +26,7 @@ class EmbeddingsPipeline {
 		EmbeddingsPipeline.loading = (async () => {
 			// Dynamic import — transformers.js is a WASM-based library
 			// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-			// @ts-ignore — vendor JS module without type declarations
+			// @ts-expect-error — vendor JS module without type declarations
 			const { env, pipeline } = await import("../../../../vendor/modules/@xenova/transformers/src/transformers.js")
 
 			env.allowLocalModels = true
@@ -86,7 +87,7 @@ export class LocalEmbeddingProvider implements EmbeddingProvider {
 
 				results.push(...output.tolist())
 			} catch (err: any) {
-				console.warn(`[Skycode Indexing] Failed to embed chunk ${i} (${text.length} chars):`, err.message)
+				Logger.warn(`[Skycode Indexing] Failed to embed chunk ${i} (${text.length} chars):`, err.message)
 				results.push(new Array(this.dimensions).fill(0))
 			}
 

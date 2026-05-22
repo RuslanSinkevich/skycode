@@ -26,7 +26,7 @@ describe("AutoApprove.shouldAutoApproveTool", () => {
 
 		const fakeStateManager = {
 			getGlobalSettingsKey: (key: string) => {
-				if (key === "yoloModeToggled") return yoloMode
+				if (key === "yoloModeToggled") { return yoloMode }
 				if (key === "autoApprovalSettings") {
 					return {
 						...DEFAULT_AUTO_APPROVAL_SETTINGS,
@@ -96,11 +96,11 @@ describe("AutoApprove.shouldAutoApproveTool", () => {
 		})
 
 		it("should return false when deleteFiles is undefined", () => {
-			const aa = createAutoApprove({ settings: {} })
+			const _aa = createAutoApprove({ settings: {} })
 			// Default is false
 			const fakeStateManager = {
 				getGlobalSettingsKey: (key: string) => {
-					if (key === "yoloModeToggled") return false
+					if (key === "yoloModeToggled") { return false }
 					if (key === "autoApprovalSettings") {
 						return {
 							...DEFAULT_AUTO_APPROVAL_SETTINGS,
@@ -144,7 +144,7 @@ describe("AutoApprove.shouldAutoApproveTool", () => {
 		it("should return false when editNotebooks is undefined", () => {
 			const fakeStateManager = {
 				getGlobalSettingsKey: (key: string) => {
-					if (key === "yoloModeToggled") return false
+					if (key === "yoloModeToggled") { return false }
 					if (key === "autoApprovalSettings") {
 						return {
 							...DEFAULT_AUTO_APPROVAL_SETTINGS,

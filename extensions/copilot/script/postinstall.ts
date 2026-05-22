@@ -195,6 +195,11 @@ async function main() {
 	await copyStaticAssets([
 		`node_modules/@anthropic-ai/claude-agent-sdk/cli.js`,
 	], 'dist');
+
+	// SKYCODE_FORK_BEGIN: postinstall removes shims.txt above; vsce packaging needs the marker
+	const shimsMarkerPath = path.join(REPO_ROOT, 'node_modules', '@github', 'copilot', 'shims.txt');
+	await fs.promises.writeFile(shimsMarkerPath, 'Shims created successfully').catch(() => { /* ignore */ });
+	// SKYCODE_FORK_END
 }
 
 main();

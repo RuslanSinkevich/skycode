@@ -9,6 +9,7 @@ EventEmitter.defaultMaxListeners = 100;
 
 import es from 'event-stream';
 import fancyLog from 'fancy-log';
+import fs from 'fs';
 import glob from 'glob';
 import gulp from 'gulp';
 import filter from 'gulp-filter';
@@ -283,7 +284,24 @@ gulp.task(compileNativeExtensionsBuildTask);
  * Compiles the built-in copilot extension for the build.
  * Used by non-CI local builds where copilot is not downloaded as a VSIX.
  */
-export const compileCopilotExtensionBuildTask = task.define('compile-copilot-extension-build', () => ext.packageCopilotExtensionStream(false).pipe(gulp.dest('.build')));
+// SKYCODE_FORK_BEGIN: copilot postinstall removes shims.txt; vsce packaging requires it
+function ensureCopilotShimsMarker(): void {
+	const shimsPath = path.join(root, 'extensions', 'copilot', 'node_modules', '@github', 'copilot', 'shims.txt');
+	const copilotSdk = path.join(path.dirname(shimsPath), 'sdk');
+	if (!fs.existsSync(copilotSdk)) {
+		return;
+	}
+	fs.mkdirSync(path.dirname(shimsPath), { recursive: true });
+	if (!fs.existsSync(shimsPath)) {
+		fs.writeFileSync(shimsPath, 'Shims created successfully');
+	}
+}
+// SKYCODE_FORK_END
+
+export const compileCopilotExtensionBuildTask = task.define('compile-copilot-extension-build', () => {
+	ensureCopilotShimsMarker();
+	return ext.packageCopilotExtensionStream(false).pipe(gulp.dest('.build'));
+});
 gulp.task(compileCopilotExtensionBuildTask);
 
 /**

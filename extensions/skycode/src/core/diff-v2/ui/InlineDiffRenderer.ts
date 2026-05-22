@@ -20,6 +20,7 @@ import * as vscode from 'vscode';
 import { DiffStore } from '../storage/DiffStore';
 import { Hunk, DiffStoreEvent } from '../storage/types';
 import { t } from '../../../i18n/backend-i18n';
+import { Logger } from "@/shared/services/Logger"
 
 interface InsetRecord {
 	inset: vscode.WebviewEditorInset;
@@ -107,13 +108,13 @@ export class InlineDiffRenderer implements vscode.Disposable {
 	 * Groups hunks by file and creates zones in parallel per file.
 	 */
 	async flush(): Promise<void> {
-		if (this.suspendDepth > 0) this.suspendDepth--;
-		if (this.suspendDepth > 0) return;
+		if (this.suspendDepth > 0) { this.suspendDepth--; }
+		if (this.suspendDepth > 0) { return; }
 
 		await this.flushPositionChanges();
 
 		const queued = this.pendingQueue.splice(0);
-		if (queued.length === 0) return;
+		if (queued.length === 0) { return; }
 
 		const byFile = new Map<string, Hunk[]>();
 		for (const hunk of queued) {
@@ -129,7 +130,7 @@ export class InlineDiffRenderer implements vscode.Disposable {
 		const tasks = Array.from(byFile.entries()).map(async ([normPath, hunks]) => {
 			let editor: vscode.TextEditor | undefined;
 			for (const hunk of hunks) {
-				if (this.hasZonesFor(hunk.id)) continue;
+				if (this.hasZonesFor(hunk.id)) { continue; }
 				if (!editor) {
 					editor = vscode.window.visibleTextEditors.find(
 						(e) => e.document.uri.fsPath.toLowerCase() === normPath,
@@ -139,7 +140,7 @@ export class InlineDiffRenderer implements vscode.Disposable {
 					await this.createZonesForHunk(editor, hunk);
 				}
 			}
-			if (editor) editorsToRefresh.push(editor);
+			if (editor) { editorsToRefresh.push(editor); }
 		});
 
 		await Promise.all(tasks);
@@ -178,7 +179,7 @@ export class InlineDiffRenderer implements vscode.Disposable {
 			return;
 		}
 
-		if (this.hasZonesFor(hunk.id)) return;
+		if (this.hasZonesFor(hunk.id)) { return; }
 
 		const editor = vscode.window.visibleTextEditors.find(
 			(e) => e.document.uri.fsPath.toLowerCase() === hunk.fsPath.toLowerCase(),
@@ -190,7 +191,7 @@ export class InlineDiffRenderer implements vscode.Disposable {
 
 	private onHunkPositionChanged(hunkId: string, fsPath: string): void {
 		this.pendingPositionChanges.set(hunkId, fsPath);
-		if (this.suspendDepth > 0) return;
+		if (this.suspendDepth > 0) { return; }
 		if (!this.positionFlushScheduled) {
 			this.positionFlushScheduled = true;
 			queueMicrotask(() => this.flushPositionChanges());
@@ -201,11 +202,11 @@ export class InlineDiffRenderer implements vscode.Disposable {
 		this.positionFlushScheduled = false;
 		const batch = new Map(this.pendingPositionChanges);
 		this.pendingPositionChanges.clear();
-		if (batch.size === 0) return;
+		if (batch.size === 0) { return; }
 
 		const byFile = new Map<string, string[]>();
 		for (const [hunkId, fsPath] of batch) {
-			if (!this.hasZonesFor(hunkId)) continue;
+			if (!this.hasZonesFor(hunkId)) { continue; }
 			const key = fsPath.toLowerCase();
 			let arr = byFile.get(key);
 			if (!arr) { arr = []; byFile.set(key, arr); }
@@ -222,7 +223,7 @@ export class InlineDiffRenderer implements vscode.Disposable {
 			const editor = vscode.window.visibleTextEditors.find(
 				(e) => e.document.uri.fsPath.toLowerCase() === normPath,
 			);
-			if (!editor) continue;
+			if (!editor) { continue; }
 
 			this._suppressGreenRefresh = true;
 			for (const hunkId of hunkIds) {
@@ -257,7 +258,8 @@ export class InlineDiffRenderer implements vscode.Disposable {
 	// ==================== Zone creation ====================
 
 	async createZonesForHunk(editor: vscode.TextEditor, hunk: Hunk): Promise<void> {
-		if (this.hasZonesFor(hunk.id)) return; // Prevent duplicates
+		if (this.hasZonesFor(hunk.id)) { return; // Prevent duplicates
+}
 
 		const hasRemoved = hunk.removedLines.length > 0;
 		// Use currentEndLine - currentStartLine to check for added lines
@@ -270,10 +272,10 @@ export class InlineDiffRenderer implements vscode.Disposable {
 		// Runtime assertions — warn but don't throw to avoid breaking UX
 		// insetLine is 0-based; -1 is valid (maps to afterLineNumber=0, before first line)
 		if (insetLine < -1) {
-			console.warn('[InlineDiffRenderer] ASSERT: insetLine < -1', { insetLine, hunk: hunk.id, currentStartLine: hunk.currentStartLine });
+			Logger.warn('[InlineDiffRenderer] ASSERT: insetLine < -1', { insetLine, hunk: hunk.id, currentStartLine: hunk.currentStartLine });
 		}
 		if (insetLine >= lineCount) {
-			console.warn('[InlineDiffRenderer] ASSERT: insetLine >= lineCount', { insetLine, lineCount, hunk: hunk.id });
+			Logger.warn('[InlineDiffRenderer] ASSERT: insetLine >= lineCount', { insetLine, lineCount, hunk: hunk.id });
 		}
 
 		if (hasRemoved && hasAdded) {
@@ -282,10 +284,10 @@ export class InlineDiffRenderer implements vscode.Disposable {
 			this.applyGreenDecorations(editor, hunk);
 			const buttonsLine = InlineDiffRenderer.calculateButtonsLine(hunk);
 			if (buttonsLine < insetLine) {
-				console.warn('[InlineDiffRenderer] ASSERT: buttonsLine < insetLine', { buttonsLine, insetLine, hunk: hunk.id });
+				Logger.warn('[InlineDiffRenderer] ASSERT: buttonsLine < insetLine', { buttonsLine, insetLine, hunk: hunk.id });
 			}
 			if (buttonsLine >= lineCount) {
-				console.warn('[InlineDiffRenderer] ASSERT: buttonsLine >= lineCount (replacement)', { buttonsLine, lineCount, hunk: hunk.id });
+				Logger.warn('[InlineDiffRenderer] ASSERT: buttonsLine >= lineCount (replacement)', { buttonsLine, lineCount, hunk: hunk.id });
 			}
 			await this.createButtonsZone(editor, buttonsLine, hunk.id);
 		} else if (hasRemoved) {
@@ -298,7 +300,7 @@ export class InlineDiffRenderer implements vscode.Disposable {
 			this.applyGreenDecorations(editor, hunk);
 			const buttonsLine = InlineDiffRenderer.calculateButtonsLine(hunk);
 			if (buttonsLine >= lineCount) {
-				console.warn('[InlineDiffRenderer] ASSERT: buttonsLine >= lineCount (addition)', { buttonsLine, lineCount, hunk: hunk.id });
+				Logger.warn('[InlineDiffRenderer] ASSERT: buttonsLine >= lineCount (addition)', { buttonsLine, lineCount, hunk: hunk.id });
 			}
 			await this.createButtonsZone(editor, buttonsLine, hunk.id);
 		}
@@ -314,7 +316,7 @@ export class InlineDiffRenderer implements vscode.Disposable {
 		// Use currentEndLine - currentStartLine for range size
 		// (more reliable than addedLines.length after user merges)
 		const lineCount = hunk.currentEndLine - hunk.currentStartLine;
-		if (lineCount <= 0) return;
+		if (lineCount <= 0) { return; }
 
 		const startLine0 = hunk.currentStartLine - 1; // 0-based
 		const endLine0 = startLine0 + lineCount - 1;
@@ -331,11 +333,11 @@ export class InlineDiffRenderer implements vscode.Disposable {
 	 */
 	private removeGreenDecorations(hunkId: string): void {
 		const entry = this.greenRanges.get(hunkId);
-		if (!entry) return;
+		if (!entry) { return; }
 
 		this.greenRanges.delete(hunkId);
 
-		if (this._suppressGreenRefresh) return;
+		if (this._suppressGreenRefresh) { return; }
 
 		const editor = vscode.window.visibleTextEditors.find(
 			(e) => e.document.uri.fsPath.toLowerCase() === entry.fsPath.toLowerCase(),
@@ -390,7 +392,7 @@ export class InlineDiffRenderer implements vscode.Disposable {
 			});
 			inset.onDidDispose(() => this.removeInsetFromArray(hunkId, inset));
 		} catch (error) {
-			console.error('[InlineDiffRenderer] Failed to create deletion zone:', error);
+			Logger.error('[InlineDiffRenderer] Failed to create deletion zone:', error);
 		}
 	}
 
@@ -417,7 +419,7 @@ export class InlineDiffRenderer implements vscode.Disposable {
 			});
 			inset.onDidDispose(() => this.removeInsetFromArray(hunkId, inset));
 		} catch (error) {
-			console.error('[InlineDiffRenderer] Failed to create buttons zone:', error);
+			Logger.error('[InlineDiffRenderer] Failed to create buttons zone:', error);
 		}
 	}
 
@@ -466,8 +468,8 @@ export class InlineDiffRenderer implements vscode.Disposable {
 				try { r.inset.dispose(); } catch { /* already disposed */ }
 			}
 			const remaining = records.filter((r) => r.fsPath.toLowerCase() !== norm);
-			if (remaining.length === 0) this.insets.delete(hunkId);
-			else this.insets.set(hunkId, remaining);
+			if (remaining.length === 0) { this.insets.delete(hunkId); }
+			else { this.insets.set(hunkId, remaining); }
 		}
 		// Clear green decorations for this file
 		for (const [hunkId, entry] of this.greenRanges.entries()) {
@@ -499,7 +501,7 @@ export class InlineDiffRenderer implements vscode.Disposable {
 	}
 
 	private async restoreZonesForEditors(editors: readonly vscode.TextEditor[]): Promise<void> {
-		if (!this.store) return;
+		if (!this.store) { return; }
 		for (const editor of editors) {
 			const fsPath = editor.document.uri.fsPath;
 			const hunks = this.store.getPendingHunksByFile(fsPath);
@@ -521,8 +523,8 @@ export class InlineDiffRenderer implements vscode.Disposable {
 				try { r.inset.dispose(); } catch { /* already disposed */ }
 			}
 			const remaining = records.filter((r) => openPaths.has(r.fsPath.toLowerCase()));
-			if (remaining.length === 0) this.insets.delete(hunkId);
-			else this.insets.set(hunkId, remaining);
+			if (remaining.length === 0) { this.insets.delete(hunkId); }
+			else { this.insets.set(hunkId, remaining); }
 		}
 	}
 
@@ -536,8 +538,8 @@ export class InlineDiffRenderer implements vscode.Disposable {
 		const records = this.insets.get(hunkId);
 		if (records) {
 			const filtered = records.filter((r) => r.inset !== inset);
-			if (filtered.length === 0) this.insets.delete(hunkId);
-			else this.insets.set(hunkId, filtered);
+			if (filtered.length === 0) { this.insets.delete(hunkId); }
+			else { this.insets.set(hunkId, filtered); }
 		}
 	}
 
@@ -619,7 +621,7 @@ let _lt=0;document.addEventListener('wheel',e=>{const n=Date.now();if(n-_lt<32){
 
 	dispose(): void {
 		this.clearAll();
-		for (const d of this.disposables) d.dispose();
+		for (const d of this.disposables) { d.dispose(); }
 		this.disposables.length = 0;
 	}
 }

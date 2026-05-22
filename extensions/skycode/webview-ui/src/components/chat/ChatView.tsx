@@ -73,8 +73,8 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 
 	const modalBanner = useMemo(() => {
 		const modal = (banners ?? []).find((b) => b.placement === "modal")
-		if (!modal) return null
-		if (modal.id === dismissedModalId) return null
+		if (!modal) { return null }
+		if (modal.id === dismissedModalId) { return null }
 		return modal
 	}, [banners, dismissedModalId])
 
@@ -368,7 +368,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 	})
 
 	useEffect(() => {
-		let id = requestAnimationFrame(() => {
+		const id = requestAnimationFrame(() => {
 			if (!isHidden && !sendingDisabled && !enableButtons) {
 				textAreaRef.current?.focus()
 			}

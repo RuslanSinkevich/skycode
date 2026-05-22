@@ -7,8 +7,8 @@ class TestBoundaryDiffViewProvider extends DiffViewProvider {
 	public truncatedAt: number | undefined
 
 	async openDiffEditor(): Promise<void> {}
-	async scrollEditorToLine(line: number): Promise<void> {}
-	async scrollAnimation(startLine: number, endLine: number): Promise<void> {}
+	async scrollEditorToLine(_line: number): Promise<void> {}
+	async scrollAnimation(_startLine: number, _endLine: number): Promise<void> {}
 
 	async truncateDocument(lineNumber: number): Promise<void> {
 		this.truncatedAt = lineNumber
@@ -35,7 +35,7 @@ class TestBoundaryDiffViewProvider extends DiffViewProvider {
 	async replaceText(
 		content: string,
 		rangeToReplace: { startLine: number; endLine: number },
-		currentLine: number | undefined,
+		_currentLine: number | undefined,
 	): Promise<void> {
 		// Minimal implementation for update() to work
 		const lines = this.documentText.split("\n")

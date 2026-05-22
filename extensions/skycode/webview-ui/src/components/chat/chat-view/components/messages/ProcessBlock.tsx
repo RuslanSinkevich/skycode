@@ -61,14 +61,14 @@ export const ProcessBlock = memo(
 				// Пропускаем служебные
 				if (msg.say === "api_req_started" || msg.say === "checkpoint_created") {
 					// Запоминаем самый ранний timestamp для таймера
-					if (!firstTs) firstTs = msg.ts
+					if (!firstTs) { firstTs = msg.ts }
 					continue
 				}
 
 				// Reasoning — в блок думалки
 				if (msg.say === "reasoning" && msg.text) {
 					reasoning.push(msg.text)
-					if (!firstTs) firstTs = msg.ts
+					if (!firstTs) { firstTs = msg.ts }
 					continue
 				}
 
@@ -115,21 +115,21 @@ export const ProcessBlock = memo(
 
 		/** Reasoning phase: streaming reasoning or waiting for first reasoning token (no tools yet). */
 		const isReasoningLive = useMemo(() => {
-			if (!isLastBlock) return false
-			if (messages.some((m) => m.say === "reasoning" && m.partial === true)) return true
+			if (!isLastBlock) { return false }
+			if (messages.some((m) => m.say === "reasoning" && m.partial === true)) { return true }
 			return messages.some((m) => m.say === "api_req_started") && !hasReasoning && !hasTools
 		}, [isLastBlock, messages, hasReasoning, hasTools])
 
 		/** Tool / API phase: open request or a tool/command still streaming. */
 		const isExploringLive = useMemo(() => {
-			if (!isLastBlock) return false
-			if (toolItems.some((item) => item.isActive)) return true
+			if (!isLastBlock) { return false }
+			if (toolItems.some((item) => item.isActive)) { return true }
 			for (let i = messages.length - 1; i >= 0; i--) {
 				const m = messages[i]
 				if (m.say === "api_req_started" && m.text) {
 					try {
 						const info = JSON.parse(m.text)
-						if (info.cost === undefined) return true
+						if (info.cost === undefined) { return true }
 					} catch {
 						/* skip */
 					}
@@ -144,16 +144,16 @@ export const ProcessBlock = memo(
 
 		// Ошибка API: последний блок + lastModifiedMessage = api_req_failed
 		const apiErrorMessage = useMemo(() => {
-			if (!isLastBlock || !lastModifiedMessage) return undefined
-			if (lastModifiedMessage.ask === "api_req_failed") return lastModifiedMessage.text
+			if (!isLastBlock || !lastModifiedMessage) { return undefined }
+			if (lastModifiedMessage.ask === "api_req_failed") { return lastModifiedMessage.text }
 			return undefined
 		}, [isLastBlock, lastModifiedMessage])
 
 		// Streaming error inside api_req_started
 		const streamingErrorMessage = useMemo(() => {
-			if (!isLastBlock) return undefined
+			if (!isLastBlock) { return undefined }
 			const lastApiReq = [...messages].reverse().find((m) => m.say === "api_req_started" && m.text)
-			if (!lastApiReq?.text) return undefined
+			if (!lastApiReq?.text) { return undefined }
 			try {
 				const info = JSON.parse(lastApiReq.text)
 				return info.streamingFailedMessage
@@ -186,15 +186,15 @@ export const ProcessBlock = memo(
 			const measureAndReport = () => {
 				debounceTimer = null
 				const node = rootRef.current
-				if (!node) return
+				if (!node) { return }
 				const h = node.getBoundingClientRect().height
-				if (!Number.isFinite(h) || h <= 0) return
+				if (!Number.isFinite(h) || h <= 0) { return }
 				if (prev === 0) {
 					prev = h
 					prevMeasuredHeightRef.current = h
 					return
 				}
-				if (Math.abs(h - prev) <= 1) return
+				if (Math.abs(h - prev) <= 1) { return }
 				onHeightChange(h > prev)
 				prev = h
 				prevMeasuredHeightRef.current = h
@@ -440,10 +440,10 @@ const ExploringSection = memo(({ items, isExploringLive, isLastBlock, compact, t
 	}, [onExpandChange, isExploringLive, isLastBlock])
 
 	const handleOpenFile = useCallback((filePath: string) => {
-		if (!filePath) return
+		if (!filePath) { return }
 		// Strip trailing slashes — directories can't be opened as text documents
 		const cleanedPath = filePath.replace(/[/\\]+$/, "")
-		if (!cleanedPath) return
+		if (!cleanedPath) { return }
 		FileServiceClient.openFileRelativePath(StringRequest.create({ value: cleanedPath })).catch((err) =>
 			console.error("Failed to open file:", err),
 		)
@@ -532,13 +532,13 @@ function getLocalizedSummary(items: ToolItemData[], isActive: boolean, t: (key: 
 	}
 
 	const parts: string[] = []
-	if (counts.read > 0) parts.push(`${t("process.read")} ${counts.read}`)
-	if (counts.edit > 0) parts.push(`${t("process.edited")} ${counts.edit}`)
-	if (counts.create > 0) parts.push(`${t("process.created")} ${counts.create}`)
-	if (counts.delete > 0) parts.push(`${t("process.deleted")} ${counts.delete}`)
-	if (counts.cmd > 0) parts.push(`${t("process.commands")} ${counts.cmd}`)
-	if (counts.search > 0) parts.push(`${t("process.search")} ${counts.search}`)
-	if (counts.web > 0) parts.push(`${t("process.web")} ${counts.web}`)
+	if (counts.read > 0) { parts.push(`${t("process.read")} ${counts.read}`) }
+	if (counts.edit > 0) { parts.push(`${t("process.edited")} ${counts.edit}`) }
+	if (counts.create > 0) { parts.push(`${t("process.created")} ${counts.create}`) }
+	if (counts.delete > 0) { parts.push(`${t("process.deleted")} ${counts.delete}`) }
+	if (counts.cmd > 0) { parts.push(`${t("process.commands")} ${counts.cmd}`) }
+	if (counts.search > 0) { parts.push(`${t("process.search")} ${counts.search}`) }
+	if (counts.web > 0) { parts.push(`${t("process.web")} ${counts.web}`) }
 
 	const prefix = isActive ? t("process.exploring") : t("process.explored")
 

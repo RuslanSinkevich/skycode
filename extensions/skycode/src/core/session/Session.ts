@@ -157,7 +157,7 @@ export class Session {
 
 	/** Изменить состояние и эмитнуть событие */
 	setState(state: SessionState, reason?: string): void {
-		if (this._state === state) return
+		if (this._state === state) { return }
 		this._state = state
 		this.emit({
 			type: "state_changed",

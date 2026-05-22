@@ -83,10 +83,8 @@ export class HicapHandler implements ApiHandler {
 
 			if (chunk.usage) {
 				const promptTokens = chunk.usage.prompt_tokens || 0
-				// @ts-ignore-next-line
-				const cachedTokens = chunk.usage.prompt_tokens_details?.cached_tokens || 0
-				// @ts-ignore-next-line
-				const cacheMissTokens = chunk.usage.prompt_cache_miss_tokens || 0
+				const cachedTokens = (chunk.usage as { prompt_tokens_details?: { cached_tokens?: number } }).prompt_tokens_details?.cached_tokens || 0
+				const cacheMissTokens = (chunk.usage as { prompt_cache_miss_tokens?: number }).prompt_cache_miss_tokens || 0
 				yield {
 					type: "usage",
 					inputTokens: promptTokens - cachedTokens,

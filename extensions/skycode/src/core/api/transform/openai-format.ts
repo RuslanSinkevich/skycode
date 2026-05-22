@@ -310,7 +310,7 @@ function consolidateReasoningDetails(reasoningDetails: ReasoningDetail[]): Reaso
 		// Drop corrupted encrypted reasoning blocks that would otherwise trigger:
 		// "Invalid input: expected string, received undefined" for reasoning_details.*.data
 		// See: #
-		if (detail.type === "reasoning.encrypted" && !detail.data) continue
+		if (detail.type === "reasoning.encrypted" && !detail.data) { continue }
 
 		const index = detail.index ?? 0
 		if (!groupedByIndex.has(index)) {

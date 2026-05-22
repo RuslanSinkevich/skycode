@@ -72,11 +72,11 @@ export class StandaloneTerminalManager implements ITerminalManager {
 	/** Set of terminal IDs managed by this instance */
 	private terminalIds: Set<number> = new Set()
 
-	/** Timeout for shell integration (not used in standalone, but kept for interface compatibility) */
-	private shellIntegrationTimeout: number = 4000
-
 	/** Whether terminal reuse is enabled */
 	private terminalReuseEnabled: boolean = true
+
+	/** Timeout in ms to wait for shell integration before falling back. */
+	private shellIntegrationTimeout: number = 4_000
 
 	/** Maximum output lines to keep */
 	private terminalOutputLineLimit: number = DEFAULT_TERMINAL_OUTPUT_LINE_LIMIT

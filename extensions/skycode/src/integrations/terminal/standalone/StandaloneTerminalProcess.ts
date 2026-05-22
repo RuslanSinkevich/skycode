@@ -61,11 +61,11 @@ export class StandaloneTerminalProcess extends EventEmitter<TerminalProcessEvent
 	/** The spawned child process */
 	private childProcess: ChildProcess | null = null
 
-	/** Exit code from the process */
-	private exitCode: number | null = null
-
 	/** Whether the process has completed */
 	private isCompleted: boolean = false
+
+	/** Exit code of the underlying child process (null while running, or on signal-termination). */
+	exitCode: number | null = null
 
 	constructor() {
 		super()

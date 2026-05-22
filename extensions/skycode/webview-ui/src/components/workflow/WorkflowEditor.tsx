@@ -72,7 +72,7 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ initial, onSave,
 	const canSave = data.name.trim() && data.steps.length > 0 && data.steps.some((s) => s.name.trim() && s.prompt.trim())
 
 	const handleSave = useCallback(() => {
-		if (!canSave) return
+		if (!canSave) { return }
 		onSave(data)
 	}, [canSave, data, onSave])
 

@@ -348,7 +348,9 @@ export class VscodeTerminalManager implements ITerminalManager {
 		// }
 		this.terminalIds.clear()
 		this.processes.clear()
-		this.disposables.forEach((disposable) => disposable.dispose())
+		this.disposables.forEach((disposable) => {
+			disposable.dispose()
+		})
 		this.disposables = []
 	}
 

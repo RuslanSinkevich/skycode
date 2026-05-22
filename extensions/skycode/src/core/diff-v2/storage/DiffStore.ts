@@ -13,6 +13,7 @@ import {
   Hunk, HunkStatus,
   CreateHunkParams, UpdateHunkParams, DiffStoreEvent
 } from './types';
+import { Logger } from "@/shared/services/Logger"
 
 function generateUuid(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -41,7 +42,7 @@ export class DiffStore implements vscode.Disposable {
   constructor(private readonly workspaceState: vscode.Memento) {}
 
   private schedulePersist(): void {
-    if (this._persistScheduled) return;
+    if (this._persistScheduled) { return; }
     this._persistScheduled = true;
     queueMicrotask(() => {
       this._persistScheduled = false;
@@ -109,7 +110,7 @@ export class DiffStore implements vscode.Disposable {
       .filter((g) => g.chatMessageTs >= messageTs && matchesTask(g))
       .sort((a, b) => a.chatMessageTs - b.chatMessageTs);
 
-    if (primary.length > 0) return primary;
+    if (primary.length > 0) { return primary; }
 
     // Fallback: active RGs for this task that started before the message
     // (they may contain changes from message processing that happened later)
@@ -118,7 +119,7 @@ export class DiffStore implements vscode.Disposable {
       .sort((a, b) => a.chatMessageTs - b.chatMessageTs);
 
     if (fallback.length > 0) {
-      console.log(`[DiffStore] getResponseGroupsFromMessageTs: primary miss (ts=${messageTs}), using ${fallback.length} active fallback RGs`);
+      Logger.log(`[DiffStore] getResponseGroupsFromMessageTs: primary miss (ts=${messageTs}), using ${fallback.length} active fallback RGs`);
     }
 
     return fallback;
@@ -129,7 +130,7 @@ export class DiffStore implements vscode.Disposable {
     const idx = all.findIndex((g) => g.id === id);
     if (idx !== -1) {
       all[idx].status = status;
-      if (status !== 'active') all[idx].resolvedAt = Date.now();
+      if (status !== 'active') { all[idx].resolvedAt = Date.now(); }
       this._dirtyKeys.add(DiffStore.RG_KEY);
       this.schedulePersist();
       this._onDidChange.fire({ type: 'responseGroupChanged', responseGroupId: id });
@@ -147,7 +148,7 @@ export class DiffStore implements vscode.Disposable {
 
   createFileChange(responseGroupId: string, fsPath: string, kind: FileChangeKind): string {
     const existing = this.getFileChangeByFile(responseGroupId, fsPath);
-    if (existing) return existing.id;
+    if (existing) { return existing.id; }
 
     const id = generateUuid();
     const fc: FileChangeRecord = { id, responseGroupId, fsPath, kind, status: 'pending' };
@@ -214,7 +215,7 @@ export class DiffStore implements vscode.Disposable {
     // clearing all previous hunks), reset it to 'active' since we now have a new pending hunk.
     const rg = this.getResponseGroup(params.responseGroupId);
     if (rg && rg.status !== 'active') {
-      console.log(`[DiffStore] Resetting RG ${params.responseGroupId.slice(0,8)} status from '${rg.status}' to 'active' (new hunk added)`);
+      Logger.log(`[DiffStore] Resetting RG ${params.responseGroupId.slice(0,8)} status from '${rg.status}' to 'active' (new hunk added)`);
       this.updateResponseGroupStatus(params.responseGroupId, 'active');
     }
 
@@ -257,7 +258,7 @@ export class DiffStore implements vscode.Disposable {
     if (idx !== -1) {
       const hunk = all[idx];
       hunk.status = status;
-      if (status !== 'pending') hunk.resolvedAt = Date.now();
+      if (status !== 'pending') { hunk.resolvedAt = Date.now(); }
       this._dirtyKeys.add(DiffStore.HUNKS_KEY);
       this.schedulePersist();
       if (status !== 'pending') {
@@ -291,7 +292,7 @@ export class DiffStore implements vscode.Disposable {
     const all = this.getHunksAll();
     const idx = all.findIndex((h) => h.id === id);
     if (idx === -1) {
-      console.warn('[DiffStore] updateHunk: hunk not found:', id);
+      Logger.warn('[DiffStore] updateHunk: hunk not found:', id);
       return;
     }
 
@@ -336,7 +337,7 @@ export class DiffStore implements vscode.Disposable {
       this._rgCache = toKeep;
       this._dirtyKeys.add(DiffStore.RG_KEY);
       this.schedulePersist();
-      console.log(`[DiffStore] Cleaned up ${removed} orphaned ResponseGroups (kept ${toKeep.length} with pending hunks)`);
+      Logger.log(`[DiffStore] Cleaned up ${removed} orphaned ResponseGroups (kept ${toKeep.length} with pending hunks)`);
     }
   }
 
@@ -352,7 +353,7 @@ export class DiffStore implements vscode.Disposable {
 
   getFilesWithPendingChanges(): string[] {
     const files = new Set<string>();
-    for (const h of this.getPendingHunks()) files.add(h.fsPath);
+    for (const h of this.getPendingHunks()) { files.add(h.fsPath); }
     return Array.from(files);
   }
 

@@ -110,7 +110,7 @@ export function evaluateRuleConditionals(
  * This is intentionally heuristic and conservative.
  */
 export function extractPathLikeStrings(text: string): string[] {
-	if (!text) return []
+	if (!text) { return [] }
 
 	// 0) Strip fenced code blocks to avoid extracting paths from pasted code.
 	// This dramatically reduces false positives from snippets containing `foo/bar` or `a.b.c`.
@@ -130,11 +130,11 @@ export function extractPathLikeStrings(text: string): string[] {
 	let match: RegExpExecArray | null
 	while ((match = tokenRegex.exec(withoutUrls))) {
 		const candidate = match[1]
-		if (!candidate) continue
+		if (!candidate) { continue }
 		// Normalize away leading ./
 		const normalized = candidate.startsWith("./") ? candidate.slice(2) : candidate
 		// Avoid absurdly long tokens
-		if (normalized.length > 300) continue
+		if (normalized.length > 300) { continue }
 		matches.push(normalized)
 	}
 
@@ -162,6 +162,6 @@ export function extractPathLikeStrings(text: string): string[] {
 export function toWorkspaceRelativePosixPath(absPath: string, workspaceRoot: string): string | undefined {
 	const rel = path.relative(workspaceRoot, absPath)
 	// Outside the root
-	if (rel.startsWith("..") || path.isAbsolute(rel)) return undefined
+	if (rel.startsWith("..") || path.isAbsolute(rel)) { return undefined }
 	return toPosix(rel)
 }

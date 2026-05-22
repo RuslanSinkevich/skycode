@@ -12,7 +12,7 @@ import { env } from "../env.js";
 import { dispatchCallback } from "./core.js";
 
 if (!globalThis.ReadableStream) {
-  // @ts-ignore
+  // @ts-expect-error
   globalThis.ReadableStream = stream.ReadableStream; // ReadableStream is not a global with Node 16
 }
 
@@ -59,12 +59,12 @@ class FileResponse {
       this.status = 200;
       this.statusText = "OK";
 
-      let stats = fs.statSync(filePath);
+      const stats = fs.statSync(filePath);
       this.headers.set("content-length", stats.size.toString());
 
       this.updateContentType();
 
-      let self = this;
+      const self = this;
       this.body = new ReadableStream({
         start(controller) {
           self.arrayBuffer().then((buffer) => {
@@ -99,7 +99,7 @@ class FileResponse {
    * @returns {FileResponse} A new FileResponse object with the same properties as the current object.
    */
   clone() {
-    let response = new FileResponse(this.filePath);
+    const response = new FileResponse(this.filePath);
     response.exists = this.exists;
     response.status = this.status;
     response.statusText = this.statusText;
@@ -261,8 +261,8 @@ class FileCache {
    * @returns {Promise<FileResponse | undefined>}
    */
   async match(request) {
-    let filePath = path.join(this.path, request);
-    let file = new FileResponse(filePath);
+    const filePath = path.join(this.path, request);
+    const file = new FileResponse(filePath);
 
     if (file.exists) {
       return file;
@@ -280,7 +280,7 @@ class FileCache {
   async put(request, response) {
     const buffer = Buffer.from(await response.arrayBuffer());
 
-    let outputPath = path.join(this.path, request);
+    const outputPath = path.join(this.path, request);
 
     try {
       await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
@@ -305,12 +305,11 @@ class FileCache {
  * @returns {Promise<FileResponse|Response|undefined>} The item from the cache, or undefined if not found.
  */
 async function tryCache(cache, ...names) {
-  for (let name of names) {
+  for (const name of names) {
     try {
-      let result = await cache.match(name);
-      if (result) return result;
-    } catch (e) {
-      continue;
+      const result = await cache.match(name);
+      if (result) { return result; }
+    } catch (_e) {
     }
   }
   return undefined;
@@ -404,10 +403,10 @@ export async function getModelFile(
 
   const revision = options.revision ?? "main";
 
-  let requestURL = pathJoin(path_or_repo_id, filename);
-  let localPath = pathJoin(env.localModelPath, requestURL);
+  const requestURL = pathJoin(path_or_repo_id, filename);
+  const localPath = pathJoin(env.localModelPath, requestURL);
 
-  let remoteURL = pathJoin(
+  const remoteURL = pathJoin(
     env.remoteHost,
     env.remotePathTemplate
       .replaceAll("{model}", path_or_repo_id)
@@ -418,14 +417,14 @@ export async function getModelFile(
   // Choose cache key for filesystem cache
   // When using the main revision (default), we use the request URL as the cache key.
   // If a specific revision is requested, we account for this in the cache key.
-  let fsCacheKey =
+  const fsCacheKey =
     revision === "main"
       ? requestURL
       : pathJoin(path_or_repo_id, revision, filename);
 
   /** @type {string} */
   let cacheKey;
-  let proposedCacheKey = cache instanceof FileCache ? fsCacheKey : remoteURL;
+  const proposedCacheKey = cache instanceof FileCache ? fsCacheKey : remoteURL;
 
   // Whether to cache the final response in the end.
   let toCacheResponse = false;
@@ -601,14 +600,14 @@ export async function getModelJSON(
   fatal = true,
   options = {},
 ) {
-  let buffer = await getModelFile(modelPath, fileName, fatal, options);
+  const buffer = await getModelFile(modelPath, fileName, fatal, options);
   if (buffer === null) {
     // Return empty object
     return {};
   }
 
-  let decoder = new TextDecoder("utf-8");
-  let jsonData = decoder.decode(buffer);
+  const decoder = new TextDecoder("utf-8");
+  const jsonData = decoder.decode(buffer);
 
   return JSON.parse(jsonData);
 }
@@ -627,22 +626,22 @@ async function readResponse(response, progress_callback) {
       "Unable to determine content-length from response headers. Will expand buffer when needed.",
     );
   }
-  let total = parseInt(contentLength ?? "0");
+  let total = parseInt(contentLength ?? "0", 10);
   let buffer = new Uint8Array(total);
   let loaded = 0;
 
   const reader = response.body.getReader();
   async function read() {
     const { done, value } = await reader.read();
-    if (done) return;
+    if (done) { return; }
 
-    let newLoaded = loaded + value.length;
+    const newLoaded = loaded + value.length;
     if (newLoaded > total) {
       total = newLoaded;
 
       // Adding the new data will overflow buffer.
       // In this case, we extend the buffer
-      let newBuffer = new Uint8Array(total);
+      const newBuffer = new Uint8Array(total);
 
       // copy contents
       newBuffer.set(buffer);
@@ -680,10 +679,10 @@ function pathJoin(...parts) {
   // https://stackoverflow.com/a/55142565
   parts = parts.map((part, index) => {
     if (index) {
-      part = part.replace(new RegExp("^/"), "");
+      part = part.replace(/^\//, "");
     }
     if (index !== parts.length - 1) {
-      part = part.replace(new RegExp("/$"), "");
+      part = part.replace(/\/$/, "");
     }
     return part;
   });

@@ -82,7 +82,7 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 	}, [state])
 
 	const handleMicClick = useCallback(async () => {
-		if (disabled || state === "starting" || state === "transcribing") return
+		if (disabled || state === "starting" || state === "transcribing") { return }
 
 		if (!isAuthenticated) {
 			onAuthRequired?.()
@@ -113,7 +113,7 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 	}, [disabled, state, error, isAuthenticated, onAuthRequired, t])
 
 	const handleStop = useCallback(async () => {
-		if (state !== "recording") return
+		if (state !== "recording") { return }
 
 		setState("transcribing")
 		onProcessingStateChange?.(true, t("chat.transcribing"))
@@ -159,8 +159,8 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 		}
 	}, [state, language, onTranscription, onProcessingStateChange, t])
 
-	const handleCancel = useCallback(async () => {
-		if (state !== "recording") return
+	const _handleCancel = useCallback(async () => {
+		if (state !== "recording") { return }
 
 		try {
 			await DictationServiceClient.cancelRecording(EmptyRequest.create({}))
@@ -173,7 +173,7 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 	// Cleanup on unmount
 	useEffect(() => {
 		return () => {
-			if (pollingRef.current) clearInterval(pollingRef.current)
+			if (pollingRef.current) { clearInterval(pollingRef.current) }
 		}
 	}, [])
 

@@ -138,6 +138,8 @@ export interface ExtensionState {
 	// Skycode AI: Codebase indexing
 	indexingConfig?: IndexingConfig
 	indexingProgress?: IndexingProgress
+	/** User dismissed the first-run indexing opt-in banner */
+	indexingPromptDismissed?: boolean
 	// Skycode AI: Pending changes for inline diffs
 	pendingChanges?: PendingChangeInfo[]
 	optOutOfRemoteConfig?: boolean

@@ -573,7 +573,7 @@
 						"local",
 						"remote"
 					],
-					"default": "local",
+					"default": "off",
 					"enumDescriptions": [
 						"Индексация выключена",
 						"Локальная индексация (встроенная модель, без интернета)",
@@ -662,6 +662,8 @@
 		"watch:esbuild": "node esbuild.mjs --watch",
 		"watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
 		"package": "npm run check-types && npm run build:webview && npm run lint && node esbuild.mjs --production",
+		"rebuild:native": "node scripts/rebuild-native.mjs",
+		"package:vsix": "npm run rebuild:native && npm run package && vsce package --allow-package-secrets sendgrid --allow-missing-repository --baseContentUrl https://github.com/skycode/skycode/tree/main/vscode/extensions/skycode --baseImagesUrl https://github.com/skycode/skycode/raw/main/vscode/extensions/skycode --out dist/skycode.vsix",
 		"protos": "node scripts/build-proto.mjs",
 		"protos-go": "node scripts/build-go-proto.mjs",
 		"protos-python": "node scripts/build-python-proto.mjs",
@@ -675,7 +677,7 @@
 		"watch-tests": "tsc -p . -w --outDir out",
 		"check-types": "npm run protos && npx tsc --noEmit && cd webview-ui && npx tsc --noEmit",
 		"lint": "biome lint --no-errors-on-unmatched --files-ignore-unknown=true --diagnostic-level=error && npm run lint:proto",
-		"lint:proto": "bash ./scripts/proto-lint.sh",
+		"lint:proto": "node ./scripts/proto-lint.mjs",
 		"format": "biome format --changed --no-errors-on-unmatched --files-ignore-unknown=true --diagnostic-level=error",
 		"format:fix": "biome check --changed --no-errors-on-unmatched --files-ignore-unknown=true --write",
 		"fix:all": "biome check --no-errors-on-unmatched --files-ignore-unknown=true --write --diagnostic-level=error --unsafe",

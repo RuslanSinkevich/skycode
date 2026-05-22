@@ -22,7 +22,7 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 	private static readonly SAFE_FILE_PATTERN = "*.{ts,tsx,js,jsx,mjs,cjs,py,go,rs,java,cs,rb,php,vue,svelte,c,cpp,h,hpp}"
 	private static readonly INDEX_SHORTLIST_LIMIT = 8
 
-	constructor(private validator: ToolValidator) {}
+	constructor(_validator: ToolValidator) {}
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name} for '${block.params.regex}'${
@@ -228,8 +228,8 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 
 	private isBroadRegex(regex: string): boolean {
 		const trimmed = regex.trim()
-		if (!trimmed) return true
-		if (trimmed.length < 3) return true
+		if (!trimmed) { return true }
+		if (trimmed.length < 3) { return true }
 		// Simple literals without anchors/context are usually too broad on workspace root.
 		const hasRegexMetachar = /[\\^$.|?*+()[\]{}]/.test(trimmed)
 		return !hasRegexMetachar && trimmed.length < 6

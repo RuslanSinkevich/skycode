@@ -62,7 +62,7 @@ export const getGlobalSkycodeRules = async (
 		evaluationContext: opts?.evaluationContext,
 	})
 	if (remoteResult.content) {
-		if (combinedContent) combinedContent += "\n\n"
+		if (combinedContent) { combinedContent += "\n\n" }
 		combinedContent += remoteResult.content
 		activatedConditionalRules.push(...remoteResult.activatedConditionalRules)
 	}

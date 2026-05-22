@@ -1,4 +1,5 @@
 import type { AudioDevice } from "./DictationSettings"
+import { Logger } from "@/shared/services/Logger"
 
 /**
  * Cached Windows audio device name.
@@ -110,7 +111,7 @@ export const AUDIO_PROGRAM_CONFIG = {
  * This works reliably regardless of system language, device order, or configuration.
  */
 export async function detectWindowsAudioDevice(ffmpegPath: string): Promise<string | null> {
-	if (_cachedWinAudioDevice) return _cachedWinAudioDevice
+	if (_cachedWinAudioDevice) { return _cachedWinAudioDevice }
 
 	const { execFile } = await import("node:child_process")
 	const { promisify } = await import("node:util")
@@ -135,18 +136,18 @@ export async function detectWindowsAudioDevice(ffmpegPath: string): Promise<stri
 		}
 
 		if (audioDevices.length === 0) {
-			console.warn("[AudioDevice] No audio devices found")
+			Logger.warn("[AudioDevice] No audio devices found")
 			return null
 		}
 
-		console.log(`[AudioDevice] Found ${audioDevices.length} audio devices: ${audioDevices.map(d => `"${d}"`).join(", ")}`)
+		Logger.log(`[AudioDevice] Found ${audioDevices.length} audio devices: ${audioDevices.map(d => `"${d}"`).join(", ")}`)
 
 		// 2. Test each device with a 1-second recording
 		for (const device of audioDevices) {
 			const testFile = path.join(os.tmpdir(), `skycode_mic_test_${Date.now()}.wav`)
 
 			try {
-				console.log(`[AudioDevice] Testing: "${device}"...`)
+				Logger.log(`[AudioDevice] Testing: "${device}"...`)
 				await execFileAsync(ffmpegPath, [
 					"-f", "dshow",
 					"-i", `audio=${device}`,
@@ -162,25 +163,25 @@ export async function detectWindowsAudioDevice(ffmpegPath: string): Promise<stri
 
 					if (size > 1000) {
 						_cachedWinAudioDevice = device
-						console.log(`[AudioDevice] ✓ Working device: "${device}" (${size} bytes)`)
+						Logger.log(`[AudioDevice] ✓ Working device: "${device}" (${size} bytes)`)
 						return _cachedWinAudioDevice
 				} else {
 						// allow-any-unicode-next-line
-						console.log(`[AudioDevice] ✗ Empty audio: "${device}" (${size} bytes)`)
+						Logger.log(`[AudioDevice] ✗ Empty audio: "${device}" (${size} bytes)`)
 				}
 				}
 			} catch (testErr) {
 				// allow-any-unicode-next-line
-				console.log(`[AudioDevice] ✗ Failed: "${device}" — ${testErr instanceof Error ? testErr.message.substring(0, 80) : testErr}`)
+				Logger.log(`[AudioDevice] ✗ Failed: "${device}" — ${testErr instanceof Error ? testErr.message.substring(0, 80) : testErr}`)
 				// Cleanup
-				try { if (fs.existsSync(testFile)) fs.unlinkSync(testFile) } catch {}
+				try { if (fs.existsSync(testFile)) { fs.unlinkSync(testFile)  }} catch {}
 			}
 		}
 
-		console.warn("[AudioDevice] No working audio device found")
+		Logger.warn("[AudioDevice] No working audio device found")
 		return null
 	} catch (err) {
-		console.error("[AudioDevice] Detection failed:", err)
+		Logger.error("[AudioDevice] Detection failed:", err)
 		return null
 	}
 }
@@ -264,10 +265,10 @@ export async function listAudioDevices(ffmpegPath: string): Promise<AudioDevice[
 			}
 		}
 
-		console.log(`[listAudioDevices] Found ${devices.length} devices on ${platform}`)
+		Logger.log(`[listAudioDevices] Found ${devices.length} devices on ${platform}`)
 		return devices
 	} catch (err) {
-		console.error("[listAudioDevices] Failed:", err)
+		Logger.error("[listAudioDevices] Failed:", err)
 		return []
 	}
 }

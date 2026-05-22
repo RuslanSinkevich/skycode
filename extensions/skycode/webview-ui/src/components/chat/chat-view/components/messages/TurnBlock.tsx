@@ -1,5 +1,5 @@
 import { SkycodeMessage } from "@shared/ExtensionMessage"
-import React, { memo, useCallback, useRef, useState, useEffect } from "react"
+import React, { memo, useCallback, useState, } from "react"
 import UserMessage from "@/components/chat/UserMessage"
 import { MessageHandlers } from "../../types/chatTypes"
 import { TurnData } from "../../utils/messageUtils"

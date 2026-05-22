@@ -146,8 +146,8 @@ export class QwenHandler implements ApiHandler {
 				} else {
 					// Local model (LM Studio / Ollama): parse <think> tags from content stream
 					const { reasoning, text } = thinkParser.process(delta.content)
-					if (reasoning) yield { type: "reasoning", reasoning }
-					if (text) yield { type: "text", text }
+					if (reasoning) { yield { type: "reasoning", reasoning } }
+					if (text) { yield { type: "text", text } }
 				}
 			}
 
@@ -161,9 +161,9 @@ export class QwenHandler implements ApiHandler {
 
 			if (chunk.usage) {
 				const promptTokens = chunk.usage.prompt_tokens || 0
-				// @ts-ignore-next-line
+				// @ts-expect-error-next-line
 				const cacheHitTokens = chunk.usage.prompt_cache_hit_tokens || 0
-				// @ts-ignore-next-line
+				// @ts-expect-error-next-line
 				const cacheMissTokens = chunk.usage.prompt_cache_miss_tokens || 0
 				yield {
 					type: "usage",

@@ -242,6 +242,11 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 				}
 				break
 			}
+			case "dismissIndexingPrompt": {
+				await this.controller.context.globalState.update("skycode.indexingPromptDismissed", true)
+				await this.controller.postStateToWebview()
+				break
+			}
 			default: {
 				Logger.error("Received unhandled WebviewMessage type:", JSON.stringify(message))
 			}

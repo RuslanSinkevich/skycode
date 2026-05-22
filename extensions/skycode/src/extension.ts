@@ -124,9 +124,9 @@ export async function activate(context: vscode.ExtensionContext) {
 	let diffSystemV2: DiffSystem | null = null
 	try {
 		diffSystemV2 = await initDiffSystem(context, false)
-		console.log("[Skycode] DiffSystem V2 initialized successfully (cleared old diffs)")
+		Logger.log("[Skycode] DiffSystem V2 initialized successfully (cleared old diffs)")
 	} catch (error) {
-		console.warn("[Skycode] DiffSystem V2 failed to initialize (Proposed API may not be available):", error)
+		Logger.warn("[Skycode] DiffSystem V2 failed to initialize (Proposed API may not be available):", error)
 	}
 
 	const webview = (await initialize(context)) as VscodeWebviewProvider
@@ -194,16 +194,27 @@ export async function activate(context: vscode.ExtensionContext) {
 				}),
 			)
 
+			// [SKYCODE-PERF] Ensure pendingPost timer is cleared on extension dispose,
+			// otherwise it can fire after the controller is disposed.
+			context.subscriptions.push({
+				dispose: () => {
+					if (pendingPost) {
+						clearTimeout(pendingPost)
+						pendingPost = null
+					}
+				},
+			})
+
 			// Initialize in background (non-blocking)
 			indexingService.initialize().catch((err) => {
-				console.warn("[Skycode] Indexing service failed to initialize:", err)
+				Logger.warn("[Skycode] Indexing service failed to initialize:", err)
 			})
 
 			context.subscriptions.push(indexingService)
-			console.log("[Skycode] Codebase Indexing System initialized")
+			Logger.log("[Skycode] Codebase Indexing System initialized")
 		}
 	} catch (error) {
-		console.warn("[Skycode] Codebase Indexing System failed to load:", error)
+		Logger.warn("[Skycode] Codebase Indexing System failed to load:", error)
 	}
 
 	// Clean up old temp files in background (non-blocking) and start periodic cleanup every 24 hours
@@ -572,10 +583,10 @@ export async function activate(context: vscode.ExtensionContext) {
 					"Generate Notebook Cell",
 					"Enter your prompt for generating notebook cell (press Enter to confirm & Esc to cancel)",
 				)
-				if (!userPrompt) return
+				if (!userPrompt) { return }
 
 				const ctx = await getNotebookCommandContext(range, diagnostics)
-				if (!ctx) return
+				if (!ctx) { return }
 
 				const notebookContext = `User prompt: ${userPrompt}
 Insert a new Jupyter notebook cell above or below the current cell based on user prompt.
@@ -596,7 +607,7 @@ ${ctx.cellJson || "{}"}
 			commands.JupyterExplainCell,
 			async (range?: vscode.Range, diagnostics?: vscode.Diagnostic[]) => {
 				const ctx = await getNotebookCommandContext(range, diagnostics)
-				if (!ctx) return
+				if (!ctx) { return }
 
 				const notebookContext = ctx.cellJson
 					? `\n\nCurrent Notebook Cell Context (JSON, sanitized of image data):\n\`\`\`json\n${ctx.cellJson}\n\`\`\``
@@ -615,10 +626,10 @@ ${ctx.cellJson || "{}"}
 					"Improve Notebook Cell",
 					"Enter your prompt for improving the current notebook cell (press Enter to confirm & Esc to cancel)",
 				)
-				if (!userPrompt) return
+				if (!userPrompt) { return }
 
 				const ctx = await getNotebookCommandContext(range, diagnostics)
-				if (!ctx) return
+				if (!ctx) { return }
 
 				const notebookContext = `User prompt: ${userPrompt}
 ${NOTEBOOK_EDIT_INSTRUCTIONS}
@@ -636,19 +647,19 @@ ${ctx.cellJson || "{}"}
 	// [SKYCODE-SKYCODE] Register indexing commands
 	context.subscriptions.push(
 		vscode.commands.registerCommand("skycode.indexing.reindex", async () => {
-			if (indexingService) await indexingService.handleCommand("reindex")
+			if (indexingService) { await indexingService.handleCommand("reindex") }
 		}),
 		vscode.commands.registerCommand("skycode.indexing.clear", async () => {
-			if (indexingService) await indexingService.handleCommand("clear")
+			if (indexingService) { await indexingService.handleCommand("clear") }
 		}),
 		vscode.commands.registerCommand("skycode.indexing.pause", () => {
-			if (indexingService) indexingService.handleCommand("pause")
+			if (indexingService) { indexingService.handleCommand("pause") }
 		}),
 		vscode.commands.registerCommand("skycode.indexing.resume", () => {
-			if (indexingService) indexingService.handleCommand("resume")
+			if (indexingService) { indexingService.handleCommand("resume") }
 		}),
 		vscode.commands.registerCommand("skycode.indexing.clearEmbeddingCache", async () => {
-			if (indexingService) await indexingService.handleCommand("clearEmbeddingCache")
+			if (indexingService) { await indexingService.handleCommand("clearEmbeddingCache") }
 		}),
 	)
 
@@ -658,7 +669,22 @@ ${ctx.cellJson || "{}"}
 	context.subscriptions.push(indexingStatusBar)
 
 	if (indexingService) {
+		// [SKYCODE-PERF] Track the "complete -> hide" timeout so we can both replace it
+		// when state changes faster than 10s and clear it on extension dispose.
+		let completeHideTimer: ReturnType<typeof setTimeout> | null = null
+		context.subscriptions.push({
+			dispose: () => {
+				if (completeHideTimer) {
+					clearTimeout(completeHideTimer)
+					completeHideTimer = null
+				}
+			},
+		})
 		const updateStatusBar = (progress: import("@shared/IndexingTypes").IndexingProgress) => {
+			if (completeHideTimer && progress.status !== "complete") {
+				clearTimeout(completeHideTimer)
+				completeHideTimer = null
+			}
 			switch (progress.status) {
 				case "indexing": {
 					const phase = progress.phase ?? "idle"
@@ -697,7 +723,11 @@ ${ctx.cellJson || "{}"}
 					indexingStatusBar.tooltip = "Индекс кодовой базы готов. Нажмите для переиндексации."
 					indexingStatusBar.show()
 					// Hide after 10 seconds if complete
-					setTimeout(() => {
+					if (completeHideTimer) {
+						clearTimeout(completeHideTimer)
+					}
+					completeHideTimer = setTimeout(() => {
+						completeHideTimer = null
 						if (indexingService?.getProgress().status === "complete") {
 							indexingStatusBar.hide()
 						}
@@ -909,6 +939,9 @@ async function getBinaryLocation(name: string): Promise<string> {
 	return binPath
 }
 
+// [SKYCODE-PERF] Track the dev watcher so we can dispose it on deactivate.
+let _devWatcher: vscode.FileSystemWatcher | null = null
+
 // This method is called when your extension is deactivated
 export async function deactivate() {
 	Logger.log("Skycode extension deactivating, cleaning up resources...")
@@ -932,6 +965,16 @@ export async function deactivate() {
 
 	clearOnboardingModelsCache()
 
+	// [SKYCODE-PERF] Dispose dev watcher (if any) to release the underlying chokidar
+	if (_devWatcher) {
+		try {
+			_devWatcher.dispose()
+		} catch {
+			// already disposed
+		}
+		_devWatcher = null
+	}
+
 	Logger.log("Skycode extension deactivated")
 }
 
@@ -947,9 +990,9 @@ const DEV_WORKSPACE_FOLDER = process.env.DEV_WORKSPACE_FOLDER
 // Set up development mode file watcher
 if (IS_DEV && IS_DEV !== "false") {
 	assert(DEV_WORKSPACE_FOLDER, "DEV_WORKSPACE_FOLDER must be set in development")
-	const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(DEV_WORKSPACE_FOLDER, "src/**/*"))
+	_devWatcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(DEV_WORKSPACE_FOLDER, "src/**/*"))
 
-	watcher.onDidChange(({ scheme, path }) => {
+	_devWatcher.onDidChange(({ scheme, path }) => {
 		Logger.info(`${scheme} ${path} changed. Reloading VSCode...`)
 
 		vscode.commands.executeCommand("workbench.action.reloadWindow")

@@ -24,7 +24,7 @@ export const ApprovalBar: React.FC<ApprovalBarProps> = ({ approvals, onApprove, 
 
 	const handleApprove = useCallback(
 		(id: string) => {
-			if (processingId) return
+			if (processingId) { return }
 			setProcessingId(id)
 			onApprove(id)
 			// Reset after a short delay (backend will remove from approvals via event)
@@ -35,7 +35,7 @@ export const ApprovalBar: React.FC<ApprovalBarProps> = ({ approvals, onApprove, 
 
 	const handleReject = useCallback(
 		(id: string) => {
-			if (processingId) return
+			if (processingId) { return }
 			setProcessingId(id)
 			onReject(id)
 			setTimeout(() => setProcessingId(null), 500)
@@ -43,7 +43,7 @@ export const ApprovalBar: React.FC<ApprovalBarProps> = ({ approvals, onApprove, 
 		[onReject, processingId],
 	)
 
-	if (approvals.length === 0) return null
+	if (approvals.length === 0) { return null }
 
 	return (
 		<div className="flex flex-col gap-1 px-4 py-2">

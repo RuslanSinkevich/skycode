@@ -19,7 +19,9 @@ async function compressImage(dataUri: string): Promise<string> {
 	try {
 		// Extract mime type and base64 data
 		const match = dataUri.match(/^data:([^;]+);base64,(.+)$/)
-		if (!match) return dataUri
+		if (!match) {
+			return dataUri
+		}
 
 		const [_, mimeType, base64Data] = match
 

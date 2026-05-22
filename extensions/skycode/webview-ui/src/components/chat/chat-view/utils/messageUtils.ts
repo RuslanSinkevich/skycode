@@ -871,7 +871,7 @@ export function groupByTurns(
 
 		if (msg?.say === "user_feedback") {
 			// Commit the previous turn (task-turn or earlier user_feedback turn)
-			if (currentTurn) turns.push(currentTurn)
+			if (currentTurn) { turns.push(currentTurn) }
 			// Start a new turn from this user message
 			currentTurn = { userMessage: msg, items: [], isTaskTurn: false }
 		} else if (currentTurn) {
@@ -880,7 +880,7 @@ export function groupByTurns(
 	}
 
 	// Commit the last turn
-	if (currentTurn) turns.push(currentTurn)
+	if (currentTurn) { turns.push(currentTurn) }
 
 	return turns
 }

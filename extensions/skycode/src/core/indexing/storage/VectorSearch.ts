@@ -27,10 +27,10 @@ function dot(a: Float32Array, b: Float32Array): number {
  */
 function normalizeInPlace(v: Float32Array): Float32Array {
 	let norm = 0
-	for (let i = 0; i < v.length; i++) norm += v[i] * v[i]
-	if (norm === 0) return v
+	for (let i = 0; i < v.length; i++) { norm += v[i] * v[i] }
+	if (norm === 0) { return v }
 	const inv = 1 / Math.sqrt(norm)
-	for (let i = 0; i < v.length; i++) v[i] *= inv
+	for (let i = 0; i < v.length; i++) { v[i] *= inv }
 	return v
 }
 

@@ -80,21 +80,21 @@ function post_process_object_detection(
       "Make sure that you pass in as many target sizes as the batch dimension of the logits",
     );
   }
-  let toReturn = [];
+  const toReturn = [];
   for (let i = 0; i < batch_size; ++i) {
-    let target_size = target_sizes !== null ? target_sizes[i] : null;
-    let info = {
+    const target_size = target_sizes !== null ? target_sizes[i] : null;
+    const info = {
       boxes: [],
       classes: [],
       scores: [],
     };
-    let logits = out_logits[i];
-    let bbox = out_bbox[i];
+    const logits = out_logits[i];
+    const bbox = out_bbox[i];
 
     for (let j = 0; j < num_boxes; ++j) {
-      let logit = logits[j];
+      const logit = logits[j];
 
-      let indices = [];
+      const indices = [];
       let probs;
       if (is_zero_shot) {
         // Get indices of classes with high enough probability
@@ -106,7 +106,7 @@ function post_process_object_detection(
         }
       } else {
         // Get most probable class
-        let maxIndex = max(logit.data)[1];
+        const maxIndex = max(logit.data)[1];
 
         if (maxIndex === num_classes - 1) {
           // This is the background class, skip it
@@ -387,7 +387,8 @@ export class ImageFeatureExtractor extends FeatureExtractor {
           const b = calculateReflectOffset(i, h1) * imageWidth;
 
           for (let j = 0; j < paddedImageWidth; ++j) {
-            if (i < imageHeight && j < imageWidth) continue; // Do not overwrite original image
+            if (i < imageHeight && j < imageWidth) { continue; // Do not overwrite original image
+}
             const c = (a + j) * imageChannels;
             const d = (b + calculateReflectOffset(j, w1)) * imageChannels;
 
@@ -647,7 +648,7 @@ export class ImageFeatureExtractor extends FeatureExtractor {
    * @param {...any} args Additional arguments.
    * @returns {Promise<ImageFeatureExtractorResult>} An object containing the concatenated pixel values (and other metadata) of the preprocessed images.
    */
-  async _call(images, ...args) {
+  async _call(images, ..._args) {
     if (!Array.isArray(images)) {
       images = [images];
     }
@@ -797,7 +798,7 @@ export class DeiTFeatureExtractor extends ImageFeatureExtractor {}
 export class BeitFeatureExtractor extends ImageFeatureExtractor {}
 export class DonutFeatureExtractor extends ImageFeatureExtractor {
   pad_image(pixelData, imgDims, padSize, options = {}) {
-    const [imageWidth, imageHeight, imageChannels] = imgDims;
+    const [_imageWidth, _imageHeight, imageChannels] = imgDims;
 
     let image_mean = this.image_mean;
     if (!Array.isArray(this.image_mean)) {
@@ -884,22 +885,22 @@ export class DetrFeatureExtractor extends ImageFeatureExtractor {
     object_mask_threshold,
     num_labels,
   ) {
-    let mask_probs_item = [];
-    let pred_scores_item = [];
-    let pred_labels_item = [];
+    const mask_probs_item = [];
+    const pred_scores_item = [];
+    const pred_labels_item = [];
 
     for (let j = 0; j < class_logits.dims[0]; ++j) {
-      let cls = class_logits[j];
-      let mask = mask_logits[j];
+      const cls = class_logits[j];
+      const mask = mask_logits[j];
 
-      let pred_label = max(cls.data)[1];
+      const pred_label = max(cls.data)[1];
       if (pred_label === num_labels) {
         // Is the background, so we ignore it
         continue;
       }
 
-      let scores = softmax(cls.data);
-      let pred_score = scores[pred_label];
+      const scores = softmax(cls.data);
+      const pred_score = scores[pred_label];
       if (pred_score > object_mask_threshold) {
         mask_probs_item.push(mask);
         pred_scores_item.push(pred_score);
@@ -927,7 +928,7 @@ export class DetrFeatureExtractor extends ImageFeatureExtractor {
     overlap_mask_area_threshold = 0.8,
   ) {
     // mask_k is a 1D array of indices, indicating where the mask is equal to k
-    let mask_k = [];
+    const mask_k = [];
     let mask_k_area = 0;
     let original_area = 0;
 
@@ -947,7 +948,7 @@ export class DetrFeatureExtractor extends ImageFeatureExtractor {
     // Eliminate disconnected tiny segments
     if (mask_exists) {
       // Perform additional check
-      let area_ratio = mask_k_area / original_area;
+      const area_ratio = mask_k_area / original_area;
       mask_exists = area_ratio > overlap_mask_area_threshold;
     }
 
@@ -971,16 +972,16 @@ export class DetrFeatureExtractor extends ImageFeatureExtractor {
     pred_labels,
     mask_threshold,
     overlap_mask_area_threshold,
-    label_ids_to_fuse = null,
+    _label_ids_to_fuse = null,
     target_size = null,
   ) {
-    let [height, width] = target_size ?? mask_probs[0].dims;
+    const [height, width] = target_size ?? mask_probs[0].dims;
 
-    let segmentation = new Tensor("int32", new Int32Array(height * width), [
+    const segmentation = new Tensor("int32", new Int32Array(height * width), [
       height,
       width,
     ]);
-    let segments = [];
+    const segments = [];
 
     // 1. If target_size is not null, we need to resize the masks to the target size
     if (target_size !== null) {
@@ -999,11 +1000,11 @@ export class DetrFeatureExtractor extends ImageFeatureExtractor {
     // NOTE: `mask_probs` is updated in-place
     //
     // Temporary storage for the best label/scores for each pixel ([height, width]):
-    let mask_labels = new Int32Array(mask_probs[0].data.length);
-    let bestScores = new Float32Array(mask_probs[0].data.length);
+    const mask_labels = new Int32Array(mask_probs[0].data.length);
+    const bestScores = new Float32Array(mask_probs[0].data.length);
 
     for (let i = 0; i < mask_probs.length; ++i) {
-      let score = pred_scores[i];
+      const score = pred_scores[i];
 
       for (let j = 0; j < mask_probs[i].data.length; ++j) {
         mask_probs[i].data[j] *= score;
@@ -1018,13 +1019,13 @@ export class DetrFeatureExtractor extends ImageFeatureExtractor {
 
     // let stuff_memory_list = {}
     for (let k = 0; k < pred_labels.length; ++k) {
-      let pred_class = pred_labels[k];
+      const pred_class = pred_labels[k];
 
       // TODO add `should_fuse`
       // let should_fuse = pred_class in label_ids_to_fuse
 
       // Check if mask exists and large enough to be a segment
-      let [mask_exists, mask_k] = this.check_segment_validity(
+      const [mask_exists, mask_k] = this.check_segment_validity(
         mask_labels,
         mask_probs,
         k,
@@ -1046,7 +1047,7 @@ export class DetrFeatureExtractor extends ImageFeatureExtractor {
       ++current_segment_id;
 
       // Add current object segment to final segmentation map
-      for (let index of mask_k) {
+      for (const index of mask_k) {
         segmentation.data[index] = current_segment_id;
       }
 
@@ -1094,7 +1095,7 @@ export class DetrFeatureExtractor extends ImageFeatureExtractor {
 
     const mask_probs = masks_queries_logits.sigmoid(); // [batch_size, num_queries, height, width]
 
-    let [batch_size, num_queries, num_labels] = class_queries_logits.dims;
+    let [batch_size, _num_queries, num_labels] = class_queries_logits.dims;
     num_labels -= 1; // Remove last class (background)
 
     if (target_sizes !== null && target_sizes.length !== batch_size) {
@@ -1103,14 +1104,14 @@ export class DetrFeatureExtractor extends ImageFeatureExtractor {
       );
     }
 
-    let toReturn = [];
+    const toReturn = [];
     for (let i = 0; i < batch_size; ++i) {
-      let target_size = target_sizes !== null ? target_sizes[i] : null;
+      const target_size = target_sizes !== null ? target_sizes[i] : null;
 
-      let class_logits = class_queries_logits[i];
-      let mask_logits = mask_probs[i];
+      const class_logits = class_queries_logits[i];
+      const mask_logits = mask_probs[i];
 
-      let [mask_probs_item, pred_scores_item, pred_labels_item] =
+      const [mask_probs_item, pred_scores_item, pred_labels_item] =
         this.remove_low_and_no_objects(
           class_logits,
           mask_logits,
@@ -1120,9 +1121,9 @@ export class DetrFeatureExtractor extends ImageFeatureExtractor {
 
       if (pred_labels_item.length === 0) {
         // No mask found
-        let [height, width] = target_size ?? mask_logits.dims.slice(-2);
+        const [height, width] = target_size ?? mask_logits.dims.slice(-2);
 
-        let segmentation = new Tensor(
+        const segmentation = new Tensor(
           "int32",
           new Int32Array(height * width).fill(-1),
           [height, width],
@@ -1135,7 +1136,7 @@ export class DetrFeatureExtractor extends ImageFeatureExtractor {
       }
 
       // Get segmentation map and segment information of batch item
-      let [segmentation, segments] = this.compute_segments(
+      const [segmentation, segments] = this.compute_segments(
         mask_probs_item,
         pred_scores_item,
         pred_labels_item,
@@ -1203,10 +1204,10 @@ export class SamImageProcessor extends ImageFeatureExtractor {
     // Reshape input points
     for (let i = 0; i < input_points.length; ++i) {
       // batch_size
-      let originalImageSize = original_sizes[i];
-      let reshapedImageSize = reshaped_input_sizes[i];
+      const originalImageSize = original_sizes[i];
+      const reshapedImageSize = reshaped_input_sizes[i];
 
-      let resizeFactors = [
+      const resizeFactors = [
         reshapedImageSize[0] / originalImageSize[0],
         reshapedImageSize[1] / originalImageSize[1],
       ];
@@ -1384,7 +1385,7 @@ export class Swin2SRImageProcessor extends ImageFeatureExtractor {
   pad_image(pixelData, imgDims, padSize, options = {}) {
     // NOTE: In this case, `padSize` represents the size of the sliding window for the local attention.
     // In other words, the image is padded so that its width and height are multiples of `padSize`.
-    const [imageWidth, imageHeight, imageChannels] = imgDims;
+    const [imageWidth, imageHeight, _imageChannels] = imgDims;
 
     return super.pad_image(
       pixelData,
@@ -1735,7 +1736,7 @@ export class ClapFeatureExtractor extends FeatureExtractor {
       }
     } else {
       if (diff < 0) {
-        let padded = new Float64Array(max_length); // already padded with zeros
+        const padded = new Float64Array(max_length); // already padded with zeros
         padded.set(waveform);
 
         if (padding === "repeat") {
@@ -1871,14 +1872,14 @@ export class SamProcessor extends Processor {
    * @borrows SamImageProcessor#post_process_masks as post_process_masks
    */
   post_process_masks(...args) {
-    // @ts-ignore
+    // @ts-expect-error
     return this.feature_extractor.post_process_masks(...args);
   }
   /**
    * @borrows SamImageProcessor#reshape_input_points as reshape_input_points
    */
   reshape_input_points(...args) {
-    // @ts-ignore
+    // @ts-expect-error
     return this.feature_extractor.reshape_input_points(...args);
   }
 }
@@ -2018,7 +2019,7 @@ export class AutoProcessor {
       revision = "main",
     } = {},
   ) {
-    let preprocessorConfig =
+    const preprocessorConfig =
       config ??
       (await getModelJSON(
         pretrained_model_name_or_path,
@@ -2035,10 +2036,10 @@ export class AutoProcessor {
 
     // Determine feature extractor class
     // TODO: Ensure backwards compatibility with old configs
-    let key =
+    const key =
       preprocessorConfig.feature_extractor_type ??
       preprocessorConfig.image_processor_type;
-    let feature_extractor_class = this.FEATURE_EXTRACTOR_CLASS_MAPPING[key];
+    let feature_extractor_class = AutoProcessor.FEATURE_EXTRACTOR_CLASS_MAPPING[key];
 
     if (!feature_extractor_class) {
       if (preprocessorConfig.size !== undefined) {
@@ -2053,12 +2054,12 @@ export class AutoProcessor {
     }
 
     // If no associated processor class, use default
-    let processor_class =
-      this.PROCESSOR_CLASS_MAPPING[preprocessorConfig.processor_class] ??
+    const processor_class =
+      AutoProcessor.PROCESSOR_CLASS_MAPPING[preprocessorConfig.processor_class] ??
       Processor;
 
     // Instantiate processor and feature extractor
-    let feature_extractor = new feature_extractor_class(preprocessorConfig);
+    const feature_extractor = new feature_extractor_class(preprocessorConfig);
     return new processor_class(feature_extractor);
   }
 }

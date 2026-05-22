@@ -121,7 +121,11 @@ async function transcribeWithLocalWhisper(
 		throw err
 	} finally {
 		// Cleanup temp files
-		if (fs.existsSync(webmPath)) fs.unlinkSync(webmPath)
-		if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath)
+		if (fs.existsSync(webmPath)) {
+			fs.unlinkSync(webmPath)
+		}
+		if (fs.existsSync(wavPath)) {
+			fs.unlinkSync(wavPath)
+		}
 	}
 }

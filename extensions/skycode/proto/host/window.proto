@@ -49,6 +49,8 @@ message ShowTextDocumentOptions {
   optional bool preview = 1;
   optional bool preserve_focus = 2;
   optional int32 view_column = 3;
+  // 1-indexed line number to navigate to; the selection is set to that line.
+  optional int32 selection_line = 4;
 }
 
 message TextEditorInfo {

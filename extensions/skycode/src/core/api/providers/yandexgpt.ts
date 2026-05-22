@@ -5,6 +5,7 @@ import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
+import { Logger } from "@/shared/services/Logger"
 
 const YANDEX_GPT_BASE_URL = "https://llm.api.cloud.yandex.net/v1/chat/completions"
 
@@ -60,8 +61,8 @@ export class YandexGptHandler implements ApiHandler {
 			if (Array.isArray(msg.content)) {
 				const text = (msg.content as any[])
 					.map((part: any) => {
-						if (typeof part === "string") return part
-						if (part.type === "text" && part.text) return part.text
+						if (typeof part === "string") { return part }
+						if (part.type === "text" && part.text) { return part.text }
 						return ""
 					})
 					.filter(Boolean)
@@ -81,7 +82,7 @@ export class YandexGptHandler implements ApiHandler {
 			requestBody.max_tokens = model.info.maxTokens
 		}
 
-		console.log(
+		Logger.log(
 			`[YandexGPT] Request: model=${model.id}, uri=${modelUri}, messages=${flatMessages.length}, stream=true`,
 		)
 
@@ -97,7 +98,7 @@ export class YandexGptHandler implements ApiHandler {
 
 		if (!response.ok) {
 			const errorText = await response.text()
-			console.error(`[YandexGPT] API error ${response.status}: ${errorText}`)
+			Logger.error(`[YandexGPT] API error ${response.status}: ${errorText}`)
 			throw new Error(t("yandexgpt.error.apiFailed", { status: String(response.status), details: errorText }))
 		}
 
@@ -112,7 +113,7 @@ export class YandexGptHandler implements ApiHandler {
 
 		while (true) {
 			const { done, value } = await reader.read()
-			if (done) break
+			if (done) { break }
 
 			buffer += decoder.decode(value, { stream: true })
 			const lines = buffer.split("\n")
@@ -120,8 +121,8 @@ export class YandexGptHandler implements ApiHandler {
 
 			for (const line of lines) {
 				const trimmed = line.trim()
-				if (!trimmed || trimmed === "data: [DONE]") continue
-				if (!trimmed.startsWith("data: ")) continue
+				if (!trimmed || trimmed === "data: [DONE]") { continue }
+				if (!trimmed.startsWith("data: ")) { continue }
 
 				try {
 					const json = JSON.parse(trimmed.slice(6))

@@ -2,7 +2,7 @@ import { SystemPromptSection } from "../templates/placeholders"
 import { TemplateEngine } from "../templates/TemplateEngine"
 import type { PromptVariant, SystemPromptContext } from "../types"
 
-const getAskModeCapabilitiesText = (context: SystemPromptContext) => `CAPABILITIES
+const getAskModeCapabilitiesText = (_context: SystemPromptContext) => `CAPABILITIES
 
 You are in ASK (read-only) mode. You can ONLY read, search, and analyze — you MUST NOT attempt to modify files, run commands, or use tools that are not listed below.
 

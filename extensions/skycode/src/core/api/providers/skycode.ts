@@ -186,7 +186,7 @@ export class SkycodeHandler implements ApiHandler {
 					delta &&
 					"reasoning_details" in delta &&
 					delta.reasoning_details &&
-					// @ts-ignore-next-line
+					// @ts-expect-error-next-line
 					delta?.reasoning_details?.length && // exists and non-0
 					!shouldSkipReasoningForModel(this.options.openRouterModelId)
 				) {
@@ -198,7 +198,7 @@ export class SkycodeHandler implements ApiHandler {
 				}
 
 				if (!didOutputUsage && chunk.usage) {
-					// @ts-ignore-next-line
+					// @ts-expect-error-next-line
 					let totalCost = (chunk.usage.cost || 0) + (chunk.usage.cost_details?.upstream_inference_cost || 0)
 
 					if (["x-ai/grok-code-fast-1", "kwaipilot/kat-coder-pro"].includes(this.getModel().id)) {

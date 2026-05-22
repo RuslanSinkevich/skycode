@@ -41,7 +41,7 @@ describe("ExecuteCommandToolHandler", () => {
 		// Track whether ask was called (manual approval requested)
 		let askCalled = false
 		let askType: string | undefined
-		let askMessage: string | undefined
+		let _askMessage: string | undefined
 
 		// Track whether say was called (auto-approved, shown as info)
 		let sayCalled = false
@@ -49,7 +49,7 @@ describe("ExecuteCommandToolHandler", () => {
 		let sayMessage: string | undefined
 
 		// Track if tool was denied
-		let toolDenied = false
+		const toolDenied = false
 
 		const config: any = {
 			ulid: "test-ulid",
@@ -72,7 +72,7 @@ describe("ExecuteCommandToolHandler", () => {
 				stateManager: {
 					getApiConfiguration: () => ({ actModeApiProvider: "test-provider" }),
 					getGlobalSettingsKey: (key: string) => {
-						if (key === "mode") return "act"
+						if (key === "mode") { return "act" }
 						return undefined
 					},
 				},
@@ -96,7 +96,7 @@ describe("ExecuteCommandToolHandler", () => {
 				ask: async (type: string, message: string) => {
 					askCalled = true
 					askType = type
-					askMessage = message
+					_askMessage = message
 					// Simulate user approving
 					return { response: "yesButtonClicked" }
 				},
@@ -436,7 +436,7 @@ describe("ExecuteCommandToolHandler", () => {
 				partial: false,
 			} as any
 
-			const result = await handler.execute(config, block)
+			const _result = await handler.execute(config, block)
 			config.taskState.consecutiveMistakeCount.should.equal(1)
 		})
 
@@ -451,7 +451,7 @@ describe("ExecuteCommandToolHandler", () => {
 				partial: false,
 			} as any
 
-			const result = await handler.execute(config, block)
+			const _result = await handler.execute(config, block)
 			config.taskState.consecutiveMistakeCount.should.equal(1)
 		})
 	})

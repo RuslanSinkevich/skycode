@@ -18,6 +18,7 @@ import * as crypto from "node:crypto"
 import * as os from "node:os"
 import * as vscode from "vscode"
 import type { ChunkRow, IndexMetadata } from "../types"
+import { Logger } from "@/shared/services/Logger"
 
 type SqliteDbLike = {
 	pragma(sql: string): void
@@ -60,8 +61,10 @@ export class IndexStorage {
 	private fileHashIndex = new Map<string, string>()
 	/** Fast lookup: filePath → all chunk indices in `chunks` array (for O(1) removal). */
 	private fileChunkIndex = new Map<string, Set<number>>()
+	private readonly extensionPath: string
 
-	constructor(workspacePath: string) {
+	constructor(workspacePath: string, extensionPath = "") {
+		this.extensionPath = extensionPath
 		const hash = workspaceHash(workspacePath)
 		this.indexDir = path.join(getIndexBaseDir(), hash)
 		this.dbPath = path.join(this.indexDir, "index.db")
@@ -74,28 +77,44 @@ export class IndexStorage {
 		await fs.promises.mkdir(this.indexDir, { recursive: true })
 	}
 
+	private resolveSqliteNativeBinding(): string {
+		const electron = process.versions.electron
+		if (this.extensionPath && electron) {
+			const versioned = path.join(
+				this.extensionPath,
+				"native",
+				"sqlite",
+				`electron-${electron}-${process.platform}-${process.arch}`,
+				"better_sqlite3.node",
+			)
+			if (fs.existsSync(versioned)) {
+				return versioned
+			}
+		}
+		const betterSqlite3Dir = path.dirname(require.resolve("better-sqlite3/package.json"))
+		const fallback = path.join(betterSqlite3Dir, "build", "Release", "better_sqlite3.node")
+		if (fs.existsSync(fallback)) {
+			return fallback
+		}
+		throw new Error(
+			`better_sqlite3.node not found (electron=${electron ?? "unknown"}, ext=${this.extensionPath || "n/a"})`,
+		)
+	}
+
 	private openDb(): boolean {
 		if (this.db) {
 			return true
 		}
 		try {
 			const Database = require("better-sqlite3")
-			// Resolve native binding path explicitly to avoid `bindings` lookup failures
-			// in Electron/VS Code extension host environment.
-			const betterSqlite3Dir = path.dirname(require.resolve("better-sqlite3/package.json"))
-			const nativeBindingPath = path.join(
-				betterSqlite3Dir,
-				"build",
-				"Release",
-				"better_sqlite3.node",
-			)
+			const nativeBindingPath = this.resolveSqliteNativeBinding()
 			this.db = new Database(this.dbPath, { nativeBinding: nativeBindingPath })
 			;(this.db as any).pragma("journal_mode = WAL")
 			;(this.db as any).pragma("synchronous = NORMAL")
 			this.createTables()
 			this.backend = "sqlite"
 			if (!this.backendInfoLogged) {
-				console.log("[Skycode Indexing] Storage backend: sqlite")
+				Logger.log("[Skycode Indexing] Storage backend: sqlite")
 				this.backendInfoLogged = true
 			}
 			return true
@@ -103,7 +122,7 @@ export class IndexStorage {
 			this.db = null
 			this.backend = "json"
 			if (!this.backendWarningLogged) {
-				console.warn("[Skycode Indexing] SQLite unavailable, fallback to JSON storage:", error)
+				Logger.warn("[Skycode Indexing] SQLite unavailable, fallback to JSON storage:", error)
 				this.backendWarningLogged = true
 				// JSON backend rewrites the entire index on every save and is orders of
 				// magnitude slower than sqlite on big repos — surface this once so the
@@ -114,7 +133,7 @@ export class IndexStorage {
 				)
 			}
 			if (!this.backendInfoLogged) {
-				console.log("[Skycode Indexing] Storage backend: json")
+				Logger.log("[Skycode Indexing] Storage backend: json")
 				this.backendInfoLogged = true
 			}
 			return false
@@ -162,7 +181,7 @@ export class IndexStorage {
 
 	/** Grow `this.vectors` to at least `minCapacity` floats, doubling when needed. */
 	private ensureVectorCapacity(minCapacity: number): void {
-		if (this.vectors.length >= minCapacity) return
+		if (this.vectors.length >= minCapacity) { return }
 		let newCapacity = this.vectors.length > 0 ? this.vectors.length : 1024 * this.dimensions
 		while (newCapacity < minCapacity) {
 			newCapacity *= 2
@@ -259,7 +278,7 @@ export class IndexStorage {
 				}
 
 				this.rebuildFileIndex()
-				console.log("[Skycode Indexing] Index loaded from sqlite:", this.chunks.length, "chunks")
+				Logger.log("[Skycode Indexing] Index loaded from sqlite:", this.chunks.length, "chunks")
 				// Empty index is treated as not loaded — triggers re-indexing
 				return this.chunks.length > 0
 			}
@@ -284,7 +303,7 @@ export class IndexStorage {
 				)
 				this.vectorsLength = this.vectors.length
 				this.rebuildFileIndex()
-				console.log("[Skycode Indexing] Index loaded from json:", this.chunks.length, "chunks")
+				Logger.log("[Skycode Indexing] Index loaded from json:", this.chunks.length, "chunks")
 				return this.chunks.length > 0
 			}
 
@@ -395,7 +414,7 @@ export class IndexStorage {
 		if (newChunks.length !== newVectors.length) {
 			throw new Error("Chunks and vectors arrays must have the same length")
 		}
-		if (newChunks.length === 0) return
+		if (newChunks.length === 0) { return }
 
 		const startOffset = this.vectorsLength
 		if (this.backend === "sqlite" && this.db) {
@@ -455,7 +474,7 @@ export class IndexStorage {
 		const chunksChanged = this.lastFinalizeLoggedChunks !== this.chunks.length
 		const enoughTimePassed = now - this.lastFinalizeLogAt >= 15000
 		if (chunksChanged || enoughTimePassed) {
-			console.log("[Skycode Indexing] Index persisted:", this.backend, this.chunks.length, "chunks")
+			Logger.log("[Skycode Indexing] Index persisted:", this.backend, this.chunks.length, "chunks")
 			this.lastFinalizeLogAt = now
 			this.lastFinalizeLoggedChunks = this.chunks.length
 		}
@@ -507,7 +526,7 @@ export class IndexStorage {
 
 	isFileChanged(filePath: string, currentHash: string): boolean {
 		const existingHash = this.fileHashIndex.get(filePath)
-		if (existingHash === undefined) return true
+		if (existingHash === undefined) { return true }
 		return existingHash !== currentHash
 	}
 

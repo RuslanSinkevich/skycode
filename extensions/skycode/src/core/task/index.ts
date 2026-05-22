@@ -52,25 +52,20 @@ import { ITerminalManager } from "@integrations/terminal/types"
 import { AuthService } from "@services/auth/AuthService"
 import { BrowserSession } from "@services/browser/BrowserSession"
 import { UrlContentFetcher } from "@services/browser/UrlContentFetcher"
-import { featureFlagsService } from "@services/feature-flags"
-import { listFiles } from "@services/glob/list-files"
 import { McpHub } from "@services/mcp/McpHub"
 import { ApiConfiguration } from "@shared/api"
-import { findLast, findLastIndex } from "@shared/array"
-import { combineApiRequests } from "@shared/combineApiRequests"
-import { combineCommandSequences } from "@shared/combineCommandSequences"
+import { findLastIndex } from "@shared/array"
 import { SkycodeApiReqCancelReason, SkycodeApiReqInfo, SkycodeAsk, SkycodeMessage, SkycodeSay } from "@shared/ExtensionMessage"
 import { HistoryItem } from "@shared/HistoryItem"
 import { getLanguageKey, LanguageDisplay } from "@shared/Languages"
 import { USER_CONTENT_TAGS } from "@shared/messages/constants"
 import { convertSkycodeMessageToProto } from "@shared/proto-conversions/skycode-message"
 import { getApiSettingsMode, isReadOnlyMode } from "@shared/storage/types"
-import { READ_ONLY_TOOLS, SkycodeDefaultTool } from "@shared/tools"
+import { SkycodeDefaultTool } from "@shared/tools"
 import { SkycodeAskResponse } from "@shared/WebviewMessage"
 import {
 	getModelCapabilityTier,
 	getSessionLimitsForModel,
-	isClaude4PlusModelFamily,
 	isGPT5ModelFamily,
 	isLocalModel,
 	isNextGenModelFamily,
@@ -80,7 +75,6 @@ import Mutex from "p-mutex"
 import pWaitFor from "p-wait-for"
 import * as path from "path"
 import { ulid } from "ulid"
-import * as vscode from "vscode"
 import type { SystemPromptContext } from "@/core/prompts/system-prompt"
 import { getSystemPrompt } from "@/core/prompts/system-prompt"
 import { HostProvider } from "@/hosts/host-provider"
@@ -103,7 +97,6 @@ import {
 	SkycodeToolResponseContent,
 	SkycodeUserContent,
 } from "@/shared/messages"
-import { ShowMessageType } from "@/shared/proto/index.host"
 import { ApiFormat } from "@/shared/proto/skycode/models"
 import { Logger } from "@/shared/services/Logger"
 import { isCliSubagentContext, isSkycodeCliInstalled } from "@/utils/cli-detector"
@@ -666,7 +659,7 @@ export class Task {
 		const askTs = approvalId ? Number(approvalId) : undefined
 		const handled = this.approvalGate.handleResponse(askResponse, text, images, files, askTs)
 		if (!handled) {
-			console.warn("[Task] handleWebviewAskResponse: no pending ask found, response dropped")
+			Logger.warn("[Task] handleWebviewAskResponse: no pending ask found, response dropped")
 		}
 	}
 
@@ -1173,17 +1166,17 @@ export class Task {
 			// Start a NEW checkpoint for this follow-up message.
 			// This allows per-message rollback: deleting this message
 			// only reverts changes made after it, not the entire task.
-			console.log(`[Task] Feedback message sent, feedbackTs=${feedbackTs}, will start checkpoint`)
+			Logger.log(`[Task] Feedback message sent, feedbackTs=${feedbackTs}, will start checkpoint`)
 			if (feedbackTs) {
 				try {
 					const diffSystem = getDiffSystem()
 					await diffSystem.startCheckpoint(`Feedback: ${text?.substring(0, 50)}...`, feedbackTs)
-					console.log(`[Task] Checkpoint started for feedback ts=${feedbackTs}`)
+					Logger.log(`[Task] Checkpoint started for feedback ts=${feedbackTs}`)
 				} catch (error) {
 					Logger.error("Failed to start checkpoint for feedback:", error)
 				}
 			} else {
-				console.warn(`[Task] feedbackTs is undefined, no checkpoint created`)
+				Logger.warn(`[Task] feedbackTs is undefined, no checkpoint created`)
 			}
 
 			responseText = text
@@ -2629,7 +2622,7 @@ export class Task {
 		// token-based threshold hasn't been reached (weak models degrade before filling context).
 		if (!shouldCompact) {
 			const currentProviderInfo = this.getCurrentProviderInfo()
-			const modelTier = getModelCapabilityTier(currentProviderInfo.model.id, currentProviderInfo)
+			const _modelTier = getModelCapabilityTier(currentProviderInfo.model.id, currentProviderInfo)
 			const customSettings = {
 				sessionBudgetMode: this.stateManager.getGlobalSettingsKey("sessionBudgetMode"),
 				customMaxToolCallsPerTurn: this.stateManager.getGlobalSettingsKey("customMaxToolCallsPerTurn"),

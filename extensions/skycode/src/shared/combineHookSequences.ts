@@ -294,7 +294,7 @@ function reorderWithPreToolUseHooks(messages: SkycodeMessage[], preToolUseMap: M
 			// Insert hooks that haven't been added yet
 			const newHooks = hooksForTool.filter((h) => !addedHooks.has(h.ts))
 			result.push(...newHooks)
-			newHooks.forEach((h) => addedHooks.add(h.ts))
+			newHooks.forEach((h) => { addedHooks.add(h.ts) })
 
 			// Add the tool
 			result.push(msg)

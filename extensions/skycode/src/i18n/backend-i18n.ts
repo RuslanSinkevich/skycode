@@ -363,7 +363,7 @@ export function getBackendLocaleForPreferredLanguage(preferredLanguage: string):
  * Priority: explicit override → vscode.env.language → default "ru"
  */
 function getLocale(): Locale {
-	if (_overrideLocale) return _overrideLocale
+	if (_overrideLocale) { return _overrideLocale }
 	try {
 		if (vscode.env.language.startsWith("ru")) {
 			return "ru"

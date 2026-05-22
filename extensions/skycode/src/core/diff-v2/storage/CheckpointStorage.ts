@@ -13,6 +13,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { Checkpoint, FileDiff, CheckpointStatus, DiffChange } from './types';
+import { Logger } from "@/shared/services/Logger"
 
 /**
  * Метаданные checkpoint (без полных diffs)
@@ -127,7 +128,7 @@ export class CheckpointStorage {
       const content = fs.readFileSync(metadataPath, 'utf-8');
       return JSON.parse(content) as CheckpointMetadata;
     } catch {
-      console.error(`[CheckpointStorage] Failed to read metadata: ${metadataPath}`);
+      Logger.error(`[CheckpointStorage] Failed to read metadata: ${metadataPath}`);
       return undefined;
     }
   }
@@ -232,7 +233,7 @@ export class CheckpointStorage {
       const content = fs.readFileSync(diffPath, 'utf-8');
       return JSON.parse(content) as FileDiff;
     } catch {
-      console.error(`[CheckpointStorage] Failed to read diff: ${diffPath}`);
+      Logger.error(`[CheckpointStorage] Failed to read diff: ${diffPath}`);
       return undefined;
     }
   }

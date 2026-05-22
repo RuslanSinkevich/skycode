@@ -4,7 +4,8 @@ import { McpDownloadResponse } from "@shared/proto/skycode/mcp"
 import axios from "axios"
 import * as fs from "fs/promises"
 import * as path from "path"
-import * as vscode from "vscode"
+import { HostProvider } from "@/hosts/host-provider"
+import { ShowMessageType } from "@/shared/proto/host/window"
 import { SkycodeEnv } from "@/config"
 import { getAxiosSettings } from "@/shared/net"
 import { t } from "@/i18n/backend-i18n"
@@ -73,11 +74,17 @@ function isPlaceholder(value: string): boolean {
  * Returns the parsed object or undefined if parsing fails.
  */
 function extractJsonObject(text: string, startIdx: number): any | undefined {
-	if (text[startIdx] !== "{") return undefined
+	if (text[startIdx] !== "{") {
+		return undefined
+	}
 	let depth = 0
 	for (let i = startIdx; i < text.length; i++) {
-		if (text[i] === "{") depth++
-		if (text[i] === "}") depth--
+		if (text[i] === "{") {
+			depth++
+		}
+		if (text[i] === "}") {
+			depth--
+		}
 		if (depth === 0) {
 			try {
 				const raw = text.substring(startIdx, i + 1)
@@ -105,7 +112,9 @@ function extractConfigFromReadme(readme: string, requiresApiKey: boolean): Extra
 
 	while (true) {
 		const idx = readme.indexOf(needle, searchFrom)
-		if (idx === -1) break
+		if (idx === -1) {
+			break
+		}
 		searchFrom = idx + needle.length
 
 		// Find the opening { before "mcpServers"
@@ -116,10 +125,14 @@ function extractConfigFromReadme(readme: string, requiresApiKey: boolean): Extra
 				break
 			}
 		}
-		if (braceIdx === -1) continue
+		if (braceIdx === -1) {
+			continue
+		}
 
 		const parsed = extractJsonObject(readme, braceIdx)
-		if (!parsed || !parsed.mcpServers || typeof parsed.mcpServers !== "object") continue
+		if (!parsed || !parsed.mcpServers || typeof parsed.mcpServers !== "object") {
+			continue
+		}
 
 		const serverNames = Object.keys(parsed.mcpServers)
 		for (const name of serverNames) {
@@ -233,16 +246,14 @@ async function promptForApiKey(config: ExtractedConfig, serverName: string): Pro
 		if (isPlaceholder(newArgs[i])) {
 			// Find the flag name (previous arg)
 			const flagName = i > 0 && newArgs[i - 1].startsWith("--") ? newArgs[i - 1] : "API Key"
-			const value = await vscode.window.showInputBox({
-				prompt: `Enter ${flagName} for ${serverName}`,
-				placeHolder: `Enter your ${flagName}...`,
-				password: true,
-				ignoreFocusOut: true,
+			const { response } = await HostProvider.window.showInputBox({
+				title: `Enter ${flagName} for ${serverName}`,
+				prompt: `Enter your ${flagName}...`,
 			})
-			if (value === undefined) {
+			if (response === undefined) {
 				return undefined // User cancelled
 			}
-			newArgs[i] = value
+			newArgs[i] = response
 		}
 	}
 
@@ -250,16 +261,14 @@ async function promptForApiKey(config: ExtractedConfig, serverName: string): Pro
 	if (newEnv) {
 		for (const [key, val] of Object.entries(newEnv)) {
 			if (isPlaceholder(val)) {
-				const value = await vscode.window.showInputBox({
-					prompt: `Enter ${key} for ${serverName}`,
-					placeHolder: `Enter your ${key}...`,
-					password: true,
-					ignoreFocusOut: true,
+				const { response } = await HostProvider.window.showInputBox({
+					title: `Enter ${key} for ${serverName}`,
+					prompt: `Enter your ${key}...`,
 				})
-				if (value === undefined) {
+				if (response === undefined) {
 					return undefined // User cancelled
 				}
-				newEnv[key] = value
+				newEnv[key] = response
 			}
 		}
 	}
@@ -425,7 +434,10 @@ export async function downloadMcp(controller: Controller, request: StringRequest
 
 			Logger.log(`[downloadMcp] Successfully installed "${mcpId}" programmatically`)
 
-			vscode.window.showInformationMessage(t("mcp.installSuccess", { name: mcpDetails.name || mcpId }))
+			await HostProvider.window.showMessage({
+				type: ShowMessageType.INFORMATION,
+				message: t("mcp.installSuccess", { name: mcpDetails.name || mcpId }),
+			})
 		} else {
 			// No config extracted — fallback to AI task
 			Logger.log("[downloadMcp] No config found in README, falling back to AI task")

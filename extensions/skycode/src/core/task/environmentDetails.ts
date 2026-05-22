@@ -1,4 +1,4 @@
-import { setTimeout as setTimeoutPromise } from "node:timers/promises"
+
 import * as vscode from "vscode"
 import * as path from "path"
 import pWaitFor from "p-wait-for"
@@ -7,7 +7,7 @@ import { extractChangelog } from "@core/context/SessionChangelog"
 import { isMultiRootEnabled } from "@core/workspace/multi-root-utils"
 import type { WorkspaceRootManager } from "@core/workspace/WorkspaceRootManager"
 import { formatResponse } from "@core/prompts/responses"
-import { getSavedSkycodeMessages, GlobalFileNames } from "@core/storage/disk"
+import { getSavedSkycodeMessages, } from "@core/storage/disk"
 import type { SkycodeIgnoreController } from "@core/ignore/SkycodeIgnoreController"
 import type { FileContextTracker } from "@core/context/context-tracking/FileContextTracker"
 import type { ITerminalManager } from "@integrations/terminal/types"
@@ -64,8 +64,8 @@ function getPrimaryWorkspaceName(
 	ctx: EnvironmentDetailsContext,
 	primary?: ReturnType<WorkspaceRootManager["getRoots"]>[0],
 ): string {
-	if (primary?.name) return primary.name
-	if (primary?.path) return path.basename(primary.path)
+	if (primary?.name) { return primary.name }
+	if (primary?.path) { return path.basename(primary.path) }
 	return path.basename(ctx.cwd)
 }
 
@@ -273,7 +273,7 @@ export async function buildEnvironmentDetails(
 	const { contextWindow } = getContextWindowInfo(ctx.api)
 
 	const getTotalTokensFromApiReqMessage = (msg: SkycodeMessage) => {
-		if (!msg.text) return 0
+		if (!msg.text) { return 0 }
 		try {
 			const { tokensIn, tokensOut, cacheWrites, cacheReads } = JSON.parse(msg.text)
 			return (tokensIn || 0) + (tokensOut || 0) + (cacheWrites || 0) + (cacheReads || 0)
@@ -285,7 +285,7 @@ export async function buildEnvironmentDetails(
 	const skycodeMessages = ctx.messageStateHandler.getSkycodeMessages()
 	const modifiedMessages = combineApiRequests(combineCommandSequences(skycodeMessages.slice(1)))
 	const lastApiReqMessage = findLast(modifiedMessages, (msg) => {
-		if (msg.say !== "api_req_started") return false
+		if (msg.say !== "api_req_started") { return false }
 		return getTotalTokensFromApiReqMessage(msg) > 0
 	})
 

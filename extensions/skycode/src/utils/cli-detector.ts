@@ -28,7 +28,7 @@ export async function isSkycodeCliInstalled(): Promise<boolean> {
 		// If we get here, the CLI is installed
 		// We could also validate the version if needed
 		return stdout.includes("Skycode CLI Version") || stdout.includes("Skycode Core Version")
-	} catch (error) {
+	} catch (_error) {
 		// Command failed, which likely means CLI is not installed
 		// or not in PATH
 		return false

@@ -156,8 +156,12 @@ export class Controller {
 		const initConfig = this.stateManager.getApiConfiguration()
 		if (initConfig.planModeApiProvider === "skycode" || initConfig.actModeApiProvider === "skycode") {
 			const migrated = { ...initConfig }
-			if (migrated.planModeApiProvider === "skycode") migrated.planModeApiProvider = "openrouter" as ApiProvider
-			if (migrated.actModeApiProvider === "skycode") migrated.actModeApiProvider = "openrouter" as ApiProvider
+			if (migrated.planModeApiProvider === "skycode") {
+				migrated.planModeApiProvider = "openrouter" as ApiProvider
+			}
+			if (migrated.actModeApiProvider === "skycode") {
+				migrated.actModeApiProvider = "openrouter" as ApiProvider
+			}
 			this.stateManager.setApiConfiguration(migrated)
 		}
 
@@ -192,6 +196,27 @@ export class Controller {
 			clearInterval(this.remoteConfigTimer)
 			this.remoteConfigTimer = undefined
 		}
+
+		// [SKYCODE-PERF] Clear postState throttle timer + drain any pending resolvers
+		// Otherwise the timer fires after dispose and tries to send state to a dead webview,
+		// and pending promises stay forever in memory.
+		if (this._postStateThrottleTimer) {
+			clearTimeout(this._postStateThrottleTimer)
+			this._postStateThrottleTimer = null
+		}
+		if (this._postStatePromiseResolvers.length > 0) {
+			const resolvers = this._postStatePromiseResolvers
+			this._postStatePromiseResolvers = []
+			for (const r of resolvers) {
+				r()
+			}
+		}
+		this._postStatePending = false
+
+		// [SKYCODE-PERF] Drop heavy caches so GC can collect them
+		this._voiceReadyCache = null
+		this._codexAuthCache = null
+		this._lastDictationSettingsJson = ""
 
 		await this.clearTask()
 		this.mcpHub.dispose()
@@ -270,7 +295,10 @@ export class Controller {
 		if (freeCount >= Controller.FREE_REQUEST_LIMIT) {
 			Logger.log(`[FreeGate] Free request limit reached (${freeCount}/${Controller.FREE_REQUEST_LIMIT}), auth required`)
 			// Show notification and navigate to Account view
-			vscode.window.showInformationMessage(t("auth.freeLimit", { limit: String(Controller.FREE_REQUEST_LIMIT) }))
+			await HostProvider.window.showMessage({
+				type: ShowMessageType.INFORMATION,
+				message: t("auth.freeLimit", { limit: String(Controller.FREE_REQUEST_LIMIT) }),
+			})
 			try {
 				await sendAccountButtonClickedEvent()
 			} catch (e) {
@@ -592,9 +620,12 @@ export class Controller {
 				currentApiConfiguration.actModeApiProvider === "skycode"
 			) {
 				const updatedConfig = { ...currentApiConfiguration }
-				if (updatedConfig.planModeApiProvider === "skycode")
+				if (updatedConfig.planModeApiProvider === "skycode") {
 					updatedConfig.planModeApiProvider = "openrouter" as ApiProvider
-				if (updatedConfig.actModeApiProvider === "skycode") updatedConfig.actModeApiProvider = "openrouter" as ApiProvider
+				}
+				if (updatedConfig.actModeApiProvider === "skycode") {
+					updatedConfig.actModeApiProvider = "openrouter" as ApiProvider
+				}
 				this.stateManager.setApiConfiguration(updatedConfig)
 			}
 
@@ -909,7 +940,9 @@ export class Controller {
 				const resolvers = this._postStatePromiseResolvers
 				this._postStatePromiseResolvers = []
 				await this._doPostStateToWebview()
-				resolvers.forEach((r) => r())
+				for (const r of resolvers) {
+					r()
+				}
 			}
 		}, 300)
 	}
@@ -976,7 +1009,9 @@ export class Controller {
 	private _whisperInitialized = false
 
 	private async _ensureWhisperInitialized(selectedModel: string): Promise<void> {
-		if (this._whisperInitialized) return
+		if (this._whisperInitialized) {
+			return
+		}
 		try {
 			const { getWhisperLocalService } = await import("@/services/dictation/WhisperLocalService")
 			getWhisperLocalService(HostProvider.get().globalStorageFsPath, selectedModel, HostProvider.get().extensionFsPath)
@@ -1238,8 +1273,7 @@ export class Controller {
 					const sessionBudgetMode = this.stateManager.getGlobalSettingsKey("sessionBudgetMode") ?? "auto"
 					const customSettings = {
 						sessionBudgetMode,
-						customMaxToolCallsPerTurn:
-							this.stateManager.getGlobalSettingsKey("customMaxToolCallsPerTurn") ?? 80,
+						customMaxToolCallsPerTurn: this.stateManager.getGlobalSettingsKey("customMaxToolCallsPerTurn") ?? 80,
 						customMaxConsecutiveReadOnlyTools:
 							this.stateManager.getGlobalSettingsKey("customMaxConsecutiveReadOnlyTools") ?? 12,
 						customForceCompactAfterSteps:
@@ -1291,6 +1325,7 @@ export class Controller {
 			// allow-any-unicode-next-line
 			// Indexing progress — captured at start of function before any awaits (see top of getStateToPostToWebview)
 			indexingProgress: indexingProgressSnapshot,
+			indexingPromptDismissed: this.context.globalState.get<boolean>("skycode.indexingPromptDismissed", false),
 			// Skycode AI: Pending changes for inline diffs
 			pendingChanges: this.getPendingChangesInfo(),
 			banners,

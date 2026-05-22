@@ -39,7 +39,7 @@ import { getModelJSON } from "./utils/hub.js";
  * @returns {Promise<Array>} A promise that resolves with information about the loaded config.
  */
 async function loadConfig(pretrained_model_name_or_path, options) {
-  let info = await getModelJSON(
+  const info = await getModelJSON(
     pretrained_model_name_or_path,
     "config.json",
     true,
@@ -85,7 +85,7 @@ export class PretrainedConfig {
       revision = "main",
     } = {},
   ) {
-    let data =
+    const data =
       config ??
       (await loadConfig(pretrained_model_name_or_path, {
         progress_callback,
@@ -94,7 +94,7 @@ export class PretrainedConfig {
         local_files_only,
         revision,
       }));
-    return new this(data);
+    return new PretrainedConfig(data);
   }
 }
 

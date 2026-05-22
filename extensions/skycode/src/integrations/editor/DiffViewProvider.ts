@@ -307,7 +307,7 @@ export abstract class DiffViewProvider {
 	 * For notebooks, strips all outputs since they aren't needed for editing.
 	 */
 	getOriginalContentForLLM(): string | undefined {
-		if (this.originalContent === undefined) return undefined
+		if (this.originalContent === undefined) { return undefined }
 		return this.isNotebookFile() ? sanitizeNotebookForLLM(this.originalContent, true) : this.originalContent
 	}
 

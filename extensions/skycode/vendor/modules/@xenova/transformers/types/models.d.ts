@@ -3490,5 +3490,4 @@ declare function decoderUpdatebeam(beam: any, newTokenId: number): void;
  */
 declare function encoderForward(self: any, model_inputs: any): Promise<any>;
 import { Tensor } from "./utils/tensor.js";
-export {};
 //# sourceMappingURL=models.d.ts.map

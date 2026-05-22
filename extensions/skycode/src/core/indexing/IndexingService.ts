@@ -21,6 +21,7 @@ import { createEmbeddingProvider } from "./EmbeddingRouter"
 import type { EmbeddingProvider, ChunkRow } from "./types"
 import { IndexStorage } from "./storage/IndexStorage"
 import { vectorSearch } from "./storage/VectorSearch"
+import { Logger } from "@/shared/services/Logger"
 
 /** Batch size for embedding requests. The worker further splits each batch into
  * sub-batches of 8 to keep peak WASM memory low; sending larger super-batches here
@@ -31,6 +32,9 @@ const EMBED_BATCH_SIZE = 16
 
 /** Debounce for file watcher change bursts (ms) */
 const FILE_CHANGE_DEBOUNCE_MS = 700
+/** Unload the embedding worker after this idle period (ms). Keeps CPU/RAM low
+ *  once indexing or incremental updates finish; reloads lazily on next search. */
+const PROVIDER_IDLE_UNLOAD_MS = 30_000
 /** Yield to the event loop between batches (ms). Set to 0 because embedding runs in
  * a Worker Thread — the extension host is not blocked by the compute itself.
  * A minimal `setImmediate`-style yield lets FileSystemWatcher and UI events interleave. */
@@ -69,6 +73,10 @@ export class IndexingService implements vscode.Disposable {
 	 * full DB write per file. */
 	private finalizeTimer: NodeJS.Timeout | null = null
 
+	/** Timer to unload the embedding worker after idle — avoids keeping ONNX/model
+	 * threads hot when indexing is complete and no embed requests are pending. */
+	private providerIdleTimer: NodeJS.Timeout | null = null
+
 	/** Event emitter for progress updates */
 	private readonly _onProgress = new vscode.EventEmitter<IndexingProgress>()
 	readonly onProgressChanged: vscode.Event<IndexingProgress> = this._onProgress.event
@@ -79,10 +87,9 @@ export class IndexingService implements vscode.Disposable {
 
 	constructor(
 		private readonly workspacePath: string,
-		private readonly extensionPath: string,
-		private readonly context?: vscode.ExtensionContext,
+		private readonly extensionPath: string,readonly _context?: vscode.ExtensionContext,
 	) {
-		this.storage = new IndexStorage(workspacePath)
+		this.storage = new IndexStorage(workspacePath, extensionPath)
 		this.config = this.readConfig()
 
 		// Listen for config changes
@@ -108,7 +115,7 @@ export class IndexingService implements vscode.Disposable {
 		if (savedMaxFileSize === 102400) {
 			maxFileSize = DEFAULT_INDEXING_CONFIG.maxFileSize
 			void cfg.update("maxFileSize", DEFAULT_INDEXING_CONFIG.maxFileSize, vscode.ConfigurationTarget.Global)
-			console.log(`[Skycode Indexing] Auto-upgraded maxFileSize from 100KB to 512KB for better search coverage`)
+			Logger.log(`[Skycode Indexing] Auto-upgraded maxFileSize from 100KB to 512KB for better search coverage`)
 		}
 
 		return {
@@ -187,7 +194,7 @@ export class IndexingService implements vscode.Disposable {
 		const currentModel = getCurrentEmbeddingModel(this.config)
 		const storedModel = this.storage.getMetadata("embeddingModel")
 		if (storedModel && storedModel !== currentModel) {
-			console.log(`[Skycode Indexing] Embedding model changed (${storedModel} -> ${currentModel}). Clearing index.`)
+			Logger.log(`[Skycode Indexing] Embedding model changed (${storedModel} -> ${currentModel}). Clearing index.`)
 			await this.storage.clear()
 			loaded = false
 		}
@@ -210,18 +217,13 @@ export class IndexingService implements vscode.Disposable {
 				lastIndexedAt: stats.lastIndexedAt,
 			}
 			this.emitProgress()
-
-			// Create embedding provider for incremental updates via file watcher
-			try {
-				this.provider = createEmbeddingProvider(this.config, this.extensionPath)
-			} catch (err: any) {
-				console.warn("[Skycode Indexing] Provider creation for incremental updates failed:", err.message)
-			}
+			// Provider is created lazily on search or file change — no need to keep
+			// the ONNX worker loaded while the index is idle.
 		} else {
 			// No existing index — delay indexing to not block extension activation
 			setTimeout(() => {
 				this.startIndexing().catch((err) => {
-					console.warn("[Skycode Indexing] Background indexing failed:", err)
+					Logger.warn("[Skycode Indexing] Background indexing failed:", err)
 				})
 			}, 5000)
 		}
@@ -268,45 +270,89 @@ export class IndexingService implements vscode.Disposable {
 	/** Schedule a debounced finalize. Coalesces a burst of incremental writes
 	 * (typical: editor save sweep, git checkout) into one DB flush. */
 	private scheduleFinalize(): void {
-		if (this.finalizeTimer) return
+		if (this.finalizeTimer) { return }
 		this.finalizeTimer = setTimeout(() => {
 			this.finalizeTimer = null
 			void this.storage.finalize()
 		}, 2000)
 	}
 
+	/** Lazily create the embedding provider (loads ONNX worker on first use). */
+	private async ensureProvider(): Promise<EmbeddingProvider | null> {
+		if (this.config.mode === "off") { return null }
+		if (!this.provider) {
+			this.cancelProviderUnload()
+			try {
+				this.provider = createEmbeddingProvider(this.config, this.extensionPath)
+			} catch (err: any) {
+				Logger.warn("[Skycode Indexing] Provider creation failed:", err.message)
+				return null
+			}
+		}
+		return this.provider
+	}
+
+	/** Release the embedding worker and cancel any pending idle-unload timer. */
+	private unloadProvider(): void {
+		this.cancelProviderUnload()
+		if (this.provider) {
+			this.provider.dispose()
+			this.provider = null
+			Logger.log("[Skycode Indexing] Embedding worker unloaded")
+		}
+	}
+
+	private scheduleProviderUnload(delayMs = PROVIDER_IDLE_UNLOAD_MS): void {
+		this.cancelProviderUnload()
+		this.providerIdleTimer = setTimeout(() => {
+			this.providerIdleTimer = null
+			if (this.progress.status === "indexing") { return }
+			this.unloadProvider()
+		}, delayMs)
+		this.providerIdleTimer.unref?.()
+	}
+
+	private cancelProviderUnload(): void {
+		if (this.providerIdleTimer) {
+			clearTimeout(this.providerIdleTimer)
+			this.providerIdleTimer = null
+		}
+	}
+
 	/** Handle file change/create — re-index this file */
 	private async onFileChanged(uri: vscode.Uri): Promise<void> {
-		if (this.config.mode === "off" || !this.provider) return
+		if (this.config.mode === "off") { return }
+		const provider = await this.ensureProvider()
+		if (!provider) { return }
 
 		const filePath = uri.fsPath
 		const relPath = vscode.workspace.asRelativePath(filePath)
 
 		// Check if file should be ignored
 		const shouldIgnore = this.config.ignoredPatterns.some((pattern) => {
-			if (pattern.startsWith("*.")) return filePath.endsWith(pattern.slice(1))
+			if (pattern.startsWith("*.")) { return filePath.endsWith(pattern.slice(1)) }
 			return relPath.split(/[/\\]/).some((seg) => seg === pattern)
 		})
-		if (shouldIgnore) return
+		if (shouldIgnore) { return }
 
 		try {
 			const content = await fs.promises.readFile(filePath, "utf-8")
 			const hash = crypto.createHash("md5").update(content).digest("hex")
 
-			if (!this.storage.isFileChanged(relPath, hash)) return
+			if (!this.storage.isFileChanged(relPath, hash)) { return }
 
 			// Remove old chunks for this file
 			this.storage.removeFile(relPath)
 
 			// Chunk and embed
 			const chunks = await chunkFile(relPath, content)
-			if (chunks.length === 0) return
+			if (chunks.length === 0) { return }
 			for (const chunk of chunks) {
 				chunk.content = this.enrichChunkContent(chunk.content, chunk.filePath, chunk.language)
 			}
 
 			const texts = chunks.map((c) => c.content)
-			const embeddings = await this.provider.embed(texts, "passage")
+			const embeddings = await provider.embed(texts, "passage")
 
 			const rows: ChunkRow[] = chunks.map((c) => ({
 				id: c.id,
@@ -321,6 +367,7 @@ export class IndexingService implements vscode.Disposable {
 
 			this.storage.addChunks(rows, embeddings)
 			this.scheduleFinalize()
+			this.scheduleProviderUnload()
 		} catch {
 			// File might be binary, too large, or deleted
 		}
@@ -352,15 +399,15 @@ export class IndexingService implements vscode.Disposable {
 		// Cancel any running indexing
 		this.stop()
 
-		if (this.config.mode === "off") return
+		if (this.config.mode === "off") { return }
 
 		// Create embedding provider
-		console.log("[Skycode Indexing] Starting indexing, mode:", this.config.mode, "extensionPath:", this.extensionPath)
+		Logger.log("[Skycode Indexing] Starting indexing, mode:", this.config.mode, "extensionPath:", this.extensionPath)
 		try {
 			this.provider = createEmbeddingProvider(this.config, this.extensionPath)
-			console.log("[Skycode Indexing] Provider created:", this.provider?.id)
+			Logger.log("[Skycode Indexing] Provider created:", this.provider?.id)
 		} catch (err: any) {
-			console.error("[Skycode Indexing] Provider creation failed:", err)
+			Logger.error("[Skycode Indexing] Provider creation failed:", err)
 			this.progress = {
 				...DEFAULT_INDEXING_PROGRESS,
 				status: "error",
@@ -370,7 +417,7 @@ export class IndexingService implements vscode.Disposable {
 			return
 		}
 
-		if (!this.provider) return
+		if (!this.provider) { return }
 
 		this.cancellation = new vscode.CancellationTokenSource()
 		const token = this.cancellation.token
@@ -394,11 +441,11 @@ export class IndexingService implements vscode.Disposable {
 
 		try {
 			// Phase 1: Walk and count files (yield every 100 files to not block event loop)
-			console.log("[Skycode Indexing] Phase 1: Walking files in", this.workspacePath)
+			Logger.log("[Skycode Indexing] Phase 1: Walking files in", this.workspacePath)
 			const files: Array<{ absPath: string; relPath: string }> = []
 			let walkCount = 0
 			for await (const file of walkFiles(this.workspacePath, this.config, token)) {
-				if (token.isCancellationRequested) return
+				if (token.isCancellationRequested) { return }
 				files.push(file)
 				walkCount++
 				if (walkCount % 100 === 0) {
@@ -411,7 +458,7 @@ export class IndexingService implements vscode.Disposable {
 			this.progress.filesTotal = files.length
 			this.progress.phase = "chunking"
 			this.emitProgress(true)
-			console.log("[Skycode Indexing] Phase 1 done:", files.length, "files found")
+			Logger.log("[Skycode Indexing] Phase 1 done:", files.length, "files found")
 
 			// Phase 2: Initialize storage
 			this.storage.beginIndexing(this.provider.id, this.provider.dimensions)
@@ -421,10 +468,10 @@ export class IndexingService implements vscode.Disposable {
 			const allChunks: Array<{ chunk: CodeChunk; fileHash: string }> = []
 
 			for (let i = 0; i < files.length; i++) {
-				if (token.isCancellationRequested) return
+				if (token.isCancellationRequested) { return }
 				while (this.paused) {
 					await new Promise((r) => setTimeout(r, 200))
-					if (token.isCancellationRequested) return
+					if (token.isCancellationRequested) { return }
 				}
 
 				const file = files[i]
@@ -458,16 +505,16 @@ export class IndexingService implements vscode.Disposable {
 			this.emitProgress(true)
 
 			// Phase 4: Embed in batches
-			console.log("[Skycode Indexing] Phase 4: Embedding", allChunks.length, "chunks in batches of", EMBED_BATCH_SIZE)
+			Logger.log("[Skycode Indexing] Phase 4: Embedding", allChunks.length, "chunks in batches of", EMBED_BATCH_SIZE)
 			// If N consecutive batches fail (typically means model init is broken),
 			// abort the whole run instead of spamming thousands of identical errors.
 			const MAX_CONSECUTIVE_EMBED_FAILURES = 5
 			let consecutiveFailures = 0
 			for (let i = 0; i < allChunks.length; i += EMBED_BATCH_SIZE) {
-				if (token.isCancellationRequested) return
+				if (token.isCancellationRequested) { return }
 				while (this.paused) {
 					await new Promise((r) => setTimeout(r, 200))
-					if (token.isCancellationRequested) return
+					if (token.isCancellationRequested) { return }
 				}
 
 				const batch = allChunks.slice(i, i + EMBED_BATCH_SIZE)
@@ -479,11 +526,11 @@ export class IndexingService implements vscode.Disposable {
 					consecutiveFailures = 0
 				} catch (err: any) {
 					consecutiveFailures++
-					console.error("[Skycode Indexing] Embedding error at batch", i, ":", err)
-					console.warn(`[Skycode Indexing] Skipping batch ${i} (${batch.length} chunks) due to embedding error`)
+					Logger.error("[Skycode Indexing] Embedding error at batch", i, ":", err)
+					Logger.warn(`[Skycode Indexing] Skipping batch ${i} (${batch.length} chunks) due to embedding error`)
 					if (consecutiveFailures >= MAX_CONSECUTIVE_EMBED_FAILURES) {
 						const msg = `Embedding failed on ${consecutiveFailures} consecutive batches — aborting indexing. ${err?.message || err}`
-						console.error("[Skycode Indexing]", msg)
+						Logger.error("[Skycode Indexing]", msg)
 						this.progress.status = "error"
 						this.progress.errorMessage = msg
 						this.emitProgress(true)
@@ -513,7 +560,7 @@ export class IndexingService implements vscode.Disposable {
 							embedding,
 						})
 					} else {
-						console.warn(
+						Logger.warn(
 							`[Skycode Indexing] Skipping chunk ${batch[j].chunk.filePath}:${batch[j].chunk.startLine} (embedding failed or too large)`,
 						)
 					}
@@ -561,7 +608,7 @@ export class IndexingService implements vscode.Disposable {
 			// Re-setup file watcher for incremental updates
 			this.setupFileWatcher()
 		} catch (err: any) {
-			console.error("[Skycode Indexing] Indexing failed:", err)
+			Logger.error("[Skycode Indexing] Indexing failed:", err)
 			if (!token.isCancellationRequested) {
 				this.progress = {
 					...this.progress,
@@ -583,6 +630,13 @@ export class IndexingService implements vscode.Disposable {
 			}
 			for (const fsPath of changes) {
 				this.scheduleFileChange(vscode.Uri.file(fsPath))
+			}
+			// Full pass is done — unload the ONNX worker unless replayed file
+			// changes are still pending (they lazy-reload the provider on demand).
+			if (changes.length === 0 && deletes.length === 0) {
+				this.unloadProvider()
+			} else {
+				this.scheduleProviderUnload()
 			}
 		}
 	}
@@ -607,6 +661,7 @@ export class IndexingService implements vscode.Disposable {
 
 	/** Stop indexing completely */
 	stop(): void {
+		this.cancelProviderUnload()
 		this.paused = false
 		if (this.cancellation) {
 			this.cancellation.cancel()
@@ -651,20 +706,13 @@ export class IndexingService implements vscode.Disposable {
 	 */
 	async search(query: string, topK: number = 10): Promise<IndexSearchResult[]> {
 		if (this.config.mode === "off") {
-			console.log("[Skycode Search] Aborted: mode is off")
+			Logger.log("[Skycode Search] Aborted: mode is off")
 			return []
 		}
 
-		if (!this.provider) {
-			try {
-				this.provider = createEmbeddingProvider(this.config, this.extensionPath)
-			} catch (err) {
-				console.warn("[Skycode Search] Provider creation failed:", err)
-				return []
-			}
-		}
-		if (!this.provider) {
-			console.log("[Skycode Search] Aborted: provider is null after creation")
+		const provider = await this.ensureProvider()
+		if (!provider) {
+			Logger.log("[Skycode Search] Aborted: provider is null after creation")
 			return []
 		}
 
@@ -673,26 +721,27 @@ export class IndexingService implements vscode.Disposable {
 		}
 		const chunkCount = this.storage.getChunks().length
 		if (chunkCount === 0) {
-			console.log("[Skycode Search] Aborted: 0 chunks in storage after load")
+			Logger.log("[Skycode Search] Aborted: 0 chunks in storage after load")
 			return []
 		}
 
 		let queryVec: number[]
 		try {
-			const embedResult = await this.provider.embed([query], "query")
+			const embedResult = await provider.embed([query], "query")
 			queryVec = embedResult[0]
 		} catch (err) {
-			console.warn("[Skycode Search] Query embedding failed:", err)
+			Logger.warn("[Skycode Search] Query embedding failed:", err)
 			return []
 		}
 		if (!queryVec) {
-			console.log("[Skycode Search] Aborted: queryVec is null/undefined")
+			Logger.log("[Skycode Search] Aborted: queryVec is null/undefined")
 			return []
 		}
 
-		console.log(`[Skycode Search] vectorSearch: chunks=${chunkCount} dims=${this.storage.getDimensions()} queryVecLen=${queryVec.length}`)
+		Logger.log(`[Skycode Search] vectorSearch: chunks=${chunkCount} dims=${this.storage.getDimensions()} queryVecLen=${queryVec.length}`)
 		const results = vectorSearch(this.storage, queryVec, topK)
-		console.log(`[Skycode Search] vectorSearch returned ${results.length} results`)
+		Logger.log(`[Skycode Search] vectorSearch returned ${results.length} results`)
+		this.scheduleProviderUnload()
 		return results
 	}
 
@@ -740,7 +789,7 @@ export class IndexingService implements vscode.Disposable {
 			return
 		}
 
-		if (this.lastEmitTimer) return
+		if (this.lastEmitTimer) { return }
 		this.lastEmitTimer = setTimeout(() => {
 			this.lastEmitTimer = null
 			this.lastEmitAt = Date.now()
@@ -750,6 +799,7 @@ export class IndexingService implements vscode.Disposable {
 
 	dispose(): void {
 		this.stop()
+		this.cancelProviderUnload()
 		for (const timer of this.pendingFileChangeTimers.values()) {
 			clearTimeout(timer)
 		}

@@ -61,7 +61,7 @@ export class ThinkTagStreamParser {
 	 */
 	private findClosingTag(str: string): { start: number; end: number } | null {
 		const idx = str.indexOf("</think")
-		if (idx === -1) return null
+		if (idx === -1) { return null }
 
 		const after = str.slice(idx + 7) // after "</think"
 		if (after.startsWith(">")) {
@@ -86,7 +86,7 @@ export class ThinkTagStreamParser {
 	 */
 	private findOpeningTag(str: string): { start: number; end: number } | null {
 		const idx = str.indexOf("<think")
-		if (idx === -1) return null
+		if (idx === -1) { return null }
 
 		const after = str.slice(idx + 6) // after "<think"
 		if (after.startsWith(">")) {
@@ -106,7 +106,7 @@ export class ThinkTagStreamParser {
 	private getPartialTagSuffix(str: string, tag: string): number {
 		const maxCheck = Math.min(str.length, tag.length - 1)
 		for (let i = maxCheck; i > 0; i--) {
-			if (str.endsWith(tag.slice(0, i))) return i
+			if (str.endsWith(tag.slice(0, i))) { return i }
 		}
 		return 0
 	}

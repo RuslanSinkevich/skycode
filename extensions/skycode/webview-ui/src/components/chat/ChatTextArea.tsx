@@ -160,7 +160,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		const buttonRef = useRef<HTMLDivElement>(null)
 		const [_arrowPosition, setArrowPosition] = useState(0)
 		const [_menuPosition, setMenuPosition] = useState(0)
-		const [, metaKeyChar] = useMetaKeyDetection(platform)
+		const [, _metaKeyChar] = useMetaKeyDetection(platform)
 
 		const {
 			isDraggingOver,

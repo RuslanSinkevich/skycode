@@ -14,7 +14,7 @@ describe('PositionTracker', () => {
     tracker = new PositionTracker(store)
   })
 
-  function createHunk(startLine: number, endLine: number, id?: string): string {
+  function createHunk(startLine: number, endLine: number, _id?: string): string {
     const rgId = store.createResponseGroup(Date.now(), 'test')
     const fcId = store.createFileChange(rgId, FILE, 'modified')
     return store.createHunk({

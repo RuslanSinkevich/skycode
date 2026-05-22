@@ -52,6 +52,10 @@ export class McpHub {
 	private fileWatchers: Map<string, FSWatcher> = new Map()
 	connections: McpConnection[] = []
 	isConnecting: boolean = false
+	/** [SKYCODE-PERF] Track ALL clear-flag timeouts so dispose() can cancel them.
+	 *  Without this, a dispose() that lands during a settings update leaves the
+	 *  flag-clear setTimeout pending, which references `this` and prevents GC. */
+	private settingsFlagClearTimers: Set<ReturnType<typeof setTimeout>> = new Set()
 	/**
 	 * Flag to skip file watcher processing when we're updating Skycode-specific settings
 	 * (autoApprove, timeout) that don't require an MCP server restart.
@@ -156,6 +160,18 @@ export class McpHub {
 	 */
 	getIsUpdatingFromRemoteConfig(): boolean {
 		return this.isUpdatingFromRemoteConfig
+	}
+
+	/** [SKYCODE-PERF] Schedule a tracked timer that clears `isUpdatingSkycodeSettings`.
+	 *  Tracking lets dispose() cancel it; otherwise the closure keeps the McpHub alive. */
+	private scheduleClearSkycodeUpdatingFlag(): void {
+		const timer = setTimeout(() => {
+			this.settingsFlagClearTimers.delete(timer)
+			this.isUpdatingSkycodeSettings = false
+		}, 300)
+		// Don't keep the Node event loop alive just for this short timer.
+		timer.unref?.()
+		this.settingsFlagClearTimers.add(timer)
 	}
 
 	private async readAndValidateMcpSettingsFile(): Promise<z.infer<typeof McpSettingsSchema> | undefined> {
@@ -797,7 +813,7 @@ export class McpHub {
 	}
 
 	private removeAllFileWatchers() {
-		this.fileWatchers.forEach((watcher) => watcher.close())
+		this.fileWatchers.forEach((watcher) => { watcher.close() })
 		this.fileWatchers.clear()
 	}
 
@@ -1109,9 +1125,7 @@ export class McpHub {
 		} finally {
 			// Clear flag after a delay to ensure file watcher event has been processed
 			// The file watcher has a 100ms stabilityThreshold, so we wait a bit longer
-			setTimeout(() => {
-				this.isUpdatingSkycodeSettings = false
-			}, 300)
+			this.scheduleClearSkycodeUpdatingFlag()
 		}
 	}
 
@@ -1162,9 +1176,7 @@ export class McpHub {
 			throw error // Re-throw to ensure the error is properly handled
 		} finally {
 			// Clear flag after a delay to ensure file watcher event has been processed
-			setTimeout(() => {
-				this.isUpdatingSkycodeSettings = false
-			}, 300)
+			this.scheduleClearSkycodeUpdatingFlag()
 		}
 	}
 
@@ -1307,9 +1319,7 @@ export class McpHub {
 			throw error
 		} finally {
 			// Clear flag after a delay to ensure file watcher event has been processed
-			setTimeout(() => {
-				this.isUpdatingSkycodeSettings = false
-			}, 300)
+			this.scheduleClearSkycodeUpdatingFlag()
 		}
 	}
 
@@ -1410,6 +1420,16 @@ export class McpHub {
 	}
 
 	async dispose(): Promise<void> {
+		// [SKYCODE-PERF] Cancel all pending flag-clear timers so they don't fire after dispose.
+		for (const t of this.settingsFlagClearTimers) {
+			clearTimeout(t)
+		}
+		this.settingsFlagClearTimers.clear()
+
+		// [SKYCODE-PERF] Drop pending notifications + callback so closures can be GC'd.
+		this.pendingNotifications = []
+		this.notificationCallback = undefined
+
 		this.removeAllFileWatchers()
 		for (const connection of this.connections) {
 			try {
@@ -1421,6 +1441,7 @@ export class McpHub {
 		this.connections = []
 		if (this.settingsWatcher) {
 			await this.settingsWatcher.close()
+			this.settingsWatcher = undefined
 		}
 	}
 }

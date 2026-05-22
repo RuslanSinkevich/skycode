@@ -1,6 +1,5 @@
 import * as path from "path"
 import type { ToolUse } from "@core/assistant-message"
-import { formatResponse } from "@core/prompts/responses"
 import { SkycodeDefaultTool } from "@/shared/tools"
 import { getDiagnostics } from "@/hosts/vscode/hostbridge/workspace/getDiagnostics"
 import { diagnosticsToProblemsString } from "@/integrations/diagnostics"

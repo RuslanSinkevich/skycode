@@ -2612,5 +2612,4 @@ import { AutoModelForZeroShotObjectDetection } from "./models.js";
 import { AutoModelForDocumentQuestionAnswering } from "./models.js";
 import { AutoModelForImageToImage } from "./models.js";
 import { AutoModelForDepthEstimation } from "./models.js";
-export {};
 //# sourceMappingURL=pipelines.d.ts.map

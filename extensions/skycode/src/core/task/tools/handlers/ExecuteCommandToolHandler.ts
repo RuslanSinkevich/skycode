@@ -29,7 +29,7 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 		return `[${block.name} for '${block.params.command}']`
 	}
 
-	async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
+	async handlePartialBlock(_block: ToolUse, _uiHelpers: StronglyTypedUIHelpers): Promise<void> {
 		// [SKYCODE-SKYCODE] Cursor-style: no partial preview for commands (auto-execute)
 		return
 	}

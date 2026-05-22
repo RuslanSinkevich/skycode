@@ -96,7 +96,7 @@ function detectLanguage(filePath: string): string {
  */
 function isBoundaryLine(line: string): boolean {
 	const trimmed = line.trimEnd()
-	if (trimmed === "") return true
+	if (trimmed === "") { return true }
 	// Top-level construct starts (no indentation)
 	if (/^(export\s+)?(function|class|interface|type|enum|const|let|var|def|fn|pub|impl|struct|trait|mod|package|import)\s/.test(trimmed)) {
 		return true
@@ -130,7 +130,7 @@ function splitLargeBlock(
 			})
 		}
 		i += MAX_CHUNK_LINES - OVERLAP_LINES
-		if (i >= lines.length) break
+		if (i >= lines.length) { break }
 	}
 	return chunks
 }

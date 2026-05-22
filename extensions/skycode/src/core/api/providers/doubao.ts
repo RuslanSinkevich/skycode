@@ -77,9 +77,9 @@ export class DoubaoHandler implements ApiHandler {
 
 			if (chunk.usage) {
 				const promptTokens = chunk.usage.prompt_tokens || 0
-				// @ts-ignore-next-line
+				// @ts-expect-error-next-line
 				const cachedTokens = chunk.usage.prompt_cache_hit_tokens || 0
-				// @ts-ignore-next-line
+				// @ts-expect-error-next-line
 				const cacheMissTokens = chunk.usage.prompt_cache_miss_tokens || 0
 				yield {
 					type: "usage",

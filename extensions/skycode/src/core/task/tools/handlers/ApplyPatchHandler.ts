@@ -1,7 +1,6 @@
 import { readFile } from "node:fs/promises"
 import * as vscode from "vscode"
 import type { ToolUse } from "@core/assistant-message"
-import { formatResponse } from "@core/prompts/responses"
 import { resolveWorkspacePath } from "@core/workspace"
 import type { SkycodeSayTool } from "@shared/ExtensionMessage"
 import { fileExistsAtPath } from "@utils/fs"
@@ -76,7 +75,7 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 		return `[${this.name} for patch application]`
 	}
 
-	async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
+	async handlePartialBlock(_block: ToolUse, _uiHelpers: StronglyTypedUIHelpers): Promise<void> {
 				// [SKYCODE-SKYCODE] Streaming preview logic simplified for Native View Zones.
 				// We could implement "live typing" effect later, but for now we just wait for the full block
 				// to avoid ViewZone flickering.
@@ -267,11 +266,11 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 								await vscode.workspace.fs.delete(uri);
 								return;
 						case PatchActionType.ADD:
-								if (!change.newContent) throw new DiffError(`Cannot create ${path} with no content`);
+								if (!change.newContent) { throw new DiffError(`Cannot create ${path} with no content`); }
 								await vscode.workspace.fs.writeFile(uri, Buffer.from(change.newContent));
 								return;
 						case PatchActionType.UPDATE:
-								if (!change.newContent) throw new DiffError(`UPDATE change for ${path} has no new content`);
+								if (!change.newContent) { throw new DiffError(`UPDATE change for ${path} has no new content`); }
 								if (change.movePath) {
 										// Move = create new file + delete old. New file gets full content.
 										await vscode.workspace.fs.writeFile(vscode.Uri.file(change.movePath), Buffer.from(change.newContent));
@@ -298,7 +297,7 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 						this.diffSystem.beginBatch();
 						try {
 								for (const chunk of change.chunks) {
-										if (chunk.delLines.length === 0 && chunk.insLines.length === 0) continue;
+										if (chunk.delLines.length === 0 && chunk.insLines.length === 0) { continue; }
 
 										// origIndex is 0-indexed, DiffSystem expects 1-indexed
 										const startLine = chunk.origIndex + 1 + cumulativeOffset;
@@ -419,10 +418,6 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 		}
 
 		return files
-	}
-
-	private extractAllFiles(text: string): string[] {
-		return this.extractFilesForOperations(text, [PATCH_MARKERS.ADD, PATCH_MARKERS.UPDATE, PATCH_MARKERS.DELETE])
 	}
 
 	private async loadFiles(config: TaskConfig, filePaths: string[]): Promise<Record<string, string>> {

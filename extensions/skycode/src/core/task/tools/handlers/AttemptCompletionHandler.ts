@@ -188,7 +188,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				const { getDiffSystem } = await import("@/core/diff-v2")
 				const diffSystem = getDiffSystem()
 				await diffSystem.startCheckpoint(`Feedback: ${text?.substring(0, 50)}...`, feedbackTs)
-				console.log(`[AttemptCompletion] Checkpoint started for feedback ts=${feedbackTs}`)
+				Logger.log(`[AttemptCompletion] Checkpoint started for feedback ts=${feedbackTs}`)
 			} catch (error) {
 				Logger.error("[AttemptCompletion] Failed to start checkpoint for feedback:", error)
 			}

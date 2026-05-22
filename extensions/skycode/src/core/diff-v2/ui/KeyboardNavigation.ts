@@ -44,7 +44,7 @@ export class KeyboardNavigation implements vscode.Disposable {
 
   private getOrderedHunks(): Hunk[] {
     const editor = vscode.window.activeTextEditor;
-    if (!editor) return [];
+    if (!editor) { return []; }
     return this.getOrderedHunksForFile(editor.document.uri.fsPath);
   }
 
@@ -61,7 +61,7 @@ export class KeyboardNavigation implements vscode.Disposable {
 
   private revealHunk(hunk: Hunk): void {
     const editor = vscode.window.activeTextEditor;
-    if (!editor) return;
+    if (!editor) { return; }
     const pos = new vscode.Position(hunk.currentStartLine - 1, 0);
     editor.selection = new vscode.Selection(pos, pos);
     editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
@@ -72,7 +72,7 @@ export class KeyboardNavigation implements vscode.Disposable {
     const currentFsPath = editor?.document.uri.fsPath;
     const allFiles = this.getFilesWithPendingHunks();
 
-    if (allFiles.length === 0) return;
+    if (allFiles.length === 0) { return; }
 
     // Try current file first
     if (currentFsPath) {
@@ -103,7 +103,7 @@ export class KeyboardNavigation implements vscode.Disposable {
     const currentFsPath = editor?.document.uri.fsPath;
     const allFiles = this.getFilesWithPendingHunks();
 
-    if (allFiles.length === 0) return;
+    if (allFiles.length === 0) { return; }
 
     // Try current file first
     if (currentFsPath) {
@@ -137,10 +137,10 @@ export class KeyboardNavigation implements vscode.Disposable {
 
   private getCurrentHunk(): Hunk | undefined {
     const editor = vscode.window.activeTextEditor;
-    if (!editor) return;
+    if (!editor) { return; }
 
     const hunks = this.getOrderedHunks();
-    if (hunks.length === 0) return;
+    if (hunks.length === 0) { return; }
 
     const curLine = editor.selection.active.line + 1;
 
@@ -148,7 +148,7 @@ export class KeyboardNavigation implements vscode.Disposable {
     const containing = hunks.find(
       (h) => curLine >= h.currentStartLine && curLine < h.currentEndLine,
     );
-    if (containing) return containing;
+    if (containing) { return containing; }
 
     // Nearest hunk
     return hunks.reduce((closest, h) => {
@@ -162,16 +162,16 @@ export class KeyboardNavigation implements vscode.Disposable {
 
   async acceptCurrent(): Promise<void> {
     const hunk = this.getCurrentHunk();
-    if (hunk) await vscode.commands.executeCommand('skycode.diff.accept', hunk.id);
+    if (hunk) { await vscode.commands.executeCommand('skycode.diff.accept', hunk.id); }
   }
 
   async rejectCurrent(): Promise<void> {
     const hunk = this.getCurrentHunk();
-    if (hunk) await vscode.commands.executeCommand('skycode.diff.reject', hunk.id);
+    if (hunk) { await vscode.commands.executeCommand('skycode.diff.reject', hunk.id); }
   }
 
   dispose(): void {
-    for (const d of this.disposables) d.dispose();
+    for (const d of this.disposables) { d.dispose(); }
     this.disposables.length = 0;
   }
 }

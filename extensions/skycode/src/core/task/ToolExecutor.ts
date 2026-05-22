@@ -60,6 +60,7 @@ import { TaskConfig, validateTaskConfig } from "./tools/types/TaskConfig"
 import { createUIHelpers } from "./tools/types/UIHelpers"
 import { ToolDisplayUtils } from "./tools/utils/ToolDisplayUtils"
 import { ToolResultUtils } from "./tools/utils/ToolResultUtils"
+import { Logger } from "@/shared/services/Logger"
 
 export class ToolExecutor {
 	private autoApprover: AutoApprove
@@ -294,7 +295,7 @@ export class ToolExecutor {
 	private async handleError(action: string, error: Error, block: ToolUse): Promise<void> {
 		// Ignore "Skycode instance aborted" errors - task was cancelled
 		if (error.message === "Skycode instance aborted") {
-			console.log(`[ToolExecutor] handleError: task aborted during ${action}, ignoring`)
+			Logger.log(`[ToolExecutor] handleError: task aborted during ${action}, ignoring`)
 			return
 		}
 
@@ -305,7 +306,7 @@ export class ToolExecutor {
 			await this.say("error", errorString)
 		} catch (sayError) {
 			if (sayError instanceof Error && sayError.message === "Skycode instance aborted") {
-				console.log(`[ToolExecutor] handleError: task aborted while reporting error, ignoring`)
+				Logger.log(`[ToolExecutor] handleError: task aborted while reporting error, ignoring`)
 				return
 			}
 			throw sayError

@@ -78,7 +78,6 @@ export class DifyHandler implements ApiHandler {
 	private apiKey: string
 	private conversationId: string | null = null
 	private currentTaskId: string | null = null
-	private abortController: AbortController | null = null
 
 	constructor(options: DifyHandlerOptions) {
 		this.options = options
@@ -343,7 +342,7 @@ export class DifyHandler implements ApiHandler {
 								}
 								hasYieldedContent = true
 							}
-						} catch (e) {
+						} catch (_e) {
 							// Not JSON, continue
 							Logger.log("[DIFY DEBUG] Line is not direct JSON, continuing")
 						}

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { Logger } from "@/shared/services/Logger"
 
 /**
  * Структура сохранённого pending change
@@ -47,7 +48,7 @@ export class PendingChangesStorage {
   private constructor() {}
 
   private schedulePersist(): void {
-    if (this._persistScheduled) return;
+    if (this._persistScheduled) { return; }
     this._persistScheduled = true;
     queueMicrotask(() => {
       this._persistScheduled = false;
@@ -59,7 +60,7 @@ export class PendingChangesStorage {
   }
 
   private scheduleChangeEvent(): void {
-    if (this._changeScheduled) return;
+    if (this._changeScheduled) { return; }
     this._changeScheduled = true;
     queueMicrotask(() => {
       this._changeScheduled = false;
@@ -79,7 +80,7 @@ export class PendingChangesStorage {
    */
   initialize(context: vscode.ExtensionContext): void {
     this._context = context;
-    console.log('[PendingChangesStorage] Initialized (workspace-scoped)');
+    Logger.log('[PendingChangesStorage] Initialized (workspace-scoped)');
   }
 
   private ensureInitialized(): void {
@@ -96,7 +97,7 @@ export class PendingChangesStorage {
     if (!this._cache) {
       const data = this._context!.workspaceState.get<StoredPendingChange[]>(STORAGE_KEY, []);
       if (!Array.isArray(data)) {
-        console.warn('[PendingChangesStorage] Invalid data in storage, resetting to empty array');
+        Logger.warn('[PendingChangesStorage] Invalid data in storage, resetting to empty array');
         this._cache = [];
         this._dirty = true;
         this.schedulePersist();

@@ -11,7 +11,6 @@ import { convertToR1Format } from "../transform/r1-format"
 import { ApiStream } from "../transform/stream"
 import { getOpenAIToolParams, ToolCallProcessor } from "../transform/tool-call-processor"
 import { ThinkTagStreamParser } from "../transform/think-tag-parser"
-import { Logger } from "@/shared/services/Logger"
 
 interface OpenAiHandlerOptions extends CommonApiHandlerOptions {
 	openAiApiKey?: string
@@ -34,8 +33,8 @@ export class OpenAiHandler implements ApiHandler {
 
 	private getAzureAudienceScope(baseUrl?: string): string {
 		const url = baseUrl?.toLowerCase() ?? ""
-		if (url.includes("azure.us")) return "https://cognitiveservices.azure.us/.default"
-		if (url.includes("azure.com")) return "https://cognitiveservices.azure.com/.default"
+		if (url.includes("azure.us")) { return "https://cognitiveservices.azure.us/.default" }
+		if (url.includes("azure.com")) { return "https://cognitiveservices.azure.com/.default" }
 		return "https://cognitiveservices.azure.com/.default"
 	}
 
@@ -185,8 +184,8 @@ export class OpenAiHandler implements ApiHandler {
 					yield { type: "text", text: delta.content }
 				} else {
 					const { reasoning, text } = thinkParser.process(delta.content)
-					if (reasoning) yield { type: "reasoning", reasoning }
-					if (text) yield { type: "text", text }
+					if (reasoning) { yield { type: "reasoning", reasoning } }
+					if (text) { yield { type: "text", text } }
 				}
 			}
 
@@ -197,7 +196,7 @@ export class OpenAiHandler implements ApiHandler {
 			if (chunk.usage) {
 				const promptTokens = chunk.usage.prompt_tokens || 0
 				const cachedTokens = chunk.usage.prompt_tokens_details?.cached_tokens || 0
-				// @ts-ignore-next-line
+				// @ts-expect-error-next-line
 				const cacheMissTokens = chunk.usage.prompt_cache_miss_tokens || 0
 				yield {
 					type: "usage",

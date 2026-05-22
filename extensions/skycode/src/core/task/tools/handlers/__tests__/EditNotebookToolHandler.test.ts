@@ -28,8 +28,8 @@ interface NotebookJSON {
 
 function languageToCellType(lang: string): "code" | "markdown" | "raw" {
 	const lower = lang.toLowerCase().trim()
-	if (lower === "markdown") return "markdown"
-	if (lower === "raw") return "raw"
+	if (lower === "markdown") { return "markdown" }
+	if (lower === "raw") { return "raw" }
 	return "code"
 }
 
@@ -37,7 +37,7 @@ function sourceToLines(text: string): string[] {
 	return text.split("\n").map((line, i, arr) => (i < arr.length - 1 ? line + "\n" : line))
 }
 
-function createEmptyNotebook(lang: string = "python"): NotebookJSON {
+function createEmptyNotebook(_lang: string = "python"): NotebookJSON {
 	return {
 		nbformat: 4,
 		nbformat_minor: 5,

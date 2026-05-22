@@ -35,7 +35,7 @@ const CHAT_COMPLETIONS_URL = `${QWEN_BASE_URL}/api/v2/chat/completions`
  * on answering it. Earlier turns are prefixed with role markers.
  */
 function flattenConversationForQwenWeb(openAiMessages: any[]): string {
-	if (openAiMessages.length === 0) return ""
+	if (openAiMessages.length === 0) { return "" }
 	if (openAiMessages.length === 1) {
 		return stringifyMessageContent(openAiMessages[0].content)
 	}
@@ -74,14 +74,14 @@ function flattenConversationForQwenWeb(openAiMessages: any[]): string {
 }
 
 function stringifyMessageContent(content: any): string {
-	if (content == null) return ""
-	if (typeof content === "string") return content
+	if (content == null) { return "" }
+	if (typeof content === "string") { return content }
 	if (Array.isArray(content)) {
 		return content
 			.map((part: any) => {
-				if (typeof part === "string") return part
-				if (part?.type === "text") return String(part.text ?? "")
-				if (part?.type === "image_url") return "[image]"
+				if (typeof part === "string") { return part }
+				if (part?.type === "text") { return String(part.text ?? "") }
+				if (part?.type === "image_url") { return "[image]" }
 				return ""
 			})
 			.join("")
@@ -255,16 +255,16 @@ export class QwenWebHandler implements ApiHandler {
 		try {
 			while (true) {
 				const { done, value } = await reader.read()
-				if (done) break
+				if (done) { break }
 				buffer += decoder.decode(value, { stream: true })
 				const lines = buffer.split("\n")
 				buffer = lines.pop() ?? ""
 
 				for (const raw of lines) {
 					const line = raw.trim()
-					if (!line || !line.startsWith("data:")) continue
+					if (!line || !line.startsWith("data:")) { continue }
 					const jsonStr = line.slice(5).trim()
-					if (!jsonStr || jsonStr === "[DONE]") continue
+					if (!jsonStr || jsonStr === "[DONE]") { continue }
 
 					let chunk: any
 					try {

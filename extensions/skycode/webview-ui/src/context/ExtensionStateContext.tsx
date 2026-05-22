@@ -225,6 +225,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		// Skycode AI: Codebase indexing
 		indexingConfig: undefined,
 		indexingProgress: undefined,
+		indexingPromptDismissed: false,
 		// Skycode AI: Lightweight mode for weak models
 		lightweightMode: false,
 		// Skycode AI: Session budget defaults
@@ -444,29 +445,52 @@ export const ExtensionStateContextProvider: React.FC<{
 			},
 		)
 
-		// Subscribe to partial message events
+		// [SKYCODE-PERF] Coalesce partial-message updates to ~30 fps via rAF.
+		// During streaming the backend sends a partial for every token; without
+		// throttling React re-renders the whole chat for each token and that is
+		// the main reason long sessions drift to ~50% CPU. We keep the latest
+		// patch per `ts` in a Map and flush them once per animation frame.
+		type PartialPatch = ReturnType<typeof convertProtoToSkycodeMessage>
+		const pendingPatches = new Map<number, PartialPatch>()
+		let pendingFlushHandle: number | null = null
+		const flushPartials = () => {
+			pendingFlushHandle = null
+			if (pendingPatches.size === 0) { return }
+			const batch: PartialPatch[] = Array.from(pendingPatches.values())
+			pendingPatches.clear()
+			setState((prevState) => {
+				let next: typeof prevState.skycodeMessages | null = null
+				for (const partial of batch) {
+					const arr: typeof prevState.skycodeMessages = next ?? prevState.skycodeMessages
+					const lastIndex = findLastIndex(arr, (msg) => msg.ts === partial.ts)
+					if (lastIndex !== -1) {
+						if (next === null) {
+							next = arr.slice()
+						}
+						next[lastIndex] = { ...next[lastIndex], ...partial }
+					}
+				}
+				if (next === null) { return prevState }
+				return { ...prevState, skycodeMessages: next }
+			})
+		}
+		const scheduleFlush = () => {
+			if (pendingFlushHandle !== null) { return }
+			// rAF naturally throttles to ~60fps and pauses when the webview is hidden,
+			// which exactly matches "don't burn CPU when the user is in another window".
+			pendingFlushHandle = requestAnimationFrame(flushPartials)
+		}
+
 		partialMessageUnsubscribeRef.current = UiServiceClient.subscribeToPartialMessage(EmptyRequest.create({}), {
 			onResponse: (protoMessage) => {
 				try {
-					// Validate critical fields
 					if (!protoMessage.ts || protoMessage.ts <= 0) {
 						console.error("Invalid timestamp in partial message:", protoMessage)
 						return
 					}
-
 					const partialMessage = convertProtoToSkycodeMessage(protoMessage)
-					setState((prevState) => {
-						// worth noting it will never be possible for a more up-to-date message to be sent here or in normal messages post since the presentAssistantContent function uses lock
-						const lastIndex = findLastIndex(prevState.skycodeMessages, (msg) => msg.ts === partialMessage.ts)
-						if (lastIndex !== -1) {
-							const newSkycodeMessages = [...prevState.skycodeMessages]
-							const prev = newSkycodeMessages[lastIndex]
-							// Merge so streaming updates don't replace the whole message and drop fields not in proto (e.g. modelInfo on ask/plan cards)
-							newSkycodeMessages[lastIndex] = { ...prev, ...partialMessage }
-							return { ...prevState, skycodeMessages: newSkycodeMessages }
-						}
-						return prevState
-					})
+					pendingPatches.set(partialMessage.ts, partialMessage)
+					scheduleFlush()
 				} catch (error) {
 					console.error("Failed to process partial message:", error, protoMessage)
 				}
@@ -559,6 +583,13 @@ export const ExtensionStateContextProvider: React.FC<{
 
 		// Clean up subscriptions when component unmounts
 		return () => {
+			// [SKYCODE-PERF] Cancel any scheduled flush + drop any leftover patches.
+			if (pendingFlushHandle !== null) {
+				cancelAnimationFrame(pendingFlushHandle)
+				pendingFlushHandle = null
+			}
+			pendingPatches.clear()
+
 			if (stateSubscriptionRef.current) {
 				stateSubscriptionRef.current()
 				stateSubscriptionRef.current = null

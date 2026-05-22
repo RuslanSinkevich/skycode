@@ -167,8 +167,8 @@ const VoiceSection = ({ renderSectionHeader }: VoiceSectionProps) => {
 									onChange={(e: any) => {
 										const newModel = e.target.value
 										const modelConfig = WHISPER_MODELS.find((m) => m.id === newModel)
-										if (!modelConfig || modelConfig.locked) return
-										if (modelConfig.requiresAuth && !isAuthenticated) return
+										if (!modelConfig || modelConfig.locked) { return }
+										if (modelConfig.requiresAuth && !isAuthenticated) { return }
 										if (newModel !== dictationSettings?.whisperModel) {
 											updateDictation({ whisperModel: newModel, voiceReady: false, voiceDownloading: false })
 										}

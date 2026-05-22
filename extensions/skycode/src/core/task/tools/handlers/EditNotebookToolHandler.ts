@@ -15,6 +15,7 @@ import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
+import { Logger } from "@/shared/services/Logger"
 
 /** Represents a single cell in a Jupyter notebook (.ipynb) */
 interface NotebookCell {
@@ -39,8 +40,8 @@ interface NotebookJSON {
  */
 function languageToCellType(lang: string): "code" | "markdown" | "raw" {
 	const lower = lang.toLowerCase().trim()
-	if (lower === "markdown") return "markdown"
-	if (lower === "raw") return "raw"
+	if (lower === "markdown") { return "markdown" }
+	if (lower === "raw") { return "raw" }
 	return "code"
 }
 
@@ -50,7 +51,7 @@ function languageToCellType(lang: string): "code" | "markdown" | "raw" {
  */
 function buildKernelMetadata(lang: string): Record<string, unknown> {
 	const lower = lang.toLowerCase().trim()
-	if (lower === "markdown" || lower === "raw") return {}
+	if (lower === "markdown" || lower === "raw") { return {} }
 	const langMap: Record<string, { name: string; display_name: string }> = {
 		python: { name: "python", display_name: "Python 3" },
 		javascript: { name: "javascript", display_name: "JavaScript" },
@@ -133,7 +134,7 @@ export class EditNotebookToolHandler implements IFullyManagedTool {
 		}
 
 		const cellIdx = parseInt(rawCellIdx, 10)
-		if (isNaN(cellIdx) || cellIdx < 0) {
+		if (Number.isNaN(cellIdx) || cellIdx < 0) {
 			config.taskState.consecutiveMistakeCount++
 			return formatResponse.toolError(
 				`Invalid cell_idx: "${rawCellIdx}". Must be a non-negative integer (0-based).`,
@@ -346,10 +347,10 @@ export class EditNotebookToolHandler implements IFullyManagedTool {
 			return `${changeDescription} in ${readablePath}`
 		} catch (error) {
 			if (error instanceof Error && error.message === "Skycode instance aborted") {
-				console.log("[EditNotebookToolHandler] Task aborted, ignoring error")
+				Logger.log("[EditNotebookToolHandler] Task aborted, ignoring error")
 				return formatResponse.toolResult("Operation cancelled")
 			}
-			console.error("[EditNotebookToolHandler] Error:", error)
+			Logger.error("[EditNotebookToolHandler] Error:", error)
 			return formatResponse.toolError(
 				`Failed to edit notebook: ${error instanceof Error ? error.message : String(error)}`,
 			)

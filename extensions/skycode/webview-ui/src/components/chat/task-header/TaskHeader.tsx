@@ -12,7 +12,6 @@ import CopyTaskButton from "./buttons/CopyTaskButton"
 import DeleteTaskButton from "./buttons/DeleteTaskButton"
 import NewTaskButton from "./buttons/NewTaskButton"
 import OpenDiskConversationHistoryButton from "./buttons/OpenDiskConversationHistoryButton"
-import { CheckpointError } from "./CheckpointError"
 import { FocusChain } from "./FocusChain"
 import { highlightText } from "./Highlights"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -98,7 +97,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	// Event handlers
 	const toggleTaskExpanded = useCallback(() => setIsTaskExpanded(!isTaskExpanded), [setIsTaskExpanded, isTaskExpanded])
 
-	const handleCheckpointSettingsClick = useCallback(() => {
+	const _handleCheckpointSettingsClick = useCallback(() => {
 		navigateToSettings("editing")
 	}, [navigateToSettings])
 

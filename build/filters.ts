@@ -67,6 +67,9 @@ export const unicodeFilter = Object.freeze<string[]>([
 	// extensions/copilot has its own code style
 	'!extensions/copilot/**',
 
+	// extensions/skycode is a fork with its own biome-based unicode policy
+	'!extensions/skycode/**',
+
 	'!src/vs/base/browser/dompurify/**',
 	'!src/vs/workbench/services/keybinding/browser/keyboardLayouts/**',
 	'!src/vs/workbench/contrib/terminal/common/scripts/psreadline/**',
@@ -123,8 +126,8 @@ export const indentationFilter = Object.freeze<string[]>([
 	'!**/codicon/**',
 	'!**/fixtures/**',
 	'!**/lib/**',
-	// Skycode: vendored @xenova/transformers (space-indented upstream style)
-	'!extensions/skycode/vendor/**',
+	// Skycode: fork uses biome-managed formatting (spaces), bypass upstream tab-only indentation check
+	'!extensions/skycode/**',
 	'!extensions/**/dist/**',
 	'!extensions/**/out/**',
 	'!extensions/**/snippets/**',

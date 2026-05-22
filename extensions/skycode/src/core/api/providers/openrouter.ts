@@ -135,8 +135,8 @@ export class OpenRouterHandler implements ApiHandler {
 				} else {
 					// Fallback: parse <think>...</think> from content (Qwen3 via OpenRouter)
 					const { reasoning, text } = thinkParser.process(delta.content)
-					if (reasoning) yield { type: "reasoning", reasoning }
-					if (text) yield { type: "text", text }
+					if (reasoning) { yield { type: "reasoning", reasoning } }
+					if (text) { yield { type: "text", text } }
 				}
 			}
 
@@ -150,7 +150,7 @@ export class OpenRouterHandler implements ApiHandler {
 				delta &&
 				"reasoning_details" in delta &&
 				delta.reasoning_details &&
-				// @ts-ignore-next-line
+				// @ts-expect-error-next-line
 				delta.reasoning_details.length && // exists and non-0
 				!shouldSkipReasoningForModel(this.options.openRouterModelId)
 			) {
@@ -168,7 +168,7 @@ export class OpenRouterHandler implements ApiHandler {
 					cacheReadTokens: chunk.usage.prompt_tokens_details?.cached_tokens || 0,
 					inputTokens: (chunk.usage.prompt_tokens || 0) - (chunk.usage.prompt_tokens_details?.cached_tokens || 0),
 					outputTokens: chunk.usage.completion_tokens || 0,
-					// @ts-ignore-next-line
+					// @ts-expect-error-next-line
 					totalCost: (chunk.usage.cost || 0) + (chunk.usage.cost_details?.upstream_inference_cost || 0),
 				}
 				didOutputUsage = true

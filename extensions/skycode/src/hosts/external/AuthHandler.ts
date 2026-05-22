@@ -4,7 +4,6 @@ import type { AddressInfo } from "node:net"
 import { SharedUriHandler } from "@/services/uri/SharedUriHandler"
 import { Logger } from "@/shared/services/Logger"
 import { t } from "@/i18n/backend-i18n"
-import { HostProvider } from "../host-provider"
 
 const SERVER_TIMEOUT = 10 * 60 * 1000 // 10 minutes
 

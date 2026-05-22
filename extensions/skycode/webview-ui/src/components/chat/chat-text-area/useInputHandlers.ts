@@ -454,6 +454,18 @@ export function useInputHandlers({
 		}
 	}, [inputValue, intendedCursorPosition])
 
+	// [SKYCODE-PERF] Clear the file-search debounce timer when the component unmounts,
+	// otherwise a typed-and-immediately-closed input leaks a setTimeout + grpc request
+	// that resolves into setState on a dead component.
+	useEffect(() => {
+		return () => {
+			if (searchTimeoutRef.current) {
+				clearTimeout(searchTimeoutRef.current)
+				searchTimeoutRef.current = null
+			}
+		}
+	}, [])
+
 	useEffect(() => {
 		if (pendingInsertions.length === 0 || !textAreaRef.current) {
 			return

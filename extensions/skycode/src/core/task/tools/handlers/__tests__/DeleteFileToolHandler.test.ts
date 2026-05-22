@@ -64,7 +64,7 @@ describe("DeleteFileToolHandler", () => {
 				stateManager: {
 					getApiConfiguration: () => ({ actModeApiProvider: "test-provider" }),
 					getGlobalSettingsKey: (key: string) => {
-						if (key === "mode") return "act"
+						if (key === "mode") { return "act" }
 						return undefined
 					},
 				},
@@ -74,10 +74,10 @@ describe("DeleteFileToolHandler", () => {
 				userMessageContent: [],
 			},
 			callbacks: {
-				say: async (type: string, message: string) => {
+				say: async (_type: string, _message: string) => {
 					sayCalled = true
 				},
-				ask: async (type: string, message: string) => {
+				ask: async (_type: string, _message: string) => {
 					askCalled = true
 					return {
 						response: userApproves ? "yesButtonClicked" : "noButtonClicked",

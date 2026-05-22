@@ -5,46 +5,28 @@ import * as readline from "readline"
 import { Logger } from "@/shared/services/Logger"
 import { getBinaryLocation } from "@/utils/fs"
 
-/*
-This file provides functionality to perform regex searches on files using ripgrep.
-Inspired by: https://github.com/DiscreteTom/vscode-ripgrep-utils
-
-Key components:
-* execRipgrep: Executes the ripgrep command and returns the output.
-* regexSearchFiles: The main function that performs regex searches on files.
-   - Parameters:
-     * cwd: The current working directory (for relative path calculation)
-     * directoryPath: The directory to search in
-     * regex: The regular expression to search for (Rust regex syntax)
-     * filePattern: Optional glob pattern to filter files (default: '*')
-   - Returns: A formatted string containing search results with context
-
-The search results include:
-- Relative file paths
-- 2 lines of context before and after each match
-- Matches formatted with pipe characters for easy reading
-
-Usage example:
-const results = await regexSearchFiles('/path/to/cwd', '/path/to/search', 'TODO:', '*.ts');
-
-rel/path/to/app.ts
-│----
-│function processData(data: any) {
-│  // Some processing logic here
-│  // TODO: Implement error handling
-│  return processedData;
-│}
-│----
-
-rel/path/to/helper.ts
-│----
-│  let result = 0;
-│  for (let i = 0; i < input; i++) {
-│    // TODO: Optimize this function for performance
-│    result += Math.pow(i, 2);
-│  }
-│----
-*/
+/**
+ * This file provides functionality to perform regex searches on files using ripgrep.
+ * Inspired by: https://github.com/DiscreteTom/vscode-ripgrep-utils
+ *
+ * Key components:
+ *   - execRipgrep: Executes the ripgrep command and returns the output.
+ *   - regexSearchFiles: The main function that performs regex searches on files.
+ *     - Parameters:
+ *       - cwd: The current working directory (for relative path calculation)
+ *       - directoryPath: The directory to search in
+ *       - regex: The regular expression to search for (Rust regex syntax)
+ *       - filePattern: Optional glob pattern to filter files (default '*')
+ *     - Returns: A formatted string containing search results with context
+ *
+ * The search results include:
+ *   - Relative file paths
+ *   - 2 lines of context before and after each match
+ *   - Matches formatted with pipe characters for easy reading
+ *
+ * Usage example:
+ *   const results = await regexSearchFiles('/path/to/cwd', '/path/to/search', 'TODO:', '*.ts');
+ */
 
 interface SearchResult {
 	filePath: string
@@ -96,14 +78,14 @@ async function execRipgrep(args: string[]): Promise<string> {
 			errorOutput += data.toString()
 		})
 		const timeout = setTimeout(() => {
-			if (settled) return
+			if (settled) { return }
 			settled = true
 			rl.close()
 			rgProcess.kill()
 			reject(new Error(`ripgrep timed out after ${RG_TIMEOUT_MS}ms`))
 		}, RG_TIMEOUT_MS)
 		rl.on("close", () => {
-			if (settled) return
+			if (settled) { return }
 			settled = true
 			clearTimeout(timeout)
 			if (errorOutput) {
@@ -113,7 +95,7 @@ async function execRipgrep(args: string[]): Promise<string> {
 			}
 		})
 		rgProcess.on("error", (error) => {
-			if (settled) return
+			if (settled) { return }
 			settled = true
 			clearTimeout(timeout)
 			reject(new Error(`ripgrep process error: ${error.message}`))
@@ -224,7 +206,7 @@ function formatResults(results: SearchResult[], cwd: string): string {
 
 	for (const [filePath, fileResults] of Object.entries(groupedResults)) {
 		// Check if adding this file's path would exceed the byte limit
-		const filePathString = `${filePath.toPosix()}\n│----\n`
+		const filePathString = `${filePath.toPosix()}\n\u2502----\n`
 		const filePathBytes = Buffer.byteLength(filePathString, "utf8")
 
 		if (byteSize + filePathBytes >= MAX_BYTE_SIZE) {
@@ -245,7 +227,7 @@ function formatResults(results: SearchResult[], cwd: string): string {
 
 			for (const line of allLines) {
 				const trimmedLine = line?.trimEnd() ?? ""
-				const lineString = `│${trimmedLine}\n`
+				const lineString = `\u2502${trimmedLine}\n`
 				const lineBytes = Buffer.byteLength(lineString, "utf8")
 
 				// Check if adding this line would exceed the byte limit
@@ -271,7 +253,7 @@ function formatResults(results: SearchResult[], cwd: string): string {
 
 			// Add separator between results if needed
 			if (resultIndex < fileResults.length - 1) {
-				const separatorString = "│----\n"
+				const separatorString = "\u2502----\n"
 				const separatorBytes = Buffer.byteLength(separatorString, "utf8")
 
 				if (byteSize + separatorBytes >= MAX_BYTE_SIZE) {
@@ -295,7 +277,7 @@ function formatResults(results: SearchResult[], cwd: string): string {
 			break
 		}
 
-		const closingString = "│----\n\n"
+		const closingString = "\u2502----\n\n"
 		const closingBytes = Buffer.byteLength(closingString, "utf8")
 
 		if (byteSize + closingBytes >= MAX_BYTE_SIZE) {

@@ -9,7 +9,7 @@ const REPLACE_BLOCK_END = "+++++++ REPLACE"
  * @returns The 1-based line number where charIndex falls
  */
 export function getLineNumberFromCharIndex(content: string, charIndex: number): number {
-	if (charIndex <= 0) return 1
+	if (charIndex <= 0) { return 1 }
 	return content.substring(0, charIndex).split("\n").length
 }
 

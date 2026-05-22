@@ -71,7 +71,7 @@ export function useNavigation(): NavigationState & NavigationActions {
 			setShowHistory(false)
 			setShowAccount(false)
 			setShowWorktrees(false)
-			if (tab) setMcpTab(tab)
+			if (tab) { setMcpTab(tab) }
 			setShowMcp(true)
 		},
 		[],

@@ -85,9 +85,9 @@ export class FireworksHandler implements ApiHandler {
 
 			if (chunk.usage) {
 				const promptTokens = chunk.usage.prompt_tokens || 0
-				// @ts-ignore-next-line
+				// @ts-expect-error-next-line
 				const cachedTokens = chunk.usage.prompt_cache_hit_tokens || 0
-				// @ts-ignore-next-line
+				// @ts-expect-error-next-line
 				const cacheMissTokens = chunk.usage.prompt_cache_miss_tokens || 0
 				// prompt_tokens total includes cache hits/misses (DeepSeek-style); we subtract hits so input+cache is not double-counted. See https://api-docs.deepseek.com/guides/kv_cache
 				yield {

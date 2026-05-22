@@ -10,9 +10,8 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { t } from '../../i18n/backend-i18n';
+import { Logger } from "@/shared/services/Logger"
 
-// v3 types
-import { Hunk, HunkType } from './storage/types';
 
 // v3 storage
 import { DiffStore } from './storage/DiffStore';
@@ -95,7 +94,7 @@ export class DiffSystem implements vscode.Disposable {
   // ==================== Lifecycle ====================
 
   async initialize(clearOnStartup: boolean = false): Promise<void> {
-    if (this.initialized) return;
+    if (this.initialized) { return; }
 
     await this.snapshotStorage.initialize();
 
@@ -103,7 +102,7 @@ export class DiffSystem implements vscode.Disposable {
     getPendingChangesStorage().initialize(this.context);
 
     if (clearOnStartup) {
-      console.log('[DiffSystem] DEV MODE: Clearing old pending diffs on startup');
+      Logger.log('[DiffSystem] DEV MODE: Clearing old pending diffs on startup');
       this.store.clearAll();
       await getPendingChangesStorage().clear();
     }
@@ -127,13 +126,13 @@ export class DiffSystem implements vscode.Disposable {
     // Listen for manual edits: update existing hunks when user edits inside them
     this.disposables.push(
       vscode.workspace.onDidChangeTextDocument(async (e) => {
-        if (this.editGuard.isSystemEdit()) return;
+        if (this.editGuard.isSystemEdit()) { return; }
 
         const editor = vscode.window.activeTextEditor;
-        if (!editor || editor.document !== e.document) return;
+        if (!editor || editor.document !== e.document) { return; }
 
         const fsPath = editor.document.uri.fsPath;
-        if (!this.store.hasPendingChangesForFile(fsPath)) return;
+        if (!this.store.hasPendingChangesForFile(fsPath)) { return; }
 
         await this.handleManualEdit(fsPath, e.contentChanges);
       }),
@@ -169,7 +168,7 @@ export class DiffSystem implements vscode.Disposable {
     this.updatePendingContext();
 
     this.initialized = true;
-    console.log('[DiffSystem] Initialized (v3 architecture)');
+    Logger.log('[DiffSystem] Initialized (v3 architecture)');
   }
 
   /**
@@ -232,7 +231,7 @@ export class DiffSystem implements vscode.Disposable {
    * Coalesced via queueMicrotask to avoid N setContext calls during a batch.
    */
   private updatePendingContext(): void {
-    if (this._pendingContextScheduled) return;
+    if (this._pendingContextScheduled) { return; }
     this._pendingContextScheduled = true;
     queueMicrotask(() => {
       this._pendingContextScheduled = false;
@@ -251,11 +250,11 @@ export class DiffSystem implements vscode.Disposable {
       }),
       vscode.commands.registerCommand('skycode.diff.acceptAllInFile', async () => {
         const editor = vscode.window.activeTextEditor;
-        if (editor) await this.acceptAllForFile(editor.document.uri.fsPath);
+        if (editor) { await this.acceptAllForFile(editor.document.uri.fsPath); }
       }),
       vscode.commands.registerCommand('skycode.diff.rejectAllInFile', async () => {
         const editor = vscode.window.activeTextEditor;
-        if (editor) await this.rejectAllForFile(editor.document.uri.fsPath);
+        if (editor) { await this.rejectAllForFile(editor.document.uri.fsPath); }
       }),
       vscode.commands.registerCommand('skycode.diff.clearAll', async () => {
         await this.clearAll();
@@ -287,7 +286,7 @@ export class DiffSystem implements vscode.Disposable {
     const ts = messageTs ?? Date.now();
     this.currentResponseGroupId = this.store.createResponseGroup(ts, description, this.currentTaskId ?? undefined);
     this.overlapCycleCount.clear();
-    console.log('[DiffSystem] Started ResponseGroup:', this.currentResponseGroupId, 'messageTs:', ts, 'taskId:', this.currentTaskId);
+    Logger.log('[DiffSystem] Started ResponseGroup:', this.currentResponseGroupId, 'messageTs:', ts, 'taskId:', this.currentTaskId);
     return this.currentResponseGroupId;
   }
 
@@ -296,7 +295,7 @@ export class DiffSystem implements vscode.Disposable {
    */
   async finishCheckpoint(): Promise<string | undefined> {
     this.ensureInitialized();
-    if (!this.currentResponseGroupId) return undefined;
+    if (!this.currentResponseGroupId) { return undefined; }
 
     const id = this.currentResponseGroupId;
     this.currentResponseGroupId = null;
@@ -309,7 +308,7 @@ export class DiffSystem implements vscode.Disposable {
    */
   setCurrentTaskId(taskId: string | null): void {
     this.currentTaskId = taskId;
-    console.log('[DiffSystem] setCurrentTaskId:', taskId);
+    Logger.log('[DiffSystem] setCurrentTaskId:', taskId);
   }
 
   /**
@@ -369,12 +368,12 @@ export class DiffSystem implements vscode.Disposable {
    */
   private checkAutoRemove(hunkId: string, fsPath: string): void {
     const hunk = this.store.getHunk(hunkId);
-    if (!hunk || hunk.status !== 'pending') return;
+    if (!hunk || hunk.status !== 'pending') { return; }
 
     const doc = vscode.workspace.textDocuments.find(
       (d) => d.uri.fsPath.toLowerCase() === fsPath.toLowerCase(),
     );
-    if (!doc) return;
+    if (!doc) { return; }
 
     // Read current lines in hunk range
     const currentLines: string[] = [];
@@ -385,21 +384,21 @@ export class DiffSystem implements vscode.Disposable {
     // Normalize: strip trailing \r from removedLines (Windows line endings from diff library)
     const normalizedRemoved = hunk.removedLines.map((l) => l.replace(/\r$/, ''));
 
-    console.log('[DiffSystem] Auto-remove check:', hunkId,
+    Logger.log('[DiffSystem] Auto-remove check:', hunkId,
       'current:', JSON.stringify(currentLines),
       'original:', JSON.stringify(normalizedRemoved));
 
     if (this.arraysEqual(currentLines, normalizedRemoved)) {
-      console.log('[DiffSystem] Auto-remove: content matches original, removing hunk:', hunkId);
+      Logger.log('[DiffSystem] Auto-remove: content matches original, removing hunk:', hunkId);
       this.store.updateHunkStatus(hunkId, 'accepted');
     }
   }
 
   /** Compare two string arrays for equality */
   private arraysEqual(a: string[], b: string[]): boolean {
-    if (a.length !== b.length) return false;
+    if (a.length !== b.length) { return false; }
     for (let i = 0; i < a.length; i++) {
-      if (a[i] !== b[i]) return false;
+      if (a[i] !== b[i]) { return false; }
     }
     return true;
   }
@@ -418,7 +417,7 @@ export class DiffSystem implements vscode.Disposable {
   private async preSaveAndSnapshot(fsPath: string, rgId: string, messageTs: number): Promise<void> {
     // Skip if snapshot already exists for this file in this ResponseGroup
     if (this.snapshotStorage.hasSnapshotForResponseGroup(fsPath, rgId)) {
-      console.log(`[DiffSystem] Snapshot already exists for ${path.basename(fsPath)} in RG ${rgId.slice(0,8)}, skipping`);
+      Logger.log(`[DiffSystem] Snapshot already exists for ${path.basename(fsPath)} in RG ${rgId.slice(0,8)}, skipping`);
       return;
     }
 
@@ -426,21 +425,21 @@ export class DiffSystem implements vscode.Disposable {
 
     // Save unsaved user edits before AI modifies the file
     if (doc.isDirty) {
-      console.log('[DiffSystem] Saving dirty file before AI edit:', fsPath);
+      Logger.log('[DiffSystem] Saving dirty file before AI edit:', fsPath);
       await doc.save();
     }
 
     // Take snapshot of current file content
     const content = doc.getText();
     const snapId = this.snapshotStorage.saveBeforeAI(fsPath, rgId, messageTs, content);
-    console.log(`[DiffSystem] Snapshot saved: ${snapId} for ${path.basename(fsPath)} (messageTs=${messageTs}, size=${content.length}, rgId=${rgId.slice(0,8)})`);
+    Logger.log(`[DiffSystem] Snapshot saved: ${snapId} for ${path.basename(fsPath)} (messageTs=${messageTs}, size=${content.length}, rgId=${rgId.slice(0,8)})`);
   }
 
   /**
    * Get the messageTs for the current ResponseGroup (for snapshot binding).
    */
   private getCurrentMessageTs(): number {
-    if (!this.currentResponseGroupId) return Date.now();
+    if (!this.currentResponseGroupId) { return Date.now(); }
     const rg = this.store.getResponseGroup(this.currentResponseGroupId);
     return rg?.chatMessageTs ?? Date.now();
   }
@@ -483,16 +482,16 @@ export class DiffSystem implements vscode.Disposable {
       if (next > DiffSystem.MAX_OVERLAP_CYCLES) {
         const msg = `Loop detected: ${next} consecutive overlap-reject cycles on ${path.basename(fsPath)} ` +
           `(lines ${startLine}-${endLine}). Blocking further edits to prevent corruption.`;
-        console.error(`[DiffSystem] ${msg}`);
+        Logger.error(`[DiffSystem] ${msg}`);
         throw new Error(msg);
       }
 
-      console.log(`[DiffSystem] Overlap detected: ${overlapping.length} hunks conflict with [${startLine}, ${endLine}) [cycle ${next}/${DiffSystem.MAX_OVERLAP_CYCLES}]`);
+      Logger.log(`[DiffSystem] Overlap detected: ${overlapping.length} hunks conflict with [${startLine}, ${endLine}) [cycle ${next}/${DiffSystem.MAX_OVERLAP_CYCLES}]`);
 
       // Reject bottom-to-top to preserve upper positions
       const sorted = [...overlapping].sort((a, b) => b.currentStartLine - a.currentStartLine);
       for (const old of sorted) {
-        console.log(`[DiffSystem] Auto-rejecting overlapping hunk ${old.id} (lines ${old.currentStartLine}-${old.currentEndLine})`);
+        Logger.log(`[DiffSystem] Auto-rejecting overlapping hunk ${old.id} (lines ${old.currentStartLine}-${old.currentEndLine})`);
         await this.hunkReverter.reject(old.id);
       }
     } else {
@@ -514,7 +513,7 @@ export class DiffSystem implements vscode.Disposable {
    */
   private async ensureDocumentLoaded(fsPath: string): Promise<void> {
     const key = fsPath.toLowerCase();
-    if (this._loadedDocs.has(key)) return;
+    if (this._loadedDocs.has(key)) { return; }
     await vscode.workspace.openTextDocument(fsPath);
     this._loadedDocs.add(key);
   }
@@ -526,7 +525,7 @@ export class DiffSystem implements vscode.Disposable {
         'Auto-started checkpoint',
         this.currentTaskId ?? undefined,
       );
-      console.log('[DiffSystem] Auto-started ResponseGroup:', this.currentResponseGroupId, 'taskId:', this.currentTaskId);
+      Logger.log('[DiffSystem] Auto-started ResponseGroup:', this.currentResponseGroupId, 'taskId:', this.currentTaskId);
     }
     return this.currentResponseGroupId;
   }
@@ -703,7 +702,7 @@ export class DiffSystem implements vscode.Disposable {
 
     for (const fsPath of files) {
       const pendingHunks = this.store.getPendingHunksByFile(fsPath);
-      if (pendingHunks.length === 0) continue;
+      if (pendingHunks.length === 0) { continue; }
 
       // Use baseline snapshot (chain[0]) — the true original state,
       // regardless of which ResponseGroups are still pending.
@@ -712,14 +711,14 @@ export class DiffSystem implements vscode.Disposable {
       const snapshot = this.snapshotStorage.getBaselineSnapshot(fsPath);
 
       if (snapshot) {
-        console.log(`[DiffSystem] rejectAll: restoring ${path.basename(fsPath)} from baseline snapshot (messageTs=${snapshot.messageTs}, size=${snapshot.content.length})`);
+        Logger.log(`[DiffSystem] rejectAll: restoring ${path.basename(fsPath)} from baseline snapshot (messageTs=${snapshot.messageTs}, size=${snapshot.content.length})`);
         try {
           await this.restoreFileFromSnapshot(fsPath, snapshot.content);
           for (const hunk of pendingHunks) {
             this.store.updateHunkStatus(hunk.id, 'rejected');
           }
         } catch (error) {
-          console.error(`[DiffSystem] rejectAll: baseline restore failed for ${path.basename(fsPath)}, falling back to per-hunk`, error);
+          Logger.error(`[DiffSystem] rejectAll: baseline restore failed for ${path.basename(fsPath)}, falling back to per-hunk`, error);
           await this.hunkReverter.rejectAllForFile(fsPath);
         }
       } else {
@@ -745,7 +744,7 @@ export class DiffSystem implements vscode.Disposable {
       if (stat.size > 0) {
         const bytes = await vscode.workspace.fs.readFile(uri);
         const content = Buffer.from(bytes).toString('utf-8');
-        if (content.trim().length > 0) return;
+        if (content.trim().length > 0) { return; }
       }
 
       // Close any open tabs for this file before deletion
@@ -758,9 +757,9 @@ export class DiffSystem implements vscode.Disposable {
       }
 
       await vscode.workspace.fs.delete(uri);
-      console.log(`[DiffSystem] Deleted empty file after reject: ${path.basename(fsPath)}`);
+      Logger.log(`[DiffSystem] Deleted empty file after reject: ${path.basename(fsPath)}`);
     } catch (e) {
-      console.debug(`[DiffSystem] deleteFileIfEmpty skipped for ${path.basename(fsPath)}:`, e);
+      Logger.debug(`[DiffSystem] deleteFileIfEmpty skipped for ${path.basename(fsPath)}:`, e);
     }
   }
 
@@ -778,28 +777,28 @@ export class DiffSystem implements vscode.Disposable {
    */
   async rollbackFromMessage(messageTs: number): Promise<string[]> {
     this.ensureInitialized();
-    console.log(`[DiffSystem] ===== rollbackFromMessage START ===== messageTs=${messageTs}, taskId=${this.currentTaskId}`);
+    Logger.log(`[DiffSystem] ===== rollbackFromMessage START ===== messageTs=${messageTs}, taskId=${this.currentTaskId}`);
 
     // Find groups for current task only — never touch other tasks' data
     const groups = this.store.getResponseGroupsFromMessageTs(messageTs, this.currentTaskId ?? undefined);
     if (groups.length === 0) {
-      console.log(`[DiffSystem] No ResponseGroups found for messageTs=${messageTs}, taskId=${this.currentTaskId}`);
+      Logger.log(`[DiffSystem] No ResponseGroups found for messageTs=${messageTs}, taskId=${this.currentTaskId}`);
       return [];
     }
 
-    console.log(`[DiffSystem] Found ${groups.length} ResponseGroups to revert:`,
+    Logger.log(`[DiffSystem] Found ${groups.length} ResponseGroups to revert:`,
       groups.map(g => `{id=${g.id.slice(0,8)}, ts=${g.chatMessageTs}, status=${g.status}, taskId=${g.taskId?.slice(0,8)}}`));
 
     // Collect all affected files and find snapshots
     const affectedFiles = new Set<string>();
     for (const group of groups) {
         const fileChanges = this.store.getFileChangesByResponseGroup(group.id);
-        console.log(`[DiffSystem] Group ${group.id.slice(0,8)} has ${fileChanges.length} file changes`);
+        Logger.log(`[DiffSystem] Group ${group.id.slice(0,8)} has ${fileChanges.length} file changes`);
         for (const fc of fileChanges) {
         affectedFiles.add(fc.fsPath);
         }
     }
-    console.log(`[DiffSystem] Affected files: ${[...affectedFiles].map(f => path.basename(f)).join(', ')}`);
+    Logger.log(`[DiffSystem] Affected files: ${[...affectedFiles].map(f => path.basename(f)).join(', ')}`);
 
     // === STEP 1: Restore files from snapshots ===
     // Track which files were restored via snapshot (vs fallback hunk reject)
@@ -816,20 +815,20 @@ export class DiffSystem implements vscode.Disposable {
       }
 
       const snapshotCount = this.snapshotStorage.getSnapshotCount(fsPath);
-      console.log(`[DiffSystem] ${path.basename(fsPath)}: snapshot=${snapshot ? 'YES' : 'NO'} (chain size: ${snapshotCount}, earliestGroupTs=${earliestGroupTs}, messageTs=${messageTs})`);
+      Logger.log(`[DiffSystem] ${path.basename(fsPath)}: snapshot=${snapshot ? 'YES' : 'NO'} (chain size: ${snapshotCount}, earliestGroupTs=${earliestGroupTs}, messageTs=${messageTs})`);
 
       if (snapshot) {
-        console.log(`[DiffSystem] Restoring ${path.basename(fsPath)} from snapshot (messageTs: ${snapshot.messageTs}, size: ${snapshot.content.length})`);
+        Logger.log(`[DiffSystem] Restoring ${path.basename(fsPath)} from snapshot (messageTs: ${snapshot.messageTs}, size: ${snapshot.content.length})`);
         try {
           await this.restoreFileFromSnapshot(fsPath, snapshot.content);
           restoredFromSnapshot.add(fsPath);
         } catch (error) {
-          console.error(`[DiffSystem] Failed to restore ${path.basename(fsPath)} from snapshot:`, error);
+          Logger.error(`[DiffSystem] Failed to restore ${path.basename(fsPath)} from snapshot:`, error);
           // Fallback: reject hunks individually (v3 behavior)
           await this.fallbackRejectHunksForFile(fsPath, groups);
         }
       } else {
-        console.warn(`[DiffSystem] No snapshot found for ${path.basename(fsPath)} (messageTs: ${messageTs}), falling back to hunk reject`);
+        Logger.warn(`[DiffSystem] No snapshot found for ${path.basename(fsPath)} (messageTs: ${messageTs}), falling back to hunk reject`);
         await this.fallbackRejectHunksForFile(fsPath, groups);
       }
     }
@@ -843,19 +842,19 @@ export class DiffSystem implements vscode.Disposable {
       if (remainingPending.length > 0) {
         if (restoredFromSnapshot.has(fsPath)) {
           // File was fully restored from snapshot → just mark hunks as rejected (no edit needed)
-          console.log(`[DiffSystem] Marking ${remainingPending.length} hunks as rejected (snapshot-restored): ${path.basename(fsPath)}`);
+          Logger.log(`[DiffSystem] Marking ${remainingPending.length} hunks as rejected (snapshot-restored): ${path.basename(fsPath)}`);
           for (const hunk of remainingPending) {
             this.store.updateHunkStatus(hunk.id, 'rejected');
           }
         } else {
           // File was NOT snapshot-restored → use hunkReverter to actually revert line-by-line
-          console.log(`[DiffSystem] Rejecting ${remainingPending.length} hunks via reverter (no snapshot): ${path.basename(fsPath)}`);
+          Logger.log(`[DiffSystem] Rejecting ${remainingPending.length} hunks via reverter (no snapshot): ${path.basename(fsPath)}`);
           const sorted = [...remainingPending].sort((a, b) => b.currentStartLine - a.currentStartLine);
           for (const hunk of sorted) {
             try {
               await this.hunkReverter.reject(hunk.id);
             } catch (e) {
-              console.warn(`[DiffSystem] Hunk reject failed in Step 2:`, hunk.id, e);
+              Logger.warn(`[DiffSystem] Hunk reject failed in Step 2:`, hunk.id, e);
               try { this.store.updateHunkStatus(hunk.id, 'rejected'); } catch { /* ignore */ }
             }
           }
@@ -888,7 +887,7 @@ export class DiffSystem implements vscode.Disposable {
       this.currentResponseGroupId = null;
     }
 
-    console.log(`[DiffSystem] ===== rollbackFromMessage END ===== reverted: ${revertedIds.length} groups, ${affectedFiles.size} files`);
+    Logger.log(`[DiffSystem] ===== rollbackFromMessage END ===== reverted: ${revertedIds.length} groups, ${affectedFiles.size} files`);
     return revertedIds;
   }
 
@@ -910,9 +909,9 @@ export class DiffSystem implements vscode.Disposable {
       const applied = await vscode.workspace.applyEdit(edit);
       if (applied) {
         await doc.save();
-        console.log(`[DiffSystem] File restored from snapshot: ${path.basename(fsPath)} (${currentSize} → ${content.length} chars)`);
+        Logger.log(`[DiffSystem] File restored from snapshot: ${path.basename(fsPath)} (${currentSize} → ${content.length} chars)`);
       } else {
-        console.error(`[DiffSystem] Failed to apply snapshot edit for ${path.basename(fsPath)}`);
+        Logger.error(`[DiffSystem] Failed to apply snapshot edit for ${path.basename(fsPath)}`);
       }
     });
   }
@@ -934,7 +933,7 @@ export class DiffSystem implements vscode.Disposable {
           await this.hunkReverter.reject(hunk.id);
         }
       } catch (error) {
-        console.error(`[DiffSystem] Fallback reject failed for group ${group.id}:`, error);
+        Logger.error(`[DiffSystem] Fallback reject failed for group ${group.id}:`, error);
       }
     }
   }
@@ -983,7 +982,7 @@ export class DiffSystem implements vscode.Disposable {
    */
   private async updateBaselineAfterAccept(fsPath: string): Promise<void> {
     const baseline = this.snapshotStorage.getBaselineSnapshot(fsPath);
-    if (!baseline) return;
+    if (!baseline) { return; }
 
     const remainingPending = this.store.getPendingHunksByFile(fsPath);
     if (remainingPending.length === 0) {
@@ -1011,7 +1010,7 @@ export class DiffSystem implements vscode.Disposable {
           lines.splice(startIdx, 0, ...cleanRemoved);
         } else if (hunk.type === 'addition') {
           // Added lines ARE in the file — remove them
-          if (count > 0) lines.splice(startIdx, count);
+          if (count > 0) { lines.splice(startIdx, count); }
         } else if (hunk.type === 'replacement') {
           // Added lines in file → replace with removed (original) lines
           lines.splice(startIdx, count, ...cleanRemoved);
@@ -1019,9 +1018,9 @@ export class DiffSystem implements vscode.Disposable {
       }
 
       this.snapshotStorage.updateBaselineContent(fsPath, lines.join('\n'));
-      console.log(`[DiffSystem] Baseline updated after accept (${path.basename(fsPath)}, ${remainingPending.length} pending remain)`);
+      Logger.log(`[DiffSystem] Baseline updated after accept (${path.basename(fsPath)}, ${remainingPending.length} pending remain)`);
     } catch (error) {
-      console.error(`[DiffSystem] Failed to update baseline after accept:`, error);
+      Logger.error(`[DiffSystem] Failed to update baseline after accept:`, error);
     }
   }
 
@@ -1087,7 +1086,7 @@ export class DiffSystem implements vscode.Disposable {
       // validateSyntaxBeforeApply is on but blockOnSyntaxErrors is off (or canApply is true):
       // Log warning but allow the change
       if (result.addedErrors.length > 0) {
-        console.warn(
+        Logger.warn(
           `[DiffSystem] Syntax warning for ${path.basename(filePath)}: ` +
           `${result.addedErrors.length} new error(s) introduced (not blocking).\n${errorDetails}`
         );
@@ -1096,7 +1095,7 @@ export class DiffSystem implements vscode.Disposable {
       return undefined;
     } catch (error) {
       // SyntaxValidator initialization/parse failure should not block edits
-      console.warn('[DiffSystem] Syntax validation error (not blocking):', error);
+      Logger.warn('[DiffSystem] Syntax validation error (not blocking):', error);
       return undefined;
     }
   }
@@ -1118,10 +1117,10 @@ export class DiffSystem implements vscode.Disposable {
     const config = vscode.workspace.getConfiguration('skycode');
     const blockEnabled = config.get<boolean>('blockLargeFileRewrites', false);
 
-    if (!blockEnabled) return undefined;
+    if (!blockEnabled) { return undefined; }
 
     const originalLineCount = originalContent.split('\n').length;
-    if (originalLineCount < 20) return undefined;
+    if (originalLineCount < 20) { return undefined; }
 
     const threshold = config.get<number>('largeRewriteThreshold', 0.6);
     const changePercent = changedLineCount / originalLineCount;
@@ -1136,14 +1135,6 @@ export class DiffSystem implements vscode.Disposable {
     }
 
     return undefined;
-  }
-
-  // ==================== Helpers ====================
-
-  private resolveHunkType(removedCount: number, addedCount: number): HunkType {
-    if (removedCount > 0 && addedCount > 0) return 'replacement';
-    if (removedCount > 0) return 'deletion';
-    return 'addition';
   }
 
   // ==================== Pre-reject for new edits ====================
@@ -1166,9 +1157,9 @@ export class DiffSystem implements vscode.Disposable {
     this.ensureInitialized();
 
     const pendingHunks = this.store.getPendingHunksByFile(fsPath);
-    if (pendingHunks.length === 0) return undefined;
+    if (pendingHunks.length === 0) { return undefined; }
 
-    console.log(`[DiffSystem] preRejectForNewEdit: ${pendingHunks.length} pending hunks in ${path.basename(fsPath)}`);
+    Logger.log(`[DiffSystem] preRejectForNewEdit: ${pendingHunks.length} pending hunks in ${path.basename(fsPath)}`);
 
     const earliestTs = Math.min(...pendingHunks.map(h => {
       const rg = this.store.getResponseGroup(h.responseGroupId);
@@ -1181,14 +1172,14 @@ export class DiffSystem implements vscode.Disposable {
     let restoredContent: string;
 
     if (snapshot) {
-      console.log(`[DiffSystem] preRejectForNewEdit: restoring from snapshot (messageTs=${snapshot.messageTs})`);
+      Logger.log(`[DiffSystem] preRejectForNewEdit: restoring from snapshot (messageTs=${snapshot.messageTs})`);
       await this.restoreFileFromSnapshot(fsPath, snapshot.content);
       for (const hunk of pendingHunks) {
         this.store.updateHunkStatus(hunk.id, 'rejected');
       }
       restoredContent = snapshot.content;
     } else {
-      console.log(`[DiffSystem] preRejectForNewEdit: no snapshot, falling back to per-hunk reject`);
+      Logger.log(`[DiffSystem] preRejectForNewEdit: no snapshot, falling back to per-hunk reject`);
       await this.hunkReverter.rejectAllForFile(fsPath);
       const doc = await vscode.workspace.openTextDocument(fsPath);
       restoredContent = doc.getText();
@@ -1244,13 +1235,31 @@ export class DiffSystem implements vscode.Disposable {
     await this.hunkApplier.writeFile(fsPath, content);
   }
 
+  // ==================== Keyboard navigation facade ====================
+
+  navigateNextHunk(): Promise<void> {
+    return this.keyboardNav.nextHunk();
+  }
+
+  navigatePrevHunk(): Promise<void> {
+    return this.keyboardNav.prevHunk();
+  }
+
+  acceptCurrentHunk(): Promise<void> {
+    return this.keyboardNav.acceptCurrent();
+  }
+
+  rejectCurrentHunk(): Promise<void> {
+    return this.keyboardNav.rejectCurrent();
+  }
+
   // ==================== Dispose ====================
 
   dispose(): void {
     this.renderer.dispose();
     this.keyboardNav.dispose();
     this.store.dispose();
-    for (const d of this.disposables) d.dispose();
+    for (const d of this.disposables) { d.dispose(); }
     this.disposables = [];
     this.initialized = false;
   }

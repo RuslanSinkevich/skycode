@@ -5,6 +5,7 @@ import { BANNER_DATA, BannerAction, BannerActionType, BannerCardData } from "@sh
 import { GitBranch } from "lucide-react"
 import React, { useCallback, useEffect, useMemo, useState } from "react"
 import BannerCarousel from "@/components/common/BannerCarousel"
+import IndexingPromptBanner from "@/components/common/IndexingPromptBanner"
 import HistoryPreview from "@/components/history/HistoryPreview"
 import { useApiConfigurationHandlers } from "@/components/settings/utils/useApiConfigurationHandlers"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -228,10 +229,12 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 		<div className="flex flex-col flex-1 w-full h-full p-0 m-0">
 			<div className="overflow-y-auto flex flex-col pb-2.5">
 				<HomeHeader shouldShowQuickWins={shouldShowQuickWins} />
+				<IndexingPromptBanner />
 				{/* Free trial banner for unauthenticated users */}
 				{!skycodeUser && (
 					<div className="mx-5 mb-3 p-4 rounded-lg border border-[var(--vscode-editorWidget-border,rgba(127,127,127,0.2))] bg-[var(--vscode-editorWidget-background,var(--vscode-editor-background))]">
 						<div className="flex items-start gap-3">
+							{/* allow-any-unicode-next-line */}
 							<span className="text-xl leading-none mt-0.5">👋</span>
 							<div className="flex-1 flex flex-col gap-2.5">
 								<p className="m-0 text-sm text-[var(--vscode-foreground)]">

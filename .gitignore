@@ -5,6 +5,8 @@ Thumbs.db
 node_modules/
 .tmp/
 .build/
+gulp-build.log
+.cursor/
 .vscode/extensions/**/out/
 extensions/**/dist/
 src/vs/base/browser/ui/codicons/codicon/codicon.ttf

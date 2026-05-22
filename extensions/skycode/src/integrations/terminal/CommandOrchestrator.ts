@@ -121,7 +121,7 @@ export async function orchestrateCommandExecution(
 	 * Switch to file-based logging when output is too large.
 	 */
 	const switchToFileBased = async () => {
-		if (isWritingToFile) return
+		if (isWritingToFile) { return }
 
 		isWritingToFile = true
 

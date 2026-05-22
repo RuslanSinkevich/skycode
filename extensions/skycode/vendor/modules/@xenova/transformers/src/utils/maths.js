@@ -20,8 +20,8 @@ export function interpolate_data(
   input,
   [in_channels, in_height, in_width],
   [out_height, out_width],
-  mode = "bilinear",
-  align_corners = false,
+  _mode = "bilinear",
+  _align_corners = false,
 ) {
   // TODO use mode and align_corners
 
@@ -30,7 +30,7 @@ export function interpolate_data(
   const y_scale = out_height / in_height;
 
   // Output image
-  // @ts-ignore
+  // @ts-expect-error
   const out_img = new input.constructor(out_height * out_width * in_channels);
 
   // Pre-calculate strides
@@ -114,7 +114,7 @@ export function transpose_data(array, dims, axes) {
   const invStride = axes.map((_, i) => stride[axes.indexOf(i)]);
 
   // Create the transposed array with the new shape
-  // @ts-ignore
+  // @ts-expect-error
   const transposedData = new array.constructor(array.length);
 
   // Transpose the original array to the new array
@@ -144,7 +144,7 @@ export function softmax(arr) {
   const exps = arr.map((x) => Math.exp(x - maxVal));
 
   // Compute the sum of the exponentials
-  // @ts-ignore
+  // @ts-expect-error
   const sumExps = exps.reduce((acc, val) => acc + val, 0);
 
   // Compute the softmax values
@@ -238,7 +238,7 @@ export function magnitude(arr) {
  * @throws {Error} If array is empty.
  */
 export function min(arr) {
-  if (arr.length === 0) throw Error("Array must not be empty");
+  if (arr.length === 0) { throw Error("Array must not be empty"); }
   let min = arr[0];
   let indexOfMin = 0;
   for (let i = 1; i < arr.length; ++i) {
@@ -257,7 +257,7 @@ export function min(arr) {
  * @throws {Error} If array is empty.
  */
 export function max(arr) {
-  if (arr.length === 0) throw Error("Array must not be empty");
+  if (arr.length === 0) { throw Error("Array must not be empty"); }
   let max = arr[0];
   let indexOfMax = 0;
   for (let i = 1; i < arr.length; ++i) {
@@ -288,8 +288,9 @@ class P2FFT {
    */
   constructor(size) {
     this.size = size | 0; // convert to a 32-bit signed integer
-    if (this.size <= 1 || !isPowerOfTwo(this.size))
+    if (this.size <= 1 || !isPowerOfTwo(this.size)) {
       throw new Error("FFT size must be a power of two larger than 1");
+    }
 
     this._csize = size << 1;
 
@@ -302,7 +303,7 @@ class P2FFT {
 
     // Find size's power of two
     let power = 0;
-    for (let t = 1; this.size > t; t <<= 1) ++power;
+    for (let t = 1; this.size > t; t <<= 1) { ++power; }
 
     // Calculate initial step's width:
     //   * If we are full radix-4, it is 2x smaller to give inital len=8
@@ -338,7 +339,7 @@ class P2FFT {
    */
   fromComplexArray(complex, storage) {
     const res = storage || new Array(complex.length >>> 1);
-    for (let i = 0; i < complex.length; i += 2) res[i >>> 1] = complex[i];
+    for (let i = 0; i < complex.length; i += 2) { res[i >>> 1] = complex[i]; }
     return res;
   }
 
@@ -382,8 +383,9 @@ class P2FFT {
    * @returns {void}
    */
   transform(out, data) {
-    if (out === data)
+    if (out === data) {
       throw new Error("Input and output buffers must be different");
+    }
 
     this._transform4(out, data, 1 /* DONE */);
   }
@@ -399,8 +401,9 @@ class P2FFT {
    * @throws {Error} If the input and output buffers are the same.
    */
   realTransform(out, data) {
-    if (out === data)
+    if (out === data) {
       throw new Error("Input and output buffers must be different");
+    }
 
     this._realTransform4(out, data, 1 /* DONE */);
   }
@@ -416,11 +419,12 @@ class P2FFT {
    * @returns {void}
    */
   inverseTransform(out, data) {
-    if (out === data)
+    if (out === data) {
       throw new Error("Input and output buffers must be different");
+    }
 
     this._transform4(out, data, -1 /* DONE */);
-    for (let i = 0; i < out.length; ++i) out[i] /= this.size;
+    for (let i = 0; i < out.length; ++i) { out[i] /= this.size; }
   }
 
   /**
@@ -913,10 +917,10 @@ export function medianFilter(data, windowSize) {
     throw new Error("Window size must be a positive odd number");
   }
 
-  // @ts-ignore
+  // @ts-expect-error
   const outputArray = new data.constructor(data.length);
 
-  // @ts-ignore
+  // @ts-expect-error
   const buffer = new data.constructor(windowSize); // Reusable array for storing values
 
   const halfWindowSize = Math.floor(windowSize / 2);
@@ -949,6 +953,6 @@ export function medianFilter(data, windowSize) {
  * @returns {number} The rounded number
  */
 export function round(num, decimals) {
-  const pow = Math.pow(10, decimals);
+  const pow = 10 ** decimals;
   return Math.round(num * pow) / pow;
 }

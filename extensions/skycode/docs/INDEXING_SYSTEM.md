@@ -69,7 +69,7 @@ models/all-MiniLM-L6-v2/                     — legacy модель (не ис�
 
 | Ключ | Тип | По умолчанию | Описание |
 |------|-----|-------------|----------|
-| `skycode.indexing.mode` | `"off" \| "local" \| "remote"` | `"local"` | Режим индексации |
+| `skycode.indexing.mode` | `"off" \| "local" \| "remote"` | `"off"` | Режим индексации |
 | `skycode.indexing.localModel` | `"mini" \| "base" \| "large"` | `"mini"` | Локальная embedding-модель |
 | `skycode.indexing.remoteApiUrl` | `string` | `""` | URL удалённого API |
 | `skycode.indexing.remoteApiKey` | `string` | `""` | API ключ |

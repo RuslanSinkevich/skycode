@@ -279,7 +279,9 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 							whisperModel,
 							HP.get().extensionFsPath,
 						)
-						if (!whisper) return
+						if (!whisper) {
+							return
+						}
 
 						// Bundled models don't need auth token (local file copy)
 						// CDN models need auth for protected downloads
@@ -605,7 +607,10 @@ function preloadChromiumIfNeeded(): void {
 				Logger.info("Chromium preloaded successfully for web tools")
 			} catch (error) {
 				Logger.error("Failed to preload Chromium:", error)
-				vscode.window.showErrorMessage(`Failed to download Chromium: ${(error as Error).message}`)
+				await HostProvider.window.showMessage({
+					type: ShowMessageType.ERROR,
+					message: `Failed to download Chromium: ${(error as Error).message}`,
+				})
 			}
 		},
 	)

@@ -27,7 +27,7 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 	// Delete message and revert all changes from this point
 	const handleDelete = async (e: React.MouseEvent) => {
 		e.stopPropagation()
-		if (!messageTs) return
+		if (!messageTs) { return }
 		try {
 			await TaskServiceClient.deleteFromMessage(Int64Request.create({ value: messageTs }))
 		} catch (err) {
@@ -38,7 +38,7 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 	// Retry: revert changes, delete history, resend same message
 	const handleRetry = async (e: React.MouseEvent) => {
 		e.stopPropagation()
-		if (!messageTs) return
+		if (!messageTs) { return }
 		try {
 			await TaskServiceClient.retryFromMessage(Int64Request.create({ value: messageTs }))
 		} catch (err) {
@@ -49,7 +49,7 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 	// Resend: delete from this message + send edited text
 	const handleResend = async () => {
 		setIsEditing(false)
-		if (!messageTs || editedText === text) return
+		if (!messageTs || editedText === text) { return }
 		try {
 			await TaskServiceClient.deleteFromMessage(Int64Request.create({ value: messageTs }))
 			sendMessageFromChatRow?.(editedText, images || [], files || [])
@@ -72,7 +72,7 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 	}, [isEditing])
 
 	const handleBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => {
-		if (e.relatedTarget === resendButtonRef.current) return
+		if (e.relatedTarget === resendButtonRef.current) { return }
 		setIsEditing(false)
 	}
 

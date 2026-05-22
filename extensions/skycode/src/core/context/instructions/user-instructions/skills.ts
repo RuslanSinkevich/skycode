@@ -31,7 +31,7 @@ async function scanSkillsDirectory(dirPath: string, source: "global" | "project"
 		for (const entryName of entries) {
 			const entryPath = path.join(dirPath, entryName)
 			const stats = await fs.stat(entryPath).catch(() => null)
-			if (!stats?.isDirectory()) continue
+			if (!stats?.isDirectory()) { continue }
 
 			const skill = await loadSkillMetadata(entryPath, source, entryName)
 			if (skill) {
@@ -56,7 +56,7 @@ async function loadSkillMetadata(
 	skillName: string,
 ): Promise<SkillMetadata | null> {
 	const skillMdPath = path.join(skillDir, "SKILL.md")
-	if (!(await fileExistsAtPath(skillMdPath))) return null
+	if (!(await fileExistsAtPath(skillMdPath))) { return null }
 
 	try {
 		const fileContent = await fs.readFile(skillMdPath, "utf-8")
@@ -142,7 +142,7 @@ export function getAvailableSkills(skills: SkillMetadata[]): SkillMetadata[] {
  */
 export async function getSkillContent(skillName: string, availableSkills: SkillMetadata[]): Promise<SkillContent | null> {
 	const skill = availableSkills.find((s) => s.name === skillName)
-	if (!skill) return null
+	if (!skill) { return null }
 
 	try {
 		const fileContent = await fs.readFile(skill.path, "utf-8")
