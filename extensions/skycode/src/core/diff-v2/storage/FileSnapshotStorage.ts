@@ -24,6 +24,8 @@ export interface FileSnapshot {
   fsPath: string;
   /** Full file content at snapshot time */
   content: string;
+  /** SHA-256 of content — used by hard guard to detect external changes */
+  contentHash: string;
   /** Timestamp of creation */
   timestamp: number;
   /** ResponseGroup that triggered this snapshot */
@@ -82,7 +84,7 @@ export class FileSnapshotStorage {
             const headerStr = raw.substring(0, nlIndex);
             const content = raw.substring(nlIndex + 1);
 
-            let header: { fsPath: string; messageTs: number; id: string; timestamp: number } | undefined;
+            let header: { fsPath: string; messageTs: number; id: string; timestamp: number; contentHash?: string } | undefined;
             try {
               header = JSON.parse(headerStr);
             } catch {
@@ -95,6 +97,7 @@ export class FileSnapshotStorage {
               id: header.id || this.generateId(),
               fsPath: header.fsPath,
               content,
+              contentHash: header.contentHash || FileSnapshotStorage.contentHash(content),
               timestamp: header.timestamp || Date.now(),
               responseGroupId: rgDir.name,
               messageTs: header.messageTs,
@@ -152,6 +155,7 @@ export class FileSnapshotStorage {
       id,
       fsPath,
       content,
+      contentHash: FileSnapshotStorage.contentHash(content),
       timestamp: Date.now(),
       responseGroupId,
       messageTs,
@@ -306,6 +310,7 @@ export class FileSnapshotStorage {
     if (!snapshots || snapshots.length === 0) { return; }
 
     snapshots[0].content = newContent;
+    snapshots[0].contentHash = FileSnapshotStorage.contentHash(newContent);
     snapshots[0].timestamp = Date.now();
     this.persistToDisk(snapshots[0]);
 
@@ -384,6 +389,11 @@ export class FileSnapshotStorage {
 
   private generateId(): string {
     return 'snap-' + crypto.randomBytes(8).toString('hex');
+  }
+
+  /** SHA-256 hex hash of file content */
+  static contentHash(content: string): string {
+    return crypto.createHash('sha256').update(content).digest('hex');
   }
 
   private fsPathHash(fsPath: string): string {

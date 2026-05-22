@@ -26,9 +26,19 @@ interface OpenAiHandlerOptions extends CommonApiHandlerOptions {
 export class OpenAiHandler implements ApiHandler {
 	private options: OpenAiHandlerOptions
 	private client: OpenAI | undefined
+	private currentStream: any = null
 
 	constructor(options: OpenAiHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		try {
+			this.currentStream?.controller?.abort?.()
+		} catch {
+			// stream may already be closed
+		}
+		this.currentStream = null
 	}
 
 	private getAzureAudienceScope(baseUrl?: string): string {
@@ -162,6 +172,7 @@ export class OpenAiHandler implements ApiHandler {
 			stream_options: { include_usage: true },
 			...getOpenAIToolParams(tools),
 		})
+		this.currentStream = stream as any
 
 		const toolCallProcessor = new ToolCallProcessor()
 		const thinkParser = new ThinkTagStreamParser()

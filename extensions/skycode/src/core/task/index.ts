@@ -1516,6 +1516,11 @@ export class Task {
 
 	async abortTask() {
 		try {
+			// PHASE 0: Immediately kill the LLM stream so the for-await loop exits ASAP.
+			// This is the single biggest source of cancel latency — the HTTP stream
+			// stays open until the next chunk arrives (can be seconds on slow models).
+			this.api.abort?.()
+
 			// PHASE 1: Check if TaskCancel should run BEFORE any cleanup
 			// We must capture this state now because subsequent cleanup will
 			// clear the active work indicators that shouldRunTaskCancelHook checks

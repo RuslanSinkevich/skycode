@@ -55,6 +55,13 @@ export class DiffSystem implements vscode.Disposable {
   private currentTaskId: string | null = null;
   private readonly context: vscode.ExtensionContext;
 
+  // External change detection
+  private fileWatchers = new Map<string, vscode.FileSystemWatcher>();
+  private externalChangeDebounce = new Map<string, NodeJS.Timeout>();
+  private pollTimer: NodeJS.Timeout | null = null;
+  /** Hash of file content after our last write — used to distinguish our writes from external edits */
+  private lastWrittenHash = new Map<string, string>();
+
   /**
    * Loop detection: tracks consecutive overlap-reject cycles per file.
    * Key: fsPath (lowercase), Value: count of consecutive auto-rejected overlaps.
@@ -166,6 +173,9 @@ export class DiffSystem implements vscode.Disposable {
 
     // Set initial context for keybindings
     this.updatePendingContext();
+
+    // External change detection (git commit, scripts, format-on-save, branch switch)
+    this.startExternalChangeDetection();
 
     this.initialized = true;
     Logger.log('[DiffSystem] Initialized (v3 architecture)');
@@ -499,7 +509,15 @@ export class DiffSystem implements vscode.Disposable {
       this.overlapCycleCount.delete(key);
     }
 
-    return await operation();
+    const hunkId = await operation();
+
+    // Record file hash after our write — used by stale detection
+    try {
+      const content = await this.hunkApplier.readFile(fsPath);
+      this.recordWrittenHash(fsPath, content);
+    } catch { /* non-critical */ }
+
+    return hunkId;
   }
 
   // ==================== Apply changes ====================
@@ -649,6 +667,14 @@ export class DiffSystem implements vscode.Disposable {
     const fsPath = hunk?.fsPath;
 
     await this.hunkReverter.reject(pendingId);
+
+    // Update written hash after reject (file content changed)
+    if (fsPath) {
+      try {
+        const content = await this.hunkApplier.readFile(fsPath);
+        this.recordWrittenHash(fsPath, content);
+      } catch { /* non-critical */ }
+    }
     // Store fires hunkRemoved → renderer removes rejected zone
     // Store fires hunkPositionChanged → renderer updates shifted zones
 
@@ -1253,9 +1279,152 @@ export class DiffSystem implements vscode.Disposable {
     return this.keyboardNav.rejectCurrent();
   }
 
+  // ==================== External Change Detection ====================
+
+  /**
+   * Start watching files that have active diff sessions.
+   * Detects external changes (git commit, scripts, format-on-save, branch switch)
+   * and auto-closes stale diff sessions.
+   */
+  private startExternalChangeDetection(): void {
+    // Level 2: Watch for save events on files with pending changes
+    this.disposables.push(
+      vscode.workspace.onDidSaveTextDocument(async (doc) => {
+        if (this.editGuard.isSystemEdit()) { return; }
+        await this.checkFileStale(doc.uri.fsPath, 'external_save');
+      }),
+    );
+
+    // Level 2: Git integration — watch HEAD changes for branch switch / commit
+    this.setupGitWatcher();
+
+    // Level 3: Periodic poll (every 8 seconds) — catches missed events
+    this.pollTimer = setInterval(() => {
+      this.pollActiveFiles();
+    }, 8_000);
+  }
+
+  private setupGitWatcher(): void {
+    try {
+      const gitExtension = vscode.extensions.getExtension('vscode.git')?.exports;
+      const gitApi = gitExtension?.getAPI?.(1);
+      if (!gitApi) { return; }
+
+      for (const repo of gitApi.repositories) {
+        this.disposables.push(
+          repo.state.onDidChange(() => {
+            this.onGitStateChanged();
+          }),
+        );
+      }
+    } catch {
+      Logger.warn('[DiffSystem] Git extension not available for change detection');
+    }
+  }
+
+  private onGitStateChanged(): void {
+    const files = this.store.getFilesWithPendingChanges();
+    for (const fsPath of files) {
+      this.debouncedStaleCheck(fsPath, 'git_change');
+    }
+  }
+
+  private debouncedStaleCheck(fsPath: string, reason: string): void {
+    const key = fsPath.toLowerCase();
+    const existing = this.externalChangeDebounce.get(key);
+    if (existing) { clearTimeout(existing); }
+
+    this.externalChangeDebounce.set(
+      key,
+      setTimeout(() => {
+        this.externalChangeDebounce.delete(key);
+        this.checkFileStale(fsPath, reason).catch((e) => {
+          Logger.error(`[DiffSystem] Stale check failed for ${fsPath}`, e);
+        });
+      }, 150),
+    );
+  }
+
+  /**
+   * Record the hash of file content after our own write,
+   * so we can distinguish our writes from external edits.
+   */
+  recordWrittenHash(fsPath: string, content: string): void {
+    this.lastWrittenHash.set(fsPath.toLowerCase(), FileSnapshotStorage.contentHash(content));
+  }
+
+  /**
+   * Hard guard: check if file on disk diverged from what we last wrote.
+   * If yes — close all diff sessions for this file.
+   */
+  private async checkFileStale(fsPath: string, reason: string): Promise<boolean> {
+    if (!this.store.hasPendingChangesForFile(fsPath)) { return false; }
+
+    const key = fsPath.toLowerCase();
+    const expectedHash = this.lastWrittenHash.get(key);
+    if (!expectedHash) { return false; }
+
+    try {
+      const { readFile } = await import('node:fs/promises');
+      const currentContent = (await readFile(fsPath, 'utf-8')).replace(/\r\n/g, '\n');
+      const currentHash = FileSnapshotStorage.contentHash(currentContent);
+
+      if (currentHash === expectedHash) { return false; }
+
+      // File diverged — close all diff sessions for this file
+      Logger.log(`[DiffSystem] File stale (${reason}): ${path.basename(fsPath)} — snapshot hash mismatch, closing diff sessions`);
+
+      const pendingHunks = this.store.getPendingHunksByFile(fsPath);
+      for (const hunk of pendingHunks) {
+        this.store.updateHunkStatus(hunk.id, 'rejected');
+      }
+      this.renderer.clearForFile(fsPath);
+      this.updatePendingContext();
+
+      vscode.window.showInformationMessage(
+        `File "${path.basename(fsPath)}" changed externally (${reason}). Diff closed.`,
+      );
+
+      return true;
+    } catch (e) {
+      Logger.debug(`[DiffSystem] checkFileStale read error: ${e}`);
+      return false;
+    }
+  }
+
+  /**
+   * Level 3 — periodic poll: iterate active diff files, check hash.
+   */
+  private pollActiveFiles(): void {
+    const files = this.store.getFilesWithPendingChanges();
+    if (files.length === 0) { return; }
+
+    for (const fsPath of files) {
+      this.checkFileStale(fsPath, 'poll').catch(() => {});
+    }
+  }
+
+  private stopExternalChangeDetection(): void {
+    for (const [, watcher] of this.fileWatchers) {
+      watcher.dispose();
+    }
+    this.fileWatchers.clear();
+
+    for (const [, timer] of this.externalChangeDebounce) {
+      clearTimeout(timer);
+    }
+    this.externalChangeDebounce.clear();
+
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
+  }
+
   // ==================== Dispose ====================
 
   dispose(): void {
+    this.stopExternalChangeDetection();
     this.renderer.dispose();
     this.keyboardNav.dispose();
     this.store.dispose();

@@ -57,8 +57,8 @@ export async function interruptAndSend(controller: Controller, request: AskRespo
 			task.api?.abort?.()
 
 			// Wait for streaming to stop (with timeout)
-			const maxWait = 3000
-			const pollInterval = 50
+			const maxWait = 800
+			const pollInterval = 30
 			let waited = 0
 
 			while (taskState.isStreaming && waited < maxWait) {

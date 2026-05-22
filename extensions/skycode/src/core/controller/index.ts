@@ -547,12 +547,12 @@ export class Controller {
 					this.task === undefined ||
 					this.task.taskState.isStreaming === false ||
 					this.task.taskState.didFinishAbortingStream ||
-					this.task.taskState.isWaitingForFirstChunk, // if only first chunk is processed, then there's no need to wait for graceful abort (closes edits, browser, etc)
+					this.task.taskState.isWaitingForFirstChunk,
 				{
-					timeout: 3_000,
+					timeout: 800,
 				},
 			).catch(() => {
-				Logger.error("Failed to abort task")
+				Logger.warn("[Controller.cancelTask] Timed out waiting for stream abort — force-continuing")
 			})
 
 			if (this.task) {

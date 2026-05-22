@@ -9,6 +9,7 @@
 
 import * as path from 'path';
 import Parser from 'web-tree-sitter';
+import { Logger } from "@/shared/services/Logger"
 
 export interface SyntaxError {
 	line: number;
@@ -91,9 +92,9 @@ export class SyntaxValidator {
 		try {
 			await Parser.init();
 			this.initialized = true;
-			console.log('[SyntaxValidator] Initialized successfully');
+			Logger.log('[SyntaxValidator] Initialized successfully');
 		} catch (error) {
-			console.error('[SyntaxValidator] Failed to initialize:', error);
+			Logger.error('[SyntaxValidator] Failed to initialize:', error);
 			throw error;
 		}
 	}
@@ -121,14 +122,14 @@ export class SyntaxValidator {
 
 		try {
 			const wasmPath = path.join(this.wasmDir, `tree-sitter-${langName}.wasm`);
-			console.log(`[SyntaxValidator] Loading language from: ${wasmPath}`);
+			Logger.log(`[SyntaxValidator] Loading language from: ${wasmPath}`);
 
 			const language = await Parser.Language.load(wasmPath);
 			this.loadedLanguages.set(langName, language);
-			console.log(`[SyntaxValidator] Loaded language: ${langName}`);
+			Logger.log(`[SyntaxValidator] Loaded language: ${langName}`);
 			return language;
 		} catch (error) {
-			console.warn(`[SyntaxValidator] Failed to load language ${langName}:`, error);
+			Logger.warn(`[SyntaxValidator] Failed to load language ${langName}:`, error);
 			return null;
 		}
 	}
@@ -209,7 +210,7 @@ export class SyntaxValidator {
 			const errors = this.findErrors(tree.rootNode);
 
 			if (errors.length > 0) {
-				console.log(`[SyntaxValidator] Found ${errors.length} errors in ${path.basename(filePath)}`);
+				Logger.log(`[SyntaxValidator] Found ${errors.length} errors in ${path.basename(filePath)}`);
 			}
 
 			return {
@@ -218,7 +219,7 @@ export class SyntaxValidator {
 				language: langName,
 			};
 		} catch (error) {
-			console.error(`[SyntaxValidator] Parse error for ${filePath}:`, error);
+			Logger.error(`[SyntaxValidator] Parse error for ${filePath}:`, error);
 			return {
 				valid: true, // On parse failure, assume valid
 				errors: [],

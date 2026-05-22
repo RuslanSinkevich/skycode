@@ -38,10 +38,20 @@ export class SkycodeHandler implements ApiHandler {
 	private readonly _baseUrl = SkycodeEnv.config().apiBaseUrl
 	lastGenerationId?: string
 	private lastRequestId?: string
+	private currentStream: any = null
 
 	constructor(options: SkycodeHandlerOptions) {
 		this.options = options
 		this._authService = AuthService.getInstance()
+	}
+
+	abort(): void {
+		try {
+			this.currentStream?.controller?.abort?.()
+		} catch {
+			// stream may already be closed
+		}
+		this.currentStream = null
 	}
 
 	private async ensureClient(): Promise<OpenAI> {
@@ -119,6 +129,7 @@ export class SkycodeHandler implements ApiHandler {
 				this.options.geminiThinkingLevel,
 			)
 
+			this.currentStream = stream
 			const toolCallProcessor = new ToolCallProcessor()
 
 			for await (const chunk of stream) {

@@ -19,9 +19,19 @@ interface AnthropicHandlerOptions extends CommonApiHandlerOptions {
 export class AnthropicHandler implements ApiHandler {
 	private options: AnthropicHandlerOptions
 	private client: Anthropic | undefined
+	private currentStream: AnthropicStream<Anthropic.RawMessageStreamEvent> | null = null
 
 	constructor(options: AnthropicHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		try {
+			this.currentStream?.controller?.abort?.()
+		} catch {
+			// stream may already be closed
+		}
+		this.currentStream = null
 	}
 
 	private ensureClient(): Anthropic {
@@ -114,6 +124,8 @@ export class AnthropicHandler implements ApiHandler {
 				stream: true,
 			})
 		}
+
+		this.currentStream = stream
 
 		const lastStartedToolCall = { id: "", name: "", arguments: "" }
 

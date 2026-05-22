@@ -30,9 +30,19 @@ export class OpenRouterHandler implements ApiHandler {
 	private options: OpenRouterHandlerOptions
 	private client: OpenAI | undefined
 	lastGenerationId?: string
+	private currentStream: any = null
 
 	constructor(options: OpenRouterHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		try {
+			this.currentStream?.controller?.abort?.()
+		} catch {
+			// stream may already be closed
+		}
+		this.currentStream = null
 	}
 
 	private ensureClient(): OpenAI {
@@ -74,6 +84,7 @@ export class OpenRouterHandler implements ApiHandler {
 			this.options.geminiThinkingLevel,
 		)
 
+		this.currentStream = stream
 		let didOutputUsage: boolean = false
 		const toolCallProcessor = new ToolCallProcessor()
 		const thinkParser = new ThinkTagStreamParser()
