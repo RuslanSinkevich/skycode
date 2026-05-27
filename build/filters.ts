@@ -50,7 +50,7 @@ export const unicodeFilter = Object.freeze<string[]>([
 	'!build/win32/**',
 	'!extensions/markdown-language-features/notebook-out/*.js',
 	'!extensions/markdown-math/notebook-out/**',
-	'!extensions/mermaid-chat-features/chat-webview-out/**',
+	'!extensions/mermaid-markdown-features/chat-webview-out/**',
 	'!extensions/ipynb/notebook-out/**',
 	'!extensions/notebook-renderers/renderer-out/**',
 	'!extensions/php-language-features/src/features/phpGlobalFunctions.ts',
@@ -155,7 +155,9 @@ export const indentationFilter = Object.freeze<string[]>([
 	'!**/*.tiff',
 
 	// except for built files
-	'!extensions/mermaid-chat-features/chat-webview-out/*.js',
+	'!extensions/mermaid-markdown-features/chat-webview-out/*.js',
+	'!extensions/mermaid-markdown-features/markdown-preview-out/*.js',
+	'!extensions/mermaid-markdown-features/notebook-out/*.js',
 	'!extensions/markdown-language-features/media/*.js',
 	'!extensions/markdown-language-features/notebook-out/*.js',
 	'!extensions/markdown-math/notebook-out/*.js',
@@ -212,7 +214,9 @@ export const copyrightFilter = Object.freeze<string[]>([
 	'!extensions/skycode/**',
 	// --- SKYCODE_FORK_END ---
 	'!src/vs/workbench/contrib/terminal/common/scripts/psreadline/**',
-	'!extensions/mermaid-chat-features/chat-webview-out/**',
+	'!extensions/mermaid-markdown-features/chat-webview-out/**',
+	'!extensions/mermaid-markdown-features/markdown-preview-out/**',
+	'!extensions/mermaid-markdown-features/notebook-out/**',
 
 	// extensions/copilot has its own code style
 	'!extensions/copilot/**',
@@ -241,10 +245,8 @@ export const tsFormattingFilter = Object.freeze<string[]>([
 ]);
 
 export const eslintFilter = Object.freeze<string[]>([
-	'**/*.js',
-	'**/*.cjs',
-	'**/*.mjs',
-	'**/*.ts',
+	'**/*.{js,cjs,mjs}',
+	'**/*.{ts,tsx,mts,cts}',
 	'.eslint-plugin-local/**/*.ts',
 	...readFileSync(join(import.meta.dirname, '..', '.eslint-ignore'))
 		.toString()
