@@ -37,9 +37,10 @@ import { ChatViewPane } from './widgetHosts/viewPane/chatViewPane.js';
 
 const chatViewIcon = registerIcon('chat-view-icon', Codicon.chatSparkle, localize('chatViewIcon', 'View icon of the chat view.'));
 
+// SKYCODE: brand the auxiliary bar panel; Copilot Chat view stays registered (no fork fight on merge).
 const chatViewContainer: ViewContainer = Registry.as<IViewContainersRegistry>(ViewExtensions.ViewContainersRegistry).registerViewContainer({
 	id: ChatViewContainerId,
-	title: localize2('chat.viewContainer.label', "Chat"),
+	title: { value: 'Skycode', original: 'Skycode' },
 	icon: chatViewIcon,
 	ctorDescriptor: new SyncDescriptor(ViewPaneContainer, [ChatViewContainerId, { mergeViewWithContainerWhenSingleView: true }]),
 	storageId: ChatViewContainerId,

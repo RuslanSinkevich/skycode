@@ -8,7 +8,7 @@
 		"editorInsets"
 	],
 	"engines": {
-		"vscode": "^1.84.0"
+		"vscode": "^1.121.0"
 	},
 	"author": {
 		"name": "SKYCODE"
