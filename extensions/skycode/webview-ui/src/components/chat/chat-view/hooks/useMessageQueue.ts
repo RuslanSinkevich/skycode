@@ -32,6 +32,38 @@ function getResponseType(skycodeAsk: string | undefined): string {
 	return "messageResponse"
 }
 
+/** Survive webview remount (focus change, panel hide/show, host crash) — sessionStorage is per-tab. */
+const QUEUE_STORAGE_KEY = "skycode.messageQueue.v1"
+
+function loadPersistedQueue(): QueuedMessage[] {
+	if (typeof window === "undefined" || !window.sessionStorage) { return [] }
+	try {
+		const raw = window.sessionStorage.getItem(QUEUE_STORAGE_KEY)
+		if (!raw) { return [] }
+		const parsed = JSON.parse(raw)
+		if (!Array.isArray(parsed)) { return [] }
+		return parsed.filter((m): m is QueuedMessage =>
+			m && typeof m.id === "string" && typeof m.text === "string"
+				&& Array.isArray(m.images) && Array.isArray(m.files),
+		)
+	} catch {
+		return []
+	}
+}
+
+function persistQueue(queue: QueuedMessage[]): void {
+	if (typeof window === "undefined" || !window.sessionStorage) { return }
+	try {
+		if (queue.length === 0) {
+			window.sessionStorage.removeItem(QUEUE_STORAGE_KEY)
+		} else {
+			window.sessionStorage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(queue))
+		}
+	} catch {
+		// quota / disabled storage — non-critical
+	}
+}
+
 /**
  * Cursor-style message queue.
  * Pure reactive - no timers, no polling.
@@ -39,11 +71,19 @@ function getResponseType(skycodeAsk: string | undefined): string {
  * 1. AI working → messages go to queue
  * 2. skycodeAsk appears + queue not empty → auto-send first
  * 3. [→] button → cancelTask → skycodeAsk appears → auto-send
+ *
+ * Survives webview remounts via sessionStorage so a mid-stream reload
+ * (focus change, host restart) doesn't silently drop queued messages.
  */
 export function useMessageQueue(_messages: SkycodeMessage[], skycodeAsk: string | undefined): MessageQueueState & MessageQueueActions {
-	const [queue, setQueue] = useState<QueuedMessage[]>([])
+	const [queue, setQueue] = useState<QueuedMessage[]>(() => loadPersistedQueue())
 	const [selectedIndex, setSelectedIndex] = useState(0)
 	const sendingRef = useRef(false) // prevent double-send
+
+	// Persist whenever the queue changes
+	useEffect(() => {
+		persistQueue(queue)
+	}, [queue])
 
 	// Add message to queue
 	const addToQueue = useCallback((text: string, images: string[], files: string[]) => {
