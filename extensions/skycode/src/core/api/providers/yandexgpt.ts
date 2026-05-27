@@ -6,6 +6,7 @@ import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
 import { Logger } from "@/shared/services/Logger"
+import { StreamAborter } from "../utils/abort-support"
 
 const YANDEX_GPT_BASE_URL = "https://llm.api.cloud.yandex.net/v1/chat/completions"
 
@@ -17,9 +18,14 @@ interface YandexGptHandlerOptions extends CommonApiHandlerOptions {
 
 export class YandexGptHandler implements ApiHandler {
 	private options: YandexGptHandlerOptions
+	private aborter = new StreamAborter()
 
 	constructor(options: YandexGptHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	/**

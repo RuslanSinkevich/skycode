@@ -9,6 +9,7 @@ import { withRetry } from "../retry"
 import { sanitizeAnthropicMessages } from "../transform/anthropic-format"
 import { ApiStream } from "../transform/stream"
 import { GeminiHandler } from "./gemini"
+import { StreamAborter } from "../utils/abort-support"
 
 interface VertexHandlerOptions extends CommonApiHandlerOptions {
 	vertexProjectId?: string
@@ -24,10 +25,15 @@ interface VertexHandlerOptions extends CommonApiHandlerOptions {
 export class VertexHandler implements ApiHandler {
 	private geminiHandler: GeminiHandler | undefined
 	private clientAnthropic: AnthropicVertex | undefined
+	private aborter = new StreamAborter()
 	private options: VertexHandlerOptions
 
 	constructor(options: VertexHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	private ensureGeminiHandler(): GeminiHandler {

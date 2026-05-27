@@ -5,6 +5,7 @@ import { ApiHandler, CommonApiHandlerOptions } from "../index"
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
+import { StreamAborter } from "../utils/abort-support"
 
 interface NousResearchHandlerOptions extends CommonApiHandlerOptions {
 	nousResearchApiKey?: string
@@ -14,9 +15,14 @@ interface NousResearchHandlerOptions extends CommonApiHandlerOptions {
 export class NousResearchHandler implements ApiHandler {
 	private options: NousResearchHandlerOptions
 	private client: OpenAI | undefined
+	private aborter = new StreamAborter()
 
 	constructor(options: NousResearchHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	private ensureClient(): OpenAI {
@@ -46,14 +52,19 @@ export class NousResearchHandler implements ApiHandler {
 			...convertToOpenAiMessages(messages),
 		]
 
+		const signal = this.aborter.reset()
 		const stream = await client.chat.completions.create({
 			model: model.id,
 			messages: openAiMessages,
 			temperature: 0,
 			stream: true,
 			stream_options: { include_usage: true },
-		})
+		},
+			{ signal },
+		)
+		this.aborter.track(stream)
 
+		try {
 		for await (const chunk of stream) {
 			const delta = chunk.choices?.[0]?.delta
 			if (delta?.content) {
@@ -77,6 +88,9 @@ export class NousResearchHandler implements ApiHandler {
 					outputTokens: chunk.usage.completion_tokens || 0,
 				}
 			}
+		}
+		} finally {
+			this.aborter.clear()
 		}
 	}
 

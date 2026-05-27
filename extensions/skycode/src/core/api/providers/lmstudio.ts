@@ -8,6 +8,7 @@ import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import type { ApiStream } from "../transform/stream"
 import { getOpenAIToolParams, ToolCallProcessor } from "../transform/tool-call-processor"
+import { StreamAborter } from "../utils/abort-support"
 
 interface LmStudioHandlerOptions extends CommonApiHandlerOptions {
 	lmStudioBaseUrl?: string
@@ -18,9 +19,14 @@ interface LmStudioHandlerOptions extends CommonApiHandlerOptions {
 export class LmStudioHandler implements ApiHandler {
 	private options: LmStudioHandlerOptions
 	private client: OpenAI | undefined
+	private aborter = new StreamAborter()
 
 	constructor(options: LmStudioHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	private ensureClient(): OpenAI {
@@ -48,17 +54,23 @@ export class LmStudioHandler implements ApiHandler {
 		]
 
 		try {
-			const stream = await client.chat.completions.create({
-				model: this.getModel().id,
-				messages: openAiMessages,
-				stream: true,
-				stream_options: { include_usage: true },
-				max_completion_tokens: this.options.lmStudioMaxTokens ? Number(this.options.lmStudioMaxTokens) : undefined,
-				...getOpenAIToolParams(tools),
-			})
+			const signal = this.aborter.reset()
+			const stream = await client.chat.completions.create(
+				{
+					model: this.getModel().id,
+					messages: openAiMessages,
+					stream: true,
+					stream_options: { include_usage: true },
+					max_completion_tokens: this.options.lmStudioMaxTokens ? Number(this.options.lmStudioMaxTokens) : undefined,
+					...getOpenAIToolParams(tools),
+				},
+				{ signal },
+			)
+			this.aborter.track(stream)
 
 			const toolCallProcessor = new ToolCallProcessor()
 
+			try {
 			for await (const chunk of stream) {
 				const choice = chunk.choices?.[0]
 				const delta = choice?.delta
@@ -90,8 +102,10 @@ export class LmStudioHandler implements ApiHandler {
 					}
 				}
 			}
+			} finally {
+				this.aborter.clear()
+			}
 		} catch {
-			// LM Studio doesn't return an error code/body for now
 			throw new Error(
 				"Please check the LM Studio developer logs to debug what went wrong. You may need to load the model with a larger context length to work with Skycode's prompts. Alternatively, try enabling Compact Prompt in your settings when working with a limited context window.",
 			)

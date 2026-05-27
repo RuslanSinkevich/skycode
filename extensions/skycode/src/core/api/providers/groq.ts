@@ -9,6 +9,7 @@ import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
 import { getOpenAIToolParams, ToolCallProcessor } from "../transform/tool-call-processor"
+import { StreamAborter } from "../utils/abort-support"
 
 interface GroqHandlerOptions extends CommonApiHandlerOptions {
 	groqApiKey?: string
@@ -89,9 +90,14 @@ const MODEL_FAMILIES: Record<string, GroqModelFamily> = {
 export class GroqHandler implements ApiHandler {
 	private options: GroqHandlerOptions
 	private client: OpenAI | undefined
+	private aborter = new StreamAborter()
 
 	constructor(options: GroqHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	private ensureClient(): OpenAI {
@@ -226,8 +232,11 @@ export class GroqHandler implements ApiHandler {
 		}
 
 		const toolCallProcessor = new ToolCallProcessor()
-		const stream = await client.chat.completions.create(requestParams)
+		const signal = this.aborter.reset()
+		const stream = await client.chat.completions.create(requestParams, { signal })
+		this.aborter.track(stream)
 
+		try {
 		for await (const chunk of stream) {
 			const delta = chunk.choices?.[0]?.delta
 
@@ -257,6 +266,9 @@ export class GroqHandler implements ApiHandler {
 			if (chunk.usage) {
 				yield* this.yieldUsage(model.info, chunk.usage)
 			}
+		}
+		} finally {
+			this.aborter.clear()
 		}
 	}
 

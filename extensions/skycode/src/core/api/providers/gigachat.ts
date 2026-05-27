@@ -9,6 +9,7 @@ import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
 import { Logger } from "@/shared/services/Logger"
+import { StreamAborter } from "../utils/abort-support"
 
 const GIGACHAT_OAUTH_URL = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
 const GIGACHAT_BASE_URL = "https://gigachat.devices.sberbank.ru/api/v1"
@@ -143,10 +144,15 @@ interface GigaChatToken {
 
 export class GigaChatHandler implements ApiHandler {
 	private options: GigaChatHandlerOptions
+	private aborter = new StreamAborter()
 	private cachedToken: GigaChatToken | undefined
 
 	constructor(options: GigaChatHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	/**

@@ -9,6 +9,7 @@ import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
 import { getOpenAIToolParams, ToolCallProcessor } from "../transform/tool-call-processor"
+import { StreamAborter } from "../utils/abort-support"
 
 interface HuggingFaceHandlerOptions extends CommonApiHandlerOptions {
 	huggingFaceApiKey?: string
@@ -19,10 +20,15 @@ interface HuggingFaceHandlerOptions extends CommonApiHandlerOptions {
 export class HuggingFaceHandler implements ApiHandler {
 	private options: HuggingFaceHandlerOptions
 	private client: OpenAI | undefined
+	private aborter = new StreamAborter()
 	private cachedModel: { id: HuggingFaceModelId; info: ModelInfo } | undefined
 
 	constructor(options: HuggingFaceHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	private ensureClient(): OpenAI {
@@ -90,11 +96,14 @@ export class HuggingFaceHandler implements ApiHandler {
 			}
 
 			const toolCallProcessor = new ToolCallProcessor()
-			const stream = (await client.chat.completions.create(requestParams)) as any
+			const signal = this.aborter.reset()
+			const stream = (await client.chat.completions.create(requestParams, { signal })) as any
+			this.aborter.track(stream)
 
 			let _chunkCount = 0
 			let _totalContent = ""
 
+			try {
 			for await (const chunk of stream) {
 				_chunkCount++
 				const delta = chunk.choices?.[0]?.delta
@@ -114,6 +123,9 @@ export class HuggingFaceHandler implements ApiHandler {
 				if (chunk.usage) {
 					yield* this.yieldUsage(model.info, chunk.usage)
 				}
+			}
+			} finally {
+				this.aborter.clear()
 			}
 		} catch (error: any) {
 			throw error

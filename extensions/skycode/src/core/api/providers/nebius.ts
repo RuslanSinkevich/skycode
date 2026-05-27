@@ -9,6 +9,7 @@ import { convertToOpenAiMessages } from "../transform/openai-format"
 import { convertToR1Format } from "../transform/r1-format"
 import { ApiStream } from "../transform/stream"
 import { getOpenAIToolParams, ToolCallProcessor } from "../transform/tool-call-processor"
+import { StreamAborter } from "../utils/abort-support"
 
 interface NebiusHandlerOptions extends CommonApiHandlerOptions {
 	nebiusApiKey?: string
@@ -17,8 +18,13 @@ interface NebiusHandlerOptions extends CommonApiHandlerOptions {
 
 export class NebiusHandler implements ApiHandler {
 	private client: OpenAI | undefined
+	private aborter = new StreamAborter()
 
 	constructor(private readonly options: NebiusHandlerOptions) {}
+
+	abort(): void {
+		this.aborter.abort()
+	}
 
 	private ensureClient(): OpenAI {
 		if (!this.client) {
@@ -47,6 +53,7 @@ export class NebiusHandler implements ApiHandler {
 			? convertToR1Format([{ role: "user", content: systemPrompt }, ...messages])
 			: [{ role: "system", content: systemPrompt }, ...convertToOpenAiMessages(messages)]
 
+		const signal = this.aborter.reset()
 		const stream = await client.chat.completions.create({
 			model: model.id,
 			messages: openAiMessages,
@@ -54,8 +61,12 @@ export class NebiusHandler implements ApiHandler {
 			stream: true,
 			stream_options: { include_usage: true },
 			...getOpenAIToolParams(tools),
-		})
+		},
+			{ signal },
+		)
+		this.aborter.track(stream)
 		const toolCallProcessor = new ToolCallProcessor()
+		try {
 		for await (const chunk of stream) {
 			const delta = chunk.choices?.[0]?.delta
 			if (delta?.content) {
@@ -83,6 +94,9 @@ export class NebiusHandler implements ApiHandler {
 					outputTokens: chunk.usage.completion_tokens || 0,
 				}
 			}
+		}
+		} finally {
+			this.aborter.clear()
 		}
 	}
 

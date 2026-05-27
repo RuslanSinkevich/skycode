@@ -411,8 +411,22 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 	}, [task, isHidden])
 
 	const visibleMessages = useMemo(() => {
-		return filterVisibleMessages(modifiedMessages)
-	}, [modifiedMessages])
+		const filtered = filterVisibleMessages(modifiedMessages)
+		if (messageQueue.queue.length === 0) {
+			return filtered
+		}
+		const phantoms: SkycodeMessage[] = messageQueue.queue.map((qm) => ({
+			ts: Number(qm.id.split("-")[0]) || Date.now(),
+			type: "say",
+			say: "user_feedback" as const,
+			text: qm.text,
+			images: qm.images,
+			files: qm.files,
+			partial: false,
+			pending: true,
+		}))
+		return [...filtered, ...phantoms]
+	}, [modifiedMessages, messageQueue.queue])
 
 	const lastProgressMessageText = useMemo(() => {
 		// First check if we have a current focus chain list from the extension state

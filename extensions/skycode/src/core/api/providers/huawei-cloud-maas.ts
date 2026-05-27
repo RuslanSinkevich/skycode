@@ -8,6 +8,7 @@ import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
 import { getOpenAIToolParams, ToolCallProcessor } from "../transform/tool-call-processor"
+import { StreamAborter } from "../utils/abort-support"
 
 interface HuaweiCloudMaaSHandlerOptions extends CommonApiHandlerOptions {
 	huaweiCloudMaasApiKey?: string
@@ -18,8 +19,13 @@ interface HuaweiCloudMaaSHandlerOptions extends CommonApiHandlerOptions {
 export class HuaweiCloudMaaSHandler implements ApiHandler {
 	private options: HuaweiCloudMaaSHandlerOptions
 	private client: OpenAI | undefined
+	private aborter = new StreamAborter()
 	constructor(options: HuaweiCloudMaaSHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	private ensureClient(): OpenAI {
@@ -69,6 +75,7 @@ export class HuaweiCloudMaaSHandler implements ApiHandler {
 			{ role: "system", content: systemPrompt },
 			...convertToOpenAiMessages(messages),
 		]
+		const signal = this.aborter.reset()
 		const stream = await client.chat.completions.create({
 			model: model.id,
 			max_completion_tokens: model.info.maxTokens,
@@ -77,7 +84,10 @@ export class HuaweiCloudMaaSHandler implements ApiHandler {
 			stream_options: { include_usage: true },
 			temperature: 0,
 			...getOpenAIToolParams(tools),
-		})
+		},
+			{ signal },
+		)
+		this.aborter.track(stream)
 
 		let reasoning: string | null = null
 		let didOutputUsage: boolean = false
@@ -85,6 +95,7 @@ export class HuaweiCloudMaaSHandler implements ApiHandler {
 
 		const toolCallProcessor = new ToolCallProcessor()
 
+		try {
 		for await (const chunk of stream) {
 			const delta = chunk.choices?.[0]?.delta
 
@@ -138,6 +149,9 @@ export class HuaweiCloudMaaSHandler implements ApiHandler {
 				}
 				didOutputUsage = true
 			}
+		}
+		} finally {
+			this.aborter.clear()
 		}
 	}
 }

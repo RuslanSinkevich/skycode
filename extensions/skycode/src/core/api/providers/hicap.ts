@@ -6,6 +6,7 @@ import { ApiHandler, CommonApiHandlerOptions } from "../index"
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
+import { StreamAborter } from "../utils/abort-support"
 
 interface OpenAiHandlerOptions extends CommonApiHandlerOptions {
 	hicapApiKey?: string
@@ -15,9 +16,14 @@ interface OpenAiHandlerOptions extends CommonApiHandlerOptions {
 export class HicapHandler implements ApiHandler {
 	private options: OpenAiHandlerOptions
 	private client: OpenAI | undefined
+	private aborter = new StreamAborter()
 
 	constructor(options: OpenAiHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	private ensureClient(): OpenAI {
@@ -56,6 +62,7 @@ export class HicapHandler implements ApiHandler {
 		let reasoningEffort: ChatCompletionReasoningEffort | undefined
 		let maxTokens: number | undefined
 
+		const signal = this.aborter.reset()
 		const stream = await client.chat.completions.create({
 			model: modelId,
 			messages: openAiMessages,
@@ -64,7 +71,11 @@ export class HicapHandler implements ApiHandler {
 			reasoning_effort: reasoningEffort,
 			stream: true,
 			stream_options: { include_usage: true },
-		})
+		},
+			{ signal },
+		)
+		this.aborter.track(stream)
+		try {
 		for await (const chunk of stream) {
 			const delta = chunk.choices?.[0]?.delta
 			if (delta?.content) {
@@ -93,6 +104,9 @@ export class HicapHandler implements ApiHandler {
 					cacheWriteTokens: cacheMissTokens,
 				}
 			}
+		}
+		} finally {
+			this.aborter.clear()
 		}
 	}
 

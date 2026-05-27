@@ -19,6 +19,7 @@ import { convertToOpenAiMessages } from "../transform/openai-format"
 import { convertToOpenAIResponsesInput } from "../transform/openai-response-format"
 import { ApiStream } from "../transform/stream"
 import { getOpenAIToolParams, ToolCallProcessor } from "../transform/tool-call-processor"
+import { StreamAborter } from "../utils/abort-support"
 
 interface OpenAiNativeHandlerOptions extends CommonApiHandlerOptions {
 	openAiNativeApiKey?: string
@@ -30,9 +31,14 @@ interface OpenAiNativeHandlerOptions extends CommonApiHandlerOptions {
 export class OpenAiNativeHandler implements ApiHandler {
 	private options: OpenAiNativeHandlerOptions
 	private client: OpenAI | undefined
+	private aborter = new StreamAborter()
 
 	constructor(options: OpenAiNativeHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	private ensureClient(): OpenAI {
@@ -112,37 +118,46 @@ export class OpenAiNativeHandler implements ApiHandler {
 			? (this.options.reasoningEffort as ChatCompletionReasoningEffort) || "medium"
 			: undefined
 
-		const stream = await client.chat.completions.create({
-			model: model.id,
-			messages: [{ role: systemRole, content: systemPrompt }, ...convertToOpenAiMessages(messages)],
-			stream: true,
-			stream_options: { include_usage: true },
-			reasoning_effort: reasoningEffort,
-			...(model.info.temperature !== undefined ? { temperature: model.info.temperature } : {}),
-			...(includeTools ? getOpenAIToolParams(tools, isGPT5ModelFamily(model.id)) : {}),
-		})
+		const signal = this.aborter.reset()
+		const stream = await client.chat.completions.create(
+			{
+				model: model.id,
+				messages: [{ role: systemRole, content: systemPrompt }, ...convertToOpenAiMessages(messages)],
+				stream: true,
+				stream_options: { include_usage: true },
+				reasoning_effort: reasoningEffort,
+				...(model.info.temperature !== undefined ? { temperature: model.info.temperature } : {}),
+				...(includeTools ? getOpenAIToolParams(tools, isGPT5ModelFamily(model.id)) : {}),
+			},
+			{ signal },
+		)
+		this.aborter.track(stream)
 
-		for await (const chunk of stream) {
-			const delta = chunk.choices?.[0]?.delta
-			if (delta?.content) {
-				yield {
-					type: "text",
-					text: delta.content,
+		try {
+			for await (const chunk of stream) {
+				const delta = chunk.choices?.[0]?.delta
+				if (delta?.content) {
+					yield {
+						type: "text",
+						text: delta.content,
+					}
+				}
+
+				if (delta?.tool_calls) {
+					try {
+						yield* toolCallProcessor.processToolCallDeltas(delta.tool_calls)
+					} catch (error) {
+						Logger.error("Error processing tool call delta:", error, delta.tool_calls)
+					}
+				}
+
+				if (chunk.usage) {
+					// Only last chunk contains usage
+					yield* this.yieldUsage(model.info, chunk.usage)
 				}
 			}
-
-			if (delta?.tool_calls) {
-				try {
-					yield* toolCallProcessor.processToolCallDeltas(delta.tool_calls)
-				} catch (error) {
-					Logger.error("Error processing tool call delta:", error, delta.tool_calls)
-				}
-			}
-
-			if (chunk.usage) {
-				// Only last chunk contains usage
-				yield* this.yieldUsage(model.info, chunk.usage)
-			}
+		} finally {
+			this.aborter.clear()
 		}
 	}
 
@@ -173,20 +188,21 @@ export class OpenAiNativeHandler implements ApiHandler {
 		// const lastAssistantMessage = [...messages].reverse().find((msg) => msg.role === "assistant" && msg.id)
 		// const previous_response_id = lastAssistantMessage?.id
 
-		// Create the response using Responses API
-		const stream = await client.responses.create({
-			model: model.id,
-			instructions: systemPrompt,
-			input,
-			stream: true,
-			tools: responseTools,
-			// previous_response_id,
-			// store: true,
-			reasoning: { effort: "medium", summary: "auto" },
-			// include: ["reasoning.encrypted_content"],
-		})
+		const signal = this.aborter.reset()
+		const stream = await client.responses.create(
+			{
+				model: model.id,
+				instructions: systemPrompt,
+				input,
+				stream: true,
+				tools: responseTools,
+				reasoning: { effort: "medium", summary: "auto" },
+			},
+			{ signal },
+		)
+		this.aborter.track(stream)
 
-		// Process the response stream
+		try {
 		for await (const chunk of stream) {
 			Logger.debug("OpenAI Responses Chunk: " + JSON.stringify(chunk))
 
@@ -345,6 +361,9 @@ export class OpenAiNativeHandler implements ApiHandler {
 					id: chunk.response.id,
 				}
 			}
+		}
+		} finally {
+			this.aborter.clear()
 		}
 	}
 

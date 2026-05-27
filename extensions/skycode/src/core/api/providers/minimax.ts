@@ -8,6 +8,7 @@ import { SkycodeTool } from "@/shared/tools"
 import { ApiHandler, CommonApiHandlerOptions } from "../index"
 import { withRetry } from "../retry"
 import { ApiStream } from "../transform/stream"
+import { StreamAborter } from "../utils/abort-support"
 
 interface MinimaxHandlerOptions extends CommonApiHandlerOptions {
 	minimaxApiKey?: string
@@ -19,9 +20,14 @@ interface MinimaxHandlerOptions extends CommonApiHandlerOptions {
 export class MinimaxHandler implements ApiHandler {
 	private options: MinimaxHandlerOptions
 	private client: Anthropic | undefined
+	private aborter = new StreamAborter()
 
 	constructor(options: MinimaxHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	private ensureClient(): Anthropic {

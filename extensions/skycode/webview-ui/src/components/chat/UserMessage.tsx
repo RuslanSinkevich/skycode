@@ -11,10 +11,11 @@ interface UserMessageProps {
 	files?: string[]
 	images?: string[]
 	messageTs?: number
+	isPending?: boolean
 	sendMessageFromChatRow?: (text: string, images: string[], files: string[]) => void
 }
 
-const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageTs, sendMessageFromChatRow }) => {
+const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageTs, isPending, sendMessageFromChatRow }) => {
 	const { t } = useI18n()
 	const [isEditing, setIsEditing] = useState(false)
 	const [editedText, setEditedText] = useState(text || "")
@@ -87,14 +88,15 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 
 	return (
 		<div
-			className="p-2.5 pr-1 my-1 rounded-xs bg-input-background text-input-foreground border border-description/10"
-			onClick={handleClick}
+			className="p-2.5 pr-1 my-1 rounded-xs bg-user-message-bg text-input-foreground border border-description/15"
+			onClick={isPending ? undefined : handleClick}
 			onMouseEnter={() => setIsHovered(true)}
 			onMouseLeave={() => setIsHovered(false)}
 			style={{
 				whiteSpace: "pre-line",
 				wordWrap: "break-word",
 				position: "relative",
+				opacity: isPending ? 0.6 : 1,
 			}}>
 			{/* Delete/Retry buttons on hover */}
 			{isHovered && !isEditing && messageTs && (

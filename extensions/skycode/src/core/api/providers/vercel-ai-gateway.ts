@@ -10,6 +10,7 @@ import { withRetry } from "../retry"
 import { ApiStream } from "../transform/stream"
 import { ToolCallProcessor } from "../transform/tool-call-processor"
 import { createVercelAIGatewayStream } from "../transform/vercel-ai-gateway-stream"
+import { StreamAborter } from "../utils/abort-support"
 
 interface VercelAIGatewayHandlerOptions extends CommonApiHandlerOptions {
 	vercelAiGatewayApiKey?: string
@@ -23,9 +24,14 @@ interface VercelAIGatewayHandlerOptions extends CommonApiHandlerOptions {
 export class VercelAIGatewayHandler implements ApiHandler {
 	private options: VercelAIGatewayHandlerOptions
 	private client: OpenAI | undefined
+	private aborter = new StreamAborter()
 
 	constructor(options: VercelAIGatewayHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	private ensureClient(): OpenAI {
@@ -56,6 +62,7 @@ export class VercelAIGatewayHandler implements ApiHandler {
 		const modelId = this.getModel().id
 		const modelInfo = this.getModel().info
 
+		this.aborter.reset()
 		try {
 			const stream = await createVercelAIGatewayStream(
 				client,
@@ -67,10 +74,12 @@ export class VercelAIGatewayHandler implements ApiHandler {
 				tools,
 				this.options.geminiThinkingLevel,
 			)
+			this.aborter.track(stream)
 			let didOutputUsage: boolean = false
 
 			const toolCallProcessor = new ToolCallProcessor()
 
+			try {
 			for await (const chunk of stream) {
 				const delta = chunk.choices?.[0]?.delta
 
@@ -125,6 +134,9 @@ export class VercelAIGatewayHandler implements ApiHandler {
 					}
 					didOutputUsage = true
 				}
+			}
+			} finally {
+				this.aborter.clear()
 			}
 
 			if (!didOutputUsage) {

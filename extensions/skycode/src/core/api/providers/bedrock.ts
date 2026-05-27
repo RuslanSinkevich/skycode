@@ -17,6 +17,7 @@ import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { withRetry } from "../retry"
 import { convertToR1Format } from "../transform/r1-format"
 import { ApiStream } from "../transform/stream"
+import { StreamAborter } from "../utils/abort-support"
 
 export interface AwsBedrockHandlerOptions extends CommonApiHandlerOptions {
 	apiModelId?: string
@@ -117,9 +118,14 @@ const JP_SUPPORTED_CRIS_MODELS = ["anthropic.claude-sonnet-4-5-20250929-v1:0", "
 // https://docs.anthropic.com/en/api/claude-on-amazon-bedrock
 export class AwsBedrockHandler implements ApiHandler {
 	private options: AwsBedrockHandlerOptions
+	private aborter = new StreamAborter()
 
 	constructor(options: AwsBedrockHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	@withRetry({ maxRetries: 4 })

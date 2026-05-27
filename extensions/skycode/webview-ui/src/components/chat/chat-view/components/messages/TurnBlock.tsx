@@ -61,7 +61,7 @@ export const TurnBlock: React.FC<TurnBlockProps> = memo(({
 						/* Collapsed: two-line preview */
 						<div
 							onClick={toggleExpanded}
-							className="flex items-center gap-1.5 cursor-pointer p-2.5 pr-2 my-1 rounded-xs bg-input-background text-input-foreground border border-description/10 hover:bg-list-hover">
+							className="flex items-center gap-1.5 cursor-pointer p-2.5 pr-2 my-1 rounded-xs bg-user-message-bg text-input-foreground border border-description/15 hover:bg-list-hover">
 							<span
 								className="text-sm flex-1 min-w-0"
 								style={{

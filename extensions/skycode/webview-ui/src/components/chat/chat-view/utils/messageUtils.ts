@@ -785,7 +785,28 @@ export function groupLowStakesTools(groupedMessages: (SkycodeMessage | SkycodeMe
 		if (isLowStakesTool(message) && isEditTool(message)) {
 			// Commit current thinking block, show edit card, then continue accumulating
 			commitProcessBlock()
-			result.push(message) // Rendered as standalone edit card
+
+			// Deduplicate: if the same file was already edited, replace the previous card
+			// so only the latest diff is shown (avoids visual "duplication")
+			try {
+				const newTool = JSON.parse(message.text || "{}") as SkycodeSayTool
+				if (newTool.path) {
+					const prevIndex = result.findLastIndex((item) => {
+						if (Array.isArray(item)) return false
+						if (!isEditTool(item)) return false
+						try {
+							const prevTool = JSON.parse(item.text || "{}") as SkycodeSayTool
+							return prevTool.path === newTool.path && prevTool.tool === newTool.tool
+						} catch { return false }
+					})
+					if (prevIndex !== -1) {
+						result[prevIndex] = message
+						continue
+					}
+				}
+			} catch { /* parse error — fall through to normal push */ }
+
+			result.push(message)
 			continue
 		}
 

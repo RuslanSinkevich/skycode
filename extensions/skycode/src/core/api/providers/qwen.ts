@@ -20,6 +20,7 @@ import { convertToR1Format } from "../transform/r1-format"
 import { ApiStream } from "../transform/stream"
 import { getOpenAIToolParams, ToolCallProcessor } from "../transform/tool-call-processor"
 import { ThinkTagStreamParser } from "../transform/think-tag-parser"
+import { StreamAborter } from "../utils/abort-support"
 
 interface QwenHandlerOptions extends CommonApiHandlerOptions {
 	qwenApiKey?: string
@@ -31,6 +32,11 @@ interface QwenHandlerOptions extends CommonApiHandlerOptions {
 export class QwenHandler implements ApiHandler {
 	private options: QwenHandlerOptions
 	private client: OpenAI | undefined
+	private aborter = new StreamAborter()
+
+	abort(): void {
+		this.aborter.abort()
+	}
 
 	constructor(options: QwenHandlerOptions) {
 		// Ensure options start with defaults but allow overrides
@@ -110,16 +116,21 @@ export class QwenHandler implements ApiHandler {
 			temperature = undefined
 		}
 
-		const stream = await client.chat.completions.create({
-			model: model.id,
-			max_completion_tokens: model.info.maxTokens,
-			messages: openAiMessages,
-			stream: true,
-			stream_options: { include_usage: true },
-			temperature,
-			...thinkingArgs,
-			...getOpenAIToolParams(tools),
-		})
+		const signal = this.aborter.reset()
+		const stream = await client.chat.completions.create(
+			{
+				model: model.id,
+				max_completion_tokens: model.info.maxTokens,
+				messages: openAiMessages,
+				stream: true,
+				stream_options: { include_usage: true },
+				temperature,
+				...thinkingArgs,
+				...getOpenAIToolParams(tools),
+			},
+			{ signal },
+		)
+		this.aborter.track(stream)
 
 		const toolCallProcessor = new ToolCallProcessor()
 		// Used to parse <think>...</think> from content when reasoning_content is absent
@@ -127,6 +138,7 @@ export class QwenHandler implements ApiHandler {
 		const thinkParser = new ThinkTagStreamParser()
 		let nativeReasoningReceived = false
 
+		try {
 		for await (const chunk of stream) {
 			const delta = chunk.choices?.[0]?.delta
 
@@ -173,6 +185,9 @@ export class QwenHandler implements ApiHandler {
 					cacheWriteTokens: cacheMissTokens,
 				}
 			}
+		}
+		} finally {
+			this.aborter.clear()
 		}
 	}
 }

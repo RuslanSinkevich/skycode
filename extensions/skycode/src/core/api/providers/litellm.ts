@@ -10,6 +10,7 @@ import { ApiHandler, CommonApiHandlerOptions } from ".."
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
+import { StreamAborter } from "../utils/abort-support"
 
 interface LiteLlmHandlerOptions extends CommonApiHandlerOptions {
 	liteLlmApiKey?: string
@@ -98,12 +99,17 @@ export async function fetchLiteLlmModelsInfo(baseUrl: string, apiKey: string): P
 export class LiteLlmHandler implements ApiHandler {
 	private options: LiteLlmHandlerOptions
 	private client: OpenAI | undefined
+	private aborter = new StreamAborter()
 	private modelInfoCache: LiteLlmModelInfoResponse | undefined
 	private modelInfoCacheTimestamp: number = 0
 	private readonly modelInfoCacheTTL = 5 * 60 * 1000 // 5 minutes
 
 	constructor(options: LiteLlmHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	private ensureClient(): OpenAI {
@@ -296,17 +302,23 @@ export class LiteLlmHandler implements ApiHandler {
 			},
 		)
 
-		const stream = await client.chat.completions.create({
-			model: this.options.liteLlmModelId || liteLlmDefaultModelId,
-			messages: [systemMessage, ...enhancedMessages],
-			temperature,
-			stream: true,
-			drop_params: true,
-			...(!isCodexModel && { stream_options: { include_usage: true } }), // Codex models are only on the responses api, which doesn't take the stream_options parameter. we will need to migrate to the responses api for this to work
-			...(thinkingConfig && { thinking: thinkingConfig }), // Add thinking configuration when applicable
-			...(this.options.ulid && { litellm_session_id: `skycode-${this.options.ulid}` }), // Add session ID for LiteLLM tracking
-		} as LiteLlmChatCompletionCreateParams)
+		const signal = this.aborter.reset()
+		const stream = await client.chat.completions.create(
+			{
+				model: this.options.liteLlmModelId || liteLlmDefaultModelId,
+				messages: [systemMessage, ...enhancedMessages],
+				temperature,
+				stream: true,
+				drop_params: true,
+				...(!isCodexModel && { stream_options: { include_usage: true } }),
+				...(thinkingConfig && { thinking: thinkingConfig }),
+				...(this.options.ulid && { litellm_session_id: `skycode-${this.options.ulid}` }),
+			} as LiteLlmChatCompletionCreateParams,
+			{ signal },
+		)
+		this.aborter.track(stream)
 
+		try {
 		for await (const chunk of stream) {
 			const delta = chunk.choices?.[0]?.delta
 
@@ -365,6 +377,9 @@ export class LiteLlmHandler implements ApiHandler {
 					totalCost,
 				}
 			}
+		}
+		} finally {
+			this.aborter.clear()
 		}
 	}
 

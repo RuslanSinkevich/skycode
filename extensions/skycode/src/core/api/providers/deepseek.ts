@@ -10,6 +10,7 @@ import { convertToOpenAiMessages } from "../transform/openai-format"
 import { convertToR1Format } from "../transform/r1-format"
 import { ApiStream } from "../transform/stream"
 import { getOpenAIToolParams, ToolCallProcessor } from "../transform/tool-call-processor"
+import { StreamAborter } from "../utils/abort-support"
 
 interface DeepSeekHandlerOptions extends CommonApiHandlerOptions {
 	deepSeekApiKey?: string
@@ -19,9 +20,14 @@ interface DeepSeekHandlerOptions extends CommonApiHandlerOptions {
 export class DeepSeekHandler implements ApiHandler {
 	private options: DeepSeekHandlerOptions
 	private client: OpenAI | undefined
+	private aborter = new StreamAborter()
 
 	constructor(options: DeepSeekHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	private ensureClient(): OpenAI {
@@ -90,19 +96,24 @@ export class DeepSeekHandler implements ApiHandler {
 			openAiMessages = convertToR1Format([{ role: "user", content: systemPrompt }, ...messages])
 		}
 
-		const stream = await client.chat.completions.create({
-			model: model.id,
-			max_completion_tokens: model.info.maxTokens,
-			messages: openAiMessages,
-			stream: true,
-			stream_options: { include_usage: true },
-			// Only set temperature for non-reasoner models
-			...(model.id === "deepseek-reasoner" ? {} : { temperature: 0 }),
-			...getOpenAIToolParams(tools),
-		})
+		const signal = this.aborter.reset()
+		const stream = await client.chat.completions.create(
+			{
+				model: model.id,
+				max_completion_tokens: model.info.maxTokens,
+				messages: openAiMessages,
+				stream: true,
+				stream_options: { include_usage: true },
+				...(model.id === "deepseek-reasoner" ? {} : { temperature: 0 }),
+				...getOpenAIToolParams(tools),
+			},
+			{ signal },
+		)
+		this.aborter.track(stream)
 
 		const toolCallProcessor = new ToolCallProcessor()
 
+		try {
 		for await (const chunk of stream) {
 			const delta = chunk.choices?.[0]?.delta
 			if (delta?.content) {
@@ -126,6 +137,9 @@ export class DeepSeekHandler implements ApiHandler {
 			if (chunk.usage) {
 				yield* this.yieldUsage(model.info, chunk.usage)
 			}
+		}
+		} finally {
+			this.aborter.clear()
 		}
 	}
 

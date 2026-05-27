@@ -56,7 +56,7 @@ export interface ApiHandler {
 	createMessage(systemPrompt: string, messages: SkycodeStorageMessage[], tools?: SkycodeTool[], useResponseApi?: boolean): ApiStream
 	getModel(): ApiHandlerModel
 	getApiStreamUsage?(): Promise<ApiStreamUsageChunk | undefined>
-	abort?(): void
+	abort(): void
 }
 
 export interface ApiHandlerModel {

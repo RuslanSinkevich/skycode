@@ -9,6 +9,7 @@ import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
 import { ToolCallProcessor } from "../transform/tool-call-processor"
+import { StreamAborter } from "../utils/abort-support"
 
 /**
  * Qwen Web provider — talks to the public chat.qwen.ai web API using a
@@ -106,9 +107,14 @@ interface QwenCreateChatResponse {
 
 export class QwenWebHandler implements ApiHandler {
 	private options: QwenWebHandlerOptions
+	private aborter = new StreamAborter()
 
 	constructor(options: QwenWebHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	getModel(): { id: QwenWebModelId; info: ModelInfo } {

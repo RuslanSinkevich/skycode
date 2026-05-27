@@ -20,6 +20,7 @@ import { convertToOpenAIResponsesInput } from "../transform/openai-response-form
 import { ApiStream } from "../transform/stream"
 import { getOpenAIToolParams, ToolCallProcessor } from "../transform/tool-call-processor"
 import { handleResponsesApiStreamResponse } from "../utils/responses_api_support"
+import { StreamAborter } from "../utils/abort-support"
 
 export interface OcaHandlerOptions extends CommonApiHandlerOptions {
 	ocaBaseUrl?: string
@@ -35,9 +36,14 @@ export interface OcaHandlerOptions extends CommonApiHandlerOptions {
 export class OcaHandler implements ApiHandler {
 	protected options: OcaHandlerOptions
 	protected client: OpenAI | undefined
+	private aborter = new StreamAborter()
 
 	constructor(options: OcaHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	protected initializeClient(options: OcaHandlerOptions) {
@@ -238,8 +244,11 @@ export class OcaHandler implements ApiHandler {
 			chatCompletionsParams["reasoning_effort"] = this.options.ocaReasoningEffort || ("medium" as any)
 		}
 
-		const stream = await client.chat.completions.create(chatCompletionsParams)
+		const signal = this.aborter.reset()
+		const stream = await client.chat.completions.create(chatCompletionsParams, { signal })
+		this.aborter.track(stream)
 
+		try {
 		for await (const chunk of stream) {
 			const delta = chunk.choices?.[0]?.delta
 
@@ -300,6 +309,9 @@ export class OcaHandler implements ApiHandler {
 				}
 			}
 		}
+		} finally {
+			this.aborter.clear()
+		}
 	}
 
 	async *createMessageResponsesApi(systemPrompt: string, messages: SkycodeStorageMessage[], tools?: OpenAITool[]): ApiStream {
@@ -333,10 +345,15 @@ export class OcaHandler implements ApiHandler {
 			responsesParams["reasoning"] = { effort: this.options.ocaReasoningEffort as any, summary: "auto" }
 		}
 
-		// Create the response using Responses API
-		const stream = await client.responses.create(responsesParams)
+		const signal2 = this.aborter.reset()
+		const stream = await client.responses.create(responsesParams, { signal: signal2 })
+		this.aborter.track(stream)
 
-		yield* handleResponsesApiStreamResponse(stream, this.options.ocaModelInfo!, this.calculateCost.bind(this))
+		try {
+			yield* handleResponsesApiStreamResponse(stream, this.options.ocaModelInfo!, this.calculateCost.bind(this))
+		} finally {
+			this.aborter.clear()
+		}
 	}
 
 	getModel() {

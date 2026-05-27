@@ -9,6 +9,7 @@ import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
 import { ToolCallProcessor } from "../transform/tool-call-processor"
+import { StreamAborter } from "../utils/abort-support"
 
 interface BasetenHandlerOptions extends CommonApiHandlerOptions {
 	basetenApiKey?: string
@@ -20,9 +21,14 @@ interface BasetenHandlerOptions extends CommonApiHandlerOptions {
 export class BasetenHandler implements ApiHandler {
 	private options: BasetenHandlerOptions
 	private client: OpenAI | undefined
+	private aborter = new StreamAborter()
 
 	constructor(options: BasetenHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	private ensureClient(): OpenAI {
@@ -111,6 +117,7 @@ export class BasetenHandler implements ApiHandler {
 			...convertToOpenAiMessages(messages),
 		]
 
+		const signal = this.aborter.reset()
 		const stream = await client.chat.completions.create({
 			model: model.id,
 			max_tokens: maxTokens,
@@ -120,10 +127,14 @@ export class BasetenHandler implements ApiHandler {
 			temperature: 0,
 			tools,
 			tool_choice: tools && tools.length > 0 ? "auto" : undefined,
-		})
+		},
+			{ signal },
+		)
+		this.aborter.track(stream)
 
 		let didOutputUsage = false
 
+		try {
 		for await (const chunk of stream) {
 			const delta = chunk?.choices?.[0]?.delta
 
@@ -153,6 +164,9 @@ export class BasetenHandler implements ApiHandler {
 				yield* this.yieldUsage(model.info, chunk.usage)
 				didOutputUsage = true
 			}
+		}
+		} finally {
+			this.aborter.clear()
 		}
 	}
 

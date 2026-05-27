@@ -508,6 +508,7 @@ export const ChatRowContent = memo(
 							<UserMessage
 								files={message.files}
 								images={message.images}
+								isPending={(message as any).pending === true}
 								messageTs={message.ts}
 								sendMessageFromChatRow={sendMessageFromChatRow}
 								text={message.text}

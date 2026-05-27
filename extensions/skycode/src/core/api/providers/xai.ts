@@ -10,6 +10,7 @@ import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
 import { getOpenAIToolParams, ToolCallProcessor } from "../transform/tool-call-processor"
+import { StreamAborter } from "../utils/abort-support"
 
 interface XAIHandlerOptions extends CommonApiHandlerOptions {
 	xaiApiKey?: string
@@ -20,9 +21,14 @@ interface XAIHandlerOptions extends CommonApiHandlerOptions {
 export class XAIHandler implements ApiHandler {
 	private options: XAIHandlerOptions
 	private client: OpenAI | undefined
+	private aborter = new StreamAborter()
 
 	constructor(options: XAIHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	private ensureClient(): OpenAI {
@@ -55,19 +61,25 @@ export class XAIHandler implements ApiHandler {
 				reasoningEffort = undefined
 			}
 		}
-		const stream = await client.chat.completions.create({
-			model: modelId,
-			max_completion_tokens: this.getModel().info.maxTokens,
-			temperature: 0,
-			messages: [{ role: "system", content: systemPrompt }, ...convertToOpenAiMessages(messages)],
-			stream: true,
-			stream_options: { include_usage: true },
-			reasoning_effort: reasoningEffort,
-			...getOpenAIToolParams(tools),
-		})
+		const signal = this.aborter.reset()
+		const stream = await client.chat.completions.create(
+			{
+				model: modelId,
+				max_completion_tokens: this.getModel().info.maxTokens,
+				temperature: 0,
+				messages: [{ role: "system", content: systemPrompt }, ...convertToOpenAiMessages(messages)],
+				stream: true,
+				stream_options: { include_usage: true },
+				reasoning_effort: reasoningEffort,
+				...getOpenAIToolParams(tools),
+			},
+			{ signal },
+		)
+		this.aborter.track(stream)
 
 		const toolCallProcessor = new ToolCallProcessor()
 
+		try {
 		for await (const chunk of stream) {
 			const delta = chunk.choices?.[0]?.delta
 			if (delta?.content) {
@@ -104,6 +116,9 @@ export class XAIHandler implements ApiHandler {
 					cacheWriteTokens: cacheMissTokens,
 				}
 			}
+		}
+		} finally {
+			this.aborter.clear()
 		}
 	}
 

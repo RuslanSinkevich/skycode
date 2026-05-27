@@ -8,6 +8,7 @@ import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
 import { getOpenAIToolParams, ToolCallProcessor } from "../transform/tool-call-processor"
+import { StreamAborter } from "../utils/abort-support"
 
 interface MoonshotHandlerOptions extends CommonApiHandlerOptions {
 	moonshotApiKey?: string
@@ -17,8 +18,13 @@ interface MoonshotHandlerOptions extends CommonApiHandlerOptions {
 
 export class MoonshotHandler implements ApiHandler {
 	private client: OpenAI | undefined
+	private aborter = new StreamAborter()
 
 	constructor(private readonly options: MoonshotHandlerOptions) {}
+
+	abort(): void {
+		this.aborter.abort()
+	}
 
 	private ensureClient(): OpenAI {
 		if (!this.client) {
@@ -49,6 +55,7 @@ export class MoonshotHandler implements ApiHandler {
 			...convertToOpenAiMessages(messages),
 		]
 
+		const signal = this.aborter.reset()
 		const stream = await client.chat.completions.create({
 			model: model.id,
 			messages: openAiMessages,
@@ -57,10 +64,14 @@ export class MoonshotHandler implements ApiHandler {
 			stream: true,
 			stream_options: { include_usage: true },
 			...getOpenAIToolParams(tools),
-		})
+		},
+			{ signal },
+		)
+		this.aborter.track(stream)
 
 		const toolCallProcessor = new ToolCallProcessor()
 
+		try {
 		for await (const chunk of stream) {
 			const delta = chunk.choices?.[0]?.delta
 			if (delta?.content) {
@@ -88,6 +99,9 @@ export class MoonshotHandler implements ApiHandler {
 					outputTokens: chunk.usage.completion_tokens || 0,
 				}
 			}
+		}
+		} finally {
+			this.aborter.clear()
 		}
 	}
 
