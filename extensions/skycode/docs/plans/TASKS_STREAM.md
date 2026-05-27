@@ -1,27 +1,24 @@
 # Task Stream
 
-Документ-стрим текущих задач. Делаем по порядку: одну добиваем до конца, потом следующая. Незакрытые подзадачи остаются здесь. Закрытые — переносим в `docs/plans/completed/`.
+## Закрыто (2026-05-27)
 
-## Режим работы агента
+| # | Задача | Коммит / ветка |
+|---|--------|----------------|
+| 1 | Бэкап WIP перед работой | `b7680ed` clean-main |
+| 2 | Дубли diff-зон + Accept All | `ce5e8ec` |
+| 3 | Сообщения в стриме «пропадают» / reload UX | `81fb2d9` |
+| 4 | Merge VS Code **1.121.0** | ветка `merge/1.121.0` (`c3d477ea`) |
+| 5 | Упростить upstream: Copilot не отключаем, RU locale остаётся | в merge + `VSCODE_FORK_PATCHES.md` |
 
-- Один непрерывный стрим. Без остановок между задачами.
-- **Не спрашивать у пользователя** разрешения/подтверждения — решаем и делаем сами.
-- Закончили задачу — сразу следующая по списку.
-- Уточняющие вопросы — только если задача физически не выполнима без ввода (нет токена, нет пути и т.д.).
+## Текущие
 
----
+*Пусто.*
 
-## Текущие задачи
+## Следующий шаг вручную
 
-*Пусто. Все задачи стрима закрыты.*
-
----
-
-## Закрытые (2026-05-23)
-
-| # | Задача | Файл |
-|---|--------|------|
-| 1 | Pre-commit hygiene | [TASK_1_PRECOMMIT_HYGIENE.md](completed/TASK_1_PRECOMMIT_HYGIENE.md) |
-| 2 | Cancel + optimistic UI | [TASK_2_CANCEL_OPTIMISTIC_UI.md](completed/TASK_2_CANCEL_OPTIMISTIC_UI.md) |
-| 3 | DiffSystem ↔ Git | [TASK_3_DIFFSYSTEM_GIT.md](completed/TASK_3_DIFFSYSTEM_GIT.md) |
-| 4 | Prod-сборка | [TASK_4_PROD_BUILD.md](completed/TASK_4_PROD_BUILD.md) |
+```powershell
+cd vscode
+git checkout clean-main
+git merge merge/1.121.0
+# smoke: .\scripts\code.bat
+```

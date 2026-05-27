@@ -2,8 +2,8 @@
 
 > Все наши правки помечены маркерами `SKYCODE_FORK_BEGIN` / `SKYCODE_FORK_END` или `[SKYCODE]`.
 > При обновлении upstream: `git grep "SKYCODE_FORK\|[SKYCODE]" -- src/ build/ product.json` покажет все наши изменения.
-> Upstream база: **1.117.0**
-> Последнее обновление: 2026-05-01
+> Upstream база: **1.121.0** (ветка `merge/1.121.0`)
+> Последнее обновление: 2026-05-27
 
 Публичная краткая версия этого файла живёт в `docs/development/fork-patches.md` (корень монорепы). Этот документ — **canonical**; публичный синхронизируется с него.
 
@@ -34,24 +34,19 @@
 
 Интеграция расширения:
 - `extensionAllowedProposedApi` → `["skycode.skycode"]` (для editorInsets)
-- `defaultChatAgent` → указывает на `disabled.skycode-placeholder` (отключает Copilot)
-- `configurationDefaults` → `chat.commandCenter.enabled: false`, `chat.experimental.detectParticipant.enabled: false`
+- `defaultChatAgent` → **upstream** (`GitHub.copilot` / `GitHub.copilot-chat`) — не отключаем, проще мержить
+- `extensionsGallery`, `onboardingKeymaps`, `onboardingThemes` — из upstream 1.121
 
-**Риск конфликта при обновлении:** НИЗКИЙ — файл обычно не меняется радикально. AppIds (`win32x64AppId` и др.) оставлены upstream-ными, чтобы установщик не конфликтовал с предыдущими сборками.
+**Риск конфликта при обновлении:** СРЕДНИЙ — при мерже оставить Skycode-поля (nameShort, dataFolderName, …), `defaultChatAgent` брать из upstream.
 
 ---
 
 ### 2. `src/vs/workbench/contrib/chat/browser/chatParticipant.contribution.ts`
-**Что:** Отключён встроенный Copilot Chat view
-- Контейнер `workbench.panel.chat` переименован: title → `{ value: 'Skycode', original: 'Skycode' }` (без `localize2`, чтобы русская локализация не перезаписывала на "Чат")
-- `chatViewDescriptor` закомментирован (Copilot Chat view не регистрируется)
-- Контейнер оставлен в AuxiliaryBar — в него регистрируется webview Skycode из расширения
-- Удалены неиспользуемые импорты: `ChatViewPane`, `KeyCode`, `KeyMod`, `IViewDescriptor`, `ContextKeyExpr`, `localize2`
+**Что:** Только брендинг контейнера (Copilot Chat view **не** отключаем)
+- `title` контейнера → `{ value: 'Skycode', original: 'Skycode' }` (без `localize2`, чтобы RU locale не подменял на «Чат»)
+- `ChatViewPane` и остальной upstream-код — как в Microsoft
 
-**Риск конфликта при обновлении:** ВЫСОКИЙ — Microsoft активно развивает chat. При мерже:
-1. Проверить что `chatViewContainer` всё ещё существует
-2. Убедиться что Copilot view descriptor не регистрируется
-3. Если Microsoft реорганизовал файл — искать `registerViews` и комментировать
+**Риск конфликта при обновлении:** ВЫСОКИЙ — при мерже: `git checkout --theirs` на файл, затем вручную вернуть одну строку `title: { value: 'Skycode', ... }`.
 
 ---
 
@@ -183,40 +178,36 @@
 
 ---
 
-## Как обновлять upstream
+## Как обновлять upstream (упрощённо, с 1.121)
 
-```bash
-# 1. Добавить upstream remote (один раз)
-git remote add upstream https://github.com/microsoft/vscode.git
-
-# 2. Получить новую версию
+```powershell
+# 1. fetch
 git fetch upstream --tags
 
-# 3. Найти стабильный тег (например 1.110.0)
-git tag -l '1.1*' | sort -V | tail -5
+# 2. ветка
+git checkout clean-main
+git branch backup/pre-$(TAG)-update
+git checkout -b merge/$(TAG)
 
-# 4. Создать ветку для мержа
-git checkout -b merge/1.110.0
+# 3. merge без LFS smudge (иначе падает на copilot test cache)
+$env:GIT_LFS_SKIP_SMUDGE = "1"
+git merge $(TAG) --no-commit
 
-# 5. Мерж
-git merge 1.110.0
+# 4. конфликты
+#    product.json — вручную: Skycode branding + upstream defaultChatAgent/Copilot
+#    src/vs/workbench/contrib/chat/** — чаще --theirs, потом title Skycode
+#    build/hygiene.ts — оставить SKYCODE unicode strip + upstream checkCopilotEnginesVersion
+git grep "SKYCODE_FORK\|\[SKYCODE\]" -- src/ build/ product.json
 
-# 6. Разрулить конфликты — искать наши маркеры
-git grep "SKYCODE_FORK" -- src/ build/
+# 5. обязательно после мержа
+#    extHostCodeInsets.ts — line БЕЗ +1 (diff Accept/Reject)
+#    extensions/skycode/package.json — engines.vscode ^$(TAG)
 
-# 7. Проверить ключевые файлы:
-#    - product.json (брендинг)
-#    - chatParticipant.contribution.ts (Copilot отключён?)
-#    - main.ts (locale: ru, getUserDefinedLocale fallback, readArgvConfigSync патч)
-#    - nls.ts (bootstrapBuiltInLanguagePack)
-#    - viewsExtensionPoint.ts (getViewContainer fallback)
-#    - extHostCodeInsets.ts (фикс +1)
-#    - chatSetupContributions.ts (ChatCodeActionsProvider убран)
-#    - markerHoverParticipant.ts (кнопка Fix убрана)
-
-# 8. Пересобрать
-npm run gulp -- vscode-win32-x64-min
+# 6. commit + smoke
+git commit -m "Merge upstream VS Code $(TAG)"
 ```
+
+Политика с 1.121: **не боремся с Copilot в ядре** — `defaultChatAgent` и chat UI из upstream; Skycode webview живёт в том же контейнере `workbench.panel.chat`.
 
 ---
 
@@ -272,10 +263,10 @@ node --max-old-space-size=8192 node_modules\gulp\bin\gulp.js vscode-win32-x64-mi
 - [ ] `serverApplicationName` / `serverDataFolderName` / `tunnelApplicationName` — skycode-* (не `*-oss`)
 - [ ] `win32TunnelServiceMutex` / `win32TunnelMutex` — "skycode-*" (не `vscodeoss-*`)
 - [ ] `extensionAllowedProposedApi` содержит `skycode.skycode`
-- [ ] `defaultChatAgent.extensionId` = "disabled.skycode-placeholder"
+- [ ] `defaultChatAgent` — upstream Copilot (`GitHub.copilot`), не placeholder
 
 ### Core patches
-- [ ] Copilot Chat view НЕ регистрируется (`chatParticipant.contribution.ts`)
+- [ ] `chatParticipant.contribution.ts` — title контейнера `Skycode`, Copilot view зарегистрирован
 - [ ] `main.ts` — `argv.json` шаблон: `"locale": "ru"`, `getUserDefinedLocale` fallback → `'ru'`, `readArgvConfigSync` патчит существующий argv.json
 - [ ] `nls.ts` — `bootstrapBuiltInLanguagePack()` на месте
 - [ ] `viewsExtensionPoint.ts` — `getViewContainer` имеет fallback на прямой ID
