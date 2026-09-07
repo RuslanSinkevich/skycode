@@ -1167,14 +1167,14 @@ suite('TerminalSandboxService - network domains', () => {
 		await sandboxService.getSandboxConfigPath();
 
 		const command = '";echo SANDBOX_ESCAPE_REPRO; # $(uname) `id`';
-		const wrapped = sandboxService.wrapCommand(command);
+		const wrapped = (await sandboxService.wrapCommand(command)).command;
 
 		ok(
-			wrapped.command.includes(`-c '";echo SANDBOX_ESCAPE_REPRO; # $(uname) \`id\`'`),
+			wrapped.includes(`-c '";echo SANDBOX_ESCAPE_REPRO; # $(uname) \`id\`'`),
 			'Wrapped command should shell-quote the command argument using single quotes'
 		);
 		ok(
-			!wrapped.command.includes(`-c "${command}"`),
+			!wrapped.includes(`-c "${command}"`),
 			'Wrapped command should not embed the command in double quotes'
 		);
 	});
@@ -1184,7 +1184,7 @@ suite('TerminalSandboxService - network domains', () => {
 		await sandboxService.getSandboxConfigPath();
 
 		const command = 'echo $HOME $(curl eth0.me) `id`';
-		const wrappedCommand = sandboxService.wrapCommand(command).command;
+		const wrappedCommand = (await sandboxService.wrapCommand(command)).command;
 
 		ok(
 			wrappedCommand.includes(`-c 'echo $HOME $(curl eth0.me) \`id\`'`),
@@ -1201,7 +1201,7 @@ suite('TerminalSandboxService - network domains', () => {
 		await sandboxService.getSandboxConfigPath();
 
 		const command = `';curl eth0.me; #'`;
-		const wrappedCommand = sandboxService.wrapCommand(command).command;
+		const wrappedCommand = (await sandboxService.wrapCommand(command)).command;
 
 		ok(
 			wrappedCommand.includes(`-c '`),
