@@ -37,6 +37,7 @@ export interface EnvironmentDetailsContext {
 	workspaceManager?: WorkspaceRootManager
 	messageStateHandler: MessageStateHandler
 	api: ApiHandler
+	backgroundCommandSummary?: string
 }
 
 function formatWorkspaceRootsSection(ctx: EnvironmentDetailsContext): string {
@@ -200,6 +201,10 @@ export async function buildEnvironmentDetails(
 
 	if (terminalDetails) {
 		details += terminalDetails
+	}
+
+	if (ctx.backgroundCommandSummary) {
+		details += `\n\n# Background Commands\n${ctx.backgroundCommandSummary}`
 	}
 
 	const recentlyModifiedFiles = ctx.fileContextTracker.getAndClearRecentlyModifiedFiles()

@@ -300,15 +300,21 @@ export async function orchestrateCommandExecution(
 					await flushBuffer(true)
 				}
 
+				// Track the command in the background so the agent can check
+				// it later by id (check_background_command tool).
+				const trackingResult = onProceedWhileRunning?.(outputLines)
+
 				process.continue()
 				await setTimeoutPromise(50)
 				const result = terminalManager.processOutput(outputLines)
 				const autoProceedSeconds = Math.round((autoProceedAfterMs ?? 0) / 1000)
+				const idMsg = trackingResult?.id ? `Background command id: ${trackingResult.id}\n` : ""
+				const logMsg = trackingResult?.logFilePath ? `Log file: ${trackingResult.logFilePath}\n` : ""
 
 				cleanupFileBased()
 				return {
 					userRejected: false,
-					result: `Command is still running after ${autoProceedSeconds}s; continuing without waiting.${result.length > 0 ? `\nOutput so far:\n${result}` : ""}`,
+					result: `Command is still running after ${autoProceedSeconds}s; continuing without waiting.${idMsg}${logMsg}${result.length > 0 ? `\nOutput so far:\n${result}` : ""}`,
 					completed: false,
 					outputLines,
 				}
@@ -334,12 +340,13 @@ export async function orchestrateCommandExecution(
 					// Standalone: переключаемся на background tracking
 					const trackingResult = onProceedWhileRunning(outputLines)
 					const result = terminalManager.processOutput(outputLines)
+					const idMsg = trackingResult?.id ? `Background command id: ${trackingResult.id}\n` : ""
 					const logMsg = trackingResult?.logFilePath ? `Log file: ${trackingResult.logFilePath}\n` : ""
 					const outputMsg = result.length > 0 ? `Output so far:\n${result}` : ""
 
 					backgroundTrackingResult = {
 						userRejected: false,
-						result: `Command is still running after ${timeoutSeconds}s — moved to background. You can keep working; check logs later if needed.\n${logMsg}${outputMsg}`,
+						result: `Command is still running after ${timeoutSeconds}s — moved to background. You can keep working; check it later with the check_background_command tool.\n${idMsg}${logMsg}${outputMsg}`,
 						completed: false,
 						outputLines,
 					}

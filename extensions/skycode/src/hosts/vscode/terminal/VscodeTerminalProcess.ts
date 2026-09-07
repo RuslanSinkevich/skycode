@@ -282,6 +282,12 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 
 	continue() {
 		this.emitRemainingBufferIfListening()
+		// Stop emitting line events after continue — the orchestrator has
+		// already returned (auto-proceed/timeout). Without this, the stream
+		// in run() keeps emitting "line" events and the orchestrator's
+		// listener keeps calling say("command_output"), mixing old command
+		// output into the chat while the agent works on the next step.
+		this.isListening = false
 		this.emit("continue")
 	}
 
@@ -335,6 +341,21 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 			return
 		}
 
+		// Skip polling entirely when shell integration is available: the stream
+		// in run() already delivers output. getLatestTerminalOutput() uses
+		// selectAll/copySelection which steals focus from the user and
+		// overwrites the clipboard — only use it as a fallback for terminals
+		// without shell integration.
+		if (this.terminal?.shellIntegration) {
+			return
+		}
+		if (
+			this.lastShellIntegrationOutputAt > 0 &&
+			Date.now() - this.lastShellIntegrationOutputAt < VSCODE_TERMINAL_POLL_INTERVAL_MS * 2
+		) {
+			return
+		}
+
 		try {
 			const snapshot = await getLatestTerminalOutput()
 			const tail = this.getTail(snapshot, VSCODE_TERMINAL_POLL_TAIL_LINES)
@@ -344,11 +365,6 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 				return
 			}
 			if (!tail || tail === this.lastPolledTail) {
-				return
-			}
-
-			if (Date.now() - this.lastShellIntegrationOutputAt < VSCODE_TERMINAL_POLL_INTERVAL_MS * 2) {
-				this.lastPolledTail = tail
 				return
 			}
 

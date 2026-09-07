@@ -377,9 +377,9 @@ export interface OrchestrationOptions {
 	 * Callback invoked when user clicks "Proceed While Running".
 	 * Used to start background command tracking in the terminal manager.
 	 * @param existingOutput The output lines captured so far (to write to log file)
-	 * @returns The log file path if tracking was started, undefined otherwise
+	 * @returns The background command id and log file path if tracking was started, undefined otherwise
 	 */
-	onProceedWhileRunning?: (existingOutput: string[]) => { logFilePath: string } | undefined
+	onProceedWhileRunning?: (existingOutput: string[]) => { id: string; logFilePath: string } | undefined
 	/**
 	 * The type of terminal being used for telemetry tracking.
 	 * Defaults to "vscode" for backward compatibility.

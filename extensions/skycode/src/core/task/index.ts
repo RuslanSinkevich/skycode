@@ -507,6 +507,7 @@ export class Task {
 			this.sayAndCreateMissingParamError.bind(this),
 			this.removeLastPartialMessageIfExistsWithType.bind(this),
 			this.executeCommandTool.bind(this),
+			this.checkBackgroundCommand.bind(this),
 			() => Promise.resolve(false), // [SKYCODE] TEMPORARILY DISABLED — legacy Cline checkpoint doesLatestTaskCompletionHaveNewChanges
 			this.FocusChainManager?.updateFCListFromToolResponse.bind(this.FocusChainManager) || (async () => {}),
 			this.switchToActModeCallback.bind(this),
@@ -1675,6 +1676,14 @@ export class Task {
 		timeoutSeconds: number | undefined,
 	): Promise<[boolean, SkycodeToolResponseContent]> {
 		return this.commandExecutor.execute(command, timeoutSeconds)
+	}
+
+	/**
+	 * Check the status of a background command (or all background commands if no id provided).
+	 * Returns a formatted string with the command status and output.
+	 */
+	async checkBackgroundCommand(id?: string): Promise<string> {
+		return this.commandExecutor.checkBackgroundCommand(id)
 	}
 
 	/**
@@ -3468,6 +3477,15 @@ export class Task {
 	}
 
 	async getEnvironmentDetails(includeFileDetails: boolean = false) {
+		let backgroundCommandSummary: string | undefined
+		if (this.commandExecutor.hasActiveBackgroundCommand()) {
+			try {
+				backgroundCommandSummary = await this.commandExecutor.checkBackgroundCommand()
+			} catch {
+				// non-fatal
+			}
+		}
+
 		return buildEnvironmentDetails(
 			{
 				cwd: this.cwd,
@@ -3480,6 +3498,7 @@ export class Task {
 				workspaceManager: this.workspaceManager,
 				messageStateHandler: this.messageStateHandler,
 				api: this.api,
+				backgroundCommandSummary,
 			},
 			includeFileDetails,
 		)

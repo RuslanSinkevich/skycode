@@ -1,8 +1,12 @@
+import { SkycodeTempManager } from "@services/temp"
 import { arePathsEqual } from "@utils/path"
 import { getShellForProfile } from "@utils/shell"
 import pWaitFor from "p-wait-for"
+import * as fs from "fs"
 import * as vscode from "vscode"
+import { BACKGROUND_COMMAND_TIMEOUT_MS } from "@/integrations/terminal/constants"
 import {
+	BackgroundCommand,
 	TerminalInfo as ITerminalInfo,
 	ITerminalManager,
 	TerminalProcessResultPromise as ITerminalProcessResultPromise,
@@ -106,6 +110,11 @@ export class VscodeTerminalManager implements ITerminalManager {
 	private subagentTerminalOutputLineLimit: number = 2000
 	private defaultTerminalProfile: string = "default"
 
+	// Background command tracking (VSCode mode) — pull-based: output is read
+	// from the process's fullOutput via getUnretrievedOutput() on demand.
+	private backgroundCommands: Map<string, BackgroundCommand> = new Map()
+	private backgroundTimeouts: Map<string, NodeJS.Timeout> = new Map()
+
 	constructor() {
 		let disposable: vscode.Disposable | undefined
 		try {
@@ -171,6 +180,8 @@ export class VscodeTerminalManager implements ITerminalManager {
 
 		vscodeTerminalInfo.busy = true
 		vscodeTerminalInfo.lastCommand = command
+		// NOTE: vscode.Terminal.name is read-only — a terminal can only be
+		// named at creation time (createTerminal options), not renamed later.
 		const process = new VscodeTerminalProcess()
 		this.processes.set(vscodeTerminalInfo.id, process)
 
@@ -351,10 +362,211 @@ export class VscodeTerminalManager implements ITerminalManager {
 		return process ? process.isHot : false
 	}
 
+	// =========================================================================
+	// Background Command Tracking (VSCode mode)
+	// =========================================================================
+	// Mirrors StandaloneTerminalManager's tracking, but pull-based: the
+	// VscodeTerminalProcess keeps accumulating fullOutput after continue(),
+	// so we read new output via getUnretrievedOutput() instead of piping
+	// "line" events (which stop after continue()).
+
+	/**
+	 * Track a command that continues running in the background after
+	 * auto-proceed/timeout. Creates a log file and sets up a 10-minute
+	 * hard timeout to prevent zombie processes.
+	 */
+	trackBackgroundCommand(
+		process: ITerminalProcessResultPromise,
+		command: string,
+		existingOutput: string[] = [],
+	): BackgroundCommand {
+		const id = `background-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+		const logFilePath = SkycodeTempManager.createTempFilePath("background")
+
+		const backgroundCommand: BackgroundCommand = {
+			id,
+			command,
+			startTime: Date.now(),
+			status: "running",
+			logFilePath,
+			lineCount: existingOutput.length,
+			process,
+		}
+
+		// Write output captured before tracking started
+		if (existingOutput.length > 0) {
+			fs.appendFileSync(logFilePath, existingOutput.join("\n") + "\n")
+		}
+
+		// Flush remaining output and mark completed
+		process.on("completed", () => {
+			if (backgroundCommand.status !== "running") {
+				return
+			}
+			this.flushVscodeBackgroundOutput(backgroundCommand)
+			backgroundCommand.status = "completed"
+			const timeout = this.backgroundTimeouts.get(id)
+			if (timeout) {
+				clearTimeout(timeout)
+				this.backgroundTimeouts.delete(id)
+			}
+		})
+
+		// Mark errored
+		process.on("error", (error: Error) => {
+			if (backgroundCommand.status !== "running") {
+				return
+			}
+			this.flushVscodeBackgroundOutput(backgroundCommand)
+			backgroundCommand.status = "error"
+			const exitCodeMatch = error.message.match(/exit code (\d+)/)
+			if (exitCodeMatch) {
+				backgroundCommand.exitCode = parseInt(exitCodeMatch[1], 10)
+			}
+			const timeout = this.backgroundTimeouts.get(id)
+			if (timeout) {
+				clearTimeout(timeout)
+				this.backgroundTimeouts.delete(id)
+			}
+		})
+
+		// 10-minute hard timeout to prevent zombie processes
+		const timeoutId = setTimeout(() => {
+			if (backgroundCommand.status === "running") {
+				backgroundCommand.status = "timed_out"
+				this.flushVscodeBackgroundOutput(backgroundCommand)
+				try {
+					fs.appendFileSync(logFilePath, "\n[TIMEOUT] Process timed out after 10 minutes\n")
+				} catch {
+					// ignore
+				}
+			}
+		}, BACKGROUND_COMMAND_TIMEOUT_MS)
+		this.backgroundTimeouts.set(id, timeoutId)
+
+		this.backgroundCommands.set(id, backgroundCommand)
+		return backgroundCommand
+	}
+
+	/**
+	 * Pull new output from the process's fullOutput into the log file.
+	 */
+	private flushVscodeBackgroundOutput(cmd: BackgroundCommand): void {
+		try {
+			const unretrieved = cmd.process.getUnretrievedOutput()
+			if (unretrieved) {
+				fs.appendFileSync(cmd.logFilePath, unretrieved + "\n")
+				cmd.lineCount += unretrieved.split("\n").length
+			}
+		} catch {
+			// ignore — process may already be disposed
+		}
+	}
+
+	/** Get a specific background command by ID. */
+	getBackgroundCommand(id: string): BackgroundCommand | undefined {
+		return this.backgroundCommands.get(id)
+	}
+
+	/** Get all tracked background commands. */
+	getAllBackgroundCommands(): BackgroundCommand[] {
+		return Array.from(this.backgroundCommands.values())
+	}
+
+	/** Get only running background commands. */
+	getRunningBackgroundCommands(): BackgroundCommand[] {
+		return this.getAllBackgroundCommands().filter((c) => c.status === "running")
+	}
+
+	/** Check if there are any active background commands. */
+	hasActiveBackgroundCommands(): boolean {
+		return this.getRunningBackgroundCommands().length > 0
+	}
+
+	/**
+	 * Get the current status and recent output for a background command.
+	 * Flushes any new output to the log file before reading.
+	 */
+	getBackgroundCommandStatus(id: string):
+		| {
+				id: string
+				command: string
+				status: string
+				exitCode?: number
+				elapsedSeconds: number
+				output: string
+		  }
+		| undefined {
+		const cmd = this.backgroundCommands.get(id)
+		if (!cmd) {
+			return undefined
+		}
+		// Pull any new output into the log
+		this.flushVscodeBackgroundOutput(cmd)
+		let output = ""
+		try {
+			const content = fs.readFileSync(cmd.logFilePath, "utf8")
+			const lines = content.split("\n")
+			output = lines.slice(-200).join("\n")
+		} catch {
+			output = ""
+		}
+		return {
+			id: cmd.id,
+			command: cmd.command,
+			status: cmd.status,
+			exitCode: cmd.exitCode,
+			elapsedSeconds: Math.round((Date.now() - cmd.startTime) / 1000),
+			output,
+		}
+	}
+
+	/** Cancel/terminate a specific background command. */
+	cancelBackgroundCommand(id: string): boolean {
+		const cmd = this.backgroundCommands.get(id)
+		if (!cmd || cmd.status !== "running") {
+			return false
+		}
+		const timeout = this.backgroundTimeouts.get(id)
+		if (timeout) {
+			clearTimeout(timeout)
+			this.backgroundTimeouts.delete(id)
+		}
+		if (cmd.process && typeof (cmd.process as any).terminate === "function") {
+			;(cmd.process as any).terminate()
+		}
+		cmd.status = "error"
+		return true
+	}
+
+	/** Get a summary string for environment details. */
+	getBackgroundCommandsSummary(): string {
+		const running = this.getRunningBackgroundCommands()
+		if (running.length === 0) {
+			return ""
+		}
+		const lines = [`# Background Commands (${running.length} running)`]
+		for (const c of running) {
+			const duration = Math.round((Date.now() - c.startTime) / 1000 / 60)
+			lines.push(`- ${c.command} (running ${duration}m, ${c.lineCount} lines, log: ${c.logFilePath})`)
+		}
+		return lines.join("\n")
+	}
+
+	/** Clean up all background command resources. */
+	disposeBackgroundCommands(): void {
+		for (const [_id, timeout] of this.backgroundTimeouts) {
+			clearTimeout(timeout)
+		}
+		this.backgroundTimeouts.clear()
+		this.backgroundCommands.clear()
+	}
+
 	disposeAll() {
 		// for (const info of this.terminals) {
 		// 	//info.terminal.dispose() // dont want to dispose terminals when task is aborted
 		// }
+		this.disposeBackgroundCommands()
 		this.terminalIds.clear()
 		this.processes.clear()
 		this.disposables.forEach((disposable) => {

@@ -520,6 +520,44 @@ export class StandaloneTerminalManager implements ITerminalManager {
 	}
 
 	/**
+	 * Get the status and recent output of a specific background command by id.
+	 * Reads the last N lines from the log file.
+	 */
+	getBackgroundCommandStatus(id: string): {
+		id: string
+		command: string
+		status: string
+		exitCode?: number
+		elapsedSeconds: number
+		output: string
+	} | undefined {
+		const cmd = this.backgroundCommands.get(id)
+		if (!cmd) {
+			return undefined
+		}
+
+		// Read last 50 lines from log file
+		let output = ""
+		try {
+			const content = fs.readFileSync(cmd.logFilePath, "utf8")
+			const lines = content.split("\n")
+			const lastLines = lines.slice(-50)
+			output = lastLines.join("\n")
+		} catch {
+			output = "(unable to read log file)"
+		}
+
+		return {
+			id: cmd.id,
+			command: cmd.command,
+			status: cmd.status,
+			exitCode: cmd.exitCode,
+			elapsedSeconds: Math.round((Date.now() - cmd.startTime) / 1000),
+			output,
+		}
+	}
+
+	/**
 	 * Get all tracked background commands.
 	 */
 	getAllBackgroundCommands(): BackgroundCommand[] {

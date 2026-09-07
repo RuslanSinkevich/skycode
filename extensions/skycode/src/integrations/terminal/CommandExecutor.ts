@@ -22,6 +22,7 @@ import { SkycodeToolResponseContent } from "@shared/messages"
 import { Logger } from "@/shared/services/Logger"
 import { orchestrateCommandExecution } from "./CommandOrchestrator"
 import { StandaloneTerminalManager } from "./standalone/StandaloneTerminalManager"
+import { VscodeTerminalManager } from "@/hosts/vscode/terminal/VscodeTerminalManager"
 import type {
 	CommandExecutorCallbacks,
 	CommandExecutorConfig,
@@ -141,15 +142,21 @@ export class CommandExecutor {
 		const result = await orchestrateCommandExecution(process, manager, this.callbacks, {
 			command,
 			timeoutSeconds,
-			// When "Proceed While Running" is triggered, track the command in the manager
-			// Returns the log file path so the orchestrator can send it to the UI
-			// existingOutput contains all output lines captured so far
-			onProceedWhileRunning: useStandalone
-				? (existingOutput: string[]) => {
-						const backgroundCmd = this.standaloneManager.trackBackgroundCommand(process, command, existingOutput)
-						return { logFilePath: backgroundCmd.logFilePath }
-					}
-				: undefined,
+			// When "Proceed While Running" / auto-proceed is triggered, track the
+			// command in the manager so the agent can check it later by id.
+			// Returns the log file path so the orchestrator can send it to the UI.
+			// existingOutput contains all output lines captured so far.
+			onProceedWhileRunning: (existingOutput: string[]) => {
+				if (useStandalone) {
+					const backgroundCmd = this.standaloneManager.trackBackgroundCommand(process, command, existingOutput)
+					return { id: backgroundCmd.id, logFilePath: backgroundCmd.logFilePath }
+				}
+				if (this.terminalManager instanceof VscodeTerminalManager) {
+					const backgroundCmd = this.terminalManager.trackBackgroundCommand(process, command, existingOutput)
+					return { id: backgroundCmd.id, logFilePath: backgroundCmd.logFilePath }
+				}
+				return undefined
+			},
 			showShellIntegrationSuggestion: this.shouldShowBackgroundTerminalSuggestion(),
 			terminalType: useStandalone ? "standalone" : "vscode",
 		})
@@ -232,19 +239,116 @@ export class CommandExecutor {
 
 	/**
 	 * Check if there are any active background commands.
-	 * Delegates to StandaloneTerminalManager.
+	 * Checks both standalone and VSCode terminal managers.
 	 */
 	hasActiveBackgroundCommand(): boolean {
-		return this.standaloneManager.hasActiveBackgroundCommands()
+		if (this.standaloneManager.hasActiveBackgroundCommands()) {
+			return true
+		}
+		if (this.terminalManager instanceof VscodeTerminalManager) {
+			return this.terminalManager.hasActiveBackgroundCommands()
+		}
+		return false
 	}
 
 	/**
 	 * Get a summary of background commands for environment details.
-	 * Delegates to StandaloneTerminalManager which tracks multiple commands.
+	 * Combines summaries from standalone and VSCode terminal managers.
 	 */
 	getBackgroundCommandSummary(): string | undefined {
-		const summary = this.standaloneManager.getBackgroundCommandsSummary()
-		return summary || undefined
+		const summaries: string[] = []
+		const standaloneSummary = this.standaloneManager.getBackgroundCommandsSummary()
+		if (standaloneSummary) {
+			summaries.push(standaloneSummary)
+		}
+		if (this.terminalManager instanceof VscodeTerminalManager) {
+			const vscodeSummary = this.terminalManager.getBackgroundCommandsSummary()
+			if (vscodeSummary) {
+				summaries.push(vscodeSummary)
+			}
+		}
+		return summaries.length > 0 ? summaries.join("\n") : undefined
+	}
+
+	/**
+	 * Get the status and recent output of a specific background command by id.
+	 * Checks both standalone and VSCode terminal managers.
+	 */
+	getBackgroundCommandStatus(id: string): {
+		id: string
+		command: string
+		status: string
+		exitCode?: number
+		elapsedSeconds: number
+		output: string
+	} | undefined {
+		// Standalone manager
+		const standaloneCmd = this.standaloneManager.getBackgroundCommand(id)
+		if (standaloneCmd) {
+			return this.standaloneManager.getBackgroundCommandStatus(id)
+		}
+		// VSCode manager
+		if (this.terminalManager instanceof VscodeTerminalManager) {
+			return this.terminalManager.getBackgroundCommandStatus(id)
+		}
+		return undefined
+	}
+
+	/**
+	 * Get all tracked background commands (both standalone and VSCode).
+	 */
+	getAllBackgroundCommands(): Array<{
+		id: string
+		command: string
+		status: string
+		exitCode?: number
+		elapsedSeconds: number
+	}> {
+		const all: Array<{ id: string; command: string; status: string; exitCode?: number; elapsedSeconds: number }> = []
+		for (const cmd of this.standaloneManager.getAllBackgroundCommands()) {
+			all.push({
+				id: cmd.id,
+				command: cmd.command,
+				status: cmd.status,
+				exitCode: cmd.exitCode,
+				elapsedSeconds: Math.round((Date.now() - cmd.startTime) / 1000),
+			})
+		}
+		if (this.terminalManager instanceof VscodeTerminalManager) {
+			for (const cmd of this.terminalManager.getAllBackgroundCommands()) {
+				all.push({
+					id: cmd.id,
+					command: cmd.command,
+					status: cmd.status,
+					exitCode: cmd.exitCode,
+					elapsedSeconds: Math.round((Date.now() - cmd.startTime) / 1000),
+				})
+			}
+		}
+		return all
+	}
+
+	/**
+	 * Check the status of a background command by id (or list all if id is empty).
+	 * Returns a human-readable string for the AI agent.
+	 */
+	async checkBackgroundCommand(id?: string): Promise<string> {
+		if (!id) {
+			const all = this.getAllBackgroundCommands()
+			if (all.length === 0) {
+				return "No background commands are being tracked."
+			}
+			const lines = all.map((c) => `- ${c.id}: ${c.command} [${c.status}] (${c.elapsedSeconds}s)`)
+			return `Background commands:\n${lines.join("\n")}`
+		}
+
+		const status = this.getBackgroundCommandStatus(id)
+		if (!status) {
+			return `Background command '${id}' not found. It may have been cleaned up.`
+		}
+		const exit = status.exitCode !== undefined ? `, exit code ${status.exitCode}` : ""
+		const output = status.output ? status.output : "(no output yet)"
+		return `Command '${status.command}' [${status.status}] (${status.elapsedSeconds}s${exit})\n\nRecent output:\n${output}`
 	}
 
 	/**

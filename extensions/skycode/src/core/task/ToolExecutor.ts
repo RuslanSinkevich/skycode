@@ -31,6 +31,7 @@ import { ApplyPatchHandler } from "./tools/handlers/ApplyPatchHandler"
 import { AskFollowupQuestionToolHandler } from "./tools/handlers/AskFollowupQuestionToolHandler"
 import { AttemptCompletionHandler } from "./tools/handlers/AttemptCompletionHandler"
 import { BrowserToolHandler } from "./tools/handlers/BrowserToolHandler"
+import { CheckBackgroundCommandHandler } from "./tools/handlers/CheckBackgroundCommandHandler"
 import { CodebaseSearchToolHandler } from "./tools/handlers/CodebaseSearchToolHandler"
 import { CondenseHandler } from "./tools/handlers/CondenseHandler"
 import { ExecuteCommandToolHandler } from "./tools/handlers/ExecuteCommandToolHandler"
@@ -128,6 +129,7 @@ export class ToolExecutor {
 		private sayAndCreateMissingParamError: (toolName: SkycodeDefaultTool, paramName: string, relPath?: string) => Promise<any>,
 		private removeLastPartialMessageIfExistsWithType: (type: "ask" | "say", askOrSay: SkycodeAsk | SkycodeSay) => Promise<void>,
 		private executeCommandTool: (command: string, timeoutSeconds: number | undefined) => Promise<[boolean, any]>,
+		private checkBackgroundCommand: (id?: string) => Promise<string>,
 		private doesLatestTaskCompletionHaveNewChanges: () => Promise<boolean>,
 		private updateFCListFromToolResponse: (taskProgress: string | undefined) => Promise<void>,
 		private switchToActMode: () => Promise<boolean>,
@@ -197,6 +199,7 @@ export class ToolExecutor {
 				cancelTask: this.cancelTask,
 				updateTaskHistory: async (_: any) => [],
 				executeCommandTool: this.executeCommandTool,
+				checkBackgroundCommand: this.checkBackgroundCommand,
 				doesLatestTaskCompletionHaveNewChanges: this.doesLatestTaskCompletionHaveNewChanges,
 				updateFCListFromToolResponse: this.updateFCListFromToolResponse,
 				sayAndCreateMissingParamError: this.sayAndCreateMissingParamError,
@@ -247,6 +250,7 @@ export class ToolExecutor {
 		this.coordinator.register(new ListCodeDefinitionNamesToolHandler(validator))
 		this.coordinator.register(new SearchFilesToolHandler(validator))
 		this.coordinator.register(new ExecuteCommandToolHandler(validator))
+		this.coordinator.register(new CheckBackgroundCommandHandler())
 		this.coordinator.register(new UseMcpToolHandler())
 		this.coordinator.register(new AccessMcpResourceHandler())
 		this.coordinator.register(new LoadMcpDocumentationHandler())

@@ -59,6 +59,7 @@ export const TASK_CALLBACKS_KEYS = [
 	"sayAndCreateMissingParamError",
 	"removeLastPartialMessageIfExistsWithType",
 	"executeCommandTool",
+	"checkBackgroundCommand",
 	"doesLatestTaskCompletionHaveNewChanges",
 	"updateFCListFromToolResponse",
 	"shouldAutoApproveToolWithPath",

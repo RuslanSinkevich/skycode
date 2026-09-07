@@ -41,6 +41,8 @@ export enum SkycodeDefaultTool {
 	DELETE_BLOCK = "delete_block",
 	REPLACE_TEXT = "replace_text",
 	FILE_DELETE = "delete_file",
+	// Background command checking
+	CHECK_BACKGROUND = "check_background_command",
 }
 
 // Array of all tool names for compatibility

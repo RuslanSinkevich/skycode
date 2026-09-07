@@ -60,6 +60,7 @@ export const toolParamNames = [
 	"new_string",
 	"pattern",
 	"max_results",
+	"id",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]

@@ -6,6 +6,7 @@ import { apply_patch_variants } from "./apply_patch"
 import { ask_followup_question_variants } from "./ask_followup_question"
 import { attempt_completion_variants } from "./attempt_completion"
 import { browser_action_variants } from "./browser_action"
+import { check_background_command_variants } from "./check_background_command"
 import { codebase_search_variants } from "./codebase_search"
 import { delete_block_variants } from "./delete_block"
 import { edit_notebook_variants } from "./edit_notebook"
@@ -42,6 +43,7 @@ export function registerSkycodeToolSets(): void {
 		...ask_followup_question_variants,
 		...attempt_completion_variants,
 		...browser_action_variants,
+		...check_background_command_variants,
 		...codebase_search_variants,
 		...delete_block_variants,
 		...edit_notebook_variants,
