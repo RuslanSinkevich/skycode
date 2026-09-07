@@ -61,6 +61,7 @@ export class DiffSystem implements vscode.Disposable {
   private pollTimer: NodeJS.Timeout | null = null;
   /** Hash of file content after our last write — used to distinguish our writes from external edits */
   private lastWrittenHash = new Map<string, string>();
+  private suppressGitStaleUntil = 0;
 
   /**
    * Loop detection: tracks consecutive overlap-reject cycles per file.
@@ -1310,11 +1311,32 @@ export class DiffSystem implements vscode.Disposable {
       const gitApi = gitExtension?.getAPI?.(1);
       if (!gitApi) { return; }
 
-      for (const repo of gitApi.repositories) {
+      const attachToRepo = (repo: any) => {
         this.disposables.push(
           repo.state.onDidChange(() => {
             this.onGitStateChanged();
           }),
+        );
+        // SKYCODE: auto-accept pending hunks when their file is committed.
+        // If user explicitly committed a file that has pending Skycode diffs,
+        // treat the commit as approval and clear the inline diff zones.
+        if (typeof repo.onDidCommit === 'function') {
+          this.disposables.push(
+            repo.onDidCommit(() => {
+              this.onGitCommit(repo).catch((e) => {
+                Logger.error('[DiffSystem] onGitCommit handler failed', e);
+              });
+            }),
+          );
+        }
+      };
+
+      for (const repo of gitApi.repositories) {
+        attachToRepo(repo);
+      }
+      if (typeof gitApi.onDidOpenRepository === 'function') {
+        this.disposables.push(
+          gitApi.onDidOpenRepository((repo: any) => attachToRepo(repo)),
         );
       }
     } catch {
@@ -1322,7 +1344,63 @@ export class DiffSystem implements vscode.Disposable {
     }
   }
 
+  /**
+   * SKYCODE: on git commit, auto-accept Skycode pending hunks for the committed files.
+   * Rationale: if the user committed a file, they implicitly approved its current
+   * content (which includes any pending Skycode diffs). Clear the inline diff zones.
+   */
+  private async onGitCommit(repo: any): Promise<void> {
+    const pendingFiles = this.store.getFilesWithPendingChanges();
+    if (pendingFiles.length === 0) { return; }
+
+    this.suppressGitStaleUntil = Date.now() + 2_000;
+    for (const fsPath of pendingFiles) {
+      const key = fsPath.toLowerCase();
+      const existing = this.externalChangeDebounce.get(key);
+      if (existing) {
+        clearTimeout(existing);
+        this.externalChangeDebounce.delete(key);
+      }
+    }
+
+    let committedFiles: Set<string>;
+    try {
+      const head = await repo.getCommit('HEAD');
+      const parent = head?.parents?.[0];
+      if (!parent) {
+        committedFiles = new Set(pendingFiles.map((p) => p.toLowerCase()));
+      } else {
+        const changes: Array<{ uri: vscode.Uri }> = await repo.diffBetween(parent, head.hash);
+        committedFiles = new Set(changes.map((c) => c.uri.fsPath.toLowerCase()));
+      }
+    } catch (e) {
+      Logger.warn('[DiffSystem] Failed to read commit diff; leaving pending files for manual confirmation', e);
+      return;
+    }
+
+    for (const fsPath of pendingFiles) {
+      if (!committedFiles.has(fsPath.toLowerCase())) { continue; }
+      try {
+        Logger.log(`[DiffSystem] Auto-accepting pending hunks for committed file: ${path.basename(fsPath)}`);
+        await this.acceptAllForFile(fsPath);
+      } catch (e) {
+        Logger.error(`[DiffSystem] Auto-accept failed for ${fsPath}`, e);
+        continue;
+      }
+
+      try {
+        const { readFile } = await import('node:fs/promises');
+        const currentContent = (await readFile(fsPath, 'utf-8')).replace(/\r\n/g, '\n');
+        this.recordWrittenHash(fsPath, currentContent);
+      } catch (e) {
+        Logger.debug(`[DiffSystem] Failed to refresh committed file hash for ${fsPath}: ${e}`);
+      }
+    }
+  }
+
   private onGitStateChanged(): void {
+    if (Date.now() < this.suppressGitStaleUntil) { return; }
+
     const files = this.store.getFilesWithPendingChanges();
     for (const fsPath of files) {
       this.debouncedStaleCheck(fsPath, 'git_change');
@@ -1359,6 +1437,7 @@ export class DiffSystem implements vscode.Disposable {
    */
   private async checkFileStale(fsPath: string, reason: string): Promise<boolean> {
     if (!this.store.hasPendingChangesForFile(fsPath)) { return false; }
+    if (reason === 'git_change' && Date.now() < this.suppressGitStaleUntil) { return false; }
 
     const key = fsPath.toLowerCase();
     const expectedHash = this.lastWrittenHash.get(key);

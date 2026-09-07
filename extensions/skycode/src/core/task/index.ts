@@ -554,10 +554,14 @@ export class Task {
 			if (partial) {
 				if (isUpdatingPreviousPartial) {
 					// existing partial message, so update it
-					await this.messageStateHandler.updateSkycodeMessage(lastMessageIndex, {
-						text,
-						partial,
-					})
+					await this.messageStateHandler.updateSkycodeMessage(
+						lastMessageIndex,
+						{
+							text,
+							partial,
+						},
+						{ persist: false },
+					)
 					// todo be more efficient about saving and posting only new data or one whole message at a time so ignore partial for saves, and only post parts of partial message instead of whole array in new listener
 					// await this.saveSkycodeMessagesAndUpdateHistory()
 					// await this.postStateToWebview()

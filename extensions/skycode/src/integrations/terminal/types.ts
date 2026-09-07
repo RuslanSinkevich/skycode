@@ -367,6 +367,8 @@ export interface OrchestrationOptions {
 	command: string
 	/** Optional timeout in seconds */
 	timeoutSeconds?: number
+	/** Optional soft timeout for visible terminal commands before returning control to the agent */
+	autoProceedAfterMs?: number
 	/** Callback to track output lines for background command tracking */
 	onOutputLine?: (line: string) => void
 	/** Whether to show shell integration warning with suggestion */

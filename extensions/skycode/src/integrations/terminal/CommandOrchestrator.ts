@@ -25,6 +25,7 @@ import {
 	MAX_BYTES_BEFORE_FILE,
 	MAX_LINES_BEFORE_FILE,
 	SUMMARY_LINES_TO_KEEP,
+	VSCODE_AUTO_PROCEED_AFTER_MS,
 } from "./constants"
 import type {
 	CommandExecutorCallbacks,
@@ -52,12 +53,23 @@ export async function orchestrateCommandExecution(
 	callbacks: CommandExecutorCallbacks,
 	options: OrchestrationOptions,
 ): Promise<OrchestrationResult> {
-	const { timeoutSeconds, onOutputLine, onProceedWhileRunning, terminalType = "vscode" } = options
+	const {
+		timeoutSeconds,
+		terminalType = "vscode",
+		autoProceedAfterMs = terminalType === "vscode" ? VSCODE_AUTO_PROCEED_AFTER_MS : undefined,
+		onOutputLine,
+		onProceedWhileRunning,
+	} = options
 
 	// Track command execution state (для UI индикации "идёт команда" и Cancel кнопки)
 	callbacks.updateBackgroundCommandState(true)
 
+	let didClearCommandState = false
 	const clearCommandState = async () => {
+		if (didClearCommandState) {
+			return
+		}
+		didClearCommandState = true
 		callbacks.updateBackgroundCommandState(false)
 
 		// Mark the command message as completed
@@ -121,7 +133,9 @@ export async function orchestrateCommandExecution(
 	 * Switch to file-based logging when output is too large.
 	 */
 	const switchToFileBased = async () => {
-		if (isWritingToFile) { return }
+		if (isWritingToFile) {
+			return
+		}
 
 		isWritingToFile = true
 
@@ -159,6 +173,18 @@ export async function orchestrateCommandExecution(
 			largeOutputLogStream.end()
 			largeOutputLogStream = null
 		}
+	}
+
+	const cleanupTimersAndStreams = () => {
+		if (chunkTimer) {
+			clearTimeout(chunkTimer)
+			chunkTimer = null
+		}
+		if (completionTimer) {
+			clearTimeout(completionTimer)
+			completionTimer = null
+		}
+		cleanupFileBased()
 	}
 
 	const outputLines: string[] = []
@@ -239,16 +265,55 @@ export async function orchestrateCommandExecution(
 	})
 
 	// Handle timeout or wait for process completion
-	if (timeoutSeconds) {
+	if (timeoutSeconds || autoProceedAfterMs) {
+		let timeoutId: NodeJS.Timeout | null = null
+		let autoProceedId: NodeJS.Timeout | null = null
 		const timeoutPromise = new Promise<never>((_, reject) => {
-			setTimeout(() => {
-				reject(new Error("COMMAND_TIMEOUT"))
-			}, timeoutSeconds * 1000)
+			if (timeoutSeconds) {
+				timeoutId = setTimeout(() => {
+					reject(new Error("COMMAND_TIMEOUT"))
+				}, timeoutSeconds * 1000)
+			}
+		})
+		const autoProceedPromise = new Promise<never>((_, reject) => {
+			if (autoProceedAfterMs) {
+				autoProceedId = setTimeout(() => {
+					reject(new Error("COMMAND_AUTO_PROCEED"))
+				}, autoProceedAfterMs)
+			}
 		})
 
 		try {
-			await Promise.race([process, timeoutPromise])
+			await Promise.race([process, timeoutPromise, autoProceedPromise])
 		} catch (error: any) {
+			if (error.message === "COMMAND_AUTO_PROCEED") {
+				if (chunkTimer) {
+					clearTimeout(chunkTimer)
+					chunkTimer = null
+				}
+				if (completionTimer) {
+					clearTimeout(completionTimer)
+					completionTimer = null
+				}
+
+				if (outputBuffer.length > 0) {
+					await flushBuffer(true)
+				}
+
+				process.continue()
+				await setTimeoutPromise(50)
+				const result = terminalManager.processOutput(outputLines)
+				const autoProceedSeconds = Math.round((autoProceedAfterMs ?? 0) / 1000)
+
+				cleanupFileBased()
+				return {
+					userRejected: false,
+					result: `Command is still running after ${autoProceedSeconds}s; continuing without waiting.${result.length > 0 ? `\nOutput so far:\n${result}` : ""}`,
+					completed: false,
+					outputLines,
+				}
+			}
+
 			if (error.message === "COMMAND_TIMEOUT") {
 				// Timeout сработал — уходим в background если доступен
 				if (chunkTimer) {
@@ -291,8 +356,9 @@ export async function orchestrateCommandExecution(
 					return backgroundTrackingResult
 				}
 
-				// VSCode mode: нет background tracking — просто отпускаем процесс,
-				// он продолжит жить в терминале, агент получит "ещё работает"
+				// VSCode mode: command keeps running in the visible terminal.
+				// Keep backgroundCommandRunning=true so the UI Cancel button can still
+				// route to cancelBackgroundCommand() and terminate the current process.
 				process.continue()
 				await setTimeoutPromise(50)
 				const result = terminalManager.processOutput(outputLines)
@@ -300,13 +366,21 @@ export async function orchestrateCommandExecution(
 				cleanupFileBased()
 				return {
 					userRejected: false,
-					result: `Command is still running after ${timeoutSeconds}s (process kept in terminal).${result.length > 0 ? `\nOutput so far:\n${result}` : ""}`,
+					result: `Command is still running after ${timeoutSeconds}s (process kept in terminal; Cancel can still stop it).${result.length > 0 ? `\nOutput so far:\n${result}` : ""}`,
 					completed: false,
 					outputLines,
 				}
 			}
 
+			cleanupTimersAndStreams()
 			throw error
+		} finally {
+			if (timeoutId) {
+				clearTimeout(timeoutId)
+			}
+			if (autoProceedId) {
+				clearTimeout(autoProceedId)
+			}
 		}
 	} else {
 		// No timeout — wait for process to complete
@@ -315,7 +389,7 @@ export async function orchestrateCommandExecution(
 
 	// Background tracking сработало по timeout
 	if (backgroundTrackingResult) {
-		cleanupFileBased()
+		cleanupTimersAndStreams()
 		return backgroundTrackingResult
 	}
 
@@ -327,7 +401,7 @@ export async function orchestrateCommandExecution(
 	// Wait for a short delay to ensure all messages are sent to the webview
 	await setTimeoutPromise(50)
 
-	cleanupFileBased()
+	cleanupTimersAndStreams()
 
 	// Build result based on whether we used file-based logging
 	let result: string

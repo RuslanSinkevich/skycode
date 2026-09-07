@@ -36,8 +36,7 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 	const { inputValue, selectedImages, selectedFiles, setSendingDisabled } = chatState
 	const [isProcessing, setIsProcessing] = useState(false)
 	// [SKYCODE] backgroundCommandRunning — флаг что команда уже одобрена и работает.
-	// Используется чтобы показать спиннер вместо кнопок "Выполнить/Отклонить",
-	// пока команда ещё не выдала первого вывода (например `sleep 15`).
+	// Держим видимую панель выполнения с Cancel, чтобы UI не выглядел зависшим.
 	const { backgroundCommandRunning } = useExtensionState()
 
 	// Memoize last messages to avoid unnecessary recalculations
@@ -119,8 +118,7 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 	const isStreaming = task.partial === true
 	const canInteract = enableButtons && !isProcessing
 
-	// [SKYCODE] Команда уже одобрена и идёт (но ещё нет вывода) — показываем спиннер вместо кнопок,
-	// чтобы пользователь видел что агент работает, а не завис.
+	// [SKYCODE] Команда уже одобрена и идёт — держим закреплённую видимую панель статуса.
 	const isApprovedCommandRunning =
 		backgroundCommandRunning &&
 		lastMessage?.type === "ask" &&
@@ -128,14 +126,14 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 
 	if (isApprovedCommandRunning) {
 		return (
-			<div className="flex px-3.5">
-				<VSCodeButton appearance="primary" className="flex-1 mr-[6px]" disabled>
-					<span className="codicon codicon-loading codicon-modifier-spin mr-1.5" />
-					{t("button.executing")}
-				</VSCodeButton>
+			<div className="sticky bottom-0 z-10 flex items-center gap-2 border-t border-(--vscode-panel-border) bg-(--vscode-sideBar-background) px-3.5 py-2">
+				<div className="flex min-w-0 flex-1 items-center gap-2 text-xs text-(--vscode-descriptionForeground)">
+					<span className="codicon codicon-loading codicon-modifier-spin shrink-0" />
+					<span className="truncate">{t("button.executing")}</span>
+				</div>
 				<VSCodeButton
 					appearance="secondary"
-					className="flex-1"
+					className="shrink-0"
 					onClick={() => handleActionClick("cancel")}>
 					{t("button.cancel")}
 				</VSCodeButton>

@@ -1,7 +1,6 @@
 import { VSCodeButton, VSCodeCheckbox, VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import { memo, useCallback, useEffect, useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { useSkycodeAuth } from "@/context/SkycodeAuthContext"
 import { useI18n } from "@/i18n"
 import { DictationServiceClient } from "@/services/grpc-client"
 import { SUPPORTED_DICTATION_LANGUAGES } from "@shared/DictationSettings"
@@ -22,9 +21,7 @@ const WHISPER_MODELS = [
 
 const VoiceSection = ({ renderSectionHeader }: VoiceSectionProps) => {
 	const { t } = useI18n()
-	const { dictationSettings, navigateToAccount } = useExtensionState()
-	const { skycodeUser } = useSkycodeAuth()
-	const isAuthenticated = !!skycodeUser?.uid
+	const { dictationSettings } = useExtensionState()
 
 	const isReady = dictationSettings?.voiceReady === true
 	const isDownloading = dictationSettings?.voiceDownloading === true
@@ -168,13 +165,12 @@ const VoiceSection = ({ renderSectionHeader }: VoiceSectionProps) => {
 										const newModel = e.target.value
 										const modelConfig = WHISPER_MODELS.find((m) => m.id === newModel)
 										if (!modelConfig || modelConfig.locked) { return }
-										if (modelConfig.requiresAuth && !isAuthenticated) { return }
 										if (newModel !== dictationSettings?.whisperModel) {
 											updateDictation({ whisperModel: newModel, voiceReady: false, voiceDownloading: false })
 										}
 									}}>
 									{WHISPER_MODELS.map((model) => {
-										const disabled = model.locked || (model.requiresAuth && !isAuthenticated)
+										const disabled = model.locked
 										return (
 											<VSCodeOption key={model.id} value={model.id} disabled={disabled}>
 												{t(model.labelKey)}
@@ -187,27 +183,21 @@ const VoiceSection = ({ renderSectionHeader }: VoiceSectionProps) => {
 
 							{/* Download / Reinstall button */}
 							<div className="mt-4">
-								{!isAuthenticated ? (
-									<VSCodeButton className="w-full" onClick={() => navigateToAccount()}>
-										{t("voice.signIn")}
-									</VSCodeButton>
-								) : (
-									<VSCodeButton
-										className="w-full"
-										disabled={isDownloading}
-										onClick={isReady ? handleReinstall : handleDownload}>
-										{isDownloading ? (
-											<>
-												<span className="codicon codicon-loading animate-spin mr-1.5" />
-												{t("voice.downloading")}
-											</>
-										) : isReady ? (
-											t("voice.reinstallButton")
-										) : (
-											t("voice.downloadButton")
-										)}
-									</VSCodeButton>
-								)}
+								<VSCodeButton
+									className="w-full"
+									disabled={isDownloading}
+									onClick={isReady ? handleReinstall : handleDownload}>
+									{isDownloading ? (
+										<>
+											<span className="codicon codicon-loading animate-spin mr-1.5" />
+											{t("voice.downloading")}
+										</>
+									) : isReady ? (
+										t("voice.reinstallButton")
+									) : (
+										t("voice.downloadButton")
+									)}
+								</VSCodeButton>
 							</div>
 
 							{/* Note */}

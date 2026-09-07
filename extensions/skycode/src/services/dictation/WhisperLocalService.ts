@@ -10,7 +10,7 @@ import { Logger } from "@/shared/services/Logger"
 const execFileAsync = promisify(execFile)
 
 // Skycode CDN — platform-specific voice archives
-const SKYCODE_VOICE_CDN = "https://skycode-ai.ru/downloads"
+const SKYCODE_VOICE_CDN = "https://storage.yandexcloud.net/skycode-releases"
 
 // Model options: bundled=true means archive is shipped with the extension for the current platform
 const WHISPER_MODELS: Record<string, { file: string; sizeMB: number; archive: string; bundled: boolean }> = {
@@ -161,17 +161,39 @@ export class WhisperLocalService {
 		url: string,
 		destPath: string,
 		onProgress?: (downloaded: number, total: number) => void,
-		timeoutMs: number = 300000,
+		inactivityMs: number = 120000,
 	): Promise<void> {
 		return new Promise((resolve, reject) => {
-			const timer = setTimeout(() => {
-				reject(new Error("Download timed out. Check your internet connection and try again."))
-			}, timeoutMs)
+			let settled = false
+			let timer: ReturnType<typeof setTimeout>
+
+			const fail = (err: Error) => {
+				if (settled) return
+				settled = true
+				clearTimeout(timer)
+				reject(err)
+			}
+			const succeed = () => {
+				if (settled) return
+				settled = true
+				clearTimeout(timer)
+				resolve()
+			}
+			// Inactivity-based timeout: reset on every received chunk. A total-time
+			// cap wrongly kills large archives (e.g. ~530 MB "small") on slow links;
+			// this only aborts when the transfer actually stalls.
+			const armTimer = () => {
+				clearTimeout(timer)
+				timer = setTimeout(
+					() => fail(new Error("Download stalled. Check your internet connection and try again.")),
+					inactivityMs,
+				)
+			}
+			armTimer()
 
 			const doRequest = (requestUrl: string, redirectCount = 0) => {
 				if (redirectCount > 5) {
-					clearTimeout(timer)
-					reject(new Error("Too many redirects"))
+					fail(new Error("Too many redirects"))
 					return
 				}
 
@@ -182,55 +204,58 @@ export class WhisperLocalService {
 
 				const protocol = requestUrl.startsWith("https") ? https : http
 				Logger.info(`[WhisperDownload] GET ${requestUrl}`)
-				protocol
-					.get(requestUrl, { headers, timeout: 30000 }, (response) => {
-						Logger.info(`[WhisperDownload] Response: ${response.statusCode}`)
-						// Handle redirects
-						if (response.statusCode && response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
-							const location = response.headers.location
-							// If redirected to login page — auth required, don't follow
-							if (location.includes("/auth/login") || location.includes("/login")) {
-								clearTimeout(timer)
-								reject(new Error("Authorization required. Please sign in to your Skycode account."))
-								return
-							}
-							doRequest(location, redirectCount + 1)
+				const req = protocol.get(requestUrl, { headers, timeout: 60000 }, (response) => {
+					Logger.info(`[WhisperDownload] Response: ${response.statusCode}`)
+					// Handle redirects
+					if (response.statusCode && response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+						const location = response.headers.location
+						// The standalone build does not support account auth; login redirects mean the asset is unavailable.
+						if (location.includes("/auth/login") || location.includes("/login")) {
+							fail(new Error("Voice package is unavailable from the download server."))
 							return
 						}
+						response.resume()
+						doRequest(location, redirectCount + 1)
+						return
+					}
 
-						if (response.statusCode === 401 || response.statusCode === 403) {
-							clearTimeout(timer)
-							reject(new Error("Authorization required. Please sign in to your Skycode account."))
-							return
-						}
+					if (response.statusCode === 401 || response.statusCode === 403) {
+						fail(new Error("Voice package is unavailable from the download server."))
+						return
+					}
 
-						if (response.statusCode !== 200) {
-							clearTimeout(timer)
-							reject(new Error(`HTTP ${response.statusCode} downloading ${requestUrl}`))
-							return
-						}
+					if (response.statusCode !== 200) {
+						fail(new Error(`HTTP ${response.statusCode} downloading ${requestUrl}`))
+						return
+					}
 
-						const totalBytes = parseInt(response.headers["content-length"] || "0", 10)
-						let downloadedBytes = 0
+					const totalBytes = parseInt(response.headers["content-length"] || "0", 10)
+					let downloadedBytes = 0
 
-						const fileStream = fs.createWriteStream(destPath)
-						response.on("data", (chunk: Buffer) => {
-							downloadedBytes += chunk.length
-							onProgress?.(downloadedBytes, totalBytes)
-						})
-						response.pipe(fileStream)
-						fileStream.on("finish", () => {
-							fileStream.close()
-							clearTimeout(timer)
-							resolve()
-						})
-						fileStream.on("error", (err) => {
-							clearTimeout(timer)
-							fs.unlinkSync(destPath)
-							reject(err)
-						})
+					const fileStream = fs.createWriteStream(destPath)
+					response.on("data", (chunk: Buffer) => {
+						downloadedBytes += chunk.length
+						armTimer()
+						onProgress?.(downloadedBytes, totalBytes)
 					})
-					.on("error", reject)
+					response.pipe(fileStream)
+					fileStream.on("finish", () => {
+						fileStream.close()
+						succeed()
+					})
+					fileStream.on("error", (err) => {
+						try {
+							fs.unlinkSync(destPath)
+						} catch {
+							// best-effort cleanup
+						}
+						fail(err)
+					})
+				})
+				req.on("timeout", () => {
+					req.destroy(new Error("Connection timed out"))
+				})
+				req.on("error", (err) => fail(err))
 			}
 
 			doRequest(url)

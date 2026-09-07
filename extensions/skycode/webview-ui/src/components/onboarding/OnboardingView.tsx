@@ -11,7 +11,7 @@ import { Item, ItemContent, ItemDescription, ItemHeader, ItemMedia, ItemTitle } 
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
 import { cn } from "@/lib/utils"
-import { AccountServiceClient, StateServiceClient } from "@/services/grpc-client"
+import { StateServiceClient } from "@/services/grpc-client"
 import ApiConfigurationSection from "../settings/sections/ApiConfigurationSection"
 import { useApiConfigurationHandlers } from "../settings/utils/useApiConfigurationHandlers"
 import {
@@ -464,16 +464,12 @@ const OnboardingView = ({ onboardingModels }: { onboardingModels: OnboardingMode
 				case "signup":
 					setStepNumber(3) // Almost there
 					setIsActionLoading(true)
-					await AccountServiceClient.accountLoginClicked({})
-						.catch(() => {})
-						.finally(() => setIsActionLoading(false))
+					setIsActionLoading(false)
 					await finishOnboarding(true, 3)
 					break
 				case "signin":
 					setIsActionLoading(true)
-					await AccountServiceClient.accountLoginClicked({})
-						.catch(() => {})
-						.finally(() => setIsActionLoading(false))
+					setIsActionLoading(false)
 					await finishOnboarding(true, 3)
 					break
 				case "next":

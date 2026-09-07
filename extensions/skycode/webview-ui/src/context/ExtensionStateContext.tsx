@@ -208,7 +208,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		backgroundCommandTaskId: undefined,
 		lastDismissedCliBannerVersion: 0,
 		subagentsEnabled: false,
-		backgroundEditEnabled: false,
+		backgroundEditEnabled: true,
 		pendingChanges: [],
 		skillsEnabled: false,
 		globalSkillsToggles: {},

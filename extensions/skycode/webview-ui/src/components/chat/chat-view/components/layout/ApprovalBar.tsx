@@ -7,6 +7,7 @@
  */
 
 import React, { useCallback, useState } from "react"
+import { useI18n } from "@/i18n"
 import type { PendingApproval } from "../../hooks/useSession"
 
 interface ApprovalBarProps {
@@ -20,6 +21,7 @@ interface ApprovalBarProps {
  * Each approval card shows tool info and approve/reject buttons.
  */
 export const ApprovalBar: React.FC<ApprovalBarProps> = ({ approvals, onApprove, onReject }) => {
+	const { t } = useI18n()
 	const [processingId, setProcessingId] = useState<string | null>(null)
 
 	const handleApprove = useCallback(
@@ -63,14 +65,14 @@ export const ApprovalBar: React.FC<ApprovalBarProps> = ({ approvals, onApprove, 
 							disabled={processingId === approval.id}
 							onClick={() => handleApprove(approval.id)}
 						>
-							{approval.primaryText ?? "Approve"}
+							{approval.primaryText ?? t("button.approve")}
 						</button>
 						<button
 							className="px-3 py-1 text-xs rounded bg-(--vscode-button-secondaryBackground) text-(--vscode-button-secondaryForeground) hover:bg-(--vscode-button-secondaryHoverBackground) disabled:opacity-50"
 							disabled={processingId === approval.id}
 							onClick={() => handleReject(approval.id)}
 						>
-							{approval.secondaryText ?? "Reject"}
+							{approval.secondaryText ?? t("button.reject")}
 						</button>
 					</div>
 				</div>

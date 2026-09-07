@@ -36,7 +36,6 @@ import { ExtensionRegistryInfo } from "@/registry"
 import { AuthService } from "@/services/auth/AuthService"
 import { OcaAuthService } from "@/services/auth/oca/OcaAuthService"
 import { LogoutReason } from "@/services/auth/types"
-import { BannerService } from "@/services/banner/BannerService"
 import { featureFlagsService } from "@/services/feature-flags"
 import { getDistinctId } from "@/services/logging/distinctId"
 import { telemetryService } from "@/services/telemetry"
@@ -46,7 +45,6 @@ import { getAxiosSettings } from "@/shared/net"
 import { ShowMessageType } from "@/shared/proto/host/window"
 import { Logger } from "@/shared/services/Logger"
 import { getLatestAnnouncementId } from "@/utils/announcements"
-import { sendAccountButtonClickedEvent } from "./ui/subscribeToAccountButtonClicked"
 import { getCwd, getDesktopDir } from "@/utils/path"
 import { PromptRegistry } from "../prompts/system-prompt"
 import { getModelCapabilityTier, getSessionLimitsForModel } from "@utils/model-utils"
@@ -124,13 +122,10 @@ export class Controller {
 
 	/**
 	 * Starts the periodic remote config fetching timer
-	 * Fetches immediately and then every hour
+	 * Server-side remote config is retired for the frozen standalone build.
 	 */
 	private startRemoteConfigTimer() {
-		// Initial fetch
-		fetchRemoteConfig(this)
-		// Set up 1-hour interval
-		this.remoteConfigTimer = setInterval(() => fetchRemoteConfig(this), 3600000) // 1 hour
+		Logger.log("[RemoteConfig] Disabled for standalone Skycode build")
 	}
 
 	constructor(readonly context: vscode.ExtensionContext) {
@@ -274,8 +269,8 @@ export class Controller {
 		this.stateManager.setGlobalState("userInfo", info)
 	}
 
-	// Number of messages a user can send without authentication before being asked to sign in
-	static readonly FREE_REQUEST_LIMIT = 20
+	// Legacy value kept for state compatibility. The standalone build does not gate usage.
+	static readonly FREE_REQUEST_LIMIT = Number.MAX_SAFE_INTEGER
 
 	/**
 	 * Checks if the user has exceeded the free request limit.
@@ -284,32 +279,6 @@ export class Controller {
 	 * @returns true if the request is allowed, false if blocked (limit reached)
 	 */
 	async checkFreeRequestGate(): Promise<boolean> {
-		const authService = AuthService.getInstance()
-		const isAuthenticated = authService["_authenticated"]
-
-		if (isAuthenticated) {
-			return true
-		}
-
-		const freeCount = this.stateManager.getGlobalStateKey("freeRequestCount") ?? 0
-		if (freeCount >= Controller.FREE_REQUEST_LIMIT) {
-			Logger.log(`[FreeGate] Free request limit reached (${freeCount}/${Controller.FREE_REQUEST_LIMIT}), auth required`)
-			// Show notification and navigate to Account view
-			await HostProvider.window.showMessage({
-				type: ShowMessageType.INFORMATION,
-				message: t("auth.freeLimit", { limit: String(Controller.FREE_REQUEST_LIMIT) }),
-			})
-			try {
-				await sendAccountButtonClickedEvent()
-			} catch (e) {
-				Logger.error("[FreeGate] Failed to navigate to account view:", e)
-			}
-			return false
-		}
-
-		// Increment counter
-		this.stateManager.setGlobalState("freeRequestCount", freeCount + 1)
-		Logger.log(`[FreeGate] Free request ${freeCount + 1}/${Controller.FREE_REQUEST_LIMIT}`)
 		return true
 	}
 
@@ -1407,11 +1376,6 @@ export class Controller {
 	}
 
 	async getBanners(): Promise<BannerCardData[]> {
-		try {
-			return BannerService.get().getActiveBanners()
-		} catch (err) {
-			Logger.log(err)
-			return []
-		}
+		return []
 	}
 }

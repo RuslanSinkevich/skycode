@@ -1,8 +1,6 @@
 import { SkycodeMessage } from "@shared/ExtensionMessage"
 import { memo } from "react"
 import CreditLimitError from "@/components/chat/CreditLimitError"
-import { Button } from "@/components/ui/button"
-import { useSkycodeAuth, useSkycodeSignIn } from "@/context/SkycodeAuthContext"
 import { useI18n } from "@/i18n"
 import { SkycodeError, SkycodeErrorType } from "../../../../src/services/error/SkycodeError"
 
@@ -17,10 +15,7 @@ interface ErrorRowProps {
 
 const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStreamingFailedMessage }: ErrorRowProps) => {
 	const { t } = useI18n()
-	const { skycodeUser } = useSkycodeAuth()
 	const rawApiError = apiRequestFailedMessage || apiReqStreamingFailedMessage
-
-	const { isLoginLoading, handleSignIn } = useSkycodeSignIn()
 
 	const renderErrorContent = () => {
 		switch (errorType) {
@@ -33,7 +28,6 @@ const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStre
 					const errorMessage = skycodeError?._error?.message || skycodeError?.message || rawApiError
 					const requestId = skycodeError?._error?.request_id
 					const providerId = skycodeError?.providerId || skycodeError?._error?.providerId
-					const isSkycodeProvider = providerId === "skycode"
 					const errorCode = skycodeError?._error?.code
 
 					if (skycodeError?.isErrorType(SkycodeErrorType.Balance)) {
@@ -91,21 +85,8 @@ const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStre
 							{/* Display raw API error if different from parsed error message */}
 							{errorMessage !== rawApiError && <div>{rawApiError}</div>}
 
-							{/* Display Login button for non-logged in users using the Skycode provider */}
 							<div>
-								{/* The user is signed in or not using skycode provider */}
-								{isSkycodeProvider && !skycodeUser ? (
-									<Button className="w-full mb-4" disabled={isLoginLoading} onClick={handleSignIn}>
-										{t("chat.signInToSkycode")}
-										{isLoginLoading && (
-											<span className="ml-1 animate-spin">
-												<span className="codicon codicon-refresh"></span>
-											</span>
-										)}
-									</Button>
-								) : (
-									<span className="mb-4 text-description">({t("chat.clickRetryBelow")})</span>
-								)}
+								<span className="mb-4 text-description">({t("chat.clickRetryBelow")})</span>
 							</div>
 						</p>
 					)

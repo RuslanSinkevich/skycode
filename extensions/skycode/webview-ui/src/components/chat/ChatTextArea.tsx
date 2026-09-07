@@ -12,7 +12,6 @@ import Thumbnails from "@/components/common/Thumbnails"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { usePlatform } from "@/context/PlatformContext"
-import { useSkycodeAuth } from "@/context/SkycodeAuthContext"
 import { useI18n } from "@/i18n"
 import { cn } from "@/lib/utils"
 import { TaskServiceClient } from "@/services/grpc-client"
@@ -92,9 +91,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			setShowChatModelSelector: setShowModelSelector,
 			dictationSettings,
 			navigateToSettings,
-			navigateToAccount,
 		} = useExtensionState()
-		const { skycodeUser } = useSkycodeAuth()
 		const [isTextAreaFocused, setIsTextAreaFocused] = useState(false)
 		const [isVoiceRecording, setIsVoiceRecording] = useState(false)
 		const [isVoiceProcessing, setIsVoiceProcessing] = useState(false)
@@ -474,9 +471,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							{dictationSettings?.featureEnabled && (dictationSettings?.dictationEnabled && dictationSettings?.voiceReady ? (
 								<VoiceRecorder
 									disabled={sendingDisabled}
-									isAuthenticated={!!skycodeUser?.uid}
 									language={dictationSettings?.dictationLanguage || "en"}
-									onAuthRequired={navigateToAccount}
 									onProcessingStateChange={(isProcessing, message) => {
 										setIsVoiceProcessing(isProcessing)
 										if (isProcessing && message) {

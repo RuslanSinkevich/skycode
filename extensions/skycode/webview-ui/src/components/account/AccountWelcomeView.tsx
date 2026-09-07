@@ -1,6 +1,5 @@
-import { VSCodeButton, VSCodeLink } from "@vscode/webview-ui-toolkit/react"
+import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { useSkycodeSignIn } from "@/context/SkycodeAuthContext"
 import { useI18n } from "@/i18n"
 import SkycodeLogoVariable from "../../assets/SkycodeLogoVariable"
 
@@ -9,8 +8,7 @@ import SkycodeLogoVariable from "../../assets/SkycodeLogoVariable"
 // 		<SkycodeLogoWhite className="size-16 mb-4" />
 export const AccountWelcomeView = () => {
 	const { t } = useI18n()
-	const { environment, freeRequestLimit } = useExtensionState()
-	const { isLoginLoading, loginError, clearError, handleSignIn } = useSkycodeSignIn()
+	const { environment } = useExtensionState()
 
 	return (
 		<div className="flex flex-col items-center pr-3 gap-2.5">
@@ -20,41 +18,56 @@ export const AccountWelcomeView = () => {
 				<div className="flex items-start gap-2.5">
 					<span className="text-base leading-none mt-0.5">👋</span>
 					<p className="m-0 text-[var(--vscode-foreground)]">
-						{t("account.freeTrialWelcome", { limit: String(freeRequestLimit ?? 20) })}
+						{t("account.standaloneWelcome")}
 					</p>
 				</div>
 			</div>
 
-			{loginError && (
-				<div className="w-full p-3 rounded text-sm bg-[var(--vscode-inputValidation-errorBackground,rgba(255,0,0,0.1))] border border-[var(--vscode-inputValidation-errorBorder,#f44747)] text-[var(--vscode-errorForeground,#f44747)]">
-					<div className="flex items-start gap-2">
-						<span className="codicon codicon-error mt-0.5 shrink-0" />
-						<div className="flex-1 break-words">
-							<div className="font-medium mb-0.5">{t("account.loginFailed")}</div>
-							<div className="text-xs opacity-80">{loginError}</div>
-						</div>
-						<button
-							className="codicon codicon-close cursor-pointer bg-transparent border-none text-[var(--vscode-foreground)] opacity-60 hover:opacity-100 p-0"
-							onClick={clearError}
-							type="button"
-						/>
+			<div className="w-full mt-2 rounded-lg bg-gradient-to-r from-[#2b5ea7] to-[#6b4fbb] p-4 shadow-md">
+				<div className="flex flex-col items-center gap-1.5 mb-3">
+					<div className="flex items-center gap-2 text-white">
+						<span className="codicon codicon-heart-filled text-base" />
+						<span className="text-[15px] font-semibold tracking-wide">{t("account.sayThanks")}</span>
 					</div>
+					<span className="text-[11px] text-white opacity-80 font-normal">{t("account.sayThanksSubtitle")}</span>
 				</div>
-			)}
 
-			<VSCodeButton className="w-full mb-4" disabled={isLoginLoading} onClick={handleSignIn}>
-				{t("account.signUpWithSkycode")}
-				{isLoginLoading && (
-					<span className="ml-1 animate-spin">
-						<span className="codicon codicon-refresh"></span>
-					</span>
-				)}
-			</VSCodeButton>
+				<div className="flex gap-2 w-full mb-2">
+					{[300, 500, 1000, 5000].map((sum) => (
+						<a
+							key={sum}
+							href={`https://yoomoney.ru/quickpay/confirm?receiver=4100117726681107&sum=${sum}&quickpay-form=donate&targets=${encodeURIComponent("Поддержка Skycode AI")}`}
+							target="_blank"
+							rel="noopener noreferrer"
+							style={{ textDecoration: "none" }}
+							className="flex-1">
+							<div className="w-full py-2 rounded-md bg-white/20 hover:bg-white/30 text-white text-sm font-semibold text-center cursor-pointer transition-colors">
+								{sum} ₽
+							</div>
+						</a>
+					))}
+				</div>
 
-			<p className="text-(--vscode-descriptionForeground) text-xs text-center m-0">
-				{t("account.byContinuingAgree")} <VSCodeLink href="https://skycode-ai.ru/ru/license">{t("account.termsOfService")}</VSCodeLink>{" "}
-				{t("account.and")} <VSCodeLink href="https://skycode-ai.ru/ru/privacy">{t("account.privacyPolicy")}</VSCodeLink>
-			</p>
+				<a
+					href="https://boosty.to/skycodeai"
+					target="_blank"
+					rel="noopener noreferrer"
+					style={{ textDecoration: "none" }}
+					className="block">
+					<div className="text-[11px] text-white/60 hover:text-white/90 text-center cursor-pointer transition-colors mt-1">
+						{t("account.orViaBoosty")}
+					</div>
+				</a>
+			</div>
+
+			<a
+				href="https://ruslansinkevich.ru/projects/skycode"
+				target="_blank"
+				rel="noopener noreferrer"
+				style={{ textDecoration: "none" }}
+				className="w-full mb-4">
+				<VSCodeButton className="w-full">{t("account.projectPage")}</VSCodeButton>
+			</a>
 		</div>
 	)
 }

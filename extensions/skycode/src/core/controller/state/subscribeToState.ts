@@ -63,20 +63,16 @@ export async function sendStateUpdate(state: ExtensionState): Promise<void> {
 	// [SKYCODE-PERF] Serialize once, send to all subscribers (was: JSON.stringify per subscriber)
 	const stateJson = JSON.stringify(state)
 
-	const promises = Array.from(activeStateSubscriptions).map(async (responseStream) => {
-		try {
-			await responseStream(
-				{
-					stateJson,
-				},
-				false, // Not the last message
-			)
-		} catch (error) {
+	for (const responseStream of Array.from(activeStateSubscriptions)) {
+		void responseStream(
+			{
+				stateJson,
+			},
+			false, // Not the last message
+		).catch((error) => {
 			Logger.error("Error sending state update:", error)
 			// Remove the subscription if there was an error
 			activeStateSubscriptions.delete(responseStream)
-		}
-	})
-
-	await Promise.all(promises)
+		})
+	}
 }

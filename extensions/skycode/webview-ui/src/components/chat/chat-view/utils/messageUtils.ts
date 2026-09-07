@@ -786,25 +786,22 @@ export function groupLowStakesTools(groupedMessages: (SkycodeMessage | SkycodeMe
 			// Commit current thinking block, show edit card, then continue accumulating
 			commitProcessBlock()
 
-			// Deduplicate: if the same file was already edited, replace the previous card
-			// so only the latest diff is shown (avoids visual "duplication")
-			try {
-				const newTool = JSON.parse(message.text || "{}") as SkycodeSayTool
-				if (newTool.path) {
-					const prevIndex = result.findLastIndex((item) => {
-						if (Array.isArray(item)) return false
-						if (!isEditTool(item)) return false
-						try {
-							const prevTool = JSON.parse(item.text || "{}") as SkycodeSayTool
-							return prevTool.path === newTool.path && prevTool.tool === newTool.tool
-						} catch { return false }
-					})
-					if (prevIndex !== -1) {
-						result[prevIndex] = message
+			// Collapse ONLY an immediately-preceding PARTIAL card of the same file —
+			// i.e. the still-streaming version of the very same edit that is now being
+			// finalized. Completed cards are never replaced, so every distinct edit
+			// (including repeated edits of the same file) stays as its own card in
+			// chronological order instead of jumping back into an earlier card.
+			const last = result[result.length - 1]
+			if (!Array.isArray(last) && last && last.partial === true && isEditTool(last)) {
+				try {
+					const newTool = JSON.parse(message.text || "{}") as SkycodeSayTool
+					const prevTool = JSON.parse(last.text || "{}") as SkycodeSayTool
+					if (newTool.path && prevTool.path === newTool.path && prevTool.tool === newTool.tool) {
+						result[result.length - 1] = message
 						continue
 					}
-				}
-			} catch { /* parse error — fall through to normal push */ }
+				} catch { /* parse error — fall through to normal push */ }
+			}
 
 			result.push(message)
 			continue

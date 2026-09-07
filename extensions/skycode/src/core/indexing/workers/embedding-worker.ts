@@ -91,16 +91,19 @@ function sendProgress(phase: string, percent: number): void {
 async function httpGet(url: string): Promise<http.IncomingMessage> {
 	return new Promise((resolve, reject) => {
 		const mod = url.startsWith("https") ? https : http
-		mod.get(url, { headers: { "User-Agent": "Skycode" } }, (res) => {
+		const req = mod.get(url, { headers: { "User-Agent": "Skycode" }, timeout: 60000 }, (res) => {
 			if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
 				const next = res.headers.location.startsWith("http")
 					? res.headers.location
 					: new URL(res.headers.location, url).href
+				res.resume()
 				httpGet(next).then(resolve, reject)
 				return
 			}
 			resolve(res)
-		}).on("error", reject)
+		})
+		req.on("timeout", () => req.destroy(new Error("Connection timed out")))
+		req.on("error", reject)
 	})
 }
 
@@ -125,23 +128,68 @@ async function ensureModelDownloaded(
 
 	await new Promise<void>((resolve, reject) => {
 		let downloaded = 0
+		let settled = false
+		let timer: ReturnType<typeof setTimeout>
+		const fail = (err: Error) => {
+			if (settled) { return }
+			settled = true
+			clearTimeout(timer)
+			reject(err)
+		}
+		// Inactivity timeout — reset per chunk so large models on slow links
+		// aren't aborted mid-transfer, but a real stall still fails fast.
+		const armTimer = () => {
+			clearTimeout(timer)
+			timer = setTimeout(() => fail(new Error("Download stalled")), 120000)
+		}
+		armTimer()
 		const ws = fs.createWriteStream(zipPath)
 		res.on("data", (chunk: Buffer) => {
 			downloaded += chunk.length
+			armTimer()
 			if (totalBytes > 0) {
 				sendProgress("downloading", Math.round((downloaded / totalBytes) * 100))
 			}
 		})
 		res.pipe(ws)
-		ws.on("finish", () => { ws.close(); resolve() })
-		ws.on("error", reject)
-		res.on("error", reject)
+		ws.on("finish", () => {
+			if (settled) { return }
+			settled = true
+			clearTimeout(timer)
+			ws.close()
+			resolve()
+		})
+		ws.on("error", fail)
+		res.on("error", fail)
 	})
 
 	sendProgress("extracting", 0)
 	await extractZip(zipPath, modelDir)
 	fs.unlinkSync(zipPath)
 	sendProgress("extracting", 100)
+}
+
+interface ZipEntry {
+	name: string
+	compMethod: number
+	dataStart: number
+	compSize: number
+	uncompSize: number
+}
+
+/**
+ * Compute a single common top-level directory shared by every entry.
+ * Some archives wrap all files in a folder named after the model
+ * (e.g. "multilingual-e5-base/config.json"); we strip it so files land
+ * directly under destDir, matching the layout transformers.js expects.
+ */
+function commonTopDir(names: string[]): string {
+	const files = names.filter((n) => !n.endsWith("/"))
+	if (files.length === 0) { return "" }
+	const firstSeg = files[0].split("/")[0]
+	if (!firstSeg) { return "" }
+	const prefix = `${firstSeg}/`
+	return files.every((n) => n.startsWith(prefix)) ? prefix : ""
 }
 
 async function extractZip(zipPath: string, destDir: string): Promise<void> {
@@ -152,6 +200,9 @@ async function extractZip(zipPath: string, destDir: string): Promise<void> {
 	await fh.read(buf, 0, stat.size, 0)
 	await fh.close()
 
+	// First pass: collect entries, normalizing separators (archives packed
+	// on Windows may use "\" instead of the zip-standard "/").
+	const entries: ZipEntry[] = []
 	let offset = 0
 	while (offset < buf.length) {
 		const sig = buf.readUInt32LE(offset)
@@ -162,23 +213,30 @@ async function extractZip(zipPath: string, destDir: string): Promise<void> {
 		const uncompSize = buf.readUInt32LE(offset + 22)
 		const nameLen = buf.readUInt16LE(offset + 26)
 		const extraLen = buf.readUInt16LE(offset + 28)
-		const fileName = buf.toString("utf8", offset + 30, offset + 30 + nameLen)
+		const fileName = buf.toString("utf8", offset + 30, offset + 30 + nameLen).replace(/\\/g, "/")
 		const dataStart = offset + 30 + nameLen + extraLen
 
-		if (!fileName.endsWith("/")) {
-			const outPath = path.join(destDir, fileName)
-			fs.mkdirSync(path.dirname(outPath), { recursive: true })
-
-			if (compMethod === 0) {
-				fs.writeFileSync(outPath, buf.subarray(dataStart, dataStart + uncompSize))
-			} else if (compMethod === 8) {
-				const { inflateRawSync } = await import("node:zlib")
-				const inflated = inflateRawSync(buf.subarray(dataStart, dataStart + compSize))
-				fs.writeFileSync(outPath, inflated)
-			}
-		}
-
+		entries.push({ name: fileName, compMethod, dataStart, compSize, uncompSize })
 		offset = dataStart + compSize
+	}
+
+	const strip = commonTopDir(entries.map((e) => e.name))
+
+	const { inflateRawSync } = await import("node:zlib")
+	for (const entry of entries) {
+		if (entry.name.endsWith("/")) { continue }
+		const relName = strip && entry.name.startsWith(strip) ? entry.name.slice(strip.length) : entry.name
+		if (!relName) { continue }
+
+		const outPath = path.join(destDir, relName)
+		fs.mkdirSync(path.dirname(outPath), { recursive: true })
+
+		if (entry.compMethod === 0) {
+			fs.writeFileSync(outPath, buf.subarray(entry.dataStart, entry.dataStart + entry.uncompSize))
+		} else if (entry.compMethod === 8) {
+			const inflated = inflateRawSync(buf.subarray(entry.dataStart, entry.dataStart + entry.compSize))
+			fs.writeFileSync(outPath, inflated)
+		}
 	}
 }
 

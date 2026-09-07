@@ -37,6 +37,15 @@ export const BUFFER_STUCK_TIMEOUT_MS = 6000 // 6 seconds
 /** Timeout to detect stuck completion */
 export const COMPLETION_TIMEOUT_MS = 6000 // 6 seconds
 
+/** Cursor-style soft timeout for VSCode terminal commands */
+export const VSCODE_AUTO_PROCEED_AFTER_MS = 20_000
+
+/** Polling interval for VS Code terminals while shell integration is quiet */
+export const VSCODE_TERMINAL_POLL_INTERVAL_MS = 3_000
+
+/** Number of visible terminal lines to compare and emit during polling */
+export const VSCODE_TERMINAL_POLL_TAIL_LINES = 20
+
 // =============================================================================
 // Large Output Protection
 // =============================================================================

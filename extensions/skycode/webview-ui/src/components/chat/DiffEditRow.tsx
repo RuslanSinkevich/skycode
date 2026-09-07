@@ -1,5 +1,5 @@
 import { StringRequest } from "@shared/proto/skycode/common"
-import { FilePlus, FileText, FileX, LoaderCircleIcon, SquareArrowOutUpRightIcon } from "lucide-react"
+import { ChevronDownIcon, ChevronRightIcon, FilePlus, FileText, FileX, LoaderCircleIcon, SquareArrowOutUpRightIcon } from "lucide-react"
 import { memo, useEffect, useMemo, useRef, useState } from "react"
 import { useI18n } from "@/i18n"
 import { cn } from "@/lib/utils"
@@ -148,12 +148,25 @@ const FileBlock = memo<{ file: Patch; isStreaming: boolean; isToolStreaming: boo
 			})
 		}, [file.lines, startLineNumber])
 
+		const headerTitle = startLineNumber ? `${t("chat.openAtLine")} ${startLineNumber}` : t("chat.openFileInEditor")
+		const ChevronIcon = isExpanded ? ChevronDownIcon : ChevronRightIcon
+
 		return (
 			<div className="bg-code rounded-xs border border-editor-group-border overflow-hidden">
-				<button
-					className="w-full flex items-center gap-2 p-2 bg-code transition-colors justify-between cursor-pointer"
-					onClick={() => setIsExpanded((prev) => !prev)}
-					type="button">
+				{/* Header: clicking anywhere navigates to the change in the editor.
+				    The chevron on the right is the dedicated expand/collapse toggle. */}
+				<div
+					className="w-full flex items-center gap-2 p-2 bg-code transition-colors justify-between cursor-pointer hover:bg-description/5"
+					onClick={(e) => handleOpenFile(e, startLineNumber)}
+					onKeyDown={(e) => {
+						if (e.key === "Enter" || e.key === " ") {
+							e.preventDefault()
+							handleOpenFile(e as unknown as React.MouseEvent, startLineNumber)
+						}
+					}}
+					role="button"
+					tabIndex={0}
+					title={headerTitle}>
 					<div className="flex items-center gap-3 flex-1 w-full overflow-hidden">
 						<div className={cn("flex items-center gap-2 w-full min-w-0", actionStyle.borderClass)}>
 							{isToolStreaming && (
@@ -167,11 +180,8 @@ const FileBlock = memo<{ file: Patch; isStreaming: boolean; isToolStreaming: boo
 							)}
 							<ActionIcon className={cn("w-5 h-5 shrink-0", actionStyle.iconClass)} />
 							<span
-								className="font-medium truncate hover:underline hover:text-link cursor-pointer"
-								onClick={(e) => handleOpenFile(e, startLineNumber)}
-								title={
-									startLineNumber ? `${t("chat.openAtLine")} ${startLineNumber}` : t("chat.openFileInEditor")
-								}>
+								className="font-medium truncate hover:underline hover:text-link"
+								title={headerTitle}>
 								{file.path}
 								{startLineNumber && <span className="text-description ml-1">:{startLineNumber}</span>}
 							</span>
@@ -182,11 +192,22 @@ const FileBlock = memo<{ file: Patch; isStreaming: boolean; isToolStreaming: boo
 						<span
 							className="p-1 hover:bg-description/20 rounded-xs transition-colors cursor-pointer"
 							onClick={(e) => handleOpenFile(e, startLineNumber)}
-							title={startLineNumber ? `${t("chat.openAtLine")} ${startLineNumber}` : t("chat.openFileInEditor")}>
+							title={headerTitle}>
 							<SquareArrowOutUpRightIcon className="size-2 text-description hover:text-foreground" />
 						</span>
+						<button
+							aria-label={isExpanded ? t("pending.collapse") : t("pending.expand")}
+							className="p-1 hover:bg-description/20 rounded-xs transition-colors"
+							onClick={(e) => {
+								e.stopPropagation()
+								setIsExpanded((prev) => !prev)
+							}}
+							title={isExpanded ? t("pending.collapse") : t("pending.expand")}
+							type="button">
+							<ChevronIcon className="size-3 text-description hover:text-foreground" />
+						</button>
 					</div>
-				</button>
+				</div>
 
 				{isExpanded && (
 					<div

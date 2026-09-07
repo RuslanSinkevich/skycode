@@ -15,7 +15,6 @@ import { FileContextTracker } from "./core/context/context-tracking/FileContextT
 import { StateManager } from "./core/storage/StateManager"
 import { openAiCodexOAuthManager } from "./integrations/openai-codex/oauth"
 import { ExtensionRegistryInfo } from "./registry"
-import { BannerService } from "./services/banner/BannerService"
 import { audioRecordingService } from "./services/dictation/AudioRecordingService"
 import { ErrorService } from "./services/error"
 import { featureFlagsService } from "./services/feature-flags"
@@ -37,6 +36,12 @@ export async function initialize(context: vscode.ExtensionContext): Promise<Webv
 	// Configure the shared Logging class to use HostProvider's output channel
 	Logger.setOutput((msg: string) => HostProvider.get().logToChannel(msg))
 
+	const runInBackground = (label: string, task: () => Promise<unknown>) => {
+		task().catch((error) => {
+			Logger.warn(`[Startup] ${label} failed:`, error)
+		})
+	}
+
 	try {
 		await StateManager.initialize(context)
 	} catch (error) {
@@ -56,38 +61,22 @@ export async function initialize(context: vscode.ExtensionContext): Promise<Webv
 	// Initialize PostHog client provider
 	PostHogClientProvider.getInstance()
 
-	// Setup the external services
-	await ErrorService.initialize()
-	await featureFlagsService.poll(null)
-
-	// Migrate custom instructions to global Skycode rules (one-time cleanup)
-	await migrateCustomInstructionsToGlobalRules(context)
-
-	// Migrate welcomeViewCompleted setting based on existing API keys (one-time cleanup)
-	await migrateWelcomeViewCompleted(context)
-
-	// Migrate workspace storage values back to global storage (reverting previous migration)
-	await migrateWorkspaceToGlobalStorage(context)
-
-	// Ensure taskHistory.json exists and migrate legacy state (runs once)
-	await migrateTaskHistoryToFile(context)
-
-	// Clean up MCP marketplace catalog from global state (moved to disk cache)
-	await cleanupMcpMarketplaceCatalogFromGlobalState(context)
-
-	// Clean up orphaned file context warnings (startup cleanup)
-	await FileContextTracker.cleanupOrphanedWarnings(context)
-
 	const webview = HostProvider.get().createWebviewProvider()
 
-	await showVersionUpdateAnnouncement(context)
-
-	// Check if this workspace was opened from worktree quick launch
-	await checkWorktreeAutoOpen(context)
-
-	// Initialize banner service (TEMPORARILY DISABLED - not fetching banners to prevent API hammering)
-	BannerService.initialize(webview.controller)
-	// DISABLED: .getActiveBanners(true)
+	// Keep the webview activation path short. These services are useful, but they
+	// should not hold the Chat panel blank on cold start or slow networks.
+	runInBackground("ErrorService.initialize", () => ErrorService.initialize())
+	runInBackground("featureFlagsService.poll", () => featureFlagsService.poll(null))
+	runInBackground("state migrations", async () => {
+		await migrateCustomInstructionsToGlobalRules(context)
+		await migrateWelcomeViewCompleted(context)
+		await migrateWorkspaceToGlobalStorage(context)
+		await migrateTaskHistoryToFile(context)
+		await cleanupMcpMarketplaceCatalogFromGlobalState(context)
+	})
+	runInBackground("FileContextTracker.cleanupOrphanedWarnings", () => FileContextTracker.cleanupOrphanedWarnings(context))
+	runInBackground("showVersionUpdateAnnouncement", () => showVersionUpdateAnnouncement(context))
+	runInBackground("checkWorktreeAutoOpen", () => checkWorktreeAutoOpen(context))
 
 	telemetryService.captureExtensionActivated()
 

@@ -3,7 +3,7 @@
 
 import assert from "node:assert"
 // Legacy: import { NativeDiffManager } from "./core/diff/NativeDiffManager"
-import { initDiffSystem, DiffSystem } from "./core/diff-v2"
+import { initDiffSystem } from "./core/diff-v2"
 import { getPendingChangesStorage } from "./core/diff-v2/storage/PendingChangesStorage"
 import { DIFF_VIEW_URI_SCHEME } from "@hosts/vscode/VscodeDiffViewProvider"
 import * as vscode from "vscode"
@@ -119,26 +119,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Используем только DiffSystem V2 (Proposed API - editorInsets)
 	// const nativeDiffManager = new NativeDiffManager(context);
 
-	// [SKYCODE-SKYCODE] Initialize DiffSystem V2 (Proposed API - editorInsets)
-	// clearOnStartup = false — сохраняем pending diffs между перезапусками
-	let diffSystemV2: DiffSystem | null = null
-	try {
-		diffSystemV2 = await initDiffSystem(context, false)
-		Logger.log("[Skycode] DiffSystem V2 initialized successfully (cleared old diffs)")
-	} catch (error) {
-		Logger.warn("[Skycode] DiffSystem V2 failed to initialize (Proposed API may not be available):", error)
-	}
-
 	const webview = (await initialize(context)) as VscodeWebviewProvider
-
-	// Sync pending changes count to webview when Accept/Reject happens in editor
-	if (diffSystemV2) {
-		context.subscriptions.push(
-			getPendingChangesStorage().onDidChange(() => {
-				webview.controller.postStateToWebview()
-			}),
-		)
-	}
 
 	// [SKYCODE-SKYCODE] Initialize Codebase Indexing System
 	let indexingService: import("./core/indexing").IndexingService | null = null
@@ -233,6 +214,22 @@ export async function activate(context: vscode.ExtensionContext) {
 			webviewOptions: { retainContextWhenHidden: true },
 		}),
 	)
+
+	// [SKYCODE-SKYCODE] Initialize DiffSystem V2 after the webview is registered.
+	// Disk reads and git watchers can be slow on cold start; they must not block
+	// resolving the Skycode view.
+	initDiffSystem(context, false)
+		.then(() => {
+			Logger.log("[Skycode] DiffSystem V2 initialized successfully (cleared old diffs)")
+			context.subscriptions.push(
+				getPendingChangesStorage().onDidChange(() => {
+					webview.controller.postStateToWebview()
+				}),
+			)
+		})
+		.catch((error) => {
+			Logger.warn("[Skycode] DiffSystem V2 failed to initialize (Proposed API may not be available):", error)
+		})
 
 	// --- SKYCODE_FORK_BEGIN: auto-open Skycode panel on first launch ---
 	try {

@@ -8,7 +8,7 @@
 		"editorInsets"
 	],
 	"engines": {
-		"vscode": "^1.121.0"
+		"vscode": "^1.124.0"
 	},
 	"author": {
 		"name": "SKYCODE"
@@ -43,8 +43,7 @@
 		"llama"
 	],
 	"activationEvents": [
-		"onLanguage",
-		"onStartupFinished",
+		"onUri",
 		"workspaceContains:evals.env"
 	],
 	"main": "./dist/extension.js",
@@ -61,45 +60,45 @@
 		"walkthroughs": [
 			{
 				"id": "SkycodeWalkthrough",
-				"title": "Meet Skycode, your new coding partner",
-				"description": "Skycode codes like a developer because it thinks like one. Here are 5 ways to put it to work:",
+				"title": "Познакомьтесь со Skycode, вашим помощником в разработке",
+				"description": "Skycode пишет код как разработчик, потому что работает по шагам. Вот 5 способов использовать его в работе:",
 				"steps": [
 					{
 						"id": "welcome",
-						"title": "Start with a Goal, Not Just a Prompt",
-						"description": "Tell Skycode what you want to achieve. It plans, asks, and then codes, like a true partner.",
+						"title": "Начните с цели, а не просто с промпта",
+						"description": "Опишите Skycode, чего нужно добиться. Он составит план, задаст вопросы и затем внесёт изменения.",
 						"media": {
 							"markdown": "walkthrough/step1.md"
 						}
 					},
 					{
 						"id": "learn",
-						"title": "Let Skycode Learn Your Codebase",
-						"description": "Point Skycode to your project. It builds understanding to make smart, context-aware changes.",
+						"title": "Дайте Skycode изучить кодовую базу",
+						"description": "Откройте Skycode доступ к проекту. Он соберёт контекст, чтобы вносить точные изменения.",
 						"media": {
 							"markdown": "walkthrough/step2.md"
 						}
 					},
 					{
 						"id": "advanced-features",
-						"title": "Always Use the Best AI Models",
-						"description": "Skycode empowers you with State-of-the-Art AI, connecting to top models (Anthropic, Gemini, OpenAI & more).",
+						"title": "Используйте лучшие AI-модели",
+						"description": "Skycode подключается к ведущим моделям Anthropic, Gemini, OpenAI и других провайдеров.",
 						"media": {
 							"markdown": "walkthrough/step3.md"
 						}
 					},
 					{
 						"id": "mcp",
-						"title": "Extend with Powerful Tools (MCP)",
-						"description": "Connect to databases, APIs, or discover new capabilities in the MCP Marketplace.",
+						"title": "Расширяйте возможности через MCP",
+						"description": "Подключайте базы данных, API и новые инструменты из MCP Marketplace.",
 						"media": {
 							"markdown": "walkthrough/step4.md"
 						}
 					},
 					{
 						"id": "getting-started",
-						"title": "You're Always in Control",
-						"description": "Review Skycode's plans and diffs. Approve changes before they happen. No surprises.",
+						"title": "Контроль остаётся у вас",
+						"description": "Проверяйте планы и diff от Skycode. Подтверждайте изменения до применения.",
 						"media": {
 							"markdown": "walkthrough/step5.md"
 						},
@@ -116,6 +115,7 @@
 					"type": "webview",
 					"id": "skycode.SidebarProvider",
 					"name": "Skycode",
+					"icon": "assets/icons/svg-src/skycode-bot.svg",
 					"when": "true"
 				}
 			]
@@ -173,13 +173,13 @@
 			},
 			{
 				"command": "skycode.dev.createTestTasks",
-				"title": "Create Test Tasks",
+				"title": "Создать тестовые задачи",
 				"category": "Skycode",
 				"when": "skycode.isDevMode"
 			},
 			{
 				"command": "skycode.dev.expireMcpOAuthTokens",
-				"title": "Expire MCP OAuth Tokens (for testing)",
+				"title": "Сбросить MCP OAuth токены (для тестов)",
 				"category": "Skycode",
 				"when": "skycode.isDevMode"
 			},
@@ -195,7 +195,7 @@
 			},
 			{
 				"command": "skycode.focusChatInput",
-				"title": "Jump to Chat Input",
+				"title": "Перейти к полю ввода чата",
 				"category": "Skycode"
 			},
 			{
@@ -206,7 +206,7 @@
 			},
 			{
 				"command": "skycode.abortGitCommitMessage",
-				"title": "Generate Commit Message with Skycode - Stop",
+				"title": "Остановить генерацию сообщения коммита Skycode",
 				"category": "Skycode",
 				"icon": "$(debug-stop)"
 			},
@@ -222,30 +222,30 @@
 			},
 			{
 				"command": "skycode.jupyterGenerateCell",
-				"title": "Generate Jupyter Cell with Skycode",
+				"title": "Сгенерировать Jupyter-ячейку с Skycode",
 				"category": "Skycode",
 				"icon": "$(sparkle)"
 			},
 			{
 				"command": "skycode.jupyterExplainCell",
-				"title": "Explain Jupyter Cell with Skycode",
+				"title": "Объяснить Jupyter-ячейку с Skycode",
 				"category": "Skycode",
 				"icon": "$(question)"
 			},
 			{
 				"command": "skycode.jupyterImproveCell",
-				"title": "Improve Jupyter Cell with Skycode",
+				"title": "Улучшить Jupyter-ячейку с Skycode",
 				"category": "Skycode",
 				"icon": "$(lightbulb)"
 			},
 			{
 				"command": "skycode.openWalkthrough",
-				"title": "Open Walkthrough",
+				"title": "Открыть вводный тур",
 				"category": "Skycode"
 			},
 			{
 				"command": "skycode.reconstructTaskHistory",
-				"title": "Reconstruct Task History",
+				"title": "Восстановить историю задач",
 				"category": "Skycode"
 			},
 			{
@@ -335,12 +335,12 @@
 			},
 			{
 				"command": "skycode.inlineEdit",
-				"title": "Skycode: Inline Edit",
+				"title": "Skycode: встроенное редактирование",
 				"category": "Skycode"
 			},
 			{
 				"command": "skycode.reviewComment.reply",
-				"title": "Reply",
+				"title": "Ответить",
 				"category": "Skycode",
 				"enablement": "!commentIsEmpty"
 			},

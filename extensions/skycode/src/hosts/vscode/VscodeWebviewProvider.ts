@@ -65,6 +65,7 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 	 * @returns A promise that resolves when the webview has been fully initialized
 	 */
 	public async resolveWebviewView(webviewView: vscode.WebviewView): Promise<void> {
+		this.disposeWebviewView()
 		this.webview = webviewView
 
 		webviewView.webview.options = {
@@ -105,8 +106,8 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 		// Listen for when the view is disposed
 		// This happens when the user closes the view or when the view is closed programmatically
 		webviewView.onDidDispose(
-			async () => {
-				await this.dispose()
+			() => {
+				this.disposeWebviewView()
 			},
 			null,
 			this.disposables,
@@ -271,15 +272,18 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 		this.webview?.webview.postMessage(msg)
 	}
 
-	override async dispose() {
-		// WebviewView doesn't have a dispose method, it's managed by VSCode
-		// We just need to clean up our disposables
+	private disposeWebviewView(): void {
 		while (this.disposables.length) {
 			const x = this.disposables.pop()
 			if (x) {
 				x.dispose()
 			}
 		}
-		super.dispose()
+		this.webview = undefined
+	}
+
+	override async dispose() {
+		this.disposeWebviewView()
+		await super.dispose()
 	}
 }

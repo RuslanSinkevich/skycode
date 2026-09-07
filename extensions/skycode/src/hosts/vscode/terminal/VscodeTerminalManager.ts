@@ -178,6 +178,10 @@ export class VscodeTerminalManager implements ITerminalManager {
 			Logger.log(`[TerminalManager] Terminal ${vscodeTerminalInfo.id} completed, setting busy to false`)
 			vscodeTerminalInfo.busy = false
 		})
+		process.once("error", () => {
+			Logger.log(`[TerminalManager] Terminal ${vscodeTerminalInfo.id} errored, setting busy to false`)
+			vscodeTerminalInfo.busy = false
+		})
 
 		// if shell integration is not available, remove terminal so it does not get reused as it may be running a long-running process
 		process.once("no_shell_integration", () => {
@@ -295,18 +299,23 @@ export class VscodeTerminalManager implements ITerminalManager {
 					availableTerminal.pendingCwdChange = undefined
 					availableTerminal.cwdResolved = undefined
 				} else {
+					let cwdTimeout: NodeJS.Timeout | null = null
 					try {
 						// Wait with a timeout for state change event to resolve
 						await Promise.race([
 							cwdPromise,
-							new Promise<void>((_, reject) =>
-								setTimeout(() => reject(new Error(`CWD timeout: Failed to update to ${cwd}`)), 1000),
-							),
+							new Promise<void>((_, reject) => {
+								cwdTimeout = setTimeout(() => reject(new Error(`CWD timeout: Failed to update to ${cwd}`)), 1000)
+							}),
 						])
 					} catch (_err) {
 						// Clear pending state on timeout
 						availableTerminal.pendingCwdChange = undefined
 						availableTerminal.cwdResolved = undefined
+					} finally {
+						if (cwdTimeout) {
+							clearTimeout(cwdTimeout)
+						}
 					}
 				}
 				this.terminalIds.add(availableTerminal.id)

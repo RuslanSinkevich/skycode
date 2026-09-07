@@ -76,6 +76,8 @@ export class IndexingService implements vscode.Disposable {
 	/** Timer to unload the embedding worker after idle — avoids keeping ONNX/model
 	 * threads hot when indexing is complete and no embed requests are pending. */
 	private providerIdleTimer: NodeJS.Timeout | null = null
+	/** Delayed initial indexing timer. Must be cancelled on dispose/stop. */
+	private initialIndexTimer: NodeJS.Timeout | null = null
 
 	/** Event emitter for progress updates */
 	private readonly _onProgress = new vscode.EventEmitter<IndexingProgress>()
@@ -87,7 +89,8 @@ export class IndexingService implements vscode.Disposable {
 
 	constructor(
 		private readonly workspacePath: string,
-		private readonly extensionPath: string,readonly _context?: vscode.ExtensionContext,
+		private readonly extensionPath: string,
+		readonly _context?: vscode.ExtensionContext,
 	) {
 		this.storage = new IndexStorage(workspacePath, extensionPath)
 		this.config = this.readConfig()
@@ -221,11 +224,16 @@ export class IndexingService implements vscode.Disposable {
 			// the ONNX worker loaded while the index is idle.
 		} else {
 			// No existing index — delay indexing to not block extension activation
-			setTimeout(() => {
+			if (this.initialIndexTimer) {
+				clearTimeout(this.initialIndexTimer)
+			}
+			this.initialIndexTimer = setTimeout(() => {
+				this.initialIndexTimer = null
 				this.startIndexing().catch((err) => {
 					Logger.warn("[Skycode Indexing] Background indexing failed:", err)
 				})
 			}, 5000)
+			this.initialIndexTimer.unref?.()
 		}
 	}
 
@@ -270,7 +278,9 @@ export class IndexingService implements vscode.Disposable {
 	/** Schedule a debounced finalize. Coalesces a burst of incremental writes
 	 * (typical: editor save sweep, git checkout) into one DB flush. */
 	private scheduleFinalize(): void {
-		if (this.finalizeTimer) { return }
+		if (this.finalizeTimer) {
+			return
+		}
 		this.finalizeTimer = setTimeout(() => {
 			this.finalizeTimer = null
 			void this.storage.finalize()
@@ -279,7 +289,9 @@ export class IndexingService implements vscode.Disposable {
 
 	/** Lazily create the embedding provider (loads ONNX worker on first use). */
 	private async ensureProvider(): Promise<EmbeddingProvider | null> {
-		if (this.config.mode === "off") { return null }
+		if (this.config.mode === "off") {
+			return null
+		}
 		if (!this.provider) {
 			this.cancelProviderUnload()
 			try {
@@ -306,7 +318,9 @@ export class IndexingService implements vscode.Disposable {
 		this.cancelProviderUnload()
 		this.providerIdleTimer = setTimeout(() => {
 			this.providerIdleTimer = null
-			if (this.progress.status === "indexing") { return }
+			if (this.progress.status === "indexing") {
+				return
+			}
 			this.unloadProvider()
 		}, delayMs)
 		this.providerIdleTimer.unref?.()
@@ -321,32 +335,44 @@ export class IndexingService implements vscode.Disposable {
 
 	/** Handle file change/create — re-index this file */
 	private async onFileChanged(uri: vscode.Uri): Promise<void> {
-		if (this.config.mode === "off") { return }
+		if (this.config.mode === "off") {
+			return
+		}
 		const provider = await this.ensureProvider()
-		if (!provider) { return }
+		if (!provider) {
+			return
+		}
 
 		const filePath = uri.fsPath
 		const relPath = vscode.workspace.asRelativePath(filePath)
 
 		// Check if file should be ignored
 		const shouldIgnore = this.config.ignoredPatterns.some((pattern) => {
-			if (pattern.startsWith("*.")) { return filePath.endsWith(pattern.slice(1)) }
+			if (pattern.startsWith("*.")) {
+				return filePath.endsWith(pattern.slice(1))
+			}
 			return relPath.split(/[/\\]/).some((seg) => seg === pattern)
 		})
-		if (shouldIgnore) { return }
+		if (shouldIgnore) {
+			return
+		}
 
 		try {
 			const content = await fs.promises.readFile(filePath, "utf-8")
 			const hash = crypto.createHash("md5").update(content).digest("hex")
 
-			if (!this.storage.isFileChanged(relPath, hash)) { return }
+			if (!this.storage.isFileChanged(relPath, hash)) {
+				return
+			}
 
 			// Remove old chunks for this file
 			this.storage.removeFile(relPath)
 
 			// Chunk and embed
 			const chunks = await chunkFile(relPath, content)
-			if (chunks.length === 0) { return }
+			if (chunks.length === 0) {
+				return
+			}
 			for (const chunk of chunks) {
 				chunk.content = this.enrichChunkContent(chunk.content, chunk.filePath, chunk.language)
 			}
@@ -399,7 +425,9 @@ export class IndexingService implements vscode.Disposable {
 		// Cancel any running indexing
 		this.stop()
 
-		if (this.config.mode === "off") { return }
+		if (this.config.mode === "off") {
+			return
+		}
 
 		// Create embedding provider
 		Logger.log("[Skycode Indexing] Starting indexing, mode:", this.config.mode, "extensionPath:", this.extensionPath)
@@ -417,7 +445,9 @@ export class IndexingService implements vscode.Disposable {
 			return
 		}
 
-		if (!this.provider) { return }
+		if (!this.provider) {
+			return
+		}
 
 		this.cancellation = new vscode.CancellationTokenSource()
 		const token = this.cancellation.token
@@ -445,7 +475,9 @@ export class IndexingService implements vscode.Disposable {
 			const files: Array<{ absPath: string; relPath: string }> = []
 			let walkCount = 0
 			for await (const file of walkFiles(this.workspacePath, this.config, token)) {
-				if (token.isCancellationRequested) { return }
+				if (token.isCancellationRequested) {
+					return
+				}
 				files.push(file)
 				walkCount++
 				if (walkCount % 100 === 0) {
@@ -468,10 +500,14 @@ export class IndexingService implements vscode.Disposable {
 			const allChunks: Array<{ chunk: CodeChunk; fileHash: string }> = []
 
 			for (let i = 0; i < files.length; i++) {
-				if (token.isCancellationRequested) { return }
+				if (token.isCancellationRequested) {
+					return
+				}
 				while (this.paused) {
 					await new Promise((r) => setTimeout(r, 200))
-					if (token.isCancellationRequested) { return }
+					if (token.isCancellationRequested) {
+						return
+					}
 				}
 
 				const file = files[i]
@@ -511,10 +547,14 @@ export class IndexingService implements vscode.Disposable {
 			const MAX_CONSECUTIVE_EMBED_FAILURES = 5
 			let consecutiveFailures = 0
 			for (let i = 0; i < allChunks.length; i += EMBED_BATCH_SIZE) {
-				if (token.isCancellationRequested) { return }
+				if (token.isCancellationRequested) {
+					return
+				}
 				while (this.paused) {
 					await new Promise((r) => setTimeout(r, 200))
-					if (token.isCancellationRequested) { return }
+					if (token.isCancellationRequested) {
+						return
+					}
 				}
 
 				const batch = allChunks.slice(i, i + EMBED_BATCH_SIZE)
@@ -661,6 +701,10 @@ export class IndexingService implements vscode.Disposable {
 
 	/** Stop indexing completely */
 	stop(): void {
+		if (this.initialIndexTimer) {
+			clearTimeout(this.initialIndexTimer)
+			this.initialIndexTimer = null
+		}
 		this.cancelProviderUnload()
 		this.paused = false
 		if (this.cancellation) {
@@ -738,7 +782,9 @@ export class IndexingService implements vscode.Disposable {
 			return []
 		}
 
-		Logger.log(`[Skycode Search] vectorSearch: chunks=${chunkCount} dims=${this.storage.getDimensions()} queryVecLen=${queryVec.length}`)
+		Logger.log(
+			`[Skycode Search] vectorSearch: chunks=${chunkCount} dims=${this.storage.getDimensions()} queryVecLen=${queryVec.length}`,
+		)
 		const results = vectorSearch(this.storage, queryVec, topK)
 		Logger.log(`[Skycode Search] vectorSearch returned ${results.length} results`)
 		this.scheduleProviderUnload()
@@ -789,7 +835,9 @@ export class IndexingService implements vscode.Disposable {
 			return
 		}
 
-		if (this.lastEmitTimer) { return }
+		if (this.lastEmitTimer) {
+			return
+		}
 		this.lastEmitTimer = setTimeout(() => {
 			this.lastEmitTimer = null
 			this.lastEmitAt = Date.now()
@@ -807,6 +855,10 @@ export class IndexingService implements vscode.Disposable {
 		if (this.finalizeTimer) {
 			clearTimeout(this.finalizeTimer)
 			this.finalizeTimer = null
+		}
+		if (this.initialIndexTimer) {
+			clearTimeout(this.initialIndexTimer)
+			this.initialIndexTimer = null
 		}
 		if (this.lastEmitTimer) {
 			clearTimeout(this.lastEmitTimer)

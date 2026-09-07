@@ -1,7 +1,5 @@
-import { BannerService } from "@/services/banner/BannerService"
 import type { EmptyRequest } from "@/shared/proto/skycode/common"
 import { Empty } from "@/shared/proto/skycode/common"
-import { Logger } from "@/shared/services/Logger"
 import type { Controller } from ".."
 
 /**
@@ -10,13 +8,6 @@ import type { Controller } from ".."
  * appear without waiting for the 1-hour cache expiry.
  */
 export async function refreshBanners(controller: Controller, _request: EmptyRequest): Promise<Empty> {
-	try {
-		if (BannerService.isInitialized()) {
-			BannerService.get().clearCache()
-		}
-		await controller.postStateToWebview()
-	} catch (error) {
-		Logger.error("Failed to refresh banners:", error)
-	}
+	await controller.postStateToWebview()
 	return {}
 }

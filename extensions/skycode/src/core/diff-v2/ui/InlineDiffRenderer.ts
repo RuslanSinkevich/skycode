@@ -635,8 +635,18 @@ export class InlineDiffRenderer implements vscode.Disposable {
 
 	private addInset(hunkId: string, record: InsetRecord): void {
 		const existing = this.insets.get(hunkId) || [];
-		existing.push(record);
-		this.insets.set(hunkId, existing);
+		const deduped: InsetRecord[] = [];
+
+		for (const old of existing) {
+			if (old.zoneType === record.zoneType && old.fsPath.toLowerCase() === record.fsPath.toLowerCase()) {
+				try { old.inset.dispose(); } catch { /* already disposed */ }
+				continue;
+			}
+			deduped.push(old);
+		}
+
+		deduped.push(record);
+		this.insets.set(hunkId, deduped);
 	}
 
 	private removeInsetFromArray(hunkId: string, inset: vscode.WebviewEditorInset): void {

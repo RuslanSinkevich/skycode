@@ -283,25 +283,8 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 							return
 						}
 
-						// Bundled models don't need auth token (local file copy)
-						// CDN models need auth for protected downloads
-						const isBundled = !!(whisper as any).bundledArchivePath
-						if (!isBundled) {
-							const token = await controller.authService.getAuthToken()
-							if (!token) {
-								const updated = { ...dictationSettings, voiceDownloading: false }
-								controller.stateManager.setGlobalState("dictationSettings", updated)
-								await controller.postStateToWebview()
-								HP.window.showMessage({
-									type: ShowMessageType.ERROR,
-									message: t2("voice.downloadFailed", { error: "Not authenticated" }),
-								})
-								return
-							}
-							whisper.authToken = token
-						}
-
 						const DOWNLOAD_TIMEOUT = 20 * 60 * 1000 // 20 minutes
+						const isBundled = !!(whisper as any).bundledArchivePath
 						try {
 							const downloadPromise = whisper.ensureReady((msg: string) => Logger.info(`[VoiceDownload] ${msg}`))
 

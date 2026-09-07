@@ -186,7 +186,11 @@ export class MessageStateHandler {
 	 * Update a specific message in the skycodeMessages array
 	 * The entire operation (validate, update, save) is atomic to prevent races (RC-4)
 	 */
-	async updateSkycodeMessage(index: number, updates: Partial<SkycodeMessage>): Promise<void> {
+	async updateSkycodeMessage(
+		index: number,
+		updates: Partial<SkycodeMessage>,
+		options: { persist?: boolean } = {},
+	): Promise<void> {
 		return await this.withStateLock(async () => {
 			if (index < 0 || index >= this.skycodeMessages.length) {
 				throw new Error(`Invalid message index: ${index}`)
@@ -194,6 +198,10 @@ export class MessageStateHandler {
 
 			// Apply updates to the message
 			Object.assign(this.skycodeMessages[index], updates)
+
+			if (options.persist === false) {
+				return
+			}
 
 			// Save changes and update history
 			await this.saveSkycodeMessagesAndUpdateHistoryInternal()

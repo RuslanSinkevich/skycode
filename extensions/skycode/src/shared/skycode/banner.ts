@@ -81,7 +81,6 @@ export interface BannerAction {
 
 /**
  * The list of predefined banner config rendered by the Welcome Section UI.
- * Remote banners come from BannerService API — keep this array for local-only tips.
  * Localized versions are built in WelcomeSection.tsx via t().
  */
 export const BANNER_DATA: BannerCardData[] = []

@@ -9,7 +9,7 @@ import { AuthService } from "@/services/auth/AuthService"
 import { buildSkycodeExtraHeaders } from "@/services/EnvUtils"
 import { SKYCODE_ACCOUNT_AUTH_ERROR_MESSAGE } from "@/shared/SkycodeAccount"
 import { SkycodeStorageMessage } from "@/shared/messages/content"
-import { fetch, getAxiosSettings } from "@/shared/net"
+import { getAxiosSettings } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
 import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { withRetry } from "../retry"
@@ -55,56 +55,9 @@ export class SkycodeHandler implements ApiHandler {
 	}
 
 	private async ensureClient(): Promise<OpenAI> {
-		const skycodeAccountAuthToken = await this._authService.getAuthToken()
-		if (!skycodeAccountAuthToken) {
-			throw new Error(SKYCODE_ACCOUNT_AUTH_ERROR_MESSAGE)
-		}
-		if (!this.client) {
-			try {
-				const defaultHeaders: Record<string, string> = {
-					"HTTP-Referer": "https://skycode-ai.local",
-					"X-Title": "Skycode",
-					"X-Task-ID": this.options.ulid || "",
-				}
-				Object.assign(defaultHeaders, await buildSkycodeExtraHeaders())
-
-				this.client = new OpenAI({
-					baseURL: `${this._baseUrl}/api/v1`,
-					apiKey: skycodeAccountAuthToken,
-					defaultHeaders,
-					// Capture real HTTP request ID from initial streaming response headers
-					fetch: async (...args: Parameters<typeof fetch>): Promise<Awaited<ReturnType<typeof fetch>>> => {
-						const [input, init] = args
-						const resp = await fetch(input, init)
-						try {
-							let urlStr = ""
-							if (typeof input === "string") {
-								urlStr = input
-							} else if (input instanceof URL) {
-								urlStr = input.toString()
-							} else if (typeof (input as { url?: unknown }).url === "string") {
-								urlStr = (input as { url: string }).url
-							}
-							// Only record for chat completions (the primary streaming request)
-							if (urlStr.includes("/chat/completions")) {
-								const rid = resp.headers.get("x-request-id") || resp.headers.get("request-id")
-								if (rid) {
-									this.lastRequestId = rid
-								}
-							}
-						} catch {
-							// ignore header capture errors
-						}
-						return resp
-					},
-				})
-			} catch (error: any) {
-				throw new Error(`Error creating Skycode client: ${error.message}`)
-			}
-		}
-		// Ensure the client is always using the latest auth token
-		this.client.apiKey = skycodeAccountAuthToken
-		return this.client
+		throw new Error(
+			"Skycode cloud provider is frozen and no longer connects to the Skycode server. Choose OpenRouter, OpenAI, Ollama, LM Studio, or another local/API-key provider in settings.",
+		)
 	}
 
 	@withRetry()

@@ -118,8 +118,9 @@ export class ExtHostEditorInsets implements ExtHostEditorInsetsShape {
 			}
 		};
 
-		// SKYCODE: pass line as-is (0-based). Upstream +1 misaligns Accept/Reject diff zones.
-		this._proxy.$createEditorInset(handle, apiEditor.id, apiEditor.value.document.uri, line, height, options || {}, extension.identifier, extension.extensionLocation);
+		// SKYCODE: line is 0-based per API; mainThread expects 1-based afterLineNumber.
+		// InlineDiffRenderer formulas assume +1 here (see calculateInsetLine/calculateButtonsLine docs).
+		this._proxy.$createEditorInset(handle, apiEditor.id, apiEditor.value.document.uri, line + 1, height, options || {}, extension.identifier, extension.extensionLocation);
 		this._insets.set(handle, { editor, inset, onDidReceiveMessage });
 
 		return inset;
