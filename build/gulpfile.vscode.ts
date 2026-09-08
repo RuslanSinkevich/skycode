@@ -521,6 +521,7 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 	return task;
 }
 
+// --- SKYCODE_FORK_BEGIN: PE detection helper (used by patchWin32DependenciesTask) ---
 function isPEFile(filePath: string): boolean {
 	const fd = fs.openSync(filePath, 'r');
 	try {
@@ -531,13 +532,16 @@ function isPEFile(filePath: string): boolean {
 		fs.closeSync(fd);
 	}
 }
+// --- SKYCODE_FORK_END ---
 
 function hasAuthenticodeSignature(filePath: string): Promise<boolean> {
 	return new Promise(resolve => {
 		const proc = cp.spawn('signtool.exe', ['verify', '/pa', filePath]);
-		// Skycode: signtool.exe ships with the Windows SDK and is only on PATH in CI.
+		// --- SKYCODE_FORK_BEGIN: tolerate a missing signtool.exe ---
+		// signtool.exe ships with the Windows SDK and is only put on PATH by CI.
 		// Treat it as absent rather than failing the whole packaging task locally.
 		proc.on('error', () => resolve(false));
+		// --- SKYCODE_FORK_END ---
 		proc.on('exit', code => resolve(code === 0));
 	});
 }
@@ -583,9 +587,11 @@ function patchWin32DependenciesTask(destinationFolderName: string) {
 		const patchPromises = deps.map<Promise<unknown>>(async dep => {
 			const basename = path.basename(dep);
 			const fullPath = path.join(cwd, dep);
+			// --- SKYCODE_FORK_BEGIN: skip non-PE files, rcedit cannot patch them ---
 			if (!isPEFile(fullPath)) {
 				return;
 			}
+			// --- SKYCODE_FORK_END ---
 
 			await stripAuthenticodeSignature(fullPath);
 			await rcedit(fullPath, {

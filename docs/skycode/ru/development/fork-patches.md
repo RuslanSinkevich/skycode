@@ -2,9 +2,13 @@
 
 # Патчи форка VS Code
 
-Все изменения в ядре VS Code помечены комментариями `SKYCODE_FORK_BEGIN` / `SKYCODE_FORK_END` или `[SKYCODE]`.
+Правки ядра помечены парой `SKYCODE_FORK_BEGIN` / `SKYCODE_FORK_END` вокруг блока либо одиночным комментарием `SKYCODE:` / `[SKYCODE]` для однострочной правки. Ищи по голому слову: шаблон `SKYCODE_FORK` пропускает однострочные маркеры — именно из-за этого два патча оставались недокументированными до мержа 1.123.2.
 
-Найти все патчи: `git grep "SKYCODE_FORK\|[SKYCODE]" -- src/ build/`
+Найти все патчи: `git grep SKYCODE -- src/ build/`
+
+На момент мержа 1.123.2 это **36 маркеров в 11 файлах** (`product.json`, пункт 1 ниже,
+маркеров не содержит). Пересчёт маркеров — самая дешёвая проверка после мержа, см.
+[Чеклист после мержа](#чеклист-после-мержа).
 
 ## Изменённые файлы ядра
 
@@ -13,70 +17,123 @@
 - `nameShort` / `nameLong` → "Skycode"
 - `applicationName` → "skycode", `dataFolderName` → ".skycode"
 - `extensionAllowedProposedApi` → `["skycode.skycode"]` (для editorInsets)
-- `defaultChatAgent` → указывает на отключённый заглушечный агент (отключает Copilot)
+
+`defaultChatAgent` **оставлен как в upstream** (`GitHub.copilot`). На уровне продукта
+Copilot не отключается.
 
 ### 2. `src/vs/workbench/contrib/chat/browser/chatParticipant.contribution.ts`
 
-Отключено встроенное представление Copilot Chat. Контейнер переименован в "Skycode", дескриптор представления Copilot закомментирован. Контейнер остаётся в AuxiliaryBar для webview Skycode.
+Контейнер в AuxiliaryBar переименован в "Skycode", чтобы у webview Skycode было
+брендированное место. **Представление Copilot Chat остаётся зарегистрированным** — форк
+сознательно не воюет здесь с upstream: файл меняется почти в каждом релизе, и удаление
+дескриптора представления давало конфликт при каждом мерже.
 
-**Риск при мерже: высокий** — Microsoft активно развивает чат.
+**Риск при мерже: низкий** — одна строка заголовка.
 
 ### 3. `src/main.ts` — локаль по умолчанию
 
-Локаль по умолчанию — `ru`, с автопатчем `argv.json`.
+Локаль по умолчанию — `ru`, с автопатчем `argv.json` при первом запуске.
 
 ### 4. `src/vs/base/node/nls.ts` — загрузка language pack
 
-Автоматически генерирует `languagepacks.json` из встроенного language pack при первом запуске. Убирает проблему «первый запуск на английском, нужен перезапуск».
+Автоматически генерирует `languagepacks.json` из встроенного language pack при первом
+запуске. Убирает проблему «первый запуск на английском, нужен перезапуск».
 
 ### 5. `src/vs/workbench/api/browser/viewsExtensionPoint.ts`
 
-В `getViewContainer()` добавлен fallback: разрешение core-контейнеров по прямому ID. Без этого расширения не могут регистрировать представления в core-контейнерах вроде `workbench.panel.chat`.
+В `getViewContainer()` добавлен fallback: разрешение core-контейнеров по прямому ID. Без
+этого расширения не могут регистрировать представления в core-контейнерах вроде
+`workbench.panel.chat`.
 
 ### 6. `src/vs/workbench/api/common/extHostCodeInsets.ts`
 
-Исправлено позиционирование View Zone inset (убран `+1` у параметра `line`). Без этого кнопки Accept/Reject в diff рисуются на строку ниже нужной.
+При вызове `$createEditorInset` сохраняется `line + 1`. API расширений использует
+нумерацию с нуля, а mainThread ожидает `afterLineNumber` с единицы, и формулы
+`InlineDiffRenderer` (`calculateInsetLine` / `calculateButtonsLine`) написаны под эту
+конвенцию.
+
+Если убрать `+1`, кнопки Accept/Reject в diff съезжают на строку. Прошлая редакция этого
+документа предписывала убрать `+1` — это было неверно и здесь исправлено.
 
 ### 7. `src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupContributions.ts`
 
 Отключён Copilot Code Actions Provider (Fix, Explain, Generate из ховеров ошибок).
+Skycode предоставляет свои AI-действия через меню Quick Fix.
 
 ### 8. `src/vs/editor/contrib/hover/browser/markerHoverParticipant.ts`
 
-Убрана кнопка "✨ Fix (Ctrl+I)" из ховеров ошибок. Skycode использует меню Quick Fix.
+Убрана кнопка "✨ Fix (Ctrl+I)" из ховеров ошибок — по той же причине, что и в п. 7.
 
-### 9. `build/filters.ts`
+### 9. `src/vs/platform/extensionManagement/node/extensionSignatureVerificationService.ts`
+
+`verify()` всегда возвращает `Success`. У OSS-сборок нет ключа подписи Microsoft, поэтому
+настоящая проверка всегда падает, а `extensionManagementService.downloadExtension()`
+отказывается ставить расширение при `verificationStatus !== Success`.
+
+### 10. `build/filters.ts`
 
 Исключён `extensions/skycode/**` из проверок upstream copyright header.
 
-### 10. `build/hygiene.ts`
+### 11. `build/hygiene.ts`
 
 Разрешён Unicode в комментариях (кириллица): комментарии вырезаются перед проверкой Unicode.
+
+### 12. `build/gulpfile.vscode.ts` — упаковка под Windows
+
+Два патча внутри `patchWin32DependenciesTask`:
+
+- Guard `isPEFile()` — пропускает файлы, не являющиеся PE-бинарниками: `rcedit` их не умеет.
+- Отсутствующий `signtool.exe` трактуется как «подписи нет», а не как ошибка. Upstream
+  добавил `stripAuthenticodeSignature()`, который зовёт `signtool.exe`; этот бинарник
+  входит в Windows SDK и попадает в `PATH` только на CI, поэтому upstream-версия роняет
+  локальную сборку `vscode-win32-x64` на самом последнем шаге.
 
 ## Добавленные расширения
 
 ### `extensions/vscode-language-pack-ru/`
 
-Встроенный русский language pack. Активируется автоматически через `bootstrapBuiltInLanguagePack()` в `nls.ts`. Работает с первого запуска без перезапуска.
+Встроенный русский language pack. Активируется автоматически через
+`bootstrapBuiltInLanguagePack()` в `nls.ts`. Работает с первого запуска без перезапуска.
 
 ## Обновление upstream
 
 ```bash
-git remote add upstream https://github.com/microsoft/vscode.git
 git fetch upstream --tags
-git checkout -b merge/1.110.0
-git merge 1.110.0
 
-# Разрешить конфликты — искать наши маркеры:
-git grep "SKYCODE_FORK" -- src/ build/
+# Git LFS: extensions/copilot отслеживает тестовые фикстуры *.sqlite, и части блобов
+# нет на LFS-сервере (404). Это данные simulation-тестов, для сборки не нужны.
+# Отключаем smudge насовсем для этого клона — каждый терминал стартует заново,
+# поэтому переменную окружения пришлось бы повторять в каждой команде:
+git config --local filter.lfs.smudge "git-lfs smudge --skip -- %f"
+git config --local filter.lfs.process "git-lfs filter-process --skip"
+
+# Посмотреть конфликты, не трогая рабочее дерево:
+git merge-tree --write-tree --name-only HEAD <тег>
+
+git merge <тег>
 ```
 
-### Чеклист после мержа
+Разрешение конфликтов, в порядке реальной экономии времени:
 
+1. **Сначала проверь, не сделал ли это уже upstream.** Большинство патчей форка либо
+   уходят в upstream, либо теряют смысл после его рефакторинга. В мерже 1.123.2 20 из 22
+   конфликтов свелись к «взять upstream», потому что задуманное форком там уже было.
+   Сравнивай каждую сторону с базой мержа
+   (`git diff $(git merge-base HEAD <тег>) HEAD -- <файл>`), прежде чем сливать руками.
+2. **Ищи наши маркеры:** `git grep SKYCODE -- src/ build/`.
+3. Лок-файлы и notices перегенерируй, а не сливай построчно.
+
+## Чеклист после мержа
+
+- [ ] `git grep -c SKYCODE -- src/ build/` — число маркеров совпадает с указанным выше;
+      уменьшилось — значит автомерж съел патч
 - [ ] `product.json` — имя "Skycode", в `extensionAllowedProposedApi` есть `skycode.skycode`
-- [ ] Представление Copilot Chat не регистрируется
 - [ ] `main.ts` — дефолтная локаль и патч argv.json на месте
 - [ ] `nls.ts` — присутствует `bootstrapBuiltInLanguagePack()`
 - [ ] `viewsExtensionPoint.ts` — fallback в `getViewContainer` на месте
-- [ ] `extHostCodeInsets.ts` — нет `+1` к `line`
-- [ ] Сборка проходит, панель Skycode открывается, UI на русском с первого запуска
+- [ ] `extHostCodeInsets.ts` — `line + 1` на месте
+- [ ] `npm run compile` — 0 ошибок
+- [ ] `.\scripts\code.bat` — приложение стартует, UI на русском с первого запуска, панель
+      Skycode открывается, кнопки Accept/Reject в diff стоят на своей строке
+- [ ] `npm run gulp vscode-win32-x64` — про обязательный пин `VCToolsVersion` см.
+      [getting-started.md](./getting-started.md)
