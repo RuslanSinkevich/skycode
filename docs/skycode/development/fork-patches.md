@@ -6,7 +6,7 @@ Core modifications are marked with a `SKYCODE_FORK_BEGIN` / `SKYCODE_FORK_END` p
 
 To find all patches: `git grep SKYCODE -- src/ build/`
 
-As of the 1.123.2 merge there are **36 markers across 11 files** (`product.json`, item 1
+As of the 1.136.1 merge there are **39 markers across 13 files** (`product.json`, item 1
 below, carries no markers). That count is the cheapest post-merge check there is — see
 [Post-Merge Checklist](#post-merge-checklist).
 
@@ -47,6 +47,15 @@ mainThread expects a 1-based `afterLineNumber`, and the `InlineDiffRenderer` for
 Removing the `+1` renders diff Accept/Reject buttons one line off. An earlier revision of
 this document told you to remove it — that was wrong and has been corrected.
 
+### 6b. `src/vs/workbench/api/browser/mainThreadCodeInsets.ts`
+Deliberately omits `afterColumn` on the view zone. Upstream sets it to 1, which gives
+the zone ordinal 1 (`ordinal ?? afterColumn ?? 10000` in viewZones); leaving it undefined
+keeps the inset below other zones on the same line. Pairs with #6 — the two together are
+what place the diff Accept/Reject buttons correctly.
+
+This patch existed unmarked from the fork's very first commit and was only found during
+the 1.136.1 merge, while chasing what looked like a merge loss. It now carries a marker.
+
 ### 7. `src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupContributions.ts`
 Disabled the Copilot Code Actions Provider (Fix, Explain, Generate from error hovers).
 Skycode ships its own AI code actions through the Quick Fix menu.
@@ -73,6 +82,13 @@ Two patches inside `patchWin32DependenciesTask`:
   `stripAuthenticodeSignature()`, which shells out to `signtool.exe`; that binary ships
   with the Windows SDK and only CI puts it on `PATH`, so upstream's version fails a local
   `vscode-win32-x64` build at the very last step.
+
+### 13. `.eslint-allowed-javascript-files`
+Upstream 1.136.1 added a `code-no-new-javascript-files` rule, checked by hygiene against
+every tracked `.js`/`.cjs`/`.mjs` file. The fork's own `extensions/skycode` ships 46 of
+them (build scripts, test harness, vendored `@xenova/transformers`), listed in a marked
+block at the end of the file. The list is matched exactly — no globs — so a new fork JS
+file has to be added by hand.
 
 ## Added Extensions
 
@@ -106,6 +122,25 @@ Resolving conflicts, in order of what actually saves time:
    the merge base (`git diff $(git merge-base HEAD <tag>) HEAD -- <file>`) before hand-merging.
 2. **Look for our markers:** `git grep SKYCODE -- src/ build/`.
 3. Regenerate lockfiles and notices rather than merging them line by line.
+
+### Auto-merge can drop upstream lines without conflicting
+
+Do not trust "no conflict" to mean "merged correctly". Release tags are cut from release
+branches, so merging one into a fork that already merged an older tag gives a merge base
+far back at the branch point. In those regions git resolves silently, and it does not
+always keep the newer side. The 1.136.1 merge lost four lines in `chatService.ts`, one in
+`sandboxHelperService.ts` and half an import in a sandbox test — none of them reported as
+conflicts, all of them pure upstream code, and the build broke.
+
+After every merge, sweep for it:
+
+```bash
+git diff --name-only <tag> HEAD -- src/ build/ extensions/copilot/
+```
+
+Every file listed should be explainable: either it carries a `SKYCODE` marker, or its
+diff is additions the fork made. A file whose diff is only deletions relative to the tag
+is an auto-merge loss — restore it with `git checkout <tag> -- <file>`.
 
 ## Post-Merge Checklist
 

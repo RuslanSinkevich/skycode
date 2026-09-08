@@ -4,7 +4,8 @@
 
 ## Требования
 
-- Node.js — ровно та версия, что указана в `vscode/.nvmrc` (24.15.0 на upstream 1.123.2)
+- Node.js — ровно та версия, что указана в `vscode/.nvmrc` (24.18.0 на upstream 1.136.1).
+  `build/npm/preinstall.ts` проверяет её и отказывается ставить зависимости на более старой.
 - Python 3.x (для сборки нативных модулей VS Code)
 - C++ build tools (Visual Studio Build Tools на Windows)
 - Git с установленным Git LFS
