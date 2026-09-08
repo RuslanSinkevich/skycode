@@ -8,14 +8,14 @@ import { IContextKey, IContextKeyService } from '../../../platform/contextkey/co
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
-import { agentsPanelBackground, agentsPanelBorder, agentsPanelForeground } from '../../common/theme.js';
-import { IWorkbenchLayoutService, Parts } from '../../../workbench/services/layout/browser/layoutService.js';
+import { agentsPanelBorder } from '../../common/theme.js';
+import { Parts } from '../../../workbench/services/layout/browser/layoutService.js';
 import { assertReturnsDefined } from '../../../base/common/types.js';
 import { LayoutPriority } from '../../../base/browser/ui/splitview/splitview.js';
 import { Direction, SerializableGrid, Sizing } from '../../../base/browser/ui/grid/grid.js';
 import { Part } from '../../../workbench/browser/part.js';
 import { ActiveSessionsContext, MultipleSessionsVisibleContext, SessionsFocusContext } from '../../common/contextkeys.js';
-import { $, addDisposableGenericMouseDownListener, addDisposableListener, EventType, isAncestor } from '../../../base/browser/dom.js';
+import { $, addDisposableGenericMouseDownListener, addDisposableListener, EventType, isAncestor, trackFocus } from '../../../base/browser/dom.js';
 import { IActiveSession } from '../../services/sessions/common/sessionsManagement.js';
 import { SessionView } from './sessionView.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
@@ -27,6 +27,10 @@ import { ProgressBar } from '../../../base/browser/ui/progressbar/progressbar.js
 import { defaultProgressBarStyles } from '../../../platform/theme/browser/defaultStyles.js';
 import { IProgressIndicator } from '../../../platform/progress/common/progress.js';
 import { AbstractProgressScope, ScopedProgressIndicator } from '../../../workbench/services/progress/browser/progressIndicator.js';
+import { IAgentWorkbenchLayoutService } from '../workbench.js';
+import { applyAgentsPartCardStyles, getAgentsPartCardContentSize } from './agentsPartCard.js';
+import { SessionsChatBackgroundRenderer } from '../../services/chatBackground/browser/chatBackgroundRenderer.js';
+import { ISessionsChatBackgroundService } from '../../services/chatBackground/browser/chatBackgroundService.js';
 
 interface IGridSlot {
 	readonly view: SessionView;
@@ -42,12 +46,6 @@ export class SessionsPart extends Part {
 	override readonly minimumHeight: number = 0;
 	override readonly maximumHeight: number = Number.POSITIVE_INFINITY;
 	get snap(): boolean { return false; }
-
-	/** Visual margin values for the card-like appearance */
-	static readonly MARGIN_TOP = 0;
-	static readonly MARGIN_LEFT = 10;
-	static readonly MARGIN_RIGHT = 5;
-	static readonly MARGIN_BOTTOM = 5;
 
 	/** Border width on the card (1px each side) */
 	static readonly BORDER_WIDTH = 1;
@@ -76,31 +74,39 @@ export class SessionsPart extends Part {
 	protected _lastLayout: { readonly width: number; readonly height: number; readonly top: number; readonly left: number } | undefined;
 
 	private readonly _multipleSessionsVisibleKey: IContextKey<boolean>;
+	private readonly _sessionsFocusKey: IContextKey<boolean>;
+
+	/**
+	 * Whether the part itself is visible in the workbench grid. Starts `true`
+	 * because the workbench grid only calls {@link setVisible} on change.
+	 */
+	private _isPartVisible = true;
 
 	get preferredHeight(): number | undefined {
 		return this.layoutService.mainContainerDimension.height * 0.4;
 	}
 
-	readonly priority = LayoutPriority.Normal;
+	readonly priority = LayoutPriority.High;
 
 	constructor(
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
-		@IWorkbenchLayoutService layoutService: IWorkbenchLayoutService,
+		@IAgentWorkbenchLayoutService private readonly agentWorkbenchLayoutService: IAgentWorkbenchLayoutService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@ISessionsChatBackgroundService private readonly chatBackgroundService: ISessionsChatBackgroundService,
 	) {
 		super(
 			Parts.SESSIONS_PART,
 			{ hasTitle: false, borderWidth: () => 0 },
 			themeService,
 			storageService,
-			layoutService
+			agentWorkbenchLayoutService
 		);
 
 		// Bind context keys for compatibility with existing when-clauses
 		ActiveSessionsContext.bindTo(contextKeyService);
-		SessionsFocusContext.bindTo(contextKeyService);
+		this._sessionsFocusKey = SessionsFocusContext.bindTo(contextKeyService);
 		this._multipleSessionsVisibleKey = MultipleSessionsVisibleContext.bindTo(contextKeyService);
 	}
 
@@ -112,8 +118,19 @@ export class SessionsPart extends Part {
 	}
 
 	protected override createContentArea(parent: HTMLElement): HTMLElement {
+		const backgroundRenderer = this._register(new SessionsChatBackgroundRenderer(parent));
+		const updateBackground = () => backgroundRenderer.setBackground(this.chatBackgroundService.getBackground());
+		this._register(this.chatBackgroundService.onDidChangeBackground(updateBackground));
+		updateBackground();
+
 		const contentArea = $('.content');
 		parent.appendChild(contentArea);
+
+		// Track keyboard focus within the sessions content so the `sessionsFocus`
+		// context key reflects whether a session (its chat view) currently has focus.
+		const focusTracker = this._register(trackFocus(contentArea));
+		this._register(focusTracker.onDidFocus(() => this._sessionsFocusKey.set(true)));
+		this._register(focusTracker.onDidBlur(() => this._sessionsFocusKey.set(false)));
 
 		// Progress bar pinned to the top of the content area (see sessionsPart.css
 		// rule `.part.sessionspart > .content > .monaco-progress-container`).
@@ -186,7 +203,7 @@ export class SessionsPart extends Part {
 			const slot = this._slots[i];
 			const session = visible[i];
 			slot.boundSessionId = session?.sessionId;
-			slot.view.openSession(session);
+			slot.view.openSession(session, {});
 		}
 
 		// Mark the active session's element for styling/focus indication.
@@ -265,6 +282,39 @@ export class SessionsPart extends Part {
 	}
 
 	/**
+	 * Moves keyboard focus into the session view hosting the given session id (or
+	 * the placeholder view when `sessionId` is `undefined`), first revealing it in
+	 * the grid when it is only partially visible. No-op if no matching slot exists.
+	 */
+	focusSession(sessionId: string | undefined): void {
+		const slot = this._slots.find(s => s.boundSessionId === sessionId);
+		if (!slot) {
+			return;
+		}
+		this._revealView(slot.view);
+		slot.view.focus();
+	}
+
+	/**
+	 * Ensures the given view is fully visible within the grid. The grid clips its
+	 * leaves (`overflow: hidden`) and lays them out side by side; when there are
+	 * more sessions than fit, the grid's split view overflows horizontally and
+	 * becomes scrollable, leaving views near the edges partially hidden. When the
+	 * target view is not fully visible, scroll it into view.
+	 */
+	private _revealView(view: SessionView): void {
+		if (!this._gridWidget) {
+			return;
+		}
+		const containerRect = this._gridWidget.element.getBoundingClientRect();
+		const viewRect = view.element.getBoundingClientRect();
+		const isFullyVisible = viewRect.left >= containerRect.left - 1 && viewRect.right <= containerRect.right + 1;
+		if (!isFullyVisible) {
+			view.element.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+		}
+	}
+
+	/**
 	 * Returns the progress indicator for the part. Drives the progress bar shown
 	 * at the top of the content area. Indicator state is scoped to the part's
 	 * visibility, mirroring how view panes manage their own progress indicators.
@@ -289,6 +339,7 @@ export class SessionsPart extends Part {
 	private _createSlot(): IGridSlot {
 		const disposables = new DisposableStore();
 		const view = disposables.add(this.instantiationService.createInstance(SessionView));
+		view.setPartVisible(this._isPartVisible);
 		const slot: IGridSlot = { view, disposables, boundSessionId: undefined };
 		// Promote a visible session to the active session when its view receives
 		// focus or is clicked. Pointer-down covers clicks on non-focusable chrome
@@ -297,12 +348,24 @@ export class SessionsPart extends Part {
 		// session) has nothing to activate.
 		const fireFocus = () => {
 			if (slot.boundSessionId !== undefined) {
+				this._restoreSessionOnActivation(view);
 				this._onDidFocusSession.fire(slot.boundSessionId);
 			}
 		};
 		disposables.add(addDisposableListener(view.element, EventType.FOCUS_IN, fireFocus, true));
 		disposables.add(addDisposableGenericMouseDownListener(view.element, fireFocus, true));
 		return slot;
+	}
+
+	private _restoreSessionOnActivation(view: SessionView): void {
+		if (!this._gridWidget) {
+			return;
+		}
+
+		const viewSize = this._gridWidget.getViewSize(view);
+		if (viewSize.width === view.minimumWidth) {
+			this._gridWidget.expandView(view);
+		}
 	}
 
 	private get _gridSeparatorBorder(): Color {
@@ -314,13 +377,21 @@ export class SessionsPart extends Part {
 
 		const container = assertReturnsDefined(this.getContainer());
 
-		// Store background and border as CSS variables for the card styling on .part
-		container.style.setProperty('--part-background', this.getColor(agentsPanelBackground) || '');
-		container.style.setProperty('--part-border-color', this.getColor(agentsPanelBorder) || 'transparent');
-		container.style.setProperty('--part-foreground', this.getColor(agentsPanelForeground) || '');
-		container.style.backgroundColor = this.getColor(agentsPanelBackground) || '';
+		applyAgentsPartCardStyles(container, this.theme);
 
 		this._gridWidget?.style({ separatorBorder: this._gridSeparatorBorder });
+	}
+
+	override setVisible(visible: boolean): void {
+		if (this._isPartVisible !== visible) {
+			// Update before `super`, whose event re-enters this method.
+			this._isPartVisible = visible;
+			for (const slot of this._slots) {
+				slot.view.setPartVisible(visible);
+			}
+		}
+
+		super.setVisible(visible);
 	}
 
 	override layout(width: number, height: number, top: number, left: number): void {
@@ -330,20 +401,10 @@ export class SessionsPart extends Part {
 
 		this._lastLayout = { width, height, top, left };
 
-		// Compute content dimensions accounting for visual margins and border.
-		// MARGIN_BOTTOM applies only when the panel is visible (paired with the panel's
-		// 5px top margin to center the sash). When the panel is hidden the card fills its
-		// cell; the workbench grid's 10px bottom gutter provides the visible gap.
-		const borderTotal = SessionsPart.BORDER_WIDTH * 2;
-		const marginLeft = this.layoutService.isVisible(Parts.SIDEBAR_PART) ? 0 : SessionsPart.MARGIN_LEFT;
-		const marginBottom = this.layoutService.isVisible(Parts.PANEL_PART) ? SessionsPart.MARGIN_BOTTOM : 0;
-		const marginRight = this.layoutService.isVisible(Parts.AUXILIARYBAR_PART) ? SessionsPart.MARGIN_RIGHT : 0;
+		const cardSize = getAgentsPartCardContentSize(width, height, this.agentWorkbenchLayoutService.isEditorPaneVisible());
 
 		// Size the content area with the reduced dimensions.
-		const { contentSize } = this.layoutContents(
-			width - marginLeft - marginRight - borderTotal,
-			height - SessionsPart.MARGIN_TOP - marginBottom - borderTotal
-		);
+		const { contentSize } = this.layoutContents(cardSize.width, cardSize.height);
 
 		// Layout the internal grid widget within the content area.
 		this._gridWidget?.layout(contentSize.width, contentSize.height, top, left);
