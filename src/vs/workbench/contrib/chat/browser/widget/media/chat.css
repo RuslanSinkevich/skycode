@@ -1033,6 +1033,109 @@ have to be updated for changes to the rules above, or to support more deeply nes
 	order: 1;
 }
 
+/* Status indicator container — sits at the rightmost end of the secondary toolbar, next to the context usage button. Intentionally non-responsive so contributed status items never collapse into an overflow menu. */
+.interactive-session .chat-secondary-toolbar .chat-input-status-container {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+	order: 2;
+}
+
+.interactive-session .chat-secondary-toolbar .chat-input-status-container:empty {
+	display: none;
+}
+
+/* Hover popup contents shown when hovering an item in the chat-input-status toolbar */
+.chat-input-status-hover.chat-input-status-hover-content {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 8px 10px;
+	min-width: 240px;
+	max-width: 420px;
+}
+
+.chat-input-status-hover .chat-input-status-hover-title {
+	font-weight: 600;
+}
+
+.chat-input-status-hover .chat-input-status-hover-title p {
+	margin: 0;
+}
+
+.chat-input-status-hover .chat-input-status-hover-title a {
+	color: var(--vscode-textLink-foreground);
+	text-decoration: none;
+}
+
+.chat-input-status-hover .chat-input-status-hover-title a:hover {
+	text-decoration: underline;
+}
+
+.chat-input-status-hover .chat-input-status-hover-detail a {
+	color: var(--vscode-textLink-foreground);
+	text-decoration: none;
+}
+
+.chat-input-status-hover .chat-input-status-hover-detail a:hover {
+	text-decoration: underline;
+}
+
+.chat-input-status-hover .chat-input-status-hover-detail code {
+	font-family: var(--monaco-monospace-font);
+	font-size: 11px;
+	background: var(--vscode-textCodeBlock-background, transparent);
+	padding: 1px 4px;
+	border-radius: 3px;
+	white-space: nowrap;
+}
+
+.chat-input-status-hover .chat-input-status-hover-description {
+	color: var(--vscode-descriptionForeground);
+	white-space: pre-wrap;
+}
+
+.chat-input-status-hover .chat-input-status-hover-detail {
+	color: var(--vscode-foreground);
+}
+
+.chat-input-status-hover .chat-input-status-hover-detail table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 12px;
+}
+
+.chat-input-status-hover .chat-input-status-hover-detail thead {
+	display: none;
+}
+
+.chat-input-status-hover .chat-input-status-hover-detail th,
+.chat-input-status-hover .chat-input-status-hover-detail td {
+	padding: 3px 8px 3px 0;
+	text-align: left;
+	vertical-align: top;
+	word-break: break-word;
+}
+
+.chat-input-status-hover .chat-input-status-hover-detail tbody tr:not(:last-child) td {
+	border-bottom: 1px solid var(--vscode-widget-border, transparent);
+}
+
+.chat-input-status-hover .chat-input-status-hover-detail tbody td:first-child {
+	color: var(--vscode-descriptionForeground);
+	white-space: nowrap;
+}
+
+.chat-input-status-hover .chat-input-status-hover-detail p {
+	margin: 0;
+}
+
+.chat-input-status-hover .chat-input-status-hover-actions {
+	display: flex;
+	justify-content: flex-end;
+	margin-top: 4px;
+}
+
 /* When context usage is inside the toolbars (compact mode), keep the ordering */
 .interactive-session .chat-input-toolbars .chat-context-usage-container {
 	order: 1;
@@ -1629,11 +1732,35 @@ have to be updated for changes to the rules above, or to support more deeply nes
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	padding: 0 4px 0 5px;
+	padding: 0 8px 0 5px;
 }
 
 .interactive-session .chat-secondary-toolbar:empty {
 	display: none;
+}
+
+/* Dividers between adjacent items in the secondary toolbar. */
+.interactive-session .chat-secondary-input-toolbar .monaco-action-bar .actions-container > .action-item.chat-input-picker-item {
+	overflow: visible;
+}
+
+.interactive-session .chat-secondary-input-toolbar .monaco-action-bar .actions-container > .action-item + .action-item {
+	position: relative;
+}
+
+.interactive-session .chat-secondary-input-toolbar .monaco-action-bar .actions-container > .action-item + .action-item::before {
+	content: '';
+	position: absolute;
+	left: -5px;
+	top: 25%;
+	bottom: 25%;
+	width: 1px;
+	background-color: var(--vscode-editorWidget-border);
+	pointer-events: none;
+}
+
+.interactive-session .chat-secondary-toolbar .chat-sessionPicker-container > .chat-sessionPicker-item + .chat-sessionPicker-item {
+	box-shadow: -5px 0 0 -4px var(--vscode-editorWidget-border);
 }
 
 .interactive-session .chat-secondary-toolbar .chat-secondary-generic-chips {
@@ -1684,7 +1811,8 @@ have to be updated for changes to the rules above, or to support more deeply nes
 
 .interactive-session .chat-secondary-toolbar .chat-input-picker-item .action-label {
 	height: 16px;
-	padding: 3px 0px 3px 6px;
+	padding: 3px 8px;
+	border-radius: 4px;
 	display: flex;
 	align-items: center;
 	color: var(--vscode-icon-foreground);
@@ -1797,7 +1925,7 @@ have to be updated for changes to the rules above, or to support more deeply nes
 .interactive-session .chat-input-toolbar .chat-input-picker-item .action-label,
 .interactive-session .chat-input-toolbar .chat-sessionPicker-item .action-label {
 	height: 16px;
-	padding: 3px 7px;
+	padding: 3px 6px;
 	display: flex;
 	align-items: center;
 	color: var(--vscode-icon-foreground);
@@ -1818,28 +1946,28 @@ have to be updated for changes to the rules above, or to support more deeply nes
 	cursor: default;
 }
 
-/* Dividers: only in the workbench chat input toolbar (not in the agents app) */
-.interactive-session .chat-input-toolbar .chat-input-picker-item .action-label.model-picker-split::before,
-.interactive-session .chat-input-toolbar .chat-input-picker-item .action-label.model-picker-split::after {
+/* Dividers between adjacent items in the workbench chat input toolbar. */
+.interactive-session .chat-input-toolbar .monaco-action-bar .actions-container > .action-item.chat-input-picker-item {
+	overflow: visible;
+}
+
+.interactive-session .chat-input-toolbar .monaco-action-bar .actions-container > .action-item + .action-item {
+	position: relative;
+}
+
+.interactive-session .chat-input-toolbar .monaco-action-bar .actions-container > .action-item + .action-item::before {
 	content: '';
 	position: absolute;
+	left: -2px;
 	top: 25%;
 	bottom: 25%;
 	width: 1px;
 	background-color: var(--vscode-editorWidget-border);
+	pointer-events: none;
 }
 
-.interactive-session .chat-input-toolbar .chat-input-picker-item .action-label.model-picker-split::before {
-	left: 0;
-}
-
-.interactive-session .chat-input-toolbar .chat-input-picker-item .action-label.model-picker-split::after {
-	right: 0;
-}
-
-/* Hide right divider when the model picker is the last item (e.g. Copilot CLI with no tool config button) */
-.interactive-session .chat-input-toolbar .chat-input-picker-item:last-child .action-label.model-picker-split::after {
-	content: none;
+.interactive-session .chat-input-toolbar .chat-sessionPicker-container > .chat-sessionPicker-item + .chat-sessionPicker-item {
+	box-shadow: -5px 0 0 -4px var(--vscode-editorWidget-border);
 }
 
 .chat-input-picker-item .action-label.model-picker-split .model-picker-section {
@@ -1906,7 +2034,8 @@ have to be updated for changes to the rules above, or to support more deeply nes
 
 .interactive-session .chat-secondary-input-toolbar .chat-sessionPicker-item .action-label {
 	height: 16px;
-	padding: 3px 0px 3px 6px;
+	padding: 3px 8px;
+	border-radius: 4px;
 	display: flex;
 	align-items: center;
 	color: var(--vscode-icon-foreground);
@@ -1919,10 +2048,10 @@ have to be updated for changes to the rules above, or to support more deeply nes
 }
 
 /* When chevrons are hidden and only showing an icon (no label), size to 22x22 with centered icon */
-.interactive-session .chat-input-toolbar .chat-input-picker-item .action-label.hide-chevrons:not(:has(.chat-input-picker-label)),
-.interactive-session .chat-input-toolbar .chat-input-picker-item.hide-chevrons .action-label:not(:has(.chat-input-picker-label)),
-.interactive-session .chat-input-toolbar .chat-sessionPicker-item .action-label.hide-chevrons:not(:has(.chat-input-picker-label)),
-.interactive-session .chat-secondary-input-toolbar .chat-sessionPicker-item .action-label.hide-chevrons:not(:has(.chat-input-picker-label)) {
+.interactive-session .chat-input-toolbar .chat-input-picker-item .action-label.compact:not(:has(.chat-input-picker-label)),
+.interactive-session .chat-input-toolbar .chat-input-picker-item.compact .action-label:not(:has(.chat-input-picker-label)),
+.interactive-session .chat-input-toolbar .chat-sessionPicker-item .action-label.compact:not(:has(.chat-input-picker-label)),
+.interactive-session .chat-secondary-input-toolbar .chat-sessionPicker-item .action-label.compact:not(:has(.chat-input-picker-label)) {
 	width: 22px;
 	min-width: 22px;
 	height: 22px;
@@ -1963,11 +2092,20 @@ have to be updated for changes to the rules above, or to support more deeply nes
 	gap: 4px;
 }
 
+.interactive-session .chat-secondary-input-toolbar .monaco-action-bar .actions-container {
+	gap: 10px;
+}
+
 .interactive-session .chat-input-toolbars .chat-sessionPicker-container,
 .interactive-session .chat-secondary-toolbar .chat-sessionPicker-container {
 	display: flex;
 	gap: 4px;
 	max-width: 100%;
+}
+
+.interactive-session .chat-input-toolbar .chat-sessionPicker-container,
+.interactive-session .chat-secondary-toolbar .chat-sessionPicker-container {
+	gap: 10px;
 }
 
 .monaco-workbench .interactive-session .chat-input-toolbars .monaco-action-bar .action-item .codicon,
