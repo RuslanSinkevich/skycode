@@ -20,6 +20,12 @@ class EditorWebviewZone implements IViewZone {
 
 	readonly domNode: HTMLElement;
 	readonly afterLineNumber: number;
+	// --- SKYCODE_FORK_BEGIN: no afterColumn on purpose ---
+	// Upstream sets afterColumn = 1, which gives the zone ordinal 1 in
+	// viewZones (ordinal ?? afterColumn ?? 10000). Leaving it undefined keeps
+	// the inset below other zones on the same line, which is what the diff
+	// Accept/Reject buttons rely on. Pairs with the +1 in extHostCodeInsets.ts.
+	// --- SKYCODE_FORK_END ---
 	readonly heightInLines: number;
 
 	private _id?: string;

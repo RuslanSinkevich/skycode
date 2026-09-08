@@ -10,7 +10,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/
 import { TestInstantiationService } from '../../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
 import { TestLifecycleService, workbenchInstantiationService } from '../../../../../test/browser/workbenchTestServices.js';
 import { TestProductService } from '../../../../../test/common/workbenchTestServices.js';
-import { TerminalSandboxPrerequisiteCheck, TerminalSandboxService } from '../../common/terminalSandboxService.js';
+import { TerminalSandboxPrerequisiteCheck, TerminalSandboxPreCheckRemediation, TerminalSandboxService, type ISandboxDependencyInstallTerminal } from '../../common/terminalSandboxService.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { IFileService } from '../../../../../../platform/files/common/files.js';
 import { IEnvironmentService } from '../../../../../../platform/environment/common/environment.js';
@@ -164,6 +164,7 @@ suite('TerminalSandboxService - network domains', () => {
 		callCount = 0;
 		status: ISandboxDependencyStatus = {
 			bubblewrapInstalled: true,
+			bubblewrapUsable: true,
 			socatInstalled: true,
 		};
 		filesystemPolicy: IWindowsMxcFilesystemPolicy = {
@@ -305,6 +306,7 @@ suite('TerminalSandboxService - network domains', () => {
 	test('should report dependency prereq failures', async () => {
 		sandboxHelperService.status = {
 			bubblewrapInstalled: false,
+			bubblewrapUsable: false,
 			socatInstalled: true,
 		};
 
