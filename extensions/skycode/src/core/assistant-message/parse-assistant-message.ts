@@ -32,6 +32,11 @@ export function parseAssistantMessageV2(assistantMessage: string): AssistantMess
 	let currentToolUse: ToolUse | undefined
 	let currentParamValueStart = 0 // Index *after* the opening tag of the current param
 	let currentParamName: ToolParamName | undefined
+	// [SKYCODE] Some weaker/OpenHands-trained models emit tool params as
+	// `<parameter=name>value</parameter>` or `<parameter>name>value</parameter>`
+	// instead of `<name>value</name>`. When a param was opened via one of those
+	// aliases, this also accepts a bare `</parameter>` as its closing tag.
+	let currentParamAltClose = false
 
 	// Precompute tags for faster lookups
 	const toolUseOpenTags = new Map<string, SkycodeDefaultTool>()
@@ -50,23 +55,33 @@ export function parseAssistantMessageV2(assistantMessage: string): AssistantMess
 		// --- State: Parsing a Tool Parameter ---
 		if (currentToolUse && currentParamName) {
 			const closeTag = `</${currentParamName}>`
+			const altCloseTag = "</parameter>"
 			// Check if the string *ending* at index `i` matches the closing tag
-			if (
+			const matchesCloseTag =
 				currentCharIndex >= closeTag.length - 1 &&
 				assistantMessage.startsWith(
 					closeTag,
 					currentCharIndex - closeTag.length + 1, // Start checking from potential start of tag
 				)
-			) {
+			// [SKYCODE] Also accept `</parameter>` when the param was opened via the
+			// `<parameter=name>` / `<parameter>name>` alias (see below).
+			const matchesAltCloseTag =
+				!matchesCloseTag &&
+				currentParamAltClose &&
+				currentCharIndex >= altCloseTag.length - 1 &&
+				assistantMessage.startsWith(altCloseTag, currentCharIndex - altCloseTag.length + 1)
+			if (matchesCloseTag || matchesAltCloseTag) {
+				const usedCloseTag = matchesCloseTag ? closeTag : altCloseTag
 				// Found the closing tag for the parameter
 				const value = assistantMessage
 					.slice(
 						currentParamValueStart, // Start after the opening tag
-						currentCharIndex - closeTag.length + 1, // End before the closing tag
+						currentCharIndex - usedCloseTag.length + 1, // End before the closing tag
 					)
 					.trim()
 				currentToolUse.params[currentParamName] = value
 				currentParamName = undefined // Go back to parsing tool content
+				currentParamAltClose = false
 				// We don't continue loop here, need to check for tool close or other params at index i
 			} else {
 				continue // Still inside param value, move to next char
@@ -88,6 +103,42 @@ export function parseAssistantMessageV2(assistantMessage: string): AssistantMess
 			}
 			if (startedNewParam) {
 				continue // Handled start of param, move to next char
+			}
+
+			// [SKYCODE] Fallback for models that emit params as `<parameter=name>value</parameter>`
+			// or `<parameter>name>value</parameter>` instead of `<name>value</name>` (a format
+			// bled through from OpenHands/SWE-agent-style training data on some open-weight models).
+			// Only triggers when the name right after the alias tag is a known param name, so it
+			// can't misfire on well-formed tool content from models that already follow our format.
+			{
+				const eqAliasTag = "<parameter="
+				const bareAliasTag = "<parameter>"
+				let aliasTag: string | undefined
+				if (
+					currentCharIndex >= eqAliasTag.length - 1 &&
+					assistantMessage.startsWith(eqAliasTag, currentCharIndex - eqAliasTag.length + 1)
+				) {
+					aliasTag = eqAliasTag
+				} else if (
+					currentCharIndex >= bareAliasTag.length - 1 &&
+					assistantMessage.startsWith(bareAliasTag, currentCharIndex - bareAliasTag.length + 1)
+				) {
+					aliasTag = bareAliasTag
+				}
+
+				if (aliasTag) {
+					const nameEnd = assistantMessage.indexOf(">", currentCharIndex + 1)
+					if (nameEnd !== -1) {
+						const candidate = assistantMessage.slice(currentCharIndex + 1, nameEnd)
+						if ((toolParamNames as readonly string[]).includes(candidate)) {
+							currentParamName = candidate as ToolParamName
+							currentParamValueStart = nameEnd + 1
+							currentParamAltClose = true
+							i = nameEnd // Skip past the consumed name/`>`; loop's i++ moves beyond it
+							continue
+						}
+					}
+				}
 			}
 
 			// Check if closing the current tool use
