@@ -37,6 +37,7 @@ AI-ассистент для разработки, интегрированны�
 ### Подсистемы
 - [DIFF_SYSTEM.md](./DIFF_SYSTEM.md) — Inline Diff система v4
 - [INDEXING_SYSTEM.md](./INDEXING_SYSTEM.md) — Семантическая индексация
+- [TERMINAL_SYSTEM.md](./TERMINAL_SYSTEM.md) — Терминал, тайминги команд, фоновые команды
 - [BANNER_SYSTEM.md](./BANNER_SYSTEM.md) — Система баннеров (клиент)
 - [architecture/CONTEXT_MANAGEMENT.md](./architecture/CONTEXT_MANAGEMENT.md) — Управление контекстом (сжатие, суммаризация)
 - [mcp/how-mcp-works.md](./mcp/how-mcp-works.md) — Как работает MCP
