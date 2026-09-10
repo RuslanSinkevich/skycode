@@ -78,6 +78,8 @@ const en: Record<string, string> = {
 	"mcp.errorNetwork": "Network error. Please check your internet connection.",
 
 	"diff.allCleared": "All pending diffs cleared.",
+	"diff.gitAutoAccepted": "Skycode: changes in {{files}} confirmed automatically — committed in git.",
+	"diff.gitOverwritten": "Skycode: pending changes in {{files}} were overwritten by git — diff closed.",
 
 	"inlineEdit.selectCode": "Select code to edit",
 	"inlineEdit.emptyResponse": "Skycode: empty response from model",
@@ -242,6 +244,10 @@ const ru: Record<string, string> = {
 
 	// allow-any-unicode-next-line
 	"diff.allCleared": "Все ожидающие изменения очищены.",
+	// allow-any-unicode-next-line
+	"diff.gitAutoAccepted": "Skycode: изменения в {{files}} подтверждены автоматически — закоммичены в git.",
+	// allow-any-unicode-next-line
+	"diff.gitOverwritten": "Skycode: ожидающие изменения в {{files}} перезаписаны git — диф закрыт.",
 
 	// allow-any-unicode-next-line
 	"inlineEdit.selectCode": "Выделите код для редактирования",

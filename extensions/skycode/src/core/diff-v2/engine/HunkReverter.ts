@@ -275,6 +275,22 @@ export class HunkReverter {
     return count;
   }
 
+  /**
+   * Resolve every pending hunk of a file WITHOUT editing the file.
+   *
+   * Used when an external actor (git checkout/reset, another tool) already
+   * rewrote the content: a per-hunk revert would corrupt it, and leaving the
+   * hunks pending would keep a diff that no longer describes the file.
+   */
+  markResolvedWithoutEdit(fsPath: string, status: 'accepted' | 'rejected'): number {
+    const hunks = this.store.getPendingHunksByFile(fsPath);
+    for (const hunk of hunks) {
+      this.store.updateHunkStatus(hunk.id, status);
+      this.updateParentStatuses(hunk.fileChangeId, hunk.responseGroupId);
+    }
+    return hunks.length;
+  }
+
   // ==================== Response-group-level bulk ====================
 
   async acceptAllForResponseGroup(responseGroupId: string): Promise<number> {

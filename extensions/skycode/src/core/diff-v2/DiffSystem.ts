@@ -62,6 +62,18 @@ export class DiffSystem implements vscode.Disposable {
   /** Hash of file content after our last write — used to distinguish our writes from external edits */
   private lastWrittenHash = new Map<string, string>();
   private suppressGitStaleUntil = 0;
+  private static readonly WRITTEN_HASH_KEY = 'skycode.diffV2.writtenHashes';
+  private static readonly GIT_STALE_SUPPRESS_MS = 10_000;
+  private hashPersistTimer: NodeJS.Timeout | null = null;
+
+  // Git integration: last known HEAD commit per repository root (lowercased path)
+  private lastHeadByRepo = new Map<string, string | undefined>();
+  private attachedRepoKeys = new Set<string>();
+  private gitApiAttached = false;
+  /** Serializes git reconciliation so overlapping HEAD events cannot race */
+  private gitReconcileQueue: Promise<void> = Promise.resolve();
+  /** True while pending hunks are being reconciled with a HEAD change */
+  private gitReconcileInFlight = false;
 
   /**
    * Loop detection: tracks consecutive overlap-reject cycles per file.
@@ -174,6 +186,10 @@ export class DiffSystem implements vscode.Disposable {
 
     // Set initial context for keybindings
     this.updatePendingContext();
+
+    // Hashes of our own writes must be restored before detection starts,
+    // otherwise pending hunks that survived a reload have no baseline to compare against.
+    await this.restoreWrittenHashes();
 
     // External change detection (git commit, scripts, format-on-save, branch switch)
     this.startExternalChangeDetection();
@@ -707,6 +723,7 @@ export class DiffSystem implements vscode.Disposable {
     this.ensureInitialized();
     await this.hunkReverter.acceptAllForFile(fsPath);
     this.renderer.clearForFile(fsPath);
+    this.checkSnapshotCleanup(fsPath);
   }
 
   async rejectAllForFile(fsPath: string): Promise<void> {
@@ -1305,96 +1322,319 @@ export class DiffSystem implements vscode.Disposable {
     }, 8_000);
   }
 
+  /**
+   * Attach to the built-in git extension.
+   *
+   * The git extension can activate after us, so a single lookup at startup is not
+   * enough — a missed `exports` used to leave the watcher dead for the whole
+   * session. Retry whenever the extension set changes.
+   */
   private setupGitWatcher(): void {
+    void this.attachGitApi();
     try {
-      const gitExtension = vscode.extensions.getExtension('vscode.git')?.exports;
-      const gitApi = gitExtension?.getAPI?.(1);
+      if (typeof vscode.extensions?.onDidChange === 'function') {
+        this.disposables.push(
+          vscode.extensions.onDidChange(() => { void this.attachGitApi(); }),
+        );
+      }
+    } catch (e) {
+      Logger.warn('[DiffSystem] Cannot watch extension activation for git', e);
+    }
+  }
+
+  private async attachGitApi(): Promise<void> {
+    if (this.gitApiAttached) { return; }
+    try {
+      const ext = vscode.extensions.getExtension<any>('vscode.git');
+      if (!ext) { return; }
+
+      const exports = ext.isActive ? ext.exports : await ext.activate();
+      const gitApi = exports?.getAPI?.(1);
       if (!gitApi) { return; }
 
-      const attachToRepo = (repo: any) => {
-        this.disposables.push(
-          repo.state.onDidChange(() => {
-            this.onGitStateChanged();
-          }),
-        );
-        // SKYCODE: auto-accept pending hunks when their file is committed.
-        // If user explicitly committed a file that has pending Skycode diffs,
-        // treat the commit as approval and clear the inline diff zones.
-        if (typeof repo.onDidCommit === 'function') {
-          this.disposables.push(
-            repo.onDidCommit(() => {
-              this.onGitCommit(repo).catch((e) => {
-                Logger.error('[DiffSystem] onGitCommit handler failed', e);
-              });
-            }),
-          );
-        }
-      };
+      this.gitApiAttached = true;
 
-      for (const repo of gitApi.repositories) {
-        attachToRepo(repo);
-      }
+      for (const repo of gitApi.repositories) { this.attachToRepo(repo); }
       if (typeof gitApi.onDidOpenRepository === 'function') {
-        this.disposables.push(
-          gitApi.onDidOpenRepository((repo: any) => attachToRepo(repo)),
-        );
+        this.disposables.push(gitApi.onDidOpenRepository((repo: any) => this.attachToRepo(repo)));
       }
-    } catch {
-      Logger.warn('[DiffSystem] Git extension not available for change detection');
+      Logger.log(`[DiffSystem] Git watcher attached (${gitApi.repositories.length} repo(s))`);
+    } catch (e) {
+      Logger.warn('[DiffSystem] Git extension not available for change detection', e);
+    }
+  }
+
+  private attachToRepo(repo: any): void {
+    const root: string | undefined = repo?.rootUri?.fsPath;
+    if (!root) { return; }
+
+    const key = root.toLowerCase();
+    if (this.attachedRepoKeys.has(key)) { return; }
+    this.attachedRepoKeys.add(key);
+
+    // Baseline only — a first-seen HEAD is never treated as a move, so startup
+    // can never trigger auto-accept.
+    this.lastHeadByRepo.set(key, repo.state?.HEAD?.commit);
+
+    this.disposables.push(repo.state.onDidChange(() => this.onRepoStateChanged(repo)));
+
+    // Commits made from the VS Code UI surface faster than the .git watcher.
+    // Both paths funnel into the same HEAD comparison, so duplicate events are free.
+    if (typeof repo.onDidCommit === 'function') {
+      this.disposables.push(repo.onDidCommit(() => this.onRepoStateChanged(repo)));
     }
   }
 
   /**
-   * SKYCODE: on git commit, auto-accept Skycode pending hunks for the committed files.
-   * Rationale: if the user committed a file, they implicitly approved its current
-   * content (which includes any pending Skycode diffs). Clear the inline diff zones.
+   * Runs on every git status refresh — including refreshes caused by commits,
+   * checkouts, pulls, merges, rebases and resets performed OUTSIDE the editor
+   * (terminal, external clients), because the git extension watches .git itself.
+   *
+   * `onDidCommit` alone only fires for commits made through the git extension,
+   * which is why external commits used to leave hunks pending forever.
    */
-  private async onGitCommit(repo: any): Promise<void> {
-    const pendingFiles = this.store.getFilesWithPendingChanges();
-    if (pendingFiles.length === 0) { return; }
+  private onRepoStateChanged(repo: any): void {
+    const root: string | undefined = repo?.rootUri?.fsPath;
+    if (!root) { return; }
 
-    this.suppressGitStaleUntil = Date.now() + 2_000;
-    for (const fsPath of pendingFiles) {
-      const key = fsPath.toLowerCase();
-      const existing = this.externalChangeDebounce.get(key);
-      if (existing) {
-        clearTimeout(existing);
-        this.externalChangeDebounce.delete(key);
-      }
-    }
+    const key = root.toLowerCase();
+    const prevCommit = this.lastHeadByRepo.get(key);
+    const nextCommit: string | undefined = repo.state?.HEAD?.commit;
 
-    let committedFiles: Set<string>;
-    try {
-      const head = await repo.getCommit('HEAD');
-      const parent = head?.parents?.[0];
-      if (!parent) {
-        committedFiles = new Set(pendingFiles.map((p) => p.toLowerCase()));
-      } else {
-        const changes: Array<{ uri: vscode.Uri }> = await repo.diffBetween(parent, head.hash);
-        committedFiles = new Set(changes.map((c) => c.uri.fsPath.toLowerCase()));
-      }
-    } catch (e) {
-      Logger.warn('[DiffSystem] Failed to read commit diff; leaving pending files for manual confirmation', e);
+    if (prevCommit === nextCommit) {
+      // HEAD did not move — plain working tree churn, keep the hash-based check.
+      this.onGitStateChanged();
       return;
     }
 
-    for (const fsPath of pendingFiles) {
-      if (!committedFiles.has(fsPath.toLowerCase())) { continue; }
-      try {
-        Logger.log(`[DiffSystem] Auto-accepting pending hunks for committed file: ${path.basename(fsPath)}`);
-        await this.acceptAllForFile(fsPath);
-      } catch (e) {
-        Logger.error(`[DiffSystem] Auto-accept failed for ${fsPath}`, e);
-        continue;
-      }
+    this.lastHeadByRepo.set(key, nextCommit);
 
-      try {
-        const { readFile } = await import('node:fs/promises');
-        const currentContent = (await readFile(fsPath, 'utf-8')).replace(/\r\n/g, '\n');
-        this.recordWrittenHash(fsPath, currentContent);
-      } catch (e) {
-        Logger.debug(`[DiffSystem] Failed to refresh committed file hash for ${fsPath}: ${e}`);
+    // Unknown boundary (repo still initializing, or HEAD gone) — record and wait.
+    if (!prevCommit || !nextCommit) { return; }
+
+    Logger.log(
+      `[DiffSystem] HEAD moved in ${path.basename(root)}: ${prevCommit.slice(0, 8)} -> ${nextCommit.slice(0, 8)}`,
+    );
+
+    this.gitReconcileQueue = this.gitReconcileQueue
+      .then(() => this.reconcileAfterHeadChange(repo, prevCommit, nextCommit))
+      .catch((e) => Logger.error('[DiffSystem] Git reconciliation failed', e));
+  }
+
+  /**
+   * Reconcile pending hunks with what git just did to the files it touched.
+   *
+   *  - content on disk still equals what Skycode wrote → the new commit contains
+   *    our changes, the user implicitly approved them → accept;
+   *  - content differs (checkout / reset / stash / rebase rewrote the file) → the
+   *    pending hunks no longer describe the file → close them without touching disk.
+   *
+   * Files outside the HEAD diff stay pending: a commit of file A is not approval
+   * of file B. Staging without committing is deliberately not treated as approval.
+   */
+  private async reconcileAfterHeadChange(repo: any, prevCommit: string, nextCommit: string): Promise<void> {
+    const pendingFiles = this.store.getFilesWithPendingChanges();
+    if (pendingFiles.length === 0) { return; }
+
+    const repoRoot: string = repo.rootUri.fsPath;
+    const candidates = pendingFiles.filter((p) => DiffSystem.isInsideRepo(p, repoRoot));
+    if (candidates.length === 0) { return; }
+
+    const affected = await this.getFilesChangedBetween(repo, prevCommit, nextCommit);
+    if (!affected) {
+      Logger.warn('[DiffSystem] Could not read the git diff for this HEAD change — pending changes left untouched');
+      return;
+    }
+
+    // Hash checks race with git rewriting the working tree; hold them off while we resolve.
+    this.suppressGitStaleUntil = Date.now() + DiffSystem.GIT_STALE_SUPPRESS_MS;
+    for (const fsPath of candidates) { this.cancelPendingStaleCheck(fsPath); }
+
+    const accepted: string[] = [];
+    const closed: string[] = [];
+
+    this.gitReconcileInFlight = true;
+    try {
+      for (const fsPath of candidates) {
+        if (!affected.has(fsPath.toLowerCase())) { continue; }
+        const verdict = await this.reconcileFileAfterGit(fsPath);
+        if (verdict === 'accepted') { accepted.push(fsPath); }
+        else if (verdict === 'closed') { closed.push(fsPath); }
       }
+    } finally {
+      this.gitReconcileInFlight = false;
+      this.suppressGitStaleUntil = Date.now() + 2_000;
+    }
+
+    if (accepted.length > 0) {
+      Logger.log(`[DiffSystem] Auto-accepted pending hunks for ${accepted.length} file(s) captured by git`);
+      vscode.window.showInformationMessage(
+        t('diff.gitAutoAccepted', { files: DiffSystem.formatFileList(accepted) }),
+      );
+    }
+    if (closed.length > 0) {
+      Logger.log(`[DiffSystem] Closed pending hunks for ${closed.length} file(s) rewritten by git`);
+      vscode.window.showInformationMessage(
+        t('diff.gitOverwritten', { files: DiffSystem.formatFileList(closed) }),
+      );
+    }
+  }
+
+  private async reconcileFileAfterGit(fsPath: string): Promise<'accepted' | 'closed' | 'skipped'> {
+    if (!this.store.hasPendingChangesForFile(fsPath)) { return 'skipped'; }
+
+    const key = fsPath.toLowerCase();
+    const expectedHash = this.lastWrittenHash.get(key);
+    if (!expectedHash) {
+      // No baseline to compare against — never guess, leave it to the user.
+      Logger.warn(`[DiffSystem] No baseline hash for ${path.basename(fsPath)} — left pending after git change`);
+      return 'skipped';
+    }
+
+    let currentContent: string | null = null;
+    try {
+      const { readFile } = await import('node:fs/promises');
+      currentContent = (await readFile(fsPath, 'utf-8')).replace(/\r\n/g, '\n');
+    } catch {
+      currentContent = null; // git deleted the file
+    }
+
+    if (currentContent !== null && FileSnapshotStorage.contentHash(currentContent) === expectedHash) {
+      Logger.log(`[DiffSystem] Auto-accepting pending hunks: ${path.basename(fsPath)} is in git as written`);
+      await this.acceptAllForFile(fsPath);
+      return 'accepted';
+    }
+
+    Logger.log(`[DiffSystem] Closing pending hunks: ${path.basename(fsPath)} was rewritten by git`);
+    this.closePendingWithoutEdit(fsPath);
+    if (currentContent !== null) {
+      this.recordWrittenHash(fsPath, currentContent);
+    } else {
+      this.lastWrittenHash.delete(key);
+      this.scheduleWrittenHashPersist();
+    }
+    return 'closed';
+  }
+
+  /**
+   * Files git rewrote between two commits. Covers commit, checkout, pull, merge,
+   * rebase and reset alike — whatever moved HEAD.
+   */
+  private async getFilesChangedBetween(repo: any, from: string, to: string): Promise<Set<string> | null> {
+    try {
+      const changes: Array<{ uri?: vscode.Uri; originalUri?: vscode.Uri; renameUri?: vscode.Uri }> =
+        await repo.diffBetween(from, to);
+
+      const files = new Set<string>();
+      for (const change of changes ?? []) {
+        for (const uri of [change.uri, change.originalUri, change.renameUri]) {
+          if (uri?.fsPath) { files.add(uri.fsPath.toLowerCase()); }
+        }
+      }
+      return files;
+    } catch (e) {
+      Logger.warn(`[DiffSystem] diffBetween(${from.slice(0, 8)}, ${to.slice(0, 8)}) failed`, e);
+      return null;
+    }
+  }
+
+  /**
+   * Resolve pending hunks for a file without touching its content on disk.
+   * Used when an external actor already rewrote the file — a per-hunk revert
+   * would corrupt it.
+   */
+  private closePendingWithoutEdit(fsPath: string): number {
+    const count = this.hunkReverter.markResolvedWithoutEdit(fsPath, 'rejected');
+    this.renderer.clearForFile(fsPath);
+    this.updatePendingContext();
+    return count;
+  }
+
+  private cancelPendingStaleCheck(fsPath: string): void {
+    const key = fsPath.toLowerCase();
+    const timer = this.externalChangeDebounce.get(key);
+    if (timer) {
+      clearTimeout(timer);
+      this.externalChangeDebounce.delete(key);
+    }
+  }
+
+  private static isInsideRepo(fsPath: string, repoRoot: string): boolean {
+    const rel = path.relative(repoRoot, fsPath);
+    return rel.length > 0 && !rel.startsWith('..') && !path.isAbsolute(rel);
+  }
+
+  private static formatFileList(files: string[], max = 3): string {
+    const names = files.map((f) => path.basename(f));
+    if (names.length <= max) { return names.join(', '); }
+    return `${names.slice(0, max).join(', ')} +${names.length - max}`;
+  }
+
+  // ==================== Written-hash persistence ====================
+
+  /**
+   * Restore per-file content hashes from the previous session.
+   *
+   * Pending hunks survive a window reload (workspaceState), so the hashes that
+   * tell our own writes from external ones must survive too — otherwise external
+   * change detection stays dead until the model writes again.
+   */
+  private async restoreWrittenHashes(): Promise<void> {
+    try {
+      const stored = this.context.workspaceState.get<Record<string, string>>(DiffSystem.WRITTEN_HASH_KEY, {});
+      for (const [key, hash] of Object.entries(stored ?? {})) {
+        this.lastWrittenHash.set(key, hash);
+      }
+    } catch (e) {
+      Logger.warn('[DiffSystem] Failed to restore written hashes', e);
+    }
+    await this.seedMissingWrittenHashes();
+  }
+
+  /**
+   * Files with pending hunks but no stored hash (state written before hashes were
+   * persisted) take their current on-disk content as baseline, so git
+   * reconciliation covers them instead of skipping them forever.
+   */
+  private async seedMissingWrittenHashes(): Promise<void> {
+    const files = this.store
+      .getFilesWithPendingChanges()
+      .filter((f) => !this.lastWrittenHash.has(f.toLowerCase()));
+    if (files.length === 0) { return; }
+
+    const { readFile } = await import('node:fs/promises');
+    let seeded = 0;
+    for (const fsPath of files) {
+      try {
+        const content = (await readFile(fsPath, 'utf-8')).replace(/\r\n/g, '\n');
+        this.recordWrittenHash(fsPath, content);
+        seeded++;
+      } catch { /* file is gone — nothing to seed */ }
+    }
+    if (seeded > 0) {
+      Logger.log(`[DiffSystem] Seeded content hashes for ${seeded} pending file(s)`);
+    }
+  }
+
+  private scheduleWrittenHashPersist(): void {
+    if (this.hashPersistTimer) { return; }
+    this.hashPersistTimer = setTimeout(() => {
+      this.hashPersistTimer = null;
+      this.persistWrittenHashes();
+    }, 1_000);
+  }
+
+  /** Persists hashes for files that still have pending hunks; the rest is dropped. */
+  private persistWrittenHashes(): void {
+    try {
+      const pending = new Set(this.store.getFilesWithPendingChanges().map((f) => f.toLowerCase()));
+      const payload: Record<string, string> = {};
+      for (const [key, hash] of this.lastWrittenHash) {
+        if (pending.has(key)) { payload[key] = hash; }
+      }
+      this.context.workspaceState.update(DiffSystem.WRITTEN_HASH_KEY, payload);
+    } catch (e) {
+      Logger.warn('[DiffSystem] Failed to persist written hashes', e);
     }
   }
 
@@ -1429,6 +1669,7 @@ export class DiffSystem implements vscode.Disposable {
    */
   recordWrittenHash(fsPath: string, content: string): void {
     this.lastWrittenHash.set(fsPath.toLowerCase(), FileSnapshotStorage.contentHash(content));
+    this.scheduleWrittenHashPersist();
   }
 
   /**
@@ -1437,6 +1678,8 @@ export class DiffSystem implements vscode.Disposable {
    */
   private async checkFileStale(fsPath: string, reason: string): Promise<boolean> {
     if (!this.store.hasPendingChangesForFile(fsPath)) { return false; }
+    // Git reconciliation owns these files right now and reports a precise reason
+    if (this.gitReconcileInFlight) { return false; }
     if (reason === 'git_change' && Date.now() < this.suppressGitStaleUntil) { return false; }
 
     const key = fsPath.toLowerCase();
@@ -1453,12 +1696,7 @@ export class DiffSystem implements vscode.Disposable {
       // File diverged — close all diff sessions for this file
       Logger.log(`[DiffSystem] File stale (${reason}): ${path.basename(fsPath)} — snapshot hash mismatch, closing diff sessions`);
 
-      const pendingHunks = this.store.getPendingHunksByFile(fsPath);
-      for (const hunk of pendingHunks) {
-        this.store.updateHunkStatus(hunk.id, 'rejected');
-      }
-      this.renderer.clearForFile(fsPath);
-      this.updatePendingContext();
+      this.closePendingWithoutEdit(fsPath);
 
       vscode.window.showInformationMessage(
         `File "${path.basename(fsPath)}" changed externally (${reason}). Diff closed.`,
@@ -1497,6 +1735,12 @@ export class DiffSystem implements vscode.Disposable {
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
+    }
+
+    if (this.hashPersistTimer) {
+      clearTimeout(this.hashPersistTimer);
+      this.hashPersistTimer = null;
+      this.persistWrittenHashes();
     }
   }
 
