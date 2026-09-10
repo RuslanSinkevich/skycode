@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, it } from "mocha"
 import "should"
-import { CommandPermissionController } from "./CommandPermissionController"
-import { COMMAND_PERMISSIONS_ENV_VAR } from "./types"
+import { CommandPermissionController } from "../CommandPermissionController"
+import { COMMAND_PERMISSIONS_ENV_VAR } from "../types"
 
 describe("CommandPermissionController", () => {
 	let originalEnvValue: string | undefined

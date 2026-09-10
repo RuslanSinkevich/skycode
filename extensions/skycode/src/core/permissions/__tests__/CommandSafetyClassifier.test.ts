@@ -1,6 +1,6 @@
 import { describe, it } from "mocha"
 import "should"
-import { CommandSafetyClassifier } from "./CommandSafetyClassifier"
+import { CommandSafetyClassifier } from "../CommandSafetyClassifier"
 
 describe("CommandSafetyClassifier", () => {
 	const classifier = new CommandSafetyClassifier()
