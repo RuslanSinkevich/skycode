@@ -43,6 +43,7 @@ export const config = createVariant(ModelFamily.QWEN)
 		SkycodeDefaultTool.FILE_NEW,
 		SkycodeDefaultTool.FILE_EDIT,
 		SkycodeDefaultTool.BASH,
+		SkycodeDefaultTool.CHECK_BACKGROUND,
 		SkycodeDefaultTool.ATTEMPT,
 		SkycodeDefaultTool.ASK,
 		SkycodeDefaultTool.PLAN_MODE,

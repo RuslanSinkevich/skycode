@@ -206,6 +206,7 @@ export const workspace = {
 		return docs
 	},
 	onDidChangeTextDocument: (_callback: any) => ({ dispose: () => {} }),
+	onDidSaveTextDocument: (_callback: any) => ({ dispose: () => {} }),
 	fs: {
 		createDirectory: async (_uri: any) => {},
 		writeFile: async (_uri: any, _content: Uint8Array) => {},

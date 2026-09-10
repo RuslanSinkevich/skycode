@@ -121,6 +121,7 @@
 	"chat.wantsToWebSearch": "Skycode AI wants to search the web:",
 	"chat.webSearched": "Skycode AI searched the web:",
 	"chat.loadedSkill": "Skycode AI loaded skill:",
+	"chat.checkedBackgroundCommand": "Skycode AI checked a background command:",
 	"chat.mcpNotification": "MCP notification",
 	"chat.loadingMcpDocs": "Loading MCP documentation",
 	"chat.generatingExplanation": "Generating explanation",

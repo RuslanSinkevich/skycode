@@ -15,12 +15,35 @@
           "requires_approval": {
             "type": "boolean",
             "description": "To indicate whether this command requires explicit user approval or interaction before it should be executed. For system/file altering operations like installing/uninstalling packages, removing/overwriting files, system configuration changes, network operations, or any commands that are considered potentially dangerous must be set to true. False for safe operations like running development servers, building projects, and other non-destructive operations."
+          },
+          "timeout": {
+            "type": "integer",
+            "description": "Optional timeout in seconds. While the command runs the task is not blocked: after the timeout the command keeps running (in the background for standalone terminals, in the terminal for VSCode) and you get its background id — check it later with check_background_command. Default is 20s for the VSCode terminal and 120s for background execution. Increase for long builds/installs/tests (e.g. 300 for npm install, 600 for heavy builds)."
           }
         },
         "required": [
           "command",
           "requires_approval"
         ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "check_background_command",
+      "description": "Check the status and output of a background command. If no id is provided, lists all tracked background commands. If an id is provided, returns status, elapsed time, and last 50 lines of output.",
+      "strict": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The background command ID to check. If omitted, returns a list of all tracked background commands."
+          }
+        },
+        "required": [],
         "additionalProperties": false
       }
     }

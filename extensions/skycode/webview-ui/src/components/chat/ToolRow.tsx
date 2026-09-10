@@ -363,6 +363,17 @@ export function ToolRow({ tool, message, backgroundEditEnabled, isExpanded, onTo
 					</div>
 				</div>
 			)
+		case "check_background_command":
+			return (
+				<div>
+					<div className={HEADER_CLASSNAMES}>
+						<CodiconIcon name="terminal" />
+						<span className="font-bold">{t("chat.checkedBackgroundCommand")}</span>
+						{tool.id && <code className="ph-no-capture break-all">{tool.id}</code>}
+					</div>
+					<CodeAccordian code={tool.content} isConsoleLogs isExpanded={isExpanded} onToggleExpand={onToggleExpand} />
+				</div>
+			)
 		default:
 			return <InvisibleSpacer />
 	}

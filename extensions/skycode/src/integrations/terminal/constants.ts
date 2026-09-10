@@ -40,6 +40,40 @@ export const COMPLETION_TIMEOUT_MS = 6000 // 6 seconds
 /** Cursor-style soft timeout for VSCode terminal commands */
 export const VSCODE_AUTO_PROCEED_AFTER_MS = 20_000
 
+/**
+ * Hard timeout applied when the model did not pass an explicit `timeout`.
+ * Only used for background/standalone execution — visible VS Code terminals
+ * fall back to VSCODE_AUTO_PROCEED_AFTER_MS instead.
+ */
+export const DEFAULT_COMMAND_TIMEOUT_SECONDS = 120
+
+/** How long a command may block the agent, and whether the soft auto-proceed applies. */
+export interface CommandTiming {
+	/** Hard timeout in seconds — after it the command keeps running without blocking the agent */
+	timeoutSeconds: number
+	/** Soft timeout for visible terminals; undefined when the model set an explicit timeout */
+	autoProceedAfterMs?: number
+}
+
+/**
+ * Decide the timing of a single command.
+ *
+ * A timeout explicitly passed by the model always wins and disables the soft
+ * auto-proceed — otherwise a 600s build in the VS Code terminal would still be
+ * reported as "still running" after 20s. Without an explicit timeout the visible
+ * terminal keeps the Cursor-style 20s auto-proceed, and background execution
+ * falls back to DEFAULT_COMMAND_TIMEOUT_SECONDS.
+ */
+export function resolveCommandTiming(timeoutSeconds: number | undefined, terminalType: "vscode" | "standalone"): CommandTiming {
+	if (typeof timeoutSeconds === "number" && Number.isFinite(timeoutSeconds) && timeoutSeconds > 0) {
+		return { timeoutSeconds }
+	}
+	return {
+		timeoutSeconds: DEFAULT_COMMAND_TIMEOUT_SECONDS,
+		autoProceedAfterMs: terminalType === "vscode" ? VSCODE_AUTO_PROCEED_AFTER_MS : undefined,
+	}
+}
+
 /** Polling interval for VS Code terminals while shell integration is quiet */
 export const VSCODE_TERMINAL_POLL_INTERVAL_MS = 3_000
 

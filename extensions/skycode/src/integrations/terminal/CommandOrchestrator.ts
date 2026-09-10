@@ -25,7 +25,6 @@ import {
 	MAX_BYTES_BEFORE_FILE,
 	MAX_LINES_BEFORE_FILE,
 	SUMMARY_LINES_TO_KEEP,
-	VSCODE_AUTO_PROCEED_AFTER_MS,
 } from "./constants"
 import type {
 	CommandExecutorCallbacks,
@@ -53,13 +52,9 @@ export async function orchestrateCommandExecution(
 	callbacks: CommandExecutorCallbacks,
 	options: OrchestrationOptions,
 ): Promise<OrchestrationResult> {
-	const {
-		timeoutSeconds,
-		terminalType = "vscode",
-		autoProceedAfterMs = terminalType === "vscode" ? VSCODE_AUTO_PROCEED_AFTER_MS : undefined,
-		onOutputLine,
-		onProceedWhileRunning,
-	} = options
+	// autoProceedAfterMs is decided by the caller (resolveCommandTiming) — an explicit
+	// timeout from the model must not be shortened by the soft auto-proceed here.
+	const { timeoutSeconds, terminalType = "vscode", autoProceedAfterMs, onOutputLine, onProceedWhileRunning } = options
 
 	// Track command execution state (для UI индикации "идёт команда" и Cancel кнопки)
 	callbacks.updateBackgroundCommandState(true)
@@ -310,14 +305,20 @@ export async function orchestrateCommandExecution(
 				const autoProceedSeconds = Math.round((autoProceedAfterMs ?? 0) / 1000)
 				const idMsg = trackingResult?.id ? `Background command id: ${trackingResult.id}\n` : ""
 				const logMsg = trackingResult?.logFilePath ? `Log file: ${trackingResult.logFilePath}\n` : ""
+				const checkMsg = trackingResult?.id ? "Check it later with the check_background_command tool.\n" : ""
 
-				cleanupFileBased()
-				return {
+				// Assigning backgroundTrackingResult also stops the "line" listener above from
+				// streaming further output into the chat — from here the background tracker
+				// owns the output, exactly like the COMMAND_TIMEOUT path below.
+				backgroundTrackingResult = {
 					userRejected: false,
-					result: `Command is still running after ${autoProceedSeconds}s; continuing without waiting.${idMsg}${logMsg}${result.length > 0 ? `\nOutput so far:\n${result}` : ""}`,
+					result: `Command is still running after ${autoProceedSeconds}s; continuing without waiting.\n${idMsg}${logMsg}${checkMsg}${result.length > 0 ? `\nOutput so far:\n${result}` : ""}`,
 					completed: false,
 					outputLines,
 				}
+
+				cleanupFileBased()
+				return backgroundTrackingResult
 			}
 
 			if (error.message === "COMMAND_TIMEOUT") {

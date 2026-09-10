@@ -48,6 +48,7 @@ export const config = createVariant(ModelFamily.GPT_5)
 	)
 	.tools(
 		SkycodeDefaultTool.BASH,
+		SkycodeDefaultTool.CHECK_BACKGROUND,
 		SkycodeDefaultTool.FILE_READ,
 		SkycodeDefaultTool.FILE_NEW,
 		SkycodeDefaultTool.FILE_EDIT,

@@ -2,6 +2,17 @@ import { ModelFamily } from "@/shared/prompts"
 import { SkycodeDefaultTool } from "@/shared/tools"
 import type { SkycodeToolSpec } from "../spec"
 
+// [SKYCODE] Общий параметр timeout — одинаково доступен и текстовым, и native-вариантам.
+// Явно заданный моделью timeout отменяет 20-секундный auto-proceed в терминале VS Code.
+const TIMEOUT_PARAM = {
+	name: "timeout",
+	required: false,
+	type: "integer" as const,
+	instruction:
+		"Optional timeout in seconds. While the command runs the task is not blocked: after the timeout the command keeps running (in the background for standalone terminals, in the terminal for VSCode) and you get its background id — check it later with check_background_command. Default is 20s for the VSCode terminal and 120s for background execution. Increase for long builds/installs/tests (e.g. 300 for npm install, 600 for heavy builds).",
+	usage: "120",
+}
+
 const GENERIC: SkycodeToolSpec = {
 	variant: ModelFamily.GENERIC,
 	id: SkycodeDefaultTool.BASH,
@@ -22,14 +33,7 @@ const GENERIC: SkycodeToolSpec = {
 			usage: "true or false",
 			type: "boolean",
 		},
-		{
-			name: "timeout",
-			required: false,
-			type: "integer",
-			instruction:
-				"Optional timeout in seconds. After this, the task continues without blocking — for standalone terminals the command keeps running in the background, for VSCode terminals it stays in the terminal. Default is 120s. Increase for long builds/installs/tests (e.g. 300 for npm install, 600 for heavy builds).",
-			usage: "120",
-		},
+		TIMEOUT_PARAM,
 	],
 }
 
@@ -53,6 +57,7 @@ const NATIVE_GPT_5: SkycodeToolSpec = {
 				"To indicate whether this command requires explicit user approval or interaction before it should be executed. For system/file altering operations like installing/uninstalling packages, removing/overwriting files, system configuration changes, network operations, or any commands that are considered potentially dangerous must be set to true. False for safe operations like running development servers, building projects, and other non-destructive operations.",
 			type: "boolean",
 		},
+		TIMEOUT_PARAM,
 	],
 }
 
@@ -81,6 +86,7 @@ const GEMINI_3: SkycodeToolSpec = {
 				"To indicate whether this command requires explicit user approval or interaction before it should be executed. For system/file altering operations like installing/uninstalling packages, removing/overwriting files, system configuration changes, network operations, or any commands that are considered potentially dangerous must be set to true. False for safe operations like running development servers, building projects, and other non-destructive operations.",
 			type: "boolean",
 		},
+		TIMEOUT_PARAM,
 	],
 }
 

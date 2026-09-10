@@ -53,6 +53,7 @@ export const config = createVariant(ModelFamily.GLM)
 		SkycodeDefaultTool.MCP_DOCS,
 		SkycodeDefaultTool.BROWSER,
 		SkycodeDefaultTool.BASH,
+		SkycodeDefaultTool.CHECK_BACKGROUND,
 		SkycodeDefaultTool.TODO,
 		SkycodeDefaultTool.GENERATE_EXPLANATION,
 		SkycodeDefaultTool.USE_SKILL,

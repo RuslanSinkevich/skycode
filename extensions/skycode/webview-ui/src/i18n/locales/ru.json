@@ -121,6 +121,7 @@
 	"chat.wantsToWebSearch": "Skycode AI хочет найти в интернете:",
 	"chat.webSearched": "Skycode AI искал в интернете:",
 	"chat.loadedSkill": "Skycode AI загрузил навык:",
+	"chat.checkedBackgroundCommand": "Skycode AI проверил фоновую команду:",
 	"chat.mcpNotification": "MCP уведомление",
 	"chat.loadingMcpDocs": "Загрузка документации MCP",
 	"chat.generatingExplanation": "Генерация объяснения",

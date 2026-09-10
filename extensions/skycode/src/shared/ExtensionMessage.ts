@@ -250,11 +250,14 @@ export interface SkycodeSayTool {
 		| "summarizeTask"
 		| "useSkill"
 		| "command"
+		| "check_background_command"
 	path?: string
 	diff?: string
 	content?: string
 	regex?: string
 	filePattern?: string
+	/** Background command id shown by the check_background_command row */
+	id?: string
 	operationIsLocatedInWorkspace?: boolean
 	/** Starting line numbers in the original file where each SEARCH block matched */
 	startLineNumbers?: number[]

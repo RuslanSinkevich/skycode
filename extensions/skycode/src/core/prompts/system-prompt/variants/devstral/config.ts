@@ -38,6 +38,7 @@ export const config = createVariant(ModelFamily.DEVSTRAL)
 	)
 	.tools(
 		SkycodeDefaultTool.BASH,
+		SkycodeDefaultTool.CHECK_BACKGROUND,
 		SkycodeDefaultTool.FILE_READ,
 		SkycodeDefaultTool.FILE_NEW,
 		SkycodeDefaultTool.FILE_EDIT,

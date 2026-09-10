@@ -73,6 +73,7 @@ export const config = createVariant(ModelFamily.GENERIC)
 		SkycodeDefaultTool.BROWSER,
 		// Priority 4: Shell (lower priority for generic — weak models abuse it)
 		SkycodeDefaultTool.BASH,
+		SkycodeDefaultTool.CHECK_BACKGROUND,
 		// Priority 5: Auxiliary
 		SkycodeDefaultTool.TODO,
 		SkycodeDefaultTool.GENERATE_EXPLANATION,

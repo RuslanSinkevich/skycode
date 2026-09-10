@@ -21,6 +21,7 @@ import { findLastIndex } from "@shared/array"
 import { SkycodeToolResponseContent } from "@shared/messages"
 import { Logger } from "@/shared/services/Logger"
 import { orchestrateCommandExecution } from "./CommandOrchestrator"
+import { resolveCommandTiming } from "./constants"
 import { StandaloneTerminalManager } from "./standalone/StandaloneTerminalManager"
 import { VscodeTerminalManager } from "@/hosts/vscode/terminal/VscodeTerminalManager"
 import type {
@@ -137,11 +138,17 @@ export class CommandExecutor {
 		process.once("completed", clearCurrentProcess)
 		process.once("error", clearCurrentProcess)
 
+		// An explicit timeout from the model disables the soft auto-proceed, otherwise
+		// a visible VS Code terminal returns control after 20s and background execution after 120s.
+		const terminalType = useStandalone ? "standalone" : "vscode"
+		const timing = resolveCommandTiming(timeoutSeconds, terminalType)
+
 		// Use shared orchestration logic
 		// The StandaloneTerminalManager handles background command tracking internally
 		const result = await orchestrateCommandExecution(process, manager, this.callbacks, {
 			command,
-			timeoutSeconds,
+			timeoutSeconds: timing.timeoutSeconds,
+			autoProceedAfterMs: timing.autoProceedAfterMs,
 			// When "Proceed While Running" / auto-proceed is triggered, track the
 			// command in the manager so the agent can check it later by id.
 			// Returns the log file path so the orchestrator can send it to the UI.
@@ -158,7 +165,7 @@ export class CommandExecutor {
 				return undefined
 			},
 			showShellIntegrationSuggestion: this.shouldShowBackgroundTerminalSuggestion(),
-			terminalType: useStandalone ? "standalone" : "vscode",
+			terminalType,
 		})
 
 		// Capture subagent telemetry

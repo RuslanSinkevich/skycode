@@ -15,11 +15,6 @@ import { applyModelContentFixes } from "../utils/ModelContentProcessor"
 import { showNotificationForApproval } from "../../utils"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
 
-// [SKYCODE] Default hard timeout для ВСЕХ команд (раньше срабатывал только в yolo/backgroundExec).
-// По истечении: standalone — уходит в background, vscode terminal — процесс остаётся в терминале,
-// агент получает "ещё работает" и продолжает работу, не блокируясь.
-const DEFAULT_COMMAND_TIMEOUT_SECONDS = 120
-
 export class ExecuteCommandToolHandler implements IFullyManagedTool {
 	readonly name = SkycodeDefaultTool.BASH
 
@@ -38,7 +33,6 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 		let command: string | undefined = block.params.command?.trim()
 		const requiresApprovalRaw: string | undefined = block.params.requires_approval?.trim()
 		const timeoutParam: string | undefined = block.params.timeout
-		let timeoutSeconds: number | undefined
 
 		// Extract provider using the proven pattern from ReportBugHandler
 		const apiConfig = config.services.stateManager.getApiConfiguration()
@@ -68,11 +62,13 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 			return "Command executed (simulated). File should be open in the editor."
 		}
 
-		// [SKYCODE] Hard timeout всегда — модель может переопределить через параметр `timeout`,
-		// иначе используем DEFAULT_COMMAND_TIMEOUT_SECONDS. По истечении агент не блокируется
-		// (см. CommandOrchestrator: standalone → background, vscode → "ещё работает").
+		// [SKYCODE] Таймаут берём только если модель задала его явно — тогда он отменяет
+		// 20-секундный auto-proceed видимого терминала. Иначе решение принимает
+		// resolveCommandTiming (20s для терминала VS Code, 120s для backgroundExec).
+		// В любом случае по истечении агент не блокируется: команда уходит в background
+		// и её можно проверить через check_background_command.
 		const parsedTimeout = timeoutParam ? parseInt(timeoutParam, 10) : NaN
-		timeoutSeconds = parsedTimeout > 0 ? parsedTimeout : DEFAULT_COMMAND_TIMEOUT_SECONDS
+		const timeoutSeconds: number | undefined = parsedTimeout > 0 ? parsedTimeout : undefined
 
 		// Pre-process command for certain models
 		if (config.api.getModel().id.includes("gemini")) {
