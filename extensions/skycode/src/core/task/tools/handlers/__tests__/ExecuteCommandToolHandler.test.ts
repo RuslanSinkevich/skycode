@@ -1,7 +1,7 @@
 import { describe, it, beforeEach } from "mocha"
 import "should"
 import sinon from "sinon"
-import { ExecuteCommandToolHandler } from "../ExecuteCommandToolHandler"
+import { ExecuteCommandToolHandler, matchesCommandPattern } from "../ExecuteCommandToolHandler"
 import { SkycodeDefaultTool } from "@shared/tools"
 
 /**
@@ -489,5 +489,55 @@ describe("ExecuteCommandToolHandler", () => {
 			// When user provides text feedback, ToolResultUtils pushes it and returns false
 			String(result).should.equal("The user denied this operation.")
 		})
+	})
+})
+
+/**
+ * Tests for the whitelist matcher behind autoApprovalSettings.allowedCommandPatterns.
+ *
+ * A pattern auto-approves a command, so the matcher must be exact about its
+ * boundaries: `*` and `?` are the only wildcards, everything else — including
+ * regex metacharacters — is literal, and the whole command has to match.
+ */
+describe("matchesCommandPattern", () => {
+	it("matches an identical command", () => {
+		matchesCommandPattern("git status", "git status").should.be.true()
+	})
+
+	it("requires the whole command to match", () => {
+		matchesCommandPattern("git status --short", "git status").should.be.false()
+		matchesCommandPattern("sudo git status", "git status").should.be.false()
+	})
+
+	it("expands * to any sequence, including an empty one", () => {
+		matchesCommandPattern("npm run build", "npm run *").should.be.true()
+		matchesCommandPattern("npm run ", "npm run *").should.be.true()
+		matchesCommandPattern("npm install", "npm run *").should.be.false()
+	})
+
+	it("expands ? to exactly one character", () => {
+		matchesCommandPattern("git co", "git c?").should.be.true()
+		matchesCommandPattern("git commit", "git c?").should.be.false()
+	})
+
+	it("treats regex metacharacters as literals", () => {
+		matchesCommandPattern("npm run buildd", "npm run build+").should.be.false()
+		matchesCommandPattern("npm run build+", "npm run build+").should.be.true()
+		matchesCommandPattern("ls x", "ls .").should.be.false()
+		matchesCommandPattern("ls .", "ls .").should.be.true()
+		matchesCommandPattern("echo (a)", "echo (a)").should.be.true()
+	})
+
+	it("matches across newlines in a multi-line command", () => {
+		matchesCommandPattern('git commit -m "line1\nline2"', "git commit *").should.be.true()
+	})
+
+	it("is case-sensitive", () => {
+		matchesCommandPattern("NPM run build", "npm run *").should.be.false()
+	})
+
+	it("does not match anything on an empty pattern unless the command is empty too", () => {
+		matchesCommandPattern("git status", "").should.be.false()
+		matchesCommandPattern("", "").should.be.true()
 	})
 })

@@ -245,7 +245,7 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
  * [SKYCODE] Wildcard match for command whitelist patterns.
  * `*` matches any sequence of characters, `?` matches one character.
  */
-function matchesCommandPattern(command: string, pattern: string): boolean {
+export function matchesCommandPattern(command: string, pattern: string): boolean {
 	const regex = new RegExp(
 		"^" +
 			pattern
