@@ -18,6 +18,11 @@ export type RuleEvaluationContext = {
 	 * These should be POSIX-style paths, relative to their workspace root.
 	 */
 	paths?: string[]
+	/**
+	 * The basename of the current workspace root directory.
+	 * Used for per-project rule scoping (e.g. `workspace: [ConsumerCRM]`).
+	 */
+	workspace?: string
 }
 
 export type ConditionalEvaluator = (frontmatterValue: unknown, context: RuleEvaluationContext) => boolean
@@ -74,8 +79,44 @@ const evaluatePathsConditional: ConditionalEvaluatorWithMatch = (frontmatterValu
 	return { passed: matchedPatterns.length > 0, matched: matchedPatterns.length > 0 ? matchedPatterns : undefined }
 }
 
+const evaluateWorkspaceConditional: ConditionalEvaluatorWithMatch = (frontmatterValue: unknown, context: RuleEvaluationContext) => {
+	// Normalize to array
+	let patterns: string[]
+	if (typeof frontmatterValue === "string") {
+		patterns = [frontmatterValue]
+	} else if (isNonEmptyStringArray(frontmatterValue)) {
+		patterns = frontmatterValue
+	} else {
+		// Invalid type -> ignore conditional (fail-open)
+		return { passed: true }
+	}
+
+	const normalized = patterns.map((p) => p.trim().toLowerCase()).filter(Boolean)
+
+	// Policy: empty => match nothing (fail-closed)
+	if (normalized.length === 0) {
+		return { passed: false }
+	}
+
+	const currentWorkspace = (context.workspace || "").trim().toLowerCase()
+	// No workspace info => do not activate workspace-scoped rules
+	if (!currentWorkspace) {
+		return { passed: false }
+	}
+
+	const matchedPatterns: string[] = []
+	for (const pattern of normalized) {
+		if (currentWorkspace === pattern) {
+			matchedPatterns.push(pattern)
+		}
+	}
+
+	return { passed: matchedPatterns.length > 0, matched: matchedPatterns.length > 0 ? matchedPatterns : undefined }
+}
+
 const conditionalEvaluators: Record<string, ConditionalEvaluatorWithMatch> = {
 	paths: evaluatePathsConditional,
+	workspace: evaluateWorkspaceConditional,
 }
 
 export function evaluateRuleConditionals(

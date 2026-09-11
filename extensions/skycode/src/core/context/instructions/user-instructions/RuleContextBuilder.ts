@@ -1,3 +1,4 @@
+import * as path from "path"
 import { HostProvider } from "@/hosts/host-provider"
 import { extractPathLikeStrings, RuleEvaluationContext, toWorkspaceRelativePosixPath } from "./rule-conditionals"
 
@@ -42,6 +43,7 @@ export class RuleContextBuilder {
 	static async buildEvaluationContext(deps: RuleContextBuilderDeps): Promise<RuleEvaluationContext> {
 		return {
 			paths: await RuleContextBuilder.getRulePathContext(deps),
+			workspace: path.basename(deps.cwd),
 		}
 	}
 
