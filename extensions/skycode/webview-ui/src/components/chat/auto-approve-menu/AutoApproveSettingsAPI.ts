@@ -8,7 +8,13 @@ import { StateServiceClient } from "@/services/grpc-client"
  */
 export async function updateAutoApproveSettings(settings: AutoApprovalSettings) {
 	try {
-		await StateServiceClient.updateAutoApprovalSettings({ metadata: {}, ...settings })
+		// allowedCommandPatterns is a repeated proto field: the wire type wants a list,
+		// while the settings type leaves it optional until the user adds a pattern.
+		await StateServiceClient.updateAutoApprovalSettings({
+			metadata: {},
+			...settings,
+			actions: { ...settings.actions, allowedCommandPatterns: settings.actions.allowedCommandPatterns ?? [] },
+		})
 	} catch (error) {
 		console.error("Failed to update auto approval settings:", error)
 		throw error
