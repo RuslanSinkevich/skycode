@@ -6,6 +6,7 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { usePlatform } from "@/context/PlatformContext"
 import { useI18n } from "@/i18n"
 import { StateServiceClient } from "../../../services/grpc-client"
+import AllowedCommandsField from "../common/AllowedCommandsField"
 import Section from "../Section"
 import TerminalOutputLineLimitSlider from "../TerminalOutputLineLimitSlider"
 import { updateSetting } from "../utils/settingsHandlers"
@@ -159,6 +160,8 @@ export const TerminalSettingsSection: React.FC<TerminalSettingsSectionProps> = (
 						</div>
 					)}
 					<TerminalOutputLineLimitSlider />
+
+					<AllowedCommandsField className="mt-5" />
 					<div className="mt-5 p-3 bg-(--vscode-textBlockQuote-background) rounded border border-(--vscode-textBlockQuote-border)">
 						<p className="text-[13px] m-0">
 							<strong>{t("terminal.troubleshootingTitle")}</strong> {t("terminal.troubleshootingPre")}{" "}

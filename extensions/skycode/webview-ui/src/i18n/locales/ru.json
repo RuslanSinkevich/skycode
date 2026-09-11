@@ -1127,6 +1127,7 @@
 	"permissions.allowedCommands": "Разрешённые команды (whitelist)",
 	"permissions.allowedCommandsDescription": "Команды, совпадающие с паттернами, выполняются без подтверждения. Поддерживаются * и ?. Одна строка на паттерн.",
 	"permissions.allowedCommandsPlaceholder": "npm run *\ngit status\ngit diff *",
+	"permissions.allowedCommandsHint": "Сохраняется, когда вы кликаете вне поля.",
 	"chat.autoApproveCommands": "Авто-аппрув команд",
 	"chat.autoApproveCommandsOff": "Команды требуют подтверждения",
 	"common.copyCode": "Копировать код",

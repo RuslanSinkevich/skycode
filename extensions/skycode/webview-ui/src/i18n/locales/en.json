@@ -1127,6 +1127,7 @@
 	"permissions.allowedCommands": "Allowed commands (whitelist)",
 	"permissions.allowedCommandsDescription": "Commands matching these patterns run without asking. * and ? are supported. One pattern per line.",
 	"permissions.allowedCommandsPlaceholder": "npm run *\ngit status\ngit diff *",
+	"permissions.allowedCommandsHint": "Saved when you click outside the field.",
 	"chat.autoApproveCommands": "Auto-approve commands",
 	"chat.autoApproveCommandsOff": "Commands require approval",
 	"common.copyCode": "Copy code",

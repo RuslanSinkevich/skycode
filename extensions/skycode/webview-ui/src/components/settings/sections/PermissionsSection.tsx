@@ -46,39 +46,6 @@ const PermissionsSection = ({ renderSectionHeader }: PermissionsSectionProps) =>
 							))}
 						</div>
 
-						{/* [SKYCODE] Whitelist: allowed command patterns */}
-						<div className="mt-3">
-							<div className="text-xs font-medium mb-1">{t("permissions.allowedCommands")}</div>
-							<p className="text-xs text-(--vscode-descriptionForeground) mb-2">
-								{t("permissions.allowedCommandsDescription")}
-							</p>
-							<textarea
-								className="w-full rounded-md text-xs p-2 min-h-[72px] resize-y"
-								style={{
-									background: "var(--vscode-input-background)",
-									color: "var(--vscode-input-foreground)",
-									border: "1px solid var(--vscode-input-border)",
-									fontFamily: "var(--vscode-editor-font-family)",
-								}}
-								placeholder={t("permissions.allowedCommandsPlaceholder")}
-								value={(autoApprovalSettings.actions.allowedCommandPatterns ?? []).join("\n")}
-								onChange={async (e) => {
-									const lines = e.target.value
-										.split("\n")
-										.map((l) => l.trim())
-										.filter((l) => l.length > 0)
-									await updateAutoApproveSettings({
-										...autoApprovalSettings,
-										version: (autoApprovalSettings.version ?? 1) + 1,
-										actions: {
-											...autoApprovalSettings.actions,
-											allowedCommandPatterns: lines,
-										},
-									})
-								}}
-							/>
-						</div>
-
 						{/* Separator */}
 						<div
 							className="my-2"
