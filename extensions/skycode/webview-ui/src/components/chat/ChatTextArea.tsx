@@ -91,6 +91,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			setShowChatModelSelector: setShowModelSelector,
 			dictationSettings,
 			navigateToSettings,
+			autoApprovalSettings,
 		} = useExtensionState()
 		const [isTextAreaFocused, setIsTextAreaFocused] = useState(false)
 		const [isVoiceRecording, setIsVoiceRecording] = useState(false)
@@ -596,6 +597,42 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							<ServersToggleModal />
 
 							<SkycodeRulesToggleModal />
+
+							{/* [SKYCODE] Auto-approve commands toggle */}
+							<Tooltip>
+								<TooltipContent>
+									{autoApprovalSettings.actions.executeAllCommands
+										? t("chat.autoApproveCommands")
+										: t("chat.autoApproveCommandsOff")}
+								</TooltipContent>
+								<TooltipTrigger>
+									<VSCodeButton
+										appearance="icon"
+										aria-label={t("chat.autoApproveCommands")}
+										className={cn(
+											"p-0 m-0 flex items-center",
+											autoApprovalSettings.actions.executeAllCommands && "text-(--vscode-charts-green)",
+										)}
+										data-testid="auto-approve-commands-button"
+										onClick={async () => {
+											const { updateAutoApproveSettings } = await import(
+												"@/components/chat/auto-approve-menu/AutoApproveSettingsAPI"
+											)
+											await updateAutoApproveSettings({
+												...autoApprovalSettings,
+												version: (autoApprovalSettings.version ?? 1) + 1,
+												actions: {
+													...autoApprovalSettings.actions,
+													executeAllCommands: !autoApprovalSettings.actions.executeAllCommands,
+												},
+											})
+										}}>
+										<ButtonContainer>
+											<span className="codicon codicon-terminal" />
+										</ButtonContainer>
+									</VSCodeButton>
+								</TooltipTrigger>
+							</Tooltip>
 
 							<ModelContainer ref={modelSelectorRef}>
 								<ModelPickerModal

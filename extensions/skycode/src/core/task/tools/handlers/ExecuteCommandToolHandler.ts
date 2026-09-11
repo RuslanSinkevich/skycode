@@ -153,6 +153,14 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 			didAutoApprove = safety.safety === "safe"
 		}
 
+		// [SKYCODE] Whitelist: auto-approve commands matching allowedCommandPatterns
+		if (!didAutoApprove) {
+			const patterns = config.autoApprovalSettings.actions.allowedCommandPatterns
+			if (patterns && patterns.length > 0) {
+				didAutoApprove = patterns.some((p) => matchesCommandPattern(actualCommand, p))
+			}
+		}
+
 		// Determine workspace context for telemetry
 		const resolvedToNonPrimary = !arePathsEqual(executionDir, config.cwd)
 		const workspaceContext = {
@@ -231,4 +239,21 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 
 		return result
 	}
+}
+
+/**
+ * [SKYCODE] Wildcard match for command whitelist patterns.
+ * `*` matches any sequence of characters, `?` matches one character.
+ */
+function matchesCommandPattern(command: string, pattern: string): boolean {
+	const regex = new RegExp(
+		"^" +
+			pattern
+				.replace(/[.+^${}()|[\]\\]/g, "\\$&")
+				.replace(/\*/g, ".*")
+				.replace(/\?/g, ".") +
+			"$",
+		"s",
+	)
+	return regex.test(command)
 }
