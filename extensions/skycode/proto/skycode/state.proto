@@ -50,6 +50,8 @@ message AutoApprovalActions {
   optional bool edit_notebooks = 10;
   // Wildcard patterns (* and ?) whose matching commands are auto-approved
   repeated string allowed_command_patterns = 11;
+  // Built-in safe patterns the user switched off
+  repeated string disabled_default_command_patterns = 12;
 }
 
 // Auto approval settings for task execution

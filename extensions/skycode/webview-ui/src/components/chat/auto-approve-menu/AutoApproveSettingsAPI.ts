@@ -13,7 +13,11 @@ export async function updateAutoApproveSettings(settings: AutoApprovalSettings) 
 		await StateServiceClient.updateAutoApprovalSettings({
 			metadata: {},
 			...settings,
-			actions: { ...settings.actions, allowedCommandPatterns: settings.actions.allowedCommandPatterns ?? [] },
+			actions: {
+				...settings.actions,
+				allowedCommandPatterns: settings.actions.allowedCommandPatterns ?? [],
+				disabledDefaultCommandPatterns: settings.actions.disabledDefaultCommandPatterns ?? [],
+			},
 		})
 	} catch (error) {
 		console.error("Failed to update auto approval settings:", error)

@@ -11,6 +11,7 @@ import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
+import { findAllowedCommandPattern, getEffectiveAllowedCommandPatterns } from "@shared/AllowedCommands"
 import { applyModelContentFixes } from "../utils/ModelContentProcessor"
 import { showNotificationForApproval } from "../../utils"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
@@ -153,12 +154,10 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 			didAutoApprove = safety.safety === "safe"
 		}
 
-		// [SKYCODE] Whitelist: auto-approve commands matching allowedCommandPatterns
+		// [SKYCODE] Whitelist: built-in safe commands plus the ones the user added
 		if (!didAutoApprove) {
-			const patterns = config.autoApprovalSettings.actions.allowedCommandPatterns
-			if (patterns && patterns.length > 0) {
-				didAutoApprove = patterns.some((p) => matchesCommandPattern(actualCommand, p))
-			}
+			const patterns = getEffectiveAllowedCommandPatterns(config.autoApprovalSettings.actions)
+			didAutoApprove = findAllowedCommandPattern(actualCommand, patterns) !== undefined
 		}
 
 		// Determine workspace context for telemetry
@@ -239,21 +238,4 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 
 		return result
 	}
-}
-
-/**
- * [SKYCODE] Wildcard match for command whitelist patterns.
- * `*` matches any sequence of characters, `?` matches one character.
- */
-export function matchesCommandPattern(command: string, pattern: string): boolean {
-	const regex = new RegExp(
-		"^" +
-			pattern
-				.replace(/[.+^${}()|[\]\\]/g, "\\$&")
-				.replace(/\*/g, ".*")
-				.replace(/\?/g, ".") +
-			"$",
-		"s",
-	)
-	return regex.test(command)
 }

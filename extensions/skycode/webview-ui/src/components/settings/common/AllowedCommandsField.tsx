@@ -1,4 +1,7 @@
-import { useEffect, useRef, useState } from "react"
+import { DEFAULT_ALLOWED_COMMAND_PATTERNS } from "@shared/AllowedCommands"
+import { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
+import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
+import { useState } from "react"
 import { updateAutoApproveSettings } from "@/components/chat/auto-approve-menu/AutoApproveSettingsAPI"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
@@ -9,77 +12,127 @@ interface AllowedCommandsFieldProps {
 }
 
 /**
- * [SKYCODE] Whitelist of command patterns that run without asking for approval.
+ * [SKYCODE] Commands that run without asking.
  *
- * Shown both in Settings → Permissions (it is an auto-approval rule) and in
- * Settings → Terminal (it is about commands) — same setting, one place to edit
- * it, two places to find it.
- *
- * The textarea keeps its own draft while focused: parsing every keystroke into
- * a list of non-empty lines made it impossible to type a second line, because
- * the fresh empty line was dropped and written back immediately.
+ * Two lists, kept apart on purpose: the built-in read-only commands (each one
+ * can be switched off) and the patterns the user added by hand (each one can be
+ * removed). Mixing them in a single text box made it impossible to tell which
+ * was which.
  */
 const AllowedCommandsField = ({ className = "mt-3" }: AllowedCommandsFieldProps) => {
 	const { t } = useI18n()
 	const { autoApprovalSettings } = useExtensionState()
+	const [draft, setDraft] = useState("")
 
-	const patterns = autoApprovalSettings.actions.allowedCommandPatterns ?? []
-	const [draft, setDraft] = useState(() => patterns.join("\n"))
-	const isEditing = useRef(false)
+	const actions = autoApprovalSettings.actions
+	const custom = actions.allowedCommandPatterns ?? []
+	const disabledDefaults = actions.disabledDefaultCommandPatterns ?? []
+	const enabledDefaultCount = DEFAULT_ALLOWED_COMMAND_PATTERNS.length - disabledDefaults.length
 
-	// Follow external changes (another window, reset) unless the user is typing here
-	useEffect(() => {
-		if (!isEditing.current) {
-			setDraft(patterns.join("\n"))
-		}
-	}, [patterns])
-
-	const save = async (text: string) => {
-		const lines = text
-			.split("\n")
-			.map((line) => line.trim())
-			.filter((line) => line.length > 0)
-
-		const unchanged = lines.length === patterns.length && lines.every((line, i) => line === patterns[i])
-		if (unchanged) {
-			return
-		}
-
+	const save = async (patch: Partial<AutoApprovalSettings["actions"]>) => {
 		await updateAutoApproveSettings({
 			...autoApprovalSettings,
 			version: (autoApprovalSettings.version ?? 1) + 1,
-			actions: {
-				...autoApprovalSettings.actions,
-				allowedCommandPatterns: lines,
-			},
+			actions: { ...actions, ...patch },
 		})
+	}
+
+	const toggleDefault = (pattern: string, enabled: boolean) => {
+		const next = enabled ? disabledDefaults.filter((p) => p !== pattern) : [...disabledDefaults, pattern]
+		void save({ disabledDefaultCommandPatterns: next })
+	}
+
+	const addCustom = () => {
+		const pattern = draft.trim()
+		if (!pattern || custom.includes(pattern) || DEFAULT_ALLOWED_COMMAND_PATTERNS.includes(pattern)) {
+			setDraft("")
+			return
+		}
+		setDraft("")
+		void save({ allowedCommandPatterns: [...custom, pattern] })
+	}
+
+	const removeCustom = (pattern: string) => {
+		void save({ allowedCommandPatterns: custom.filter((p) => p !== pattern) })
+	}
+
+	const inputStyle = {
+		background: "var(--vscode-input-background)",
+		color: "var(--vscode-input-foreground)",
+		border: "1px solid var(--vscode-input-border)",
+		fontFamily: "var(--vscode-editor-font-family)",
 	}
 
 	return (
 		<div className={className}>
-			<div className="text-xs font-medium mb-1">{t("permissions.allowedCommands")}</div>
-			<p className="text-xs text-(--vscode-descriptionForeground) mb-2">{t("permissions.allowedCommandsDescription")}</p>
-			<textarea
-				className="w-full rounded-md text-xs p-2 min-h-[72px] resize-y"
-				data-testid="allowed-commands-field"
-				onBlur={() => {
-					isEditing.current = false
-					void save(draft)
-				}}
-				onChange={(e) => setDraft(e.target.value)}
-				onFocus={() => {
-					isEditing.current = true
-				}}
-				placeholder={t("permissions.allowedCommandsPlaceholder")}
-				style={{
-					background: "var(--vscode-input-background)",
-					color: "var(--vscode-input-foreground)",
-					border: "1px solid var(--vscode-input-border)",
-					fontFamily: "var(--vscode-editor-font-family)",
-				}}
-				value={draft}
-			/>
-			<p className="text-xs text-(--vscode-descriptionForeground) mt-1">{t("permissions.allowedCommandsHint")}</p>
+			<div className="font-medium mb-1">{t("permissions.allowedCommands")}</div>
+			<p className="text-xs text-(--vscode-descriptionForeground) mb-3">{t("permissions.allowedCommandsDescription")}</p>
+
+			{/* Built-in, read-only commands */}
+			<details className="mb-3 rounded-md p-2" style={{ border: "1px solid var(--vscode-widget-border)" }}>
+				<summary className="text-xs cursor-pointer select-none">
+					{t("permissions.allowedCommandsDefaults")}{" "}
+					<span className="text-(--vscode-descriptionForeground)">
+						({enabledDefaultCount}/{DEFAULT_ALLOWED_COMMAND_PATTERNS.length})
+					</span>
+				</summary>
+				<div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2">
+					{DEFAULT_ALLOWED_COMMAND_PATTERNS.map((pattern) => (
+						<label className="flex items-center gap-1.5 text-xs cursor-pointer" key={pattern}>
+							<input
+								checked={!disabledDefaults.includes(pattern)}
+								onChange={(e) => toggleDefault(pattern, e.target.checked)}
+								type="checkbox"
+							/>
+							<code className="break-all">{pattern}</code>
+						</label>
+					))}
+				</div>
+			</details>
+
+			{/* Patterns the user added */}
+			<div className="text-xs font-medium mb-1">{t("permissions.allowedCommandsCustom")}</div>
+			{custom.length === 0 ? (
+				<p className="text-xs text-(--vscode-descriptionForeground) mb-2">{t("permissions.allowedCommandsEmpty")}</p>
+			) : (
+				<ul className="list-none p-0 m-0 mb-2 flex flex-col gap-1" data-testid="allowed-commands-list">
+					{custom.map((pattern) => (
+						<li
+							className="flex items-center justify-between gap-2 rounded px-2 py-1"
+							key={pattern}
+							style={{ background: "var(--vscode-textBlockQuote-background)" }}>
+							<code className="text-xs break-all">{pattern}</code>
+							<VSCodeButton
+								appearance="icon"
+								aria-label={t("permissions.allowedCommandsRemove")}
+								onClick={() => removeCustom(pattern)}
+								title={t("permissions.allowedCommandsRemove")}>
+								<span className="codicon codicon-close" />
+							</VSCodeButton>
+						</li>
+					))}
+				</ul>
+			)}
+
+			<div className="flex gap-2">
+				<input
+					className="flex-1 rounded-md text-xs p-2"
+					data-testid="allowed-commands-input"
+					onChange={(e) => setDraft(e.target.value)}
+					onKeyDown={(e) => {
+						if (e.key === "Enter") {
+							e.preventDefault()
+							addCustom()
+						}
+					}}
+					placeholder={t("permissions.allowedCommandsPlaceholder")}
+					style={inputStyle}
+					value={draft}
+				/>
+				<VSCodeButton appearance="secondary" disabled={draft.trim().length === 0} onClick={addCustom}>
+					{t("permissions.allowedCommandsAdd")}
+				</VSCodeButton>
+			</div>
 		</div>
 	)
 }
