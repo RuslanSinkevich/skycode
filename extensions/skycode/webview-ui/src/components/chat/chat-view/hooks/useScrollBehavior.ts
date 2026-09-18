@@ -1,6 +1,6 @@
 import { SkycodeMessage } from "@shared/ExtensionMessage"
 import { useCallback, useEffect, useRef, useState } from "react"
-import { ScrollBehavior } from "../types/chatTypes"
+import { RowExpansionOptions, ScrollBehavior } from "../types/chatTypes"
 import { TurnData } from "../utils/messageUtils"
 
 /**
@@ -215,15 +215,19 @@ export function useScrollBehavior(
 	// --- toggleRowExpansion ---
 
 	const toggleRowExpansion = useCallback(
-		(ts: number) => {
+		(ts: number, options?: RowExpansionOptions) => {
 			const isCollapsing = expandedRows[ts] ?? false
+			const userInitiated = options?.userInitiated !== false
 			setExpandedRows((prev) => ({ ...prev, [ts]: !prev[ts] }))
 
 			if (!isCollapsing) {
-				// Expanding a row – the user is reading something specific,
-				// don't auto-yank them down.
-				disableAutoScrollRef.current = true
-				setShowScrollToBottom(true)
+				// Expanding by hand – the user is reading something specific,
+				// don't auto-yank them down. An expansion the app decided on
+				// (a long-running command) must not stop following.
+				if (userInitiated) {
+					disableAutoScrollRef.current = true
+					setShowScrollToBottom(true)
+				}
 			} else {
 				// Collapsing → clamp scrollTop so we don't end up below the
 				// new (smaller) maxScroll.

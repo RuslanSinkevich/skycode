@@ -4,7 +4,7 @@ import BrowserSessionRow from "@/components/chat/BrowserSessionRow"
 import ChatRow from "@/components/chat/ChatRow"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { cn } from "@/lib/utils"
-import { MessageHandlers } from "../../types/chatTypes"
+import { MessageHandlers, ToggleRowExpansion } from "../../types/chatTypes"
 import { findReasoningForApiReq, isEditTool, isProcessBlock, isTextMessagePendingToolCall } from "../../utils/messageUtils"
 import { EditCard } from "./EditCard"
 import { ProcessBlock } from "./ProcessBlock"
@@ -16,7 +16,7 @@ interface MessageRendererProps {
 	isLastMessage: boolean
 	modifiedMessages: SkycodeMessage[]
 	expandedRows: Record<number, boolean>
-	onToggleExpand: (ts: number) => void
+	onToggleExpand: ToggleRowExpansion
 	onHeightChange?: (isTaller: boolean) => void
 	onSetQuote: (quote: string | null) => void
 	inputValue: string

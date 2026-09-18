@@ -1,7 +1,7 @@
 import { SkycodeMessage } from "@shared/ExtensionMessage"
 import React, { memo, useCallback, useState, } from "react"
 import UserMessage from "@/components/chat/UserMessage"
-import { MessageHandlers } from "../../types/chatTypes"
+import { MessageHandlers, ToggleRowExpansion } from "../../types/chatTypes"
 import { TurnData } from "../../utils/messageUtils"
 import { MessageRenderer } from "./MessageRenderer"
 
@@ -14,7 +14,7 @@ interface TurnBlockProps {
 	totalTurns: number
 	modifiedMessages: SkycodeMessage[]
 	expandedRows: Record<number, boolean>
-	onToggleExpand: (ts: number) => void
+	onToggleExpand: ToggleRowExpansion
 	onHeightChange: (isTaller: boolean) => void
 	onSetQuote: (quote: string | null) => void
 	inputValue: string

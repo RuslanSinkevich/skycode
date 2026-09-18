@@ -28,6 +28,7 @@ import {
 } from "lucide-react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSize } from "react-use"
+import type { ToggleRowExpansion } from "@/components/chat/chat-view/types/chatTypes"
 import { OptionsButtons } from "@/components/chat/OptionsButtons"
 import { WithCopyButton } from "@/components/common/CopyButton"
 import McpResponseDisplay from "@/components/mcp/chat-display/McpResponseDisplay"
@@ -58,7 +59,7 @@ const HEADER_CLASSNAMES = "flex items-center gap-2.5 mb-3"
 interface ChatRowProps {
 	message: SkycodeMessage
 	isExpanded: boolean
-	onToggleExpand: (ts: number) => void
+	onToggleExpand: ToggleRowExpansion
 	lastModifiedMessage?: SkycodeMessage
 	isLast: boolean
 	onHeightChange?: (isTaller: boolean) => void
@@ -340,7 +341,8 @@ export const ChatRowContent = memo(
 			let rafId = 0
 			const tick = () => {
 				if (performance.now() - start >= 500) {
-					onToggleExpand(message.ts)
+					// Not a user gesture: expanding here must not switch auto-scroll off
+					onToggleExpand(message.ts, { userInitiated: false })
 					return
 				}
 				rafId = requestAnimationFrame(tick)
