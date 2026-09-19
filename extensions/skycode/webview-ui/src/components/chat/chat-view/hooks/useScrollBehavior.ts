@@ -73,10 +73,31 @@ export function useScrollBehavior(
 	const resizeObserverRef = useRef<ResizeObserver | null>(null)
 	const footerObserverRef = useRef<ResizeObserver | null>(null)
 	const wheelTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+	const keyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-	// Grace period after a programmatic scrollTo: ignore the resulting
-	// "scroll" event so it isn't misclassified as a user gesture.
-	const programmaticScrollUntilRef = useRef(0)
+	// Our own scrollTo is recognised by where it lands, not by how long ago it
+	// was issued: during streaming a time window would be re-armed on every
+	// chunk and swallow every real scroll event for the whole answer.
+	// `expected: null` means "anything within the window is ours" — used for
+	// smooth scrolls, which pass through many intermediate positions.
+	const programmaticScrollRef = useRef<{ expected: number | null; until: number }>({
+		expected: null,
+		until: 0,
+	})
+
+	const markProgrammaticScroll = useCallback((expected: number | null, durationMs: number) => {
+		programmaticScrollRef.current = { expected, until: Date.now() + durationMs }
+	}, [])
+
+	const forgetProgrammaticScroll = useCallback(() => {
+		programmaticScrollRef.current = { expected: null, until: 0 }
+	}, [])
+
+	const isProgrammaticScroll = useCallback((scrollTop: number) => {
+		const { expected, until } = programmaticScrollRef.current
+		if (Date.now() >= until) { return false }
+		return expected === null || Math.abs(scrollTop - expected) <= 2
+	}, [])
 
 	// ---------- helpers ----------
 
@@ -133,10 +154,10 @@ export function useScrollBehavior(
 
 		const maxScroll = getContentMaxScroll(scroller)
 		if (scroller.scrollTop < maxScroll) {
-			programmaticScrollUntilRef.current = Date.now() + 80
+			markProgrammaticScroll(maxScroll, 250)
 			scroller.scrollTop = maxScroll
 		}
-	}, [getContentMaxScroll])
+	}, [getContentMaxScroll, markProgrammaticScroll])
 
 	// --- public API ---
 
@@ -146,9 +167,9 @@ export function useScrollBehavior(
 		disableAutoScrollRef.current = false
 		setShowScrollToBottom(false)
 		const maxScroll = getContentMaxScroll(scroller)
-		programmaticScrollUntilRef.current = Date.now() + 80
+		markProgrammaticScroll(maxScroll, 250)
 		scroller.scrollTop = maxScroll
-	}, [getContentMaxScroll])
+	}, [getContentMaxScroll, markProgrammaticScroll])
 
 	const scrollToBottomSmooth = useCallback(() => {
 		const scroller = scrollerRef.current
@@ -156,9 +177,10 @@ export function useScrollBehavior(
 		disableAutoScrollRef.current = false
 		setShowScrollToBottom(false)
 		const maxScroll = getContentMaxScroll(scroller)
-		programmaticScrollUntilRef.current = Date.now() + 200
+		// A smooth scroll passes through many positions — match on time alone.
+		markProgrammaticScroll(null, 700)
 		scroller.scrollTo({ top: maxScroll, behavior: "smooth" })
-	}, [getContentMaxScroll])
+	}, [getContentMaxScroll, markProgrammaticScroll])
 
 	// --- scrollToMessage ---
 
@@ -201,7 +223,7 @@ export function useScrollBehavior(
 					if (!scroller) { return }
 					const turnEl = scroller.querySelector(`[data-turn-index="${turnIndex}"]`) as HTMLElement | null
 					if (turnEl) {
-						programmaticScrollUntilRef.current = Date.now() + 200
+						markProgrammaticScroll(null, 700)
 						turnEl.scrollIntoView({ block: "start", behavior: "smooth" })
 					}
 				})
@@ -209,7 +231,7 @@ export function useScrollBehavior(
 				setPendingScrollToMessage(null)
 			}
 		},
-		[messages, turns],
+		[messages, turns, markProgrammaticScroll],
 	)
 
 	// --- toggleRowExpansion ---
@@ -277,12 +299,40 @@ export function useScrollBehavior(
 				// User scrolled up → disable follow until they return near
 				// the bottom (handleScroll re-enables it).
 				disableAutoScrollRef.current = true
-				programmaticScrollUntilRef.current = 0
+				forgetProgrammaticScroll()
 				setShowScrollToBottom(true)
 			}
 
 			if (wheelTimeoutRef.current) { clearTimeout(wheelTimeoutRef.current) }
 			wheelTimeoutRef.current = setTimeout(() => {
+				userInteractingRef.current = false
+			}, 150)
+		}
+
+		// Keyboard scrolling counts as a gesture too. Without this, PageUp
+		// inside the chat was followed by an immediate yank back down.
+		const SCROLL_UP_KEYS = new Set(["PageUp", "ArrowUp", "Home"])
+		const SCROLL_KEYS = new Set([...SCROLL_UP_KEYS, "PageDown", "ArrowDown", "End", " "])
+
+		const onKeyDown = (e: KeyboardEvent) => {
+			if (!SCROLL_KEYS.has(e.key)) { return }
+			const target = e.target as HTMLElement | null
+			if (target?.isContentEditable || (target && /^(input|textarea|select)$/i.test(target.tagName))) {
+				return
+			}
+			if (!scroller.contains(document.activeElement) && document.activeElement !== document.body) {
+				return
+			}
+
+			userInteractingRef.current = true
+			if (SCROLL_UP_KEYS.has(e.key)) {
+				disableAutoScrollRef.current = true
+				forgetProgrammaticScroll()
+				setShowScrollToBottom(true)
+			}
+
+			if (keyTimeoutRef.current) { clearTimeout(keyTimeoutRef.current) }
+			keyTimeoutRef.current = setTimeout(() => {
 				userInteractingRef.current = false
 			}, 150)
 		}
@@ -295,6 +345,7 @@ export function useScrollBehavior(
 		}
 
 		scroller.addEventListener("wheel", onWheel, { passive: true })
+		window.addEventListener("keydown", onKeyDown, { passive: true })
 		scroller.addEventListener("touchstart", markUserInteraction, { passive: true })
 		scroller.addEventListener("pointerdown", markUserInteraction, { passive: true })
 		scroller.addEventListener("touchend", clearUserInteraction, { passive: true })
@@ -302,13 +353,15 @@ export function useScrollBehavior(
 
 		return () => {
 			scroller.removeEventListener("wheel", onWheel)
+			window.removeEventListener("keydown", onKeyDown)
 			scroller.removeEventListener("touchstart", markUserInteraction)
 			scroller.removeEventListener("pointerdown", markUserInteraction)
 			scroller.removeEventListener("touchend", clearUserInteraction)
 			scroller.removeEventListener("pointerup", clearUserInteraction)
 			if (wheelTimeoutRef.current) { clearTimeout(wheelTimeoutRef.current) }
+			if (keyTimeoutRef.current) { clearTimeout(keyTimeoutRef.current) }
 		}
-	}, [scrollerRef.current])
+	}, [scrollerRef.current, forgetProgrammaticScroll])
 
 	// ==================== Scroll event — auto-scroll toggle / button ====================
 
@@ -318,13 +371,19 @@ export function useScrollBehavior(
 
 		const handleScroll = () => {
 			if (isPinningRef.current) { return }
-			// Ignore browser-emitted scroll events from our own scrollTo.
-			if (Date.now() < programmaticScrollUntilRef.current && !userInteractingRef.current) { return }
 
 			// With the dynamic footer, max scrollTop already equals either
 			// `lastTurn.offsetTop` (short answer) or end-of-last-turn (long
 			// answer). So we can use the natural distance to content end.
 			const distanceFromContent = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight
+
+			// `isAtBottom` is consumed by InputSection; keep it fresh even for
+			// our own scrolls, otherwise it goes stale for a whole answer.
+			setIsAtBottom(distanceFromContent <= AT_BOTTOM_PX)
+
+			// Our own scrollTo must not be mistaken for a gesture.
+			if (isProgrammaticScroll(scroller.scrollTop) && !userInteractingRef.current) { return }
+
 			const nearBottom = distanceFromContent <= NEAR_BOTTOM_PX
 
 			if (nearBottom) {
@@ -334,18 +393,11 @@ export function useScrollBehavior(
 				disableAutoScrollRef.current = true
 				setShowScrollToBottom(true)
 			}
-
-			// `isAtBottom` is consumed by InputSection to decide whether a
-			// growing textarea should pull the chat down. Right after
-			// pinning a fresh turn, scrollTop == maxScroll, so this is
-			// true — which is fine: scrollToBottomAuto re-targets the same
-			// position so no visible jump occurs.
-			setIsAtBottom(distanceFromContent <= AT_BOTTOM_PX)
 		}
 
 		scroller.addEventListener("scroll", handleScroll, { passive: true })
 		return () => scroller.removeEventListener("scroll", handleScroll)
-	}, [scrollerRef.current])
+	}, [scrollerRef.current, isProgrammaticScroll])
 
 	// ==================== ResizeObserver — follow content growth ====================
 
@@ -464,7 +516,7 @@ export function useScrollBehavior(
 				const scrollerRect = sc.getBoundingClientRect()
 				const turnRect = lastTurnEl.getBoundingClientRect()
 				const elTop = turnRect.top - scrollerRect.top + sc.scrollTop
-				programmaticScrollUntilRef.current = Date.now() + 200
+				markProgrammaticScroll(elTop, 400)
 				sc.scrollTop = elTop
 			}
 
@@ -499,6 +551,9 @@ export function useScrollBehavior(
 		() => () => {
 			if (wheelTimeoutRef.current != null) {
 				clearTimeout(wheelTimeoutRef.current)
+			}
+			if (keyTimeoutRef.current != null) {
+				clearTimeout(keyTimeoutRef.current)
 			}
 		},
 		[],
