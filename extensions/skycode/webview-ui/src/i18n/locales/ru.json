@@ -1135,6 +1135,7 @@
 	"permissions.allowedCommandsEmpty": "Пока ничего не добавлено.",
 	"permissions.allowedCommandsAdd": "Добавить",
 	"permissions.allowedCommandsRemove": "Убрать",
+	"chat.scrollToBottom": "К последнему сообщению",
 	"chat.autoApproveCommands": "Авто-аппрув команд",
 	"chat.autoApproveCommandsOff": "Команды требуют подтверждения",
 	"common.copyCode": "Копировать код",

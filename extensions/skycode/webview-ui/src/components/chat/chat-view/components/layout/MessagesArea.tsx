@@ -1,5 +1,6 @@
 import { SkycodeMessage } from "@shared/ExtensionMessage"
 import React, { useCallback } from "react"
+import { useI18n } from "@/i18n"
 import { ChatState, MessageHandlers, ScrollBehavior } from "../../types/chatTypes"
 import { TurnData } from "../../utils/messageUtils"
 import { TurnBlock } from "../messages/TurnBlock"
@@ -38,7 +39,11 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 		toggleRowExpansion,
 		onScrollerRef,
 		onFooterRef,
+		showScrollToBottom,
+		scrollToBottomSmooth,
 	} = scrollBehavior
+
+	const { t } = useI18n()
 
 	const { expandedRows, inputValue, setActiveQuote } = chatState
 
@@ -92,6 +97,19 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 					/>
 				</div>
 			</div>
+			{/* Following is off while you read further up — this is the way back.
+			    Without it the only way to resume was to scroll down by hand. */}
+			{showScrollToBottom && (
+				<button
+					aria-label={t("chat.scrollToBottom")}
+					className="absolute bottom-3 right-3 flex h-7 w-7 items-center justify-center rounded-full border border-(--vscode-widget-border) bg-(--vscode-button-secondaryBackground) text-(--vscode-button-secondaryForeground) shadow-md hover:bg-(--vscode-button-secondaryHoverBackground) cursor-pointer"
+					data-testid="scroll-to-bottom-button"
+					onClick={scrollToBottomSmooth}
+					title={t("chat.scrollToBottom")}
+					type="button">
+					<span className="codicon codicon-arrow-down text-xs" />
+				</button>
+			)}
 		</div>
 	)
 }

@@ -1135,6 +1135,7 @@
 	"permissions.allowedCommandsEmpty": "Nothing added yet.",
 	"permissions.allowedCommandsAdd": "Add",
 	"permissions.allowedCommandsRemove": "Remove",
+	"chat.scrollToBottom": "Jump to latest",
 	"chat.autoApproveCommands": "Auto-approve commands",
 	"chat.autoApproveCommandsOff": "Commands require approval",
 	"common.copyCode": "Copy code",
