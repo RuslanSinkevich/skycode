@@ -17,7 +17,6 @@ interface MessageRendererProps {
 	modifiedMessages: SkycodeMessage[]
 	expandedRows: Record<number, boolean>
 	onToggleExpand: ToggleRowExpansion
-	onHeightChange?: (isTaller: boolean) => void
 	onSetQuote: (quote: string | null) => void
 	inputValue: string
 	messageHandlers: MessageHandlers
@@ -33,7 +32,6 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
 	modifiedMessages,
 	expandedRows,
 	onToggleExpand,
-	onHeightChange,
 	onSetQuote,
 	inputValue,
 	messageHandlers,
@@ -65,7 +63,6 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
 				isLast={isLastMessage}
 				lastModifiedMessage={modifiedMessages.at(-1)}
 				messages={messageOrGroup}
-				onHeightChange={onHeightChange}
 			/>
 		)
 	}
@@ -84,7 +81,6 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
 				key={messageOrGroup[0]?.ts}
 				lastModifiedMessage={modifiedMessages.at(-1)}
 				messages={messageOrGroup}
-				onHeightChange={onHeightChange}
 				onSetQuote={onSetQuote}
 				onToggleExpand={onToggleExpand}
 			/>
@@ -110,7 +106,6 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
 				message={messageOrGroup}
 				mode={rowMode}
 				onCancelCommand={() => messageHandlers.executeButtonAction("cancel")}
-				onHeightChange={onHeightChange}
 				onSetQuote={onSetQuote}
 				onToggleExpand={onToggleExpand}
 				reasoningContent={reasoningData.reasoning}

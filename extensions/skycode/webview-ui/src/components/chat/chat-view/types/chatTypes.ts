@@ -95,7 +95,6 @@ export interface ScrollBehavior {
 	scrollToBottomAuto: () => void
 	scrollToMessage: (messageIndex: number) => void
 	toggleRowExpansion: ToggleRowExpansion
-	handleRowHeightChange: (isTaller: boolean) => void
 	showScrollToBottom: boolean
 	setShowScrollToBottom: React.Dispatch<React.SetStateAction<boolean>>
 	isAtBottom: boolean

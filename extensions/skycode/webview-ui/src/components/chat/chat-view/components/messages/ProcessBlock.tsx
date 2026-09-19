@@ -13,7 +13,7 @@
 import type { SkycodeMessage, SkycodeSayTool } from "@shared/ExtensionMessage"
 import { StringRequest } from "@shared/proto/skycode/common"
 import { BrainIcon, ChevronRightIcon, Loader2Icon, TerminalSquareIcon } from "lucide-react"
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import ErrorRow from "@/components/chat/ErrorRow"
 import { cleanPathPrefix } from "@/components/common/CodeAccordian"
 import { useI18n } from "@/i18n"
@@ -29,7 +29,6 @@ interface ProcessBlockProps {
 	lastModifiedMessage?: SkycodeMessage
 	onExpandChange?: (expanded: boolean) => void
 	/** Как у ChatRow: держит инкрементальный скролл в конце чата при смене высоты блока (тулы/«думаю»). */
-	onHeightChange?: (isTaller: boolean) => void
 }
 
 type ToolType = "read" | "edit" | "create" | "delete" | "cmd" | "search" | "web"
@@ -45,11 +44,9 @@ interface ToolItemData {
 // ==================== Главный компонент ====================
 
 export const ProcessBlock = memo(
-	({ messages, isLast, lastModifiedMessage, onExpandChange, onHeightChange }: ProcessBlockProps) => {
+	({ messages, isLast, lastModifiedMessage, onExpandChange }: ProcessBlockProps) => {
 		const { t } = useI18n()
 		const isLastBlock = isLast === true
-		const rootRef = useRef<HTMLDivElement>(null)
-		const prevMeasuredHeightRef = useRef(0)
 
 		// Разделяем сообщения на reasoning и инструменты
 		const { reasoningTexts, toolItems, thinkingStartTime } = useMemo(() => {
@@ -166,56 +163,6 @@ export const ProcessBlock = memo(
 
 		const isVisible = hasReasoning || hasTools || isWaitingForFirstReasoning || hasError
 
-		// Track height changes to trigger scroll, with debounce to avoid jitter.
-		// ResizeObserver fires on every chunk — debounce consolidates them into one scroll.
-		useLayoutEffect(() => {
-			if (!isVisible || !onHeightChange || !isLastBlock) {
-				if (!isVisible) {
-					prevMeasuredHeightRef.current = 0
-				}
-				return
-			}
-			const el = rootRef.current
-			if (!el) {
-				return
-			}
-
-			let prev = prevMeasuredHeightRef.current
-			let debounceTimer: ReturnType<typeof setTimeout> | null = null
-
-			const measureAndReport = () => {
-				debounceTimer = null
-				const node = rootRef.current
-				if (!node) { return }
-				const h = node.getBoundingClientRect().height
-				if (!Number.isFinite(h) || h <= 0) { return }
-				if (prev === 0) {
-					prev = h
-					prevMeasuredHeightRef.current = h
-					return
-				}
-				if (Math.abs(h - prev) <= 1) { return }
-				onHeightChange(h > prev)
-				prev = h
-				prevMeasuredHeightRef.current = h
-			}
-
-			const ro = new ResizeObserver(() => {
-				if (debounceTimer !== null) {
-					clearTimeout(debounceTimer)
-				}
-				debounceTimer = setTimeout(measureAndReport, 80)
-			})
-
-			ro.observe(el)
-			return () => {
-				ro.disconnect()
-				if (debounceTimer !== null) {
-					clearTimeout(debounceTimer)
-				}
-			}
-		}, [isVisible, isLastBlock, onHeightChange])
-
 		if (!isVisible) {
 			return null
 		}
@@ -224,7 +171,7 @@ export const ProcessBlock = memo(
 		const hasBothSections = (hasReasoning || isWaitingForFirstReasoning) && hasTools
 
 		return (
-			<div className="space-y-0.5" ref={rootRef}>
+			<div className="space-y-0.5">
 				{/* Блок думалки — reasoning + промежуточный текст */}
 				{(hasReasoning || isWaitingForFirstReasoning) && (
 					<ThinkingSection

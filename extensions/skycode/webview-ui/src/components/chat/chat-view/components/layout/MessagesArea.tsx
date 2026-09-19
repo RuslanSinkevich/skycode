@@ -36,7 +36,6 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 	const {
 		scrollContainerRef,
 		toggleRowExpansion,
-		handleRowHeightChange,
 		onScrollerRef,
 		onFooterRef,
 	} = scrollBehavior
@@ -70,7 +69,6 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 								inputValue={inputValue}
 								messageHandlers={messageHandlers}
 								modifiedMessages={modifiedMessages}
-								onHeightChange={handleRowHeightChange}
 								onSetQuote={setActiveQuote}
 								onToggleExpand={toggleRowExpansion}
 								totalTurns={turns.length}

@@ -246,17 +246,6 @@ export function useScrollBehavior(
 		[expandedRows, setExpandedRows, getContentMaxScroll],
 	)
 
-	// --- handleRowHeightChange (called by the last ProcessBlock when its
-	//     own ResizeObserver detects a height change). Just delegates to
-	//     followIfOverflowing — we don't need separate logic here. ---
-
-	const handleRowHeightChange = useCallback(
-		(_isTaller: boolean) => {
-			followIfOverflowing()
-		},
-		[followIfOverflowing],
-	)
-
 	// ==================== Scroller ref callback ====================
 
 	const onScrollerRef = useCallback((ref: HTMLElement | null) => {
@@ -520,7 +509,6 @@ export function useScrollBehavior(
 		scrollToBottomAuto,
 		scrollToMessage,
 		toggleRowExpansion,
-		handleRowHeightChange,
 		showScrollToBottom,
 		setShowScrollToBottom,
 		isAtBottom,
