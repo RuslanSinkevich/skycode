@@ -52,33 +52,44 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 
 	return (
 		<div className="overflow-hidden flex flex-col h-full relative">
+			{/* Scroll anchoring stays ON here: it is what keeps the text you are
+			    reading still when something above the viewport grows (code
+			    highlighting, a late image, an expanding block). Only the footer
+			    spacer opts out, because it is resized on every streamed chunk. */}
 			<div
 				className="scrollable grow overflow-y-auto"
 				ref={scrollerCallbackRef}
 				style={{
 					scrollbarWidth: "none",
 					msOverflowStyle: "none",
-					overflowAnchor: "none",
 				}}>
-				{/* Single content wrapper so ResizeObserver in useScrollBehavior tracks growth of the WHOLE conversation, not just the first turn. */}
+				{/* The turns live in their own box: useScrollBehavior observes that box,
+				    so resizing the footer spacer below cannot feed the observer its own
+				    change back. */}
 				<div data-chat-content-wrapper>
-					{turns.map((turn, index) => (
-						<div data-turn-index={index} key={turn.userMessage.ts}>
-							<TurnBlock
-								expandedRows={expandedRows}
-								inputValue={inputValue}
-								messageHandlers={messageHandlers}
-								modifiedMessages={modifiedMessages}
-								onSetQuote={setActiveQuote}
-								onToggleExpand={toggleRowExpansion}
-								totalTurns={turns.length}
-								turn={turn}
-								turnIndex={index}
-							/>
-						</div>
-					))}
+					<div data-chat-turns>
+						{turns.map((turn, index) => (
+							<div data-turn-index={index} key={turn.userMessage.ts}>
+								<TurnBlock
+									expandedRows={expandedRows}
+									inputValue={inputValue}
+									messageHandlers={messageHandlers}
+									modifiedMessages={modifiedMessages}
+									onSetQuote={setActiveQuote}
+									onToggleExpand={toggleRowExpansion}
+									totalTurns={turns.length}
+									turn={turn}
+									turnIndex={index}
+								/>
+							</div>
+						))}
+					</div>
 					{/* Footer spacer — height managed by useScrollBehavior.resizeFooter */}
-					<div data-chat-footer-spacer ref={onFooterRef} style={{ minHeight: 0, height: 0 }} />
+					<div
+						data-chat-footer-spacer
+						ref={onFooterRef}
+						style={{ minHeight: 0, height: 0, overflowAnchor: "none" }}
+					/>
 				</div>
 			</div>
 		</div>

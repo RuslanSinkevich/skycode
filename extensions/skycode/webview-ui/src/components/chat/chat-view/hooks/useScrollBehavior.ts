@@ -353,9 +353,11 @@ export function useScrollBehavior(
 		const scroller = scrollerRef.current
 		if (!scroller) { return }
 
-		// Observe the dedicated chat-content wrapper (added in MessagesArea
-		// so growth of any turn is detected, not just the first child).
-		const target = scroller.firstElementChild ?? scroller
+		// Observe the turns box only (see MessagesArea): the footer spacer is
+		// resized from inside this callback, and observing a node that contains
+		// it would feed that resize straight back into the observer.
+		const target =
+			scroller.querySelector<HTMLElement>("[data-chat-turns]") ?? scroller.firstElementChild ?? scroller
 
 		const ro = new ResizeObserver(() => {
 			// Footer needs to be re-sized BEFORE we decide whether to tail.
