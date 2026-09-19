@@ -92,7 +92,7 @@ export interface ScrollBehavior {
 	scrollContainerRef: React.RefObject<HTMLDivElement>
 	disableAutoScrollRef: React.MutableRefObject<boolean>
 	scrollToBottomSmooth: () => void
-	scrollToBottomAuto: () => void
+	keepAtBottom: () => void
 	scrollToMessage: (messageIndex: number) => void
 	toggleRowExpansion: ToggleRowExpansion
 	showScrollToBottom: boolean

@@ -61,6 +61,9 @@ export function useScrollBehavior(
 	const [pendingScrollToMessage, setPendingScrollToMessage] = useState<number | null>(null)
 
 	// --- internal refs ---
+	// The element is kept in state as well: effects that attach listeners must
+	// re-run when the node is replaced, and a ref never triggers that.
+	const [scrollerEl, setScrollerEl] = useState<HTMLElement | null>(null)
 	const scrollerRef = useRef<HTMLElement | null>(null)
 	const footerRef = useRef<HTMLElement | null>(null)
 	const isPinningRef = useRef(false)
@@ -74,6 +77,7 @@ export function useScrollBehavior(
 	const footerObserverRef = useRef<ResizeObserver | null>(null)
 	const wheelTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 	const keyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+	const settleTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
 
 	// Our own scrollTo is recognised by where it lands, not by how long ago it
 	// was issued: during streaming a time window would be re-armed on every
@@ -161,12 +165,15 @@ export function useScrollBehavior(
 
 	// --- public API ---
 
-	const scrollToBottomAuto = useCallback(() => {
+	/** Used when the layout shrinks under a reader who is already at the bottom
+	 *  (the input box growing, for one). Unlike a deliberate jump it neither
+	 *  re-enables following nor hides the button — it only avoids the gap. */
+	const keepAtBottom = useCallback(() => {
 		const scroller = scrollerRef.current
 		if (!scroller) { return }
-		disableAutoScrollRef.current = false
-		setShowScrollToBottom(false)
+		if (disableAutoScrollRef.current) { return }
 		const maxScroll = getContentMaxScroll(scroller)
+		if (scroller.scrollTop >= maxScroll) { return }
 		markProgrammaticScroll(maxScroll, 250)
 		scroller.scrollTop = maxScroll
 	}, [getContentMaxScroll, markProgrammaticScroll])
@@ -272,6 +279,7 @@ export function useScrollBehavior(
 
 	const onScrollerRef = useCallback((ref: HTMLElement | null) => {
 		scrollerRef.current = ref
+		setScrollerEl(ref)
 	}, [])
 
 	const onFooterRef = useCallback(
@@ -289,7 +297,7 @@ export function useScrollBehavior(
 	// ==================== User interaction detection ====================
 
 	useEffect(() => {
-		const scroller = scrollerRef.current
+		const scroller = scrollerEl
 		if (!scroller) { return }
 
 		const onWheel = (e: WheelEvent) => {
@@ -361,12 +369,12 @@ export function useScrollBehavior(
 			if (wheelTimeoutRef.current) { clearTimeout(wheelTimeoutRef.current) }
 			if (keyTimeoutRef.current) { clearTimeout(keyTimeoutRef.current) }
 		}
-	}, [scrollerRef.current, forgetProgrammaticScroll])
+	}, [scrollerEl, forgetProgrammaticScroll])
 
 	// ==================== Scroll event — auto-scroll toggle / button ====================
 
 	useEffect(() => {
-		const scroller = scrollerRef.current
+		const scroller = scrollerEl
 		if (!scroller) { return }
 
 		const handleScroll = () => {
@@ -397,12 +405,12 @@ export function useScrollBehavior(
 
 		scroller.addEventListener("scroll", handleScroll, { passive: true })
 		return () => scroller.removeEventListener("scroll", handleScroll)
-	}, [scrollerRef.current, isProgrammaticScroll])
+	}, [scrollerEl, isProgrammaticScroll])
 
 	// ==================== ResizeObserver — follow content growth ====================
 
 	useEffect(() => {
-		const scroller = scrollerRef.current
+		const scroller = scrollerEl
 		if (!scroller) { return }
 
 		// Observe the turns box only (see MessagesArea): the footer spacer is
@@ -426,7 +434,7 @@ export function useScrollBehavior(
 			ro.disconnect()
 			resizeObserverRef.current = null
 		}
-	}, [scrollerRef.current, followIfOverflowing, resizeFooter])
+	}, [scrollerEl, followIfOverflowing, resizeFooter])
 
 	// ==================== Dynamic footer sizing ====================
 	//
@@ -439,7 +447,7 @@ export function useScrollBehavior(
 	const lastTurnTs = turns.length ? turns[turns.length - 1].userMessage.ts : 0
 
 	useEffect(() => {
-		const scroller = scrollerRef.current
+		const scroller = scrollerEl
 		if (!scroller) { return }
 		const lastTurnEl = getLastTurnEl()
 		if (!lastTurnEl) { return }
@@ -458,7 +466,7 @@ export function useScrollBehavior(
 			footerObserverRef.current = null
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [turns.length, lastTurnTs, scrollerRef.current])
+	}, [turns.length, lastTurnTs, scrollerEl])
 
 	// ==================== New turn pinning ====================
 
@@ -476,16 +484,23 @@ export function useScrollBehavior(
 		// lands in the live area.
 		if (isFirstRenderRef.current) {
 			isFirstRenderRef.current = false
-			const scroller = scrollerRef.current
-			if (scroller) {
-				requestAnimationFrame(() => {
-					const sc = scrollerRef.current
-					if (!sc) { return }
-					resizeFooter()
-					const maxScroll = getContentMaxScroll(sc)
-					sc.scrollTop = maxScroll
-				})
+
+			// Markdown, syntax highlighting and images land after the first
+			// frame, so one jump is not enough: the view drifts off the latest
+			// message and the first growth tick then yanks it back. Re-settle a
+			// couple of times instead, and stop the moment the user takes over.
+			const settle = () => {
+				const sc = scrollerRef.current
+				if (!sc) { return }
+				if (userInteractingRef.current || disableAutoScrollRef.current) { return }
+				resizeFooter()
+				const maxScroll = getContentMaxScroll(sc)
+				markProgrammaticScroll(maxScroll, 250)
+				sc.scrollTop = maxScroll
 			}
+
+			requestAnimationFrame(settle)
+			settleTimersRef.current.push(setTimeout(settle, 150), setTimeout(settle, 450))
 			return
 		}
 
@@ -555,6 +570,10 @@ export function useScrollBehavior(
 			if (keyTimeoutRef.current != null) {
 				clearTimeout(keyTimeoutRef.current)
 			}
+			for (const timer of settleTimersRef.current) {
+				clearTimeout(timer)
+			}
+			settleTimersRef.current = []
 		},
 		[],
 	)
@@ -563,7 +582,7 @@ export function useScrollBehavior(
 		scrollContainerRef,
 		disableAutoScrollRef,
 		scrollToBottomSmooth,
-		scrollToBottomAuto,
+		keepAtBottom,
 		scrollToMessage,
 		toggleRowExpansion,
 		showScrollToBottom,

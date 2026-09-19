@@ -48,7 +48,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
 		handleFocusChange,
 	} = chatState
 
-	const { isAtBottom, scrollToBottomAuto } = scrollBehavior
+	const { isAtBottom, keepAtBottom } = scrollBehavior
 	const prevTextAreaHeightRef = useRef(0)
 
 	// Handle send - queue if AI is working, send directly otherwise.
@@ -107,7 +107,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
 				const grew = prevTextAreaHeightRef.current > 0 && height > prevTextAreaHeightRef.current
 				prevTextAreaHeightRef.current = height
 				if (grew && isAtBottom) {
-					scrollToBottomAuto()
+					keepAtBottom()
 				}
 			}}
 				onSelectFilesAndImages={selectFilesAndImages}
