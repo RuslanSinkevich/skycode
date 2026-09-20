@@ -50,10 +50,8 @@ export function isPostHogConfigValid(config: PostHogClientConfig): config is Pos
 	if (isTestEnv) {
 		return false
 	}
-	return (
-		typeof config.apiKey === "string" &&
-		typeof config.errorTrackingApiKey === "string" &&
-		typeof config.host === "string" &&
-		typeof config.uiHost === "string"
-	)
+	// [SKYCODE] Проверяем непустоту, а не только тип: host у нас пока "" (см. TODO выше), и по
+	// старому условию пустая строка считалась валидной — клиент поднялся бы с пустым адресом.
+	const isFilled = (value: unknown): value is string => typeof value === "string" && value.trim().length > 0
+	return isFilled(config.apiKey) && isFilled(config.errorTrackingApiKey) && isFilled(config.host) && isFilled(config.uiHost)
 }

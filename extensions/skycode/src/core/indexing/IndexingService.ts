@@ -49,6 +49,8 @@ function getCurrentEmbeddingModel(_config: IndexingConfig): string {
 export class IndexingService implements vscode.Disposable {
 	private readonly storage: IndexStorage
 	private provider: EmbeddingProvider | null = null
+	/** Подпись последнего провала создания провайдера — чтобы не повторять один и тот же лог. */
+	private lastProviderFailure: string | undefined
 	private config: IndexingConfig
 	private progress: IndexingProgress = { ...DEFAULT_INDEXING_PROGRESS }
 	private watcher: vscode.FileSystemWatcher | null = null
@@ -296,8 +298,19 @@ export class IndexingService implements vscode.Disposable {
 			this.cancelProviderUnload()
 			try {
 				this.provider = createEmbeddingProvider(this.config, this.extensionPath)
+				this.lastProviderFailure = undefined
 			} catch (err: any) {
-				Logger.warn("[Skycode Indexing] Provider creation failed:", err.message)
+				// [SKYCODE] Раньше это была тихая WARN на каждый вызов (в логах — сотни подряд, причём
+				// без самой причины). Теперь причина видна, повтор не спамит, и сказано, что делать.
+				const reason = err instanceof Error ? err.message : String(err)
+				const signature = `${this.config.mode}:${this.config.localModel}:${reason}`
+				if (this.lastProviderFailure !== signature) {
+					this.lastProviderFailure = signature
+					Logger.error(
+						`[Skycode Indexing] Embedding provider unavailable (mode="${this.config.mode}", model="${this.config.localModel}"): ${reason}. ` +
+							`codebase_search is disabled until this is fixed — check skycode.indexing.* settings, or switch localModel to "mini", which ships with the extension.`,
+					)
+				}
 				return null
 			}
 		}

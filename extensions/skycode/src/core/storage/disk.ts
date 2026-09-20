@@ -41,6 +41,81 @@ async function atomicWriteFile(filePath: string, data: string): Promise<void> {
 	}
 }
 
+/** Возраст, после которого недописанный временный файл считается брошенным. */
+const ORPHANED_TEMP_MAX_AGE_MS = 60 * 60 * 1000
+
+/**
+ * [SKYCODE] Подчищает временные файлы, оставшиеся от прерванных записей.
+ *
+ * `atomicWriteFile` убирает за собой только при собственной ошибке: если окно закрыли или процесс
+ * упал посреди записи, `<имя>.tmp.<ts>.<rand>.json` остаётся навсегда. У живых установок их
+ * накапливались десятки на сотни мегабайт, и они ещё и завышали размер задачи в истории.
+ *
+ * Свежие файлы (моложе часа) не трогаем — их может писать другое окно прямо сейчас.
+ */
+export async function cleanupOrphanedTempFiles(): Promise<number> {
+	const roots = [await getGlobalStorageDir("tasks"), await getGlobalStorageDir("state")]
+	let removed = 0
+
+	for (const root of roots) {
+		let entries: string[]
+		try {
+			entries = await fs.readdir(root)
+		} catch {
+			continue // каталога может ещё не быть
+		}
+
+		for (const entry of entries) {
+			const entryPath = path.join(root, entry)
+			try {
+				const stats = await fs.stat(entryPath)
+				if (stats.isDirectory()) {
+					removed += await cleanupTempFilesInDirectory(entryPath)
+					continue
+				}
+				if (isOrphanedTempFile(entry, stats.mtimeMs)) {
+					await fs.unlink(entryPath)
+					removed++
+				}
+			} catch {
+				// файл мог исчезнуть между readdir и stat — это нормально
+			}
+		}
+	}
+
+	if (removed > 0) {
+		Logger.log(`[Skycode] Removed ${removed} orphaned temp file(s) left by interrupted writes`)
+	}
+	return removed
+}
+
+async function cleanupTempFilesInDirectory(dir: string): Promise<number> {
+	let removed = 0
+	let entries: string[]
+	try {
+		entries = await fs.readdir(dir)
+	} catch {
+		return 0
+	}
+	for (const entry of entries) {
+		try {
+			const entryPath = path.join(dir, entry)
+			const stats = await fs.stat(entryPath)
+			if (!stats.isDirectory() && isOrphanedTempFile(entry, stats.mtimeMs)) {
+				await fs.unlink(entryPath)
+				removed++
+			}
+		} catch {
+			// см. выше
+		}
+	}
+	return removed
+}
+
+function isOrphanedTempFile(fileName: string, mtimeMs: number): boolean {
+	return /\.tmp\.\d+\.[a-z0-9]+\.json$/i.test(fileName) && Date.now() - mtimeMs > ORPHANED_TEMP_MAX_AGE_MS
+}
+
 export const GlobalFileNames = {
 	apiConversationHistory: "api_conversation_history.json",
 	contextHistory: "context_history.json",

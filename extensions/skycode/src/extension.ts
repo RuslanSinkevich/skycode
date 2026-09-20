@@ -8,6 +8,7 @@ import { getPendingChangesStorage } from "./core/diff-v2/storage/PendingChangesS
 import { DIFF_VIEW_URI_SCHEME } from "@hosts/vscode/VscodeDiffViewProvider"
 import * as vscode from "vscode"
 import { Logger } from "@/shared/services/Logger"
+import { cleanupOrphanedTempFiles } from "@core/storage/disk"
 import { sendAccountButtonClickedEvent } from "./core/controller/ui/subscribeToAccountButtonClicked"
 import { sendChatButtonClickedEvent } from "./core/controller/ui/subscribeToChatButtonClicked"
 import { sendHistoryButtonClickedEvent } from "./core/controller/ui/subscribeToHistoryButtonClicked"
@@ -216,6 +217,12 @@ export async function activate(context: vscode.ExtensionContext) {
 	)
 
 	// [SKYCODE-SKYCODE] Initialize DiffSystem V2 after the webview is registered.
+	// [SKYCODE] Подчистить временные файлы от прерванных записей (см. cleanupOrphanedTempFiles).
+	// Фоном и молча: к работе расширения это не относится, блокировать старт незачем.
+	cleanupOrphanedTempFiles().catch((error) => {
+		Logger.warn("[Skycode] Orphaned temp file cleanup failed:", error)
+	})
+
 	// Disk reads and git watchers can be slow on cold start; they must not block
 	// resolving the Skycode view.
 	initDiffSystem(context, false)

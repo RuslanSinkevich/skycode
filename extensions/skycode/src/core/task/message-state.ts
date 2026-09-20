@@ -22,6 +22,9 @@ interface MessageStateHandlerParams {
 	checkpointManagerErrorMessage?: string
 }
 
+/** Как часто пересчитывать размер папки задачи (значение только для отображения). */
+const TASK_DIR_SIZE_TTL_MS = 30_000
+
 export class MessageStateHandler {
 	private apiConversationHistory: SkycodeStorageMessage[] = []
 	private skycodeMessages: SkycodeMessage[] = []
@@ -37,6 +40,12 @@ export class MessageStateHandler {
 	// operations try to modify message state simultaneously
 	// This follows the same pattern as Task.stateMutex for consistency
 	private stateMutex = new Mutex()
+
+	// [SKYCODE] Размер папки задачи нужен только для подписи в истории, а считался рекурсивным
+	// обходом на КАЖДОЕ сохранение сообщения — на большой задаче это заметная лишняя работа.
+	// Держим последнее значение и пересчитываем не чаще, чем раз в TASK_DIR_SIZE_TTL_MS.
+	private lastTaskDirSize = 0
+	private lastTaskDirSizeAt = 0
 
 	constructor(params: MessageStateHandlerParams) {
 		this.taskId = params.taskId
@@ -95,15 +104,7 @@ export class MessageStateHandler {
 					)
 				]
 			const lastModelInfo = [...this.apiConversationHistory].reverse().find((msg) => msg.modelInfo !== undefined)
-			const taskDir = await ensureTaskDirectoryExists(this.taskId)
-			let taskDirSize = 0
-			try {
-				// getFolderSize.loose silently ignores errors
-				// returns # of bytes, size/1000/1000 = MB
-				taskDirSize = await getFolderSize.loose(taskDir)
-			} catch (error) {
-				Logger.error("Failed to get task directory size:", taskDir, error)
-			}
+			const taskDirSize = await this.getTaskDirSize()
 			const cwd = await getCwd(getDesktopDir())
 			await this.updateTaskHistory({
 				id: this.taskId,
@@ -126,6 +127,26 @@ export class MessageStateHandler {
 		} catch (error) {
 			Logger.error("Failed to save skycode messages:", error)
 		}
+	}
+
+	/**
+	 * Размер папки задачи с коротким кэшем: значение идёт в подпись в истории, поэтому
+	 * небольшая неточность между пересчётами роли не играет.
+	 */
+	private async getTaskDirSize(): Promise<number> {
+		if (Date.now() - this.lastTaskDirSizeAt < TASK_DIR_SIZE_TTL_MS) {
+			return this.lastTaskDirSize
+		}
+		const taskDir = await ensureTaskDirectoryExists(this.taskId)
+		try {
+			// getFolderSize.loose silently ignores errors
+			// returns # of bytes, size/1000/1000 = MB
+			this.lastTaskDirSize = await getFolderSize.loose(taskDir)
+			this.lastTaskDirSizeAt = Date.now()
+		} catch (error) {
+			Logger.error("Failed to get task directory size:", taskDir, error)
+		}
+		return this.lastTaskDirSize
 	}
 
 	/**

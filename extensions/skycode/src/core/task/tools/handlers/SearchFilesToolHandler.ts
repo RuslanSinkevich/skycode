@@ -105,17 +105,21 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 				resultCount,
 				success: true,
 				errorType: undefined as "timeout" | "error" | undefined,
+				errorMessage: undefined as string | undefined,
+				searchPath: absolutePath,
 			}
 		} catch (error) {
 			// If search fails in one workspace, return error info
 			Logger.error(`Search failed in ${absolutePath}:`, error)
-			const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+			const rawMessage = error instanceof Error ? error.message : String(error)
 			return {
 				workspaceName,
 				workspaceResults: "",
 				resultCount: 0,
 				success: false,
-				errorType: message.includes("timed out") ? ("timeout" as const) : ("error" as const),
+				errorType: rawMessage.toLowerCase().includes("timed out") ? ("timeout" as const) : ("error" as const),
+				errorMessage: rawMessage,
+				searchPath: absolutePath,
 			}
 		}
 	}
@@ -130,11 +134,29 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 			workspaceResults: string
 			resultCount: number
 			success: boolean
+			errorType?: "timeout" | "error"
+			errorMessage?: string
+			searchPath?: string
 		}>,
 		searchPaths: Array<{ absolutePath: string; workspaceName?: string }>,
 	): string {
 		const allResults: string[] = []
 		let totalResultCount = 0
+
+		// [SKYCODE] Упавший поиск раньше молча превращался в "Found 0 results" — модель делала
+		// вывод, что кода нет, и шла править вслепую. Теперь провал виден и отличим от пустоты.
+		const failures = searchResults.filter((result) => !result.success)
+		const failureNote = failures
+			.map((failure) => {
+				const where = failure.workspaceName || failure.searchPath || "the search path"
+				const reason = failure.errorType === "timeout" ? "timed out" : failure.errorMessage || "unknown error"
+				return `[SEARCH FAILED] ${where}: ${reason}`
+			})
+			.join("\n")
+
+		if (failures.length === searchResults.length) {
+			return `${failureNote}\n\nThe search did not run, so this is NOT a statement about whether the pattern exists. Retry with a narrower path, or use another tool (list_files, read_file) before drawing conclusions.`
+		}
 
 		for (const { workspaceName, workspaceResults, resultCount, success } of searchResults) {
 			if (!success || !workspaceResults) {
@@ -163,17 +185,21 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 			}
 		}
 
-		// Combine results
+		// Combine results. A partial failure is prepended so the model knows the answer is incomplete.
+		const partialFailurePrefix = failureNote
+			? `${failureNote}\n(results below cover only the paths that were searched)\n\n`
+			: ""
+
 		if (config.isMultiRootEnabled && searchPaths.length > 1) {
 			// Multi-workspace search result
 			if (totalResultCount === 0) {
-				return "Found 0 results."
+				return `${partialFailurePrefix}Found 0 results.`
 			} else {
-				return `Found ${totalResultCount === 1 ? "1 result" : `${totalResultCount.toLocaleString()} results`} across ${searchPaths.length} workspace${searchPaths.length > 1 ? "s" : ""}.\n\n${allResults.join("\n\n")}`
+				return `${partialFailurePrefix}Found ${totalResultCount === 1 ? "1 result" : `${totalResultCount.toLocaleString()} results`} across ${searchPaths.length} workspace${searchPaths.length > 1 ? "s" : ""}.\n\n${allResults.join("\n\n")}`
 			}
 		} else {
 			// Single workspace result
-			return allResults[0] || "Found 0 results."
+			return `${partialFailurePrefix}${allResults[0] || "Found 0 results."}`
 		}
 	}
 
