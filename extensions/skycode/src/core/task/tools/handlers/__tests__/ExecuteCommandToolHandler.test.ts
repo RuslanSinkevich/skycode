@@ -129,7 +129,6 @@ describe("ExecuteCommandToolHandler", () => {
 			name: SkycodeDefaultTool.BASH,
 			params: {
 				command,
-				requires_approval: "false",
 			},
 			partial: false,
 			isNativeToolCall: false,
@@ -450,7 +449,7 @@ describe("ExecuteCommandToolHandler", () => {
 
 			const block = {
 				name: SkycodeDefaultTool.BASH,
-				params: { requires_approval: "false" },
+				params: {},
 				partial: false,
 			} as any
 
@@ -458,19 +457,20 @@ describe("ExecuteCommandToolHandler", () => {
 			config.taskState.consecutiveMistakeCount.should.equal(1)
 		})
 
-		it("should return error when requires_approval is missing", async () => {
+		it("should ignore a legacy requires_approval param instead of failing the turn", async () => {
 			const { config } = createMockConfig({
 				autoApproveResult: [false, false],
 			})
 
 			const block = {
 				name: SkycodeDefaultTool.BASH,
-				params: { command: "ls" },
+				// Models trained on the old prompt still send this; it is no longer declared
+				params: { command: "ls", requires_approval: "false" },
 				partial: false,
 			} as any
 
 			const _result = await handler.execute(config, block)
-			config.taskState.consecutiveMistakeCount.should.equal(1)
+			config.taskState.consecutiveMistakeCount.should.equal(0)
 		})
 	})
 

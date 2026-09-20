@@ -35,7 +35,6 @@ const XS_RULES = (context: SystemPromptContext) => `GLOBAL RULES
 - One tool per message; wait for result. Never assume outcomes.
 - Exact XML tags for tool + params.
 - CWD fixed: {{CWD}}; to run elsewhere: cd /path && cmd in **one** command; no ~ or $HOME.
-- Impactful/network/delete/overwrite/config ops -> requires_approval=true.
 - Environment details are context; check Actively Running Terminals before starting servers.
 - Prefer list/search/read tools over asking; if anything is unclear, use <ask_followup_question>.
 - ALWAYS narrow search scope before calling search_files. Use codebase_search or list_files first to identify relevant directories, then call search_files only in those directories.
@@ -147,12 +146,11 @@ Include options/trade-offs when helpful, ask if plan matches, then add the exact
 const XS_TOOLS_FULL = `TOOLS
 
 **execute_command** - Run CLI in {{CWD}}.
-Params: command, requires_approval.
+Params: command.
 Key: If output doesn't stream, assume success unless critical; else ask user to paste via ask_followup_question.
 *Example:*
 <execute_command>
 <command>npm run build</command>
-<requires_approval>false</requires_approval>
 </execute_command>
 
 **read_file** - Read file. Param: path.

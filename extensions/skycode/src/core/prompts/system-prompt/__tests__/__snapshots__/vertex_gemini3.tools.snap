@@ -8,16 +8,12 @@
         "command": {
           "type": "STRING"
         },
-        "requires_approval": {
-          "type": "BOOLEAN"
-        },
         "timeout": {
           "type": "NUMBER"
         }
       },
       "required": [
-        "command",
-        "requires_approval"
+        "command"
       ]
     }
   },

@@ -3,6 +3,70 @@ import { AssistantMessageContent, TextStreamContent, ToolParamName, ToolUse, too
 
 // parseAssistantmessageV1 removed in #
 
+// [SKYCODE] Qwen3-Coder-family models carry their own XML tool grammar and leak it into ours:
+// instead of `<regex>value</regex>` they emit generic wrappers — `<parameter_name>regex</parameter_name>`,
+// `<parameter1_name>regex</parameter1_name>` or `<parameter2>value</parameter2>` — where names and
+// values alternate across sibling tags. The streaming loop can't map those tags to a param, so the
+// turn used to die with "without value for required parameter". `extractAliasParams` recovers them
+// from a finished tool block; it only ever fills gaps, never overrides a normally parsed value.
+const ALIAS_PARAM_TAG_SOURCE = "<(parameter\\d*(?:_name|_value)?)>"
+const ALIAS_PARAM_TAG_RE = new RegExp(ALIAS_PARAM_TAG_SOURCE)
+const ALIAS_PARAM_TRAILING_CLOSE_RE = /<\/parameter\d*(?:_name|_value)?>\s*$/
+
+function extractAliasParams(toolContent: string): Partial<Record<ToolParamName, string>> {
+	const found: Partial<Record<ToolParamName, string>> = {}
+	const knownParams = toolParamNames as readonly string[]
+	const openTagRe = new RegExp(ALIAS_PARAM_TAG_SOURCE, "g")
+	let pendingName: ToolParamName | undefined
+	let match: RegExpExecArray | null
+
+	// biome-ignore lint/suspicious/noAssignInExpressions: standard exec loop
+	while ((match = openTagRe.exec(toolContent)) !== null) {
+		const closeTag = `</${match[1]}>`
+		const valueStart = match.index + match[0].length
+		const closeIndex = toolContent.indexOf(closeTag, valueStart)
+		if (closeIndex === -1) {
+			break // Unterminated tag — nothing reliable left to read
+		}
+		const content = toolContent.slice(valueStart, closeIndex).trim()
+		openTagRe.lastIndex = closeIndex + closeTag.length
+
+		if (knownParams.includes(content)) {
+			// A name-only tag. The value is either the next sibling tag's content or the
+			// bare text right after it (these models often leave that text unwrapped).
+			pendingName = content as ToolParamName
+			const rest = toolContent.slice(openTagRe.lastIndex)
+			const nextTagIndex = rest.search(ALIAS_PARAM_TAG_RE)
+			const between = (nextTagIndex === -1 ? rest : rest.slice(0, nextTagIndex))
+				.replace(ALIAS_PARAM_TRAILING_CLOSE_RE, "")
+				.trim()
+			if (between) {
+				found[pendingName] ??= between
+				pendingName = undefined
+			}
+			continue
+		}
+
+		if (pendingName) {
+			found[pendingName] ??= content
+			pendingName = undefined
+		}
+	}
+
+	return found
+}
+
+function applyAliasParamRepair(toolUse: ToolUse, toolContent: string): void {
+	if (!toolContent.includes("<parameter")) {
+		return
+	}
+	for (const [name, value] of Object.entries(extractAliasParams(toolContent))) {
+		if (toolUse.params[name as ToolParamName] === undefined) {
+			toolUse.params[name as ToolParamName] = value
+		}
+	}
+}
+
 /**
  * @description **Version 2**
  * Parses an assistant message string potentially containing mixed text and tool usage blocks
@@ -174,6 +238,9 @@ export function parseAssistantMessageV2(assistantMessage: string): AssistantMess
 					}
 				}
 
+				// [SKYCODE] Recover params the model wrapped in generic `<parameter…>` tags
+				applyAliasParamRepair(currentToolUse, toolContentSlice)
+
 				currentToolUse.partial = false // Mark as complete
 				contentBlocks.push(currentToolUse)
 				currentToolUse = undefined // Reset state
@@ -269,6 +336,9 @@ export function parseAssistantMessageV2(assistantMessage: string): AssistantMess
 
 	// Finalize any open tool use (which might contain the finalized partial param)
 	if (currentToolUse) {
+		// [SKYCODE] Same alias recovery for a tool block whose closing tag never arrived —
+		// an unclosed block still gets executed once the stream ends.
+		applyAliasParamRepair(currentToolUse, assistantMessage.slice(currentToolUseStart))
 		// Tool use is partial because the loop finished before its closing tag
 		contentBlocks.push(currentToolUse)
 	}

@@ -27,12 +27,11 @@ You have access to a set of tools. One tool may be used per message, results wil
 ## TOOLS
 
 **execute_command** — Run terminal commands in {{CWD}} or other directories.
-Params: command, requires_approval. "requires_approval" should be true if the command is dangerous, otherwise false.
+Params: command.
 Key: If output doesn't stream, assume success unless critical; else ask user to paste via ask_followup_question.
 *Example:*
 <execute_command>
 <command>npm run build</command>
-<requires_approval>false</requires_approval>
 </execute_command>
 
 **read_file** — Read file.
@@ -143,7 +142,6 @@ Each tool supports an optional task_progress parameter for maintaining a Markdow
 Example:
 <execute_command>
 <command>npm install react</command>
-<requires_approval>false</requires_approval>
 <task_progress>    <- NOTE THAT task_progress IS ALWAYS A PARAMETER INSIDE THE TOOL CALL
 - [x] Set up project structure
 - [x] Install dependencies

@@ -13,6 +13,10 @@ const TIMEOUT_PARAM = {
 	usage: "120",
 }
 
+// [SKYCODE] Параметра requires_approval здесь больше нет: ExecuteCommandToolHandler его значение
+// не читал (решение об аппруве принимают auto-approve настройки), зато модели на нём спотыкались —
+// пропущенный параметр стоил целого хода и приближал лимит ошибок.
+
 const GENERIC: SkycodeToolSpec = {
 	variant: ModelFamily.GENERIC,
 	id: SkycodeDefaultTool.BASH,
@@ -24,14 +28,6 @@ const GENERIC: SkycodeToolSpec = {
 			required: true,
 			instruction: `The CLI command to execute. This should be valid for the current operating system. Ensure the command is properly formatted and does not contain any harmful instructions.`,
 			usage: "Your command here",
-		},
-		{
-			name: "requires_approval",
-			required: true,
-			instruction:
-				"A boolean indicating whether this command requires explicit user approval before execution in case the user has auto-approve mode enabled. Set to 'true' for potentially impactful operations like installing/uninstalling packages, deleting/overwriting files, system configuration changes, network operations, or any commands that could have unintended side effects. Set to 'false' for safe operations like reading files/directories, running development servers, building projects, and other non-destructive operations.",
-			usage: "true or false",
-			type: "boolean",
 		},
 		TIMEOUT_PARAM,
 	],
@@ -49,13 +45,6 @@ const NATIVE_GPT_5: SkycodeToolSpec = {
 			required: true,
 			instruction:
 				"The CLI command to execute. This should be valid for the current operating system. Do not use the ~ character or $HOME to refer to the home directory. Always use absolute paths. The command will be executed from the current workspace, you do not need to cd to the workspace.",
-		},
-		{
-			name: "requires_approval",
-			required: true,
-			instruction:
-				"To indicate whether this command requires explicit user approval or interaction before it should be executed. For system/file altering operations like installing/uninstalling packages, removing/overwriting files, system configuration changes, network operations, or any commands that are considered potentially dangerous must be set to true. False for safe operations like running development servers, building projects, and other non-destructive operations.",
-			type: "boolean",
 		},
 		TIMEOUT_PARAM,
 	],
@@ -78,13 +67,6 @@ const GEMINI_3: SkycodeToolSpec = {
 			required: true,
 			instruction:
 				"The CLI command to execute. This should be valid for the current operating system. For command chaining, use proper shell operators like && to chain commands (e.g., 'cd path && command'). Do not use the ~ character or $HOME to refer to the home directory. Always use absolute paths. Do not run search/grep commands that may return thousands of results.",
-		},
-		{
-			name: "requires_approval",
-			required: true,
-			instruction:
-				"To indicate whether this command requires explicit user approval or interaction before it should be executed. For system/file altering operations like installing/uninstalling packages, removing/overwriting files, system configuration changes, network operations, or any commands that are considered potentially dangerous must be set to true. False for safe operations like running development servers, building projects, and other non-destructive operations.",
-			type: "boolean",
 		},
 		TIMEOUT_PARAM,
 	],

@@ -32,7 +32,6 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
 		let command: string | undefined = block.params.command?.trim()
-		const requiresApprovalRaw: string | undefined = block.params.requires_approval?.trim()
 		const timeoutParam: string | undefined = block.params.timeout
 
 		// Extract provider using the proven pattern from ReportBugHandler
@@ -46,10 +45,9 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 			return await config.callbacks.sayAndCreateMissingParamError(this.name, "command")
 		}
 
-		if (!requiresApprovalRaw) {
-			config.taskState.consecutiveMistakeCount++
-			return await config.callbacks.sayAndCreateMissingParamError(this.name, "requires_approval")
-		}
+		// [SKYCODE] `requires_approval` is intentionally not validated: nothing in the execution
+		// path reads it (approval is decided by auto-approve settings), and weaker models omit it
+		// often enough that enforcing it burned whole turns and pushed tasks into the mistake limit.
 
 		config.taskState.consecutiveMistakeCount = 0
 
