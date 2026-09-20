@@ -777,7 +777,7 @@ export class Task {
 				relPath ? ` for '${relPath.toPosix()}'` : ""
 			} without value for required parameter '${paramName}'. Retrying...`,
 		)
-		return formatResponse.toolError(formatResponse.missingToolParameterError(paramName))
+		return formatResponse.toolError(formatResponse.missingToolParameterError(paramName, toolName))
 	}
 
 	async removeLastPartialMessageIfExistsWithType(type: "ask" | "say", askOrSay: SkycodeAsk | SkycodeSay) {
@@ -2473,7 +2473,7 @@ export class Task {
 		if (this.taskState.sessionBudgetExhausted) {
 			await this.say(
 				"error",
-				"Session budget exhausted — the model reached its tool call limit for this turn. The task will be paused. You can continue with a new message.",
+				"Session budget exhausted — the model used up the tool calls allotted for this run. The task is paused; send a message to continue. Raise or disable the cap in the Session Budget setting.",
 			)
 			return true
 		}

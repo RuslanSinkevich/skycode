@@ -190,6 +190,11 @@ export function isLocalModel(providerInfo: ApiProviderInfo): boolean {
 	return localProviders.includes(normalize(providerInfo.providerId))
 }
 
+/** Свой OpenAI-совместимый эндпоинт: модель раздаёт сам пользователь, id произвольный. */
+export function isSelfHostedCompatibleProvider(providerInfo: ApiProviderInfo): boolean {
+	return normalize(providerInfo.providerId) === "openai"
+}
+
 /**
  * Parses a price string and converts it from per-token to per-million-tokens
  * @param priceString The price string to parse (e.g. from API responses)
@@ -252,11 +257,15 @@ export function getModelCapabilityTier(
 		return "strong"
 	}
 
-	// Local quantized models are weak by definition
+	// [SKYCODE] Сильно квантованные веса — признак слабой модели независимо от того, кто их
+	// раздаёт: локальный рантайм или свой OpenAI-совместимый шлюз. Раньше проверка работала
+	// только для ollama/lmstudio, хотя self-hosted vLLM — самый частый способ раздать q4-сборку.
+	if (providerInfo && isQuantizedModel(id) && (isLocalModel(providerInfo) || isSelfHostedCompatibleProvider(providerInfo))) {
+		return "weak"
+	}
+
+	// Non-quantized local models — medium
 	if (providerInfo && isLocalModel(providerInfo)) {
-		if (isQuantizedModel(id)) {
-			return "weak"
-		}
 		return "medium"
 	}
 
@@ -274,10 +283,14 @@ export function getModelCapabilityTier(
 }
 
 /**
- * Detects quantized models by common naming patterns (q4, q5, q8, gguf, etc.)
+ * Detects lossy-quantized models by common naming patterns (q4, gguf, awq, int4, ...).
+ *
+ * [SKYCODE] fp16 и fp8 здесь намеренно отсутствуют: это варианты точности, а не сжатие с
+ * потерями. Тег fp16 у локальной сборки обычно означает лучшую из доступных, а не худшую,
+ * и прежний список записывал её в "weak" вместе с q2.
  */
 function isQuantizedModel(modelId: string): boolean {
-	return /[_-](q[2-8][_-]|gguf|gptq|awq|exl2|fp16|fp8|int[48])/.test(modelId)
+	return /[_-](q[2-8][_-]|gguf|gptq|awq|exl2|int[48])/.test(modelId)
 }
 
 export interface CustomSessionBudgetSettings {

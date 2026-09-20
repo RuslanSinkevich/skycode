@@ -603,12 +603,15 @@ export class ToolExecutor {
 		}
 
 		// Session budget warning at 80% of limit
+		// [SKYCODE] Счётчик обнуляется в initiateTaskLoop, то есть один бюджет расходуется на весь
+		// прогон до следующего сообщения пользователя, а не на один ответ модели. Формулировки
+		// говорят ровно это — раньше они обещали лимит «на ход» и сбивали модель с толку.
 		const budgetWarningThreshold = Math.floor(limits.maxToolCallsPerTurn * 0.8)
 		if (this.taskState.turnToolCallCount === budgetWarningThreshold) {
 			const remaining = limits.maxToolCallsPerTurn - this.taskState.turnToolCallCount
 			this.taskState.userMessageContent.push({
 				type: "text",
-				text: `[SESSION BUDGET] Warning: You have ${remaining} tool calls remaining in this session. Wrap up your current task and call attempt_completion soon.`,
+				text: `[SESSION BUDGET] Warning: ${remaining} tool calls left before this run is paused (the budget covers everything until the user replies). Wrap up your current task and call attempt_completion soon.`,
 			})
 		}
 
@@ -617,7 +620,7 @@ export class ToolExecutor {
 			this.taskState.sessionBudgetExhausted = true
 			this.taskState.userMessageContent.push({
 				type: "text",
-				text: `[SESSION BUDGET EXHAUSTED] You have reached the maximum number of tool calls (${limits.maxToolCallsPerTurn}) for this session. You MUST call attempt_completion now with whatever progress you have made. Do NOT call any other tool.`,
+				text: `[SESSION BUDGET EXHAUSTED] You have used all ${limits.maxToolCallsPerTurn} tool calls allowed for this run. You MUST call attempt_completion now with whatever progress you have made. Do NOT call any other tool.`,
 			})
 		}
 	}
