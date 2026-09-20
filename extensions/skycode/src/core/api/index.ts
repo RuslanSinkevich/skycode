@@ -152,6 +152,7 @@ function createHandlerForProvider(
 				openAiModelId: isPlan ? options.planModeOpenAiModelId : options.actModeOpenAiModelId,
 				openAiModelInfo: isPlan ? options.planModeOpenAiModelInfo : options.actModeOpenAiModelInfo,
 				reasoningEffort: isPlan ? options.planModeReasoningEffort : options.actModeReasoningEffort,
+				thinkingBudgetTokens: isPlan ? options.planModeThinkingBudgetTokens : options.actModeThinkingBudgetTokens,
 			})
 		case "ollama":
 			return new OllamaHandler({

@@ -21,6 +21,7 @@ interface OpenAiHandlerOptions extends CommonApiHandlerOptions {
 	openAiModelId?: string
 	openAiModelInfo?: OpenAiCompatibleModelInfo
 	reasoningEffort?: string
+	thinkingBudgetTokens?: number
 }
 
 export class OpenAiHandler implements ApiHandler {
@@ -106,25 +107,23 @@ export class OpenAiHandler implements ApiHandler {
 			["o1", "o3", "o4", "gpt-5"].some((prefix) => modelId.includes(prefix)) && !modelId.includes("chat")
 		// Qwen3/Qwen3.5 models: enable thinking mode so reasoning goes into <think> tags
 		// parsed by ThinkTagStreamParser instead of appearing as plain text.
-		// Matches: qwen3, qwen3.5, qwen-3, Qwen/Qwen3.5-..., etc.
+		// [SKYCODE] Только по явному запросу: раньше режим включался всем моделям с "qwen3" в id,
+		// без настройки и без следа в UI, а сообщение пользователя молча переписывалось.
 		const modelIdLower = modelId.toLowerCase()
-		const isQwen3ThinkingModel =
-			modelIdLower.includes("qwen3") ||
-			modelIdLower.includes("qwen3.") ||
-			modelIdLower.includes("qwen-3") ||
-			/qwen\/qwen3/i.test(modelId)
+		const thinkingRequested = (this.options.thinkingBudgetTokens ?? 0) > 0
+		const isQwen3ThinkingModel = thinkingRequested && (modelIdLower.includes("qwen3") || modelIdLower.includes("qwen-3"))
 
 		let openAiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
 			{ role: "system", content: systemPrompt },
 			...convertToOpenAiMessages(messages),
 		]
-		let temperature: number | undefined
-		if (this.options.openAiModelInfo?.temperature !== undefined) {
-			const tempValue = Number(this.options.openAiModelInfo.temperature)
-			temperature = tempValue === 0 ? undefined : tempValue
-		} else {
-			temperature = openAiModelInfoSaneDefaults.temperature
-		}
+		// [SKYCODE] Заданная температура отправляется как есть, включая 0. Раньше явный 0
+		// означал «не отправлять параметр» — то есть выставленный руками ноль давал дефолт
+		// провайдера, а получить настоящий 0 можно было только оставив поле пустым.
+		const configuredTemperature = Number(this.options.openAiModelInfo?.temperature)
+		let temperature: number | undefined = Number.isFinite(configuredTemperature)
+			? configuredTemperature
+			: openAiModelInfoSaneDefaults.temperature
 		let reasoningEffort: ChatCompletionReasoningEffort | undefined
 		let maxTokens: number | undefined
 
