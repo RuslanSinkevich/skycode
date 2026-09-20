@@ -11,8 +11,6 @@ export const BASE = `{{${SystemPromptSection.AGENT_ROLE}}}
 
 ====
 
-{{${SystemPromptSection.TODO}}}
-
 ====
 
 {{${SystemPromptSection.TASK_PROGRESS}}}

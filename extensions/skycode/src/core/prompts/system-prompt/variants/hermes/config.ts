@@ -30,7 +30,6 @@ export const config = createVariant(ModelFamily.HERMES)
 		SystemPromptSection.CLI_SUBAGENTS,
 		SystemPromptSection.CAPABILITIES,
 		SystemPromptSection.EDITING_FILES,
-		SystemPromptSection.TODO,
 		SystemPromptSection.MCP,
 		SystemPromptSection.TASK_PROGRESS,
 		SystemPromptSection.SYSTEM_INFO,

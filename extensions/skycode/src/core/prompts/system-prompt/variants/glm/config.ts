@@ -30,7 +30,6 @@ export const config = createVariant(ModelFamily.GLM)
 		SystemPromptSection.CLI_SUBAGENTS,
 		SystemPromptSection.CAPABILITIES,
 		SystemPromptSection.EDITING_FILES,
-		SystemPromptSection.TODO,
 		SystemPromptSection.MCP,
 		SystemPromptSection.SYSTEM_INFO,
 		SystemPromptSection.OBJECTIVE,
