@@ -187,7 +187,6 @@ export const ProcessBlock = memo(
 				{/* Блок исследования — инструменты */}
 				{hasTools && (
 					<ExploringSection
-						compact={hasBothSections}
 						isExploringLive={isExploringLive}
 						isLastBlock={isLastBlock}
 						items={toolItems}
@@ -330,8 +329,6 @@ interface ExploringSectionProps {
 	isExploringLive: boolean
 	/** This ProcessBlock is still the last item in the turn (no newer agent row below yet) */
 	isLastBlock: boolean
-	/** Both sections visible - reduce height */
-	compact: boolean
 	t: (key: string, params?: Record<string, string | number>) => string
 	onExpandChange?: (expanded: boolean) => void
 }
@@ -341,7 +338,7 @@ interface ExploringSectionProps {
  * Пока блок последний в ходе и идёт работа — список раскрыт; после новой записи агента ниже — сворачивается.
  * userHidden гасит только краткие провалы isExploringLive между тулов в том же ходе.
  */
-const ExploringSection = memo(({ items, isExploringLive, isLastBlock, compact, t, onExpandChange }: ExploringSectionProps) => {
+const ExploringSection = memo(({ items, isExploringLive, isLastBlock, t, onExpandChange }: ExploringSectionProps) => {
 	const scrollRef = useRef<HTMLDivElement>(null)
 	/** User explicitly collapsed the tool list; non-last blocks start collapsed. */
 	const [userHidden, setUserHidden] = useState(!isLastBlock)
@@ -396,14 +393,12 @@ const ExploringSection = memo(({ items, isExploringLive, isLastBlock, compact, t
 	// Локализованное саммари: «Исследование: чтение 3, правка 1»
 	const summary = useMemo(() => getLocalizedSummary(items, isExploringLive, t), [items, isExploringLive, t])
 
-	// Высота контента: compact → меньше
-	const maxHeightClass = isExploringLive
-		? compact
-			? "max-h-[80px]"
-			: "max-h-[100px]"
-		: compact
-			? "max-h-[160px]"
-			: "max-h-[280px]"
+	// [SKYCODE] Одна высота на все состояния. Раньше она зависела от isExploringLive
+	// (100px в работе против 280px в покое) и от compact, а оба флага переключаются в
+	// середине хода: isExploringLive проваливается между инструментами, compact — когда
+	// рядом появляется блок «Думаю». Каждое переключение меняло число видимых строк,
+	// и список прыгал с шести на десять и обратно. Теперь он просто стоит на месте.
+	const maxHeightClass = "max-h-[280px]"
 
 	return (
 		<div className="px-4 py-0.5">
