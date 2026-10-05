@@ -11,15 +11,17 @@ import { Logger } from "@/shared/services/Logger"
 export async function rejectAllPendingChanges(controller: Controller, _request: EmptyRequest): Promise<Empty> {
 	Logger.log("[rejectAllPendingChanges] Called")
 	const diffSystem = getDiffSystem()
+	// [SKYCODE] Только текущая задача — см. комментарий в acceptAllPendingChanges.
+	const taskId = controller.task?.taskId
 
-	const count = diffSystem.getPendingCount()
-	Logger.log("[rejectAllPendingChanges] Pending hunks:", count)
+	const count = diffSystem.getStore().getPendingCount(taskId)
+	Logger.log("[rejectAllPendingChanges] Pending hunks:", count, "taskId:", taskId)
 
 	if (count === 0) {
 		return Empty.create({})
 	}
 
-	await diffSystem.rejectAll()
+	await diffSystem.rejectAll(taskId)
 
 	await controller.postStateToWebview()
 

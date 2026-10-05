@@ -16,6 +16,7 @@ import { Logger } from "@/shared/services/Logger"
 // v3 storage
 import { DiffStore } from './storage/DiffStore';
 import { FileSnapshotStorage } from './storage/FileSnapshotStorage';
+import type { Hunk } from './storage/types';
 
 // v3 engine
 import { SystemEditGuard } from './engine/SystemEditGuard';
@@ -202,6 +203,14 @@ export class DiffSystem implements vscode.Disposable {
    * Syncs DiffStore events to PendingChangesStorage so the webview
    * PendingChangesBar stays up to date.
    */
+  /**
+   * [SKYCODE] Задача, которой принадлежит хунк: берём из его ResponseGroup, а не из
+   * currentTaskId — на момент записи активной может быть уже другая задача.
+   */
+  private taskIdOfHunk(hunk: Hunk): string | undefined {
+    return this.store.getResponseGroup(hunk.responseGroupId)?.taskId;
+  }
+
   private syncStoreToWebview(): void {
     const pending = getPendingChangesStorage();
 
@@ -218,6 +227,7 @@ export class DiffSystem implements vscode.Disposable {
               addedLines: h.addedLines,
               timestamp: Date.now(),
               checkpointId: h.responseGroupId,
+              taskId: this.taskIdOfHunk(h),
             });
             break;
           }
@@ -233,6 +243,7 @@ export class DiffSystem implements vscode.Disposable {
               addedLines: h.addedLines,
               timestamp: Date.now(),
               checkpointId: h.responseGroupId,
+              taskId: this.taskIdOfHunk(h),
             });
             break;
           }
@@ -740,9 +751,13 @@ export class DiffSystem implements vscode.Disposable {
    * then mark all hunks as rejected. Falls back to per-hunk revert only when no
    * snapshot exists (legacy data or files not touched through the snapshot path).
    */
-  async rejectAll(): Promise<void> {
+  /**
+   * [SKYCODE] С `taskId` отклоняются только файлы этой задачи — кнопка живёт в баре, а бар
+   * показывает изменения текущей вкладки. Без аргумента поведение прежнее (все файлы).
+   */
+  async rejectAll(taskId?: string): Promise<void> {
     this.ensureInitialized();
-    const files = this.store.getFilesWithPendingChanges();
+    const files = this.store.getFilesWithPendingChanges(taskId);
 
     for (const fsPath of files) {
       const pendingHunks = this.store.getPendingHunksByFile(fsPath);

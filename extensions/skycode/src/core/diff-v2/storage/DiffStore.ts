@@ -343,18 +343,35 @@ export class DiffStore implements vscode.Disposable {
 
   // ==================== Queries ====================
 
-  getPendingCount(): number {
-    return this.getPendingHunks().length;
+  getPendingCount(taskId?: string): number {
+    return taskId === undefined ? this.getPendingHunks().length : this.getPendingHunksForTask(taskId).length;
   }
 
   hasPendingChangesForFile(fsPath: string): boolean {
     return this.getPendingHunksByFile(fsPath).length > 0;
   }
 
-  getFilesWithPendingChanges(): string[] {
+  getFilesWithPendingChanges(taskId?: string): string[] {
+    const hunks = taskId === undefined ? this.getPendingHunks() : this.getPendingHunksForTask(taskId);
     const files = new Set<string>();
-    for (const h of this.getPendingHunks()) { files.add(h.fsPath); }
+    for (const h of hunks) { files.add(h.fsPath); }
     return Array.from(files);
+  }
+
+  /**
+   * [SKYCODE] Незакрытые хунки одной задачи: привязка идёт через ResponseGroup.
+   *
+   * Группы без taskId считаем принадлежащими любой задаче — это либо записи, созданные до
+   * появления привязки, либо правки, сделанные вне задачи (inline edit). Прятать их значило бы
+   * лишить пользователя возможности их принять.
+   */
+  getPendingHunksForTask(taskId: string): Hunk[] {
+    const ownGroupIds = new Set(
+      this.getRGs()
+        .filter((g) => g.taskId === undefined || g.taskId === taskId)
+        .map((g) => g.id),
+    );
+    return this.getPendingHunks().filter((h) => ownGroupIds.has(h.responseGroupId));
   }
 
   dispose(): void {

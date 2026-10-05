@@ -146,6 +146,62 @@ describe('DiffStore', () => {
 
   // ==================== Hunk ====================
 
+  // [SKYCODE] Бар изменений внизу чата привязан к задаче: в новой вкладке не должны
+  // висеть файлы, которые правил агент прошлой.
+  describe('привязка незакрытых хунков к задаче', () => {
+    function addHunk(taskId: string | undefined, fsPath: string) {
+      const rgId = store.createResponseGroup(Date.now(), undefined, taskId)
+      const fcId = store.createFileChange(rgId, fsPath, 'modified')
+      return store.createHunk({
+        fileChangeId: fcId,
+        responseGroupId: rgId,
+        fsPath,
+        originalStartLine: 1,
+        originalEndLine: 2,
+        currentStartLine: 1,
+        currentEndLine: 2,
+        removedLines: ['old'],
+        addedLines: ['new'],
+        type: 'replacement',
+      })
+    }
+
+    it('отдаёт только хунки своей задачи', () => {
+      addHunk('task-a', '/a.ts')
+      addHunk('task-b', '/b.ts')
+
+      store.getPendingHunksForTask('task-a').map((h) => h.fsPath).should.deepEqual(['/a.ts'])
+      store.getPendingHunksForTask('task-b').map((h) => h.fsPath).should.deepEqual(['/b.ts'])
+    })
+
+    it('показывает хунки без привязки в любой задаче', () => {
+      addHunk(undefined, '/legacy.ts')
+      addHunk('task-a', '/a.ts')
+
+      store
+        .getPendingHunksForTask('task-b')
+        .map((h) => h.fsPath)
+        .should.deepEqual(['/legacy.ts'])
+    })
+
+    it('getFilesWithPendingChanges и getPendingCount сужаются по задаче', () => {
+      addHunk('task-a', '/a.ts')
+      addHunk('task-b', '/b.ts')
+
+      store.getFilesWithPendingChanges('task-a').should.deepEqual(['/a.ts'])
+      store.getPendingCount('task-a').should.equal(1)
+      // Без аргумента — прежнее поведение: всё разом
+      store.getFilesWithPendingChanges().length.should.equal(2)
+      store.getPendingCount().should.equal(2)
+    })
+
+    it('принятый хунк выпадает из выборки задачи', () => {
+      const id = addHunk('task-a', '/a.ts')
+      store.updateHunkStatus(id, 'accepted')
+      store.getPendingHunksForTask('task-a').length.should.equal(0)
+    })
+  })
+
   describe('Hunk CRUD', () => {
     let rgId: string
     let fcId: string

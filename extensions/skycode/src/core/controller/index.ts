@@ -1311,7 +1311,9 @@ export class Controller {
 	private getPendingChangesInfo(): PendingChangeInfo[] {
 		try {
 			const storage = getPendingChangesStorage()
-			const fileStats = storage.getFileStats()
+			// [SKYCODE] Бар внизу показывает изменения ТЕКУЩЕЙ задачи. Раньше он брал все правки
+			// workspace, поэтому в новой вкладке висели файлы, изменённые агентом в прошлой.
+			const fileStats = storage.getFileStats(this.task?.taskId)
 			return fileStats.map((stats) => ({
 				id: stats.fsPath, // Use fsPath as id for grouping
 				fileName: stats.fileName,
@@ -1336,6 +1338,9 @@ export class Controller {
 		try {
 			const diffSystem = getDiffSystem()
 			await diffSystem.finishCheckpoint()
+			// [SKYCODE] И снимаем привязку: до этого currentTaskId оставался от закрытой задачи,
+			// так что правки, сделанные между задачами (например inline edit), уезжали в её бар.
+			diffSystem.setCurrentTaskId(null)
 		} catch {
 			// DiffSystem may not be initialized
 		}
