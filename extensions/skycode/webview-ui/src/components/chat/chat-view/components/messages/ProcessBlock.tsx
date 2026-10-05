@@ -272,8 +272,10 @@ const ThinkingSection = memo(({ content, isReasoningLive, compact, startTime, t,
 		}
 	}, [content, isReasoningLive])
 
-	// Открыт пока идёт reasoning-фаза ИЛИ вручную раскрыт
-	const isOpen = isReasoningLive || isExpanded
+	// [SKYCODE] Открывается только руками. Раньше блок распахивался сам на время потока
+	// рассуждений: содержимое приезжало кусками, высота прыгала, чат дёргался — а читать
+	// там по факту нечего. Теперь это просто полоска с заголовком, разворот по клику.
+	const isOpen = isExpanded
 
 	const handleToggle = useCallback(() => {
 		setIsExpanded((prev) => {
@@ -287,14 +289,9 @@ const ThinkingSection = memo(({ content, isReasoningLive, compact, startTime, t,
 		? `${t("thinking.thinking")}${elapsed > 0 ? ` ${elapsed}${t("thinking.secondsShort")}` : "..."}`
 		: `${t("thinking.thoughtFor")} ${elapsed}${t("thinking.secondsShort")}`
 
-	// Высота контента: compact немного меньше, но не в 2 раза
-	const maxHeightClass = isReasoningLive
-		? compact
-			? "max-h-[80px]"
-			: "max-h-[100px]"
-		: compact
-			? "max-h-[160px]"
-			: "max-h-[200px]"
+	// [SKYCODE] Высота одна на все случаи: блок теперь раскрывают осознанно, поэтому
+	// урезать её на время потока (было 80/100px) больше незачем — дали читаемый размер.
+	const maxHeightClass = compact ? "max-h-[160px]" : "max-h-[200px]"
 
 	return (
 		<div className="px-4 py-0.5">
