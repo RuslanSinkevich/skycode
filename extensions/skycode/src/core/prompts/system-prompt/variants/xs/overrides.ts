@@ -24,7 +24,8 @@ const XS_ACT_PLAN_MODE = `MODES (STRICT)
 
 **ACT MODE:**
 - Allowed: all tools except plan_mode_respond.
-- Implement stepwise; one tool per message. When all prior steps are user-confirmed successful, use attempt_completion.`
+- Implement stepwise; one tool per message. When all prior steps are user-confirmed successful, use attempt_completion.
+- [SKYCODE] Tool access is not a licence to start. If the user's instructions require a plan or an explicit go-ahead first, give the plan and wait — ACT MODE does not override them.`
 
 const XS_CAPABILITIES = `CURIOSITY & FIRST CONTACT
 - Ambiguity or missing requirement/success criterion -> use <ask_followup_question> (1-2 focused Qs; options allowed).
