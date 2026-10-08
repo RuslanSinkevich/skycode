@@ -969,5 +969,4 @@ declare class AddedToken {
   normalized: boolean;
 }
 import { Tensor } from "./utils/tensor.js";
-export {};
 //# sourceMappingURL=tokenizers.d.ts.map

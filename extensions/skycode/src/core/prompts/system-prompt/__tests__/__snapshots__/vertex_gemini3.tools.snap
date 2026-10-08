@@ -8,14 +8,26 @@
         "command": {
           "type": "STRING"
         },
-        "requires_approval": {
-          "type": "BOOLEAN"
+        "timeout": {
+          "type": "NUMBER"
         }
       },
       "required": [
-        "command",
-        "requires_approval"
+        "command"
       ]
+    }
+  },
+  {
+    "name": "check_background_command",
+    "description": "Check the status and output of a background command. If no id is provided, lists all tracked background commands. If an id is provided, returns status, elapsed time, and last 50 lines of output.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "id": {
+          "type": "STRING"
+        }
+      },
+      "required": []
     }
   },
   {

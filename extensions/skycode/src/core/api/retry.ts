@@ -26,6 +26,43 @@ export class RetriableError extends Error {
 	}
 }
 
+// [SKYCODE] Транспортные сбои, которые имеет смысл повторять: обрыв соединения, таймаут,
+// DNS, 5xx на стороне шлюза. Раньше ретраился только 429, поэтому каждый «Connection error»
+// на самостоятельно поднятом OpenAI-совместимом эндпоинте прилетал пользователю как отказ.
+const TRANSIENT_ERROR_CODES = new Set([
+	"ECONNABORTED",
+	"ECONNREFUSED",
+	"ECONNRESET",
+	"EHOSTUNREACH",
+	"ENETUNREACH",
+	"ENOTFOUND",
+	"EAI_AGAIN",
+	"EPIPE",
+	"ETIMEDOUT",
+	"UND_ERR_CONNECT_TIMEOUT",
+	"UND_ERR_HEADERS_TIMEOUT",
+	"UND_ERR_SOCKET",
+])
+
+const TRANSIENT_MESSAGE_RE = /connection error|request timed out|socket hang up|network error|fetch failed|terminated/i
+
+function isAbortError(error: any): boolean {
+	const name = error?.name
+	return name === "AbortError" || name === "APIUserAbortError" || /request was aborted/i.test(error?.message ?? "")
+}
+
+function isTransientError(error: any): boolean {
+	if (typeof error?.status === "number" && error.status >= 500) {
+		return true
+	}
+	for (const code of [error?.code, error?.errno, error?.cause?.code, error?.cause?.errno]) {
+		if (typeof code === "string" && TRANSIENT_ERROR_CODES.has(code)) {
+			return true
+		}
+	}
+	return TRANSIENT_MESSAGE_RE.test(error?.message ?? "")
+}
+
 export function withRetry(options: RetryOptions = {}) {
 	const { maxRetries, baseDelay, maxDelay, retryAllErrors } = { ...DEFAULT_OPTIONS, ...options }
 
@@ -34,14 +71,22 @@ export function withRetry(options: RetryOptions = {}) {
 
 		descriptor.value = async function* (...args: any[]) {
 			for (let attempt = 0; attempt < maxRetries; attempt++) {
+				// [SKYCODE] Ретрай перезапускает генератор с нуля, а чанки, которые потребитель уже
+				// получил, никуда не денутся — повтор склеил бы ответ сам с собой. Поэтому повторяем
+				// только сбой, случившийся до первого чанка.
+				let yieldedChunk = false
 				try {
-					yield* originalMethod.apply(this, args)
+					for await (const chunk of originalMethod.apply(this, args)) {
+						yieldedChunk = true
+						yield chunk
+					}
 					return
 				} catch (error: any) {
 					const isRateLimit = error?.status === 429 || error instanceof RetriableError
 					const isLastAttempt = attempt === maxRetries - 1
+					const isRetriable = isRateLimit || isTransientError(error) || retryAllErrors
 
-					if ((!isRateLimit && !retryAllErrors) || isLastAttempt) {
+					if (!isRetriable || isLastAttempt || isAbortError(error) || yieldedChunk) {
 						throw error
 					}
 

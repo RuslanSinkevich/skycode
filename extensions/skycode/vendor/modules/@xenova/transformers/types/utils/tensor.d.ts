@@ -320,5 +320,4 @@ declare const DataTypeMap: Readonly<{
   uint64: BigUint64ArrayConstructor;
   bool: Uint8ArrayConstructor;
 }>;
-export {};
 //# sourceMappingURL=tensor.d.ts.map

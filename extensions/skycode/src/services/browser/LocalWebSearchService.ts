@@ -74,9 +74,9 @@ function extractRealUrl(duckUrl: string): string {
 		if (duckUrl.includes("uddg=")) {
 			const urlObj = new URL(duckUrl, "https://duckduckgo.com")
 			const realUrl = urlObj.searchParams.get("uddg")
-			if (realUrl) return realUrl
+			if (realUrl) { return realUrl }
 		}
-		if (duckUrl.startsWith("http")) return duckUrl
+		if (duckUrl.startsWith("http")) { return duckUrl }
 	} catch {
 		// ignore
 	}

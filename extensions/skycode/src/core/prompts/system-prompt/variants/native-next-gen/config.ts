@@ -34,7 +34,6 @@ export const config = createVariant(ModelFamily.NATIVE_NEXT_GEN)
 	.components(
 		SystemPromptSection.AGENT_ROLE,
 		SystemPromptSection.TOOL_USE,
-		SystemPromptSection.TODO,
 		SystemPromptSection.ACT_VS_PLAN,
 		SystemPromptSection.TASK_PROGRESS,
 		SystemPromptSection.CAPABILITIES,
@@ -48,6 +47,7 @@ export const config = createVariant(ModelFamily.NATIVE_NEXT_GEN)
 	.tools(
 		// Strong model (native tool calling): BASH high priority
 		SkycodeDefaultTool.BASH,
+		SkycodeDefaultTool.CHECK_BACKGROUND,
 		SkycodeDefaultTool.FILE_READ,
 		SkycodeDefaultTool.FILE_NEW,
 		SkycodeDefaultTool.FILE_EDIT,

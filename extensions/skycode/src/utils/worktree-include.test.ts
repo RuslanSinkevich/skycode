@@ -7,8 +7,8 @@ import { copyWorktreeIncludeFiles, hasWorktreeInclude } from "./worktree-include
 
 describe("Worktree Include Utilities", () => {
 	const tmpDir = path.join(os.tmpdir(), "skycode-worktree-test-" + Math.random().toString(36).slice(2))
-	const sourceDir = path.join(tmpDir, "source")
-	const targetDir = path.join(tmpDir, "target")
+	const _sourceDir = path.join(tmpDir, "source")
+	const _targetDir = path.join(tmpDir, "target")
 
 	// Clean up after tests
 	after(async () => {

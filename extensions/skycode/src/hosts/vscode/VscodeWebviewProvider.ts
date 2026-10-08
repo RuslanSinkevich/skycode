@@ -8,6 +8,20 @@ import type { ExtensionMessage } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import { WebviewMessage } from "@/shared/WebviewMessage"
 
+/**
+ * Allowlist of `skycode.indexing.*` keys the webview can modify.
+ * Must match entries declared in `package.json > contributes.configuration.properties`.
+ */
+const ALLOWED_INDEXING_CONFIG_KEYS = new Set<string>([
+	"mode",
+	"localModel",
+	"remoteApiUrl",
+	"remoteApiKey",
+	"remoteModel",
+	"maxFileSize",
+	"ignoredPatterns",
+])
+
 /*
 https://github.com/microsoft/vscode-webview-ui-toolkit-samples/blob/main/default/weather-webview/src/providers/WeatherViewProvider.ts
 https://github.com/KumarVariable/vscode-extension-sidebar-html/blob/master/src/customSidebarViewProvider.ts
@@ -51,6 +65,7 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 	 * @returns A promise that resolves when the webview has been fully initialized
 	 */
 	public async resolveWebviewView(webviewView: vscode.WebviewView): Promise<void> {
+		this.disposeWebviewView()
 		this.webview = webviewView
 
 		webviewView.webview.options = {
@@ -91,8 +106,8 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 		// Listen for when the view is disposed
 		// This happens when the user closes the view or when the view is closed programmatically
 		webviewView.onDidDispose(
-			async () => {
-				await this.dispose()
+			() => {
+				this.disposeWebviewView()
 			},
 			null,
 			this.disposables,
@@ -175,7 +190,12 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 				break
 			}
 			case "executeVsCodeCommand": {
-				// [DEV TOOLS] Execute VS Code command directly from webview
+				// [DEV TOOLS] Execute VS Code command directly from webview.
+				// Only allowed in Development mode to avoid giving the webview a general command-exec channel in release builds.
+				if (this.context.extensionMode !== vscode.ExtensionMode.Development) {
+					Logger.warn(`[executeVsCodeCommand] ignored in non-development mode`)
+					break
+				}
 				if (message.executeVsCodeCommand) {
 					const { command, args } = message.executeVsCodeCommand
 					try {
@@ -188,9 +208,15 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 				break
 			}
 			case "updateIndexingConfig": {
-				// [SKYCODE-SKYCODE] Update indexing configuration from webview
+				// [SKYCODE-SKYCODE] Update indexing configuration from webview.
+				// Only known, user-settable indexing keys are accepted — protects against
+				// a compromised webview writing arbitrary configuration entries.
 				if (message.indexingConfigUpdate) {
 					const { key, value } = message.indexingConfigUpdate
+					if (!ALLOWED_INDEXING_CONFIG_KEYS.has(key)) {
+						Logger.warn(`[Indexing] rejected config key: ${key}`)
+						break
+					}
 					try {
 						const cfg = vscode.workspace.getConfiguration("skycode.indexing")
 						await cfg.update(key, value, vscode.ConfigurationTarget.Global)
@@ -206,6 +232,7 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 					const cmdMap: Record<string, string> = {
 						reindex: "skycode.indexing.reindex",
 						clear: "skycode.indexing.clear",
+						clearEmbeddingCache: "skycode.indexing.clearEmbeddingCache",
 						pause: "skycode.indexing.pause",
 						resume: "skycode.indexing.resume",
 					}
@@ -214,6 +241,11 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 						await vscode.commands.executeCommand(cmd)
 					}
 				}
+				break
+			}
+			case "dismissIndexingPrompt": {
+				await this.controller.context.globalState.update("skycode.indexingPromptDismissed", true)
+				await this.controller.postStateToWebview()
 				break
 			}
 			default: {
@@ -240,15 +272,18 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 		this.webview?.webview.postMessage(msg)
 	}
 
-	override async dispose() {
-		// WebviewView doesn't have a dispose method, it's managed by VSCode
-		// We just need to clean up our disposables
+	private disposeWebviewView(): void {
 		while (this.disposables.length) {
 			const x = this.disposables.pop()
 			if (x) {
 				x.dispose()
 			}
 		}
-		super.dispose()
+		this.webview = undefined
+	}
+
+	override async dispose() {
+		this.disposeWebviewView()
+		await super.dispose()
 	}
 }

@@ -14,6 +14,7 @@ import { DiffStore } from '../storage/DiffStore';
 import { FileSnapshotStorage } from '../storage/FileSnapshotStorage';
 import { PositionTracker } from './PositionTracker';
 import { SystemEditGuard } from './SystemEditGuard';
+import { Logger } from "@/shared/services/Logger"
 
 export class HunkApplier {
   /**
@@ -47,7 +48,7 @@ export class HunkApplier {
           await doc.save();
         }
       } catch (e) {
-        console.error('[HunkApplier] endBatch save failed for', fsPath, e);
+        Logger.error('[HunkApplier] endBatch save failed for', fsPath, e);
       }
     }
   }
@@ -82,7 +83,7 @@ export class HunkApplier {
     // Log mismatch for diagnostics (helps trace red-zone-shows-wrong-content bugs)
     if (actualRemovedLines.length > 0 && originalLines.length > 0 &&
         actualRemovedLines[0] !== originalLines[0]) {
-      console.warn(`[HunkApplier] removedLines MISMATCH at line ${startLine}:`,
+      Logger.warn(`[HunkApplier] removedLines MISMATCH at line ${startLine}:`,
         `\n  file:   ${JSON.stringify(actualRemovedLines[0].substring(0, 80))}`,
         `\n  caller: ${JSON.stringify(originalLines[0].substring(0, 80))}`);
     }
@@ -271,7 +272,7 @@ export class HunkApplier {
       const doc = cached ?? await vscode.workspace.openTextDocument(vscode.Uri.file(fsPath));
       return doc.getText().replace(/\r\n/g, '\n');
     } catch {
-      if (!fs.existsSync(fsPath)) throw new Error(`File not found: ${fsPath}`);
+      if (!fs.existsSync(fsPath)) { throw new Error(`File not found: ${fsPath}`); }
       return fs.readFileSync(fsPath, 'utf-8').replace(/\r\n/g, '\n');
     }
   }

@@ -1,4 +1,5 @@
 import { Message } from "ollama"
+import { isBase64ImageSource } from "@/shared/messages/message-interchange"
 import {
 	SkycodeAssistantToolUseBlock,
 	SkycodeImageContentBlock,
@@ -46,10 +47,16 @@ export function convertToOllamaMessages(anthropicMessages: Omit<SkycodeStorageMe
 							toolMessage.content
 								?.map((part) => {
 									if (part.type === "image") {
-										toolResultImages.push(`data:${part.source.media_type};base64,${part.source.data}`)
+										const url = isBase64ImageSource(part.source)
+											? `data:${part.source.media_type};base64,${part.source.data}`
+											: part.source.url
+										toolResultImages.push(url)
 										return "(see following user message for image)"
 									}
-									return part.text
+									if (part.type === "text") {
+										return part.text
+									}
+									return ""
 								})
 								.join("\n") ?? ""
 					}
@@ -67,7 +74,9 @@ export function convertToOllamaMessages(anthropicMessages: Omit<SkycodeStorageMe
 						content: nonToolMessages
 							.map((part) => {
 								if (part.type === "image") {
-									return `data:${part.source.media_type};base64,${part.source.data}`
+									return isBase64ImageSource(part.source)
+										? `data:${part.source.media_type};base64,${part.source.data}`
+										: part.source.url
 								}
 								return part.text
 							})

@@ -1,5 +1,11 @@
 export interface WebviewMessage {
-	type: "grpc_request" | "grpc_request_cancel" | "executeVsCodeCommand" | "updateIndexingConfig" | "indexingCommand"
+	type:
+		| "grpc_request"
+		| "grpc_request_cancel"
+		| "executeVsCodeCommand"
+		| "updateIndexingConfig"
+		| "indexingCommand"
+		| "dismissIndexingPrompt"
 	grpc_request?: GrpcRequest
 	grpc_request_cancel?: GrpcCancel
 	// Dev tools: execute VS Code command directly
@@ -13,7 +19,7 @@ export interface WebviewMessage {
 		value: any
 	}
 	// Indexing: execute command
-	indexingCommandAction?: "reindex" | "clear" | "pause" | "resume"
+	indexingCommandAction?: "reindex" | "clear" | "pause" | "resume" | "clearEmbeddingCache"
 }
 
 export type GrpcRequest = {

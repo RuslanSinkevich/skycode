@@ -4,12 +4,9 @@ import { SkycodeEnv } from "@/config"
 import { Controller } from "@/core/controller"
 import { getRequestRegistry, type StreamingResponseHandler } from "@/core/controller/grpc-handler"
 import { setWelcomeViewCompleted } from "@/core/controller/state/setWelcomeViewCompleted"
-import { HostProvider } from "@/hosts/host-provider"
 import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
-import { openExternal } from "@/utils/env"
 import { AuthInvalidTokenError, AuthNetworkError } from "../error/SkycodeError"
-import { featureFlagsService } from "../feature-flags"
 import { SkycodeAuthProvider } from "./providers/SkycodeAuthProvider"
 import { LogoutReason } from "./types"
 
@@ -115,18 +112,7 @@ export class AuthService {
 	 * Refreshing it if necessary.
 	 */
 	async getAuthToken(): Promise<string | null> {
-		const token = await this.internalGetAuthToken(this._provider)
-		if (!token) {
-			return null
-		}
-
-		if (this._provider.timeUntilExpiry(token) <= 0) {
-			// internalGetAuthToken may return stale data on network errors
-			// Verify the token is not expired after refresh - We have a pending larger refactor to prevent this
-			// This prevents 401 errors from using expired tokens
-			return null
-		}
-		return `workos:${token}`
+		return null
 	}
 
 	/**
@@ -248,22 +234,9 @@ export class AuthService {
 		})
 	}
 
-	async createAuthRequest(strict = false): Promise<String> {
-		// In strict mode, we do not open a new auth window if already authenticated
-		if (strict && this._authenticated) {
-			this.sendAuthStatusUpdate()
-			return String.create({ value: "Already authenticated" })
-		}
-
-		const callbackHost = await HostProvider.get().getCallbackUrl()
-		const callbackUrl = `${callbackHost}/auth`
-
-		const authUrl = await this._provider.getAuthRequest(callbackUrl)
-		const authUrlString = authUrl.toString()
-
-		await openExternal(authUrlString)
-		telemetryService.captureAuthStarted(this._provider.name)
-		return String.create({ value: authUrlString })
+	async createAuthRequest(_strict = false): Promise<String> {
+		await this.sendAuthStatusUpdate()
+		return String.create({ value: "Skycode account authorization is disabled in the standalone build." })
 	}
 
 	async handleDeauth(reason: LogoutReason = LogoutReason.UNKNOWN): Promise<void> {
@@ -279,12 +252,11 @@ export class AuthService {
 		}
 	}
 
-	async handleAuthCallback(authorizationCode: string, provider: string): Promise<void> {
+	async handleAuthCallback(_authorizationCode: string, _provider: string): Promise<void> {
 		try {
-			this._skycodeAuthInfo = await this._provider.signIn(this._controller, authorizationCode, provider)
-			this._authenticated = this._skycodeAuthInfo?.idToken !== undefined
-
-			telemetryService.captureAuthSucceeded(this._provider.name)
+			Logger.log("Ignoring Skycode auth callback: account authorization is disabled in standalone build.")
+			this._skycodeAuthInfo = null
+			this._authenticated = false
 			await setWelcomeViewCompleted(this._controller, { value: true })
 		} catch (error) {
 			Logger.error("Error signing in with custom token:", error)
@@ -310,16 +282,10 @@ export class AuthService {
 	 */
 	async restoreRefreshTokenAndRetrieveAuthInfo(): Promise<void> {
 		try {
-			this._skycodeAuthInfo = await this.retrieveAuthInfo()
-			if (this._skycodeAuthInfo) {
-				this._authenticated = true
-				await this.sendAuthStatusUpdate()
-			} else {
-				Logger.warn("No user found after restoring auth token")
-				this._authenticated = false
-				this._skycodeAuthInfo = null
-				telemetryService.captureAuthLoggedOut(this._provider.name, LogoutReason.ERROR_RECOVERY)
-			}
+			this.destroyTokens()
+			this._authenticated = false
+			this._skycodeAuthInfo = null
+			await this.sendAuthStatusUpdate()
 		} catch (error) {
 			Logger.error("Error restoring auth token:", error)
 			this._authenticated = false
@@ -404,16 +370,6 @@ export class AuthService {
 		})
 
 		await Promise.all(streamSends)
-		// Identify the user in telemetry if available
-		if (this._skycodeAuthInfo?.userInfo?.id) {
-			telemetryService.identifyAccount(this._skycodeAuthInfo.userInfo)
-			// Poll feature flags immediately for authenticated users to ensure cache is populated
-			await featureFlagsService.poll(this._skycodeAuthInfo.userInfo?.id)
-		} else {
-			// Poll feature flags for unauthenticated state
-			await featureFlagsService.poll(null)
-		}
-
 		// Update state in webviews once per unique controller
 		await Promise.all(Array.from(uniqueControllers).map((c) => c.postStateToWebview()))
 	}

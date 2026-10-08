@@ -27,7 +27,7 @@ import {
 	TriangleAlertIcon,
 } from "lucide-react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { useSize } from "react-use"
+import type { ToggleRowExpansion } from "@/components/chat/chat-view/types/chatTypes"
 import { OptionsButtons } from "@/components/chat/OptionsButtons"
 import { WithCopyButton } from "@/components/common/CopyButton"
 import McpResponseDisplay from "@/components/mcp/chat-display/McpResponseDisplay"
@@ -58,10 +58,9 @@ const HEADER_CLASSNAMES = "flex items-center gap-2.5 mb-3"
 interface ChatRowProps {
 	message: SkycodeMessage
 	isExpanded: boolean
-	onToggleExpand: (ts: number) => void
+	onToggleExpand: ToggleRowExpansion
 	lastModifiedMessage?: SkycodeMessage
 	isLast: boolean
-	onHeightChange?: (isTaller: boolean) => void
 	inputValue?: string
 	sendMessageFromChatRow?: (text: string, images: string[], files: string[]) => void
 	onSetQuote: (text: string) => void
@@ -74,36 +73,21 @@ interface ChatRowProps {
 
 export type { QuoteButtonState } from "./useQuoteButton"
 
-interface ChatRowContentProps extends Omit<ChatRowProps, "onHeightChange"> {}
+interface ChatRowContentProps extends ChatRowProps {}
 
 export const ProgressIndicator = () => <LoaderCircleIcon className="size-2 mr-2 animate-spin" />
 const InvisibleSpacer = () => <div aria-hidden className="h-px" />
 
+// Row growth is followed by the single ResizeObserver in useScrollBehavior.
+// Measuring here as well re-rendered the streaming row on every chunk and fired
+// a second, differently-timed scroll clamp for the same growth.
 const ChatRow = memo(
 	(props: ChatRowProps) => {
-		const { isLast, onHeightChange, message } = props
-		// Store the previous height to compare with the current height
-		// This allows us to detect changes without causing re-renders
-		const prevHeightRef = useRef(0)
-
-		const [chatrow, { height }] = useSize(
+		return (
 			<div className="relative pt-2.5 px-4">
 				<ChatRowContent {...props} />
-			</div>,
+			</div>
 		)
-
-		useEffect(() => {
-			const isInitialRender = prevHeightRef.current === 0
-			if (isLast && height !== 0 && height !== Infinity && height !== prevHeightRef.current) {
-				if (!isInitialRender) {
-					onHeightChange?.(height > prevHeightRef.current)
-				}
-				prevHeightRef.current = height
-			}
-		}, [height, isLast, onHeightChange, message])
-
-		// we cannot return null as virtuoso does not support it so we use a separate visibleMessages array to filter out messages that should not be rendered
-		return chatrow
 	},
 	// memo does shallow comparison of props, so we need to do deep comparison of arrays/objects whose properties might change
 	deepEqual,
@@ -340,7 +324,8 @@ export const ChatRowContent = memo(
 			let rafId = 0
 			const tick = () => {
 				if (performance.now() - start >= 500) {
-					onToggleExpand(message.ts)
+					// Not a user gesture: expanding here must not switch auto-scroll off
+					onToggleExpand(message.ts, { userInitiated: false })
 					return
 				}
 				rafId = requestAnimationFrame(tick)
@@ -508,6 +493,7 @@ export const ChatRowContent = memo(
 							<UserMessage
 								files={message.files}
 								images={message.images}
+								isPending={(message as any).pending === true}
 								messageTs={message.ts}
 								sendMessageFromChatRow={sendMessageFromChatRow}
 								text={message.text}

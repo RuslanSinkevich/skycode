@@ -44,17 +44,17 @@ describe('DiffSystem.validateSyntax (integration)', () => {
     vscode.workspace.getConfiguration = ((section?: string) => ({
       get: (key: string, defaultValue?: any) => {
         if (section === 'skycode') {
-          if (key in overrides) return overrides[key]
+          if (key in overrides) { return overrides[key] }
           // Defaults
-          if (key === 'validateSyntaxBeforeApply') return true
-          if (key === 'blockOnSyntaxErrors') return true
+          if (key === 'validateSyntaxBeforeApply') { return true }
+          if (key === 'blockOnSyntaxErrors') { return true }
         }
         return defaultValue
       },
     })) as any
   }
 
-  before(function () {
+  before(() => {
     const wasmDir = path.join(__dirname, '..', '..', '..', '..', 'dist')
     wasmAvailable = fs.existsSync(path.join(wasmDir, 'tree-sitter.wasm'))
     if (!wasmAvailable) {
@@ -73,7 +73,7 @@ describe('DiffSystem.validateSyntax (integration)', () => {
   afterEach(() => {
     system.dispose()
     vscode.workspace.getConfiguration = originalGetConfig
-    if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true })
+    if (tmpDir) { fs.rmSync(tmpDir, { recursive: true, force: true }) }
   })
 
   // ==================== Config-driven behavior ====================
@@ -90,7 +90,7 @@ describe('DiffSystem.validateSyntax (integration)', () => {
     })
 
     it('should return error when validateSyntaxBeforeApply is true and code is broken', async function () {
-      if (!wasmAvailable) this.skip()
+      if (!wasmAvailable) { this.skip() }
       this.timeout(10000)
 
       mockConfig({ validateSyntaxBeforeApply: true, blockOnSyntaxErrors: true })
@@ -117,7 +117,7 @@ function working() {
     })
 
     it('should allow broken code when blockOnSyntaxErrors is false', async function () {
-      if (!wasmAvailable) this.skip()
+      if (!wasmAvailable) { this.skip() }
       this.timeout(10000)
 
       mockConfig({ validateSyntaxBeforeApply: true, blockOnSyntaxErrors: false })
@@ -168,7 +168,7 @@ function working() {
 
   describe('Full flow: replaceLines with syntax validation', () => {
     it('should apply valid TypeScript changes through replaceLines', async function () {
-      if (!wasmAvailable) this.skip()
+      if (!wasmAvailable) { this.skip() }
       this.timeout(10000)
 
       mockConfig({ validateSyntaxBeforeApply: true, blockOnSyntaxErrors: true })
@@ -204,7 +204,7 @@ function working() {
     })
 
     it('should not block edits for empty files', async function () {
-      if (!wasmAvailable) this.skip()
+      if (!wasmAvailable) { this.skip() }
       this.timeout(10000)
 
       mockConfig({ validateSyntaxBeforeApply: true, blockOnSyntaxErrors: true })

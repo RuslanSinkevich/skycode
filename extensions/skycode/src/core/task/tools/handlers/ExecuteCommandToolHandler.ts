@@ -11,12 +11,10 @@ import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
+import { findAllowedCommandPattern, getEffectiveAllowedCommandPatterns } from "@shared/AllowedCommands"
 import { applyModelContentFixes } from "../utils/ModelContentProcessor"
 import { showNotificationForApproval } from "../../utils"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
-
-// Default timeout for commands in yolo mode and background exec mode
-const DEFAULT_COMMAND_TIMEOUT_SECONDS = 30
 
 export class ExecuteCommandToolHandler implements IFullyManagedTool {
 	readonly name = SkycodeDefaultTool.BASH
@@ -27,16 +25,14 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 		return `[${block.name} for '${block.params.command}']`
 	}
 
-	async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
+	async handlePartialBlock(_block: ToolUse, _uiHelpers: StronglyTypedUIHelpers): Promise<void> {
 		// [SKYCODE-SKYCODE] Cursor-style: no partial preview for commands (auto-execute)
 		return
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
-		let command: string | undefined = block.params.command
-		const requiresApprovalRaw: string | undefined = block.params.requires_approval
+		let command: string | undefined = block.params.command?.trim()
 		const timeoutParam: string | undefined = block.params.timeout
-		let timeoutSeconds: number | undefined
 
 		// Extract provider using the proven pattern from ReportBugHandler
 		const apiConfig = config.services.stateManager.getApiConfiguration()
@@ -49,28 +45,29 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 			return await config.callbacks.sayAndCreateMissingParamError(this.name, "command")
 		}
 
-		if (!requiresApprovalRaw) {
-			config.taskState.consecutiveMistakeCount++
-			return await config.callbacks.sayAndCreateMissingParamError(this.name, "requires_approval")
-		}
+		// [SKYCODE] `requires_approval` is intentionally not validated: nothing in the execution
+		// path reads it (approval is decided by auto-approve settings), and weaker models omit it
+		// often enough that enforcing it burned whole turns and pushed tasks into the mistake limit.
 
 		config.taskState.consecutiveMistakeCount = 0
 
-        // [SKYCODE-SKYCODE] Hard Block for redundant 'open' commands
-        // We move this to the very top to prevent ANY confirmation or terminal spam.
-        const openCommands = ["code ", "code-insiders ", "cursor ", "open ", "xdg-open ", "notepad "];
-        const trimmedCommand = command.trim();
-        if (openCommands.some(cmd => trimmedCommand.startsWith(cmd))) {
-             await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "command");
-             await config.callbacks.say("command", command, undefined, undefined, false);
-             return "Command executed (simulated). File should be open in the editor.";
-        }
-
-		// Handling of timeout while in yolo mode or background exec mode
-		if (config.yoloModeToggled || config.vscodeTerminalExecutionMode === "backgroundExec") {
-			const parsed = timeoutParam ? parseInt(timeoutParam, 10) : NaN
-			timeoutSeconds = parsed > 0 ? parsed : DEFAULT_COMMAND_TIMEOUT_SECONDS
+		// [SKYCODE-SKYCODE] Hard Block for redundant 'open' commands
+		// We move this to the very top to prevent ANY confirmation or terminal spam.
+		const openCommands = ["code ", "code-insiders ", "cursor ", "open ", "xdg-open ", "notepad "]
+		const trimmedCommand = command.trim()
+		if (openCommands.some((cmd) => trimmedCommand.startsWith(cmd))) {
+			await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "command")
+			await config.callbacks.say("command", command, undefined, undefined, false)
+			return "Command executed (simulated). File should be open in the editor."
 		}
+
+		// [SKYCODE] Таймаут берём только если модель задала его явно — тогда он отменяет
+		// 20-секундный auto-proceed видимого терминала. Иначе решение принимает
+		// resolveCommandTiming (20s для терминала VS Code, 120s для backgroundExec).
+		// В любом случае по истечении агент не блокируется: команда уходит в background
+		// и её можно проверить через check_background_command.
+		const parsedTimeout = timeoutParam ? parseInt(timeoutParam, 10) : NaN
+		const timeoutSeconds: number | undefined = parsedTimeout > 0 ? parsedTimeout : undefined
 
 		// Pre-process command for certain models
 		if (config.api.getModel().id.includes("gemini")) {
@@ -101,7 +98,7 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 		}
 
 		// Check command permission validation (SKYCODE_COMMAND_PERMISSIONS env var)
-        // [SKYCODE-SKYCODE] Security check stays active!
+		// [SKYCODE-SKYCODE] Security check stays active!
 		const permissionResult = config.services.commandPermissionController.validateCommand(actualCommand)
 		if (!permissionResult.allowed) {
 			let errorMessage: string
@@ -153,6 +150,12 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 			const classifier = new CommandSafetyClassifier()
 			const safety = classifier.classify(actualCommand)
 			didAutoApprove = safety.safety === "safe"
+		}
+
+		// [SKYCODE] Whitelist: built-in safe commands plus the ones the user added
+		if (!didAutoApprove) {
+			const patterns = getEffectiveAllowedCommandPatterns(config.autoApprovalSettings.actions)
+			didAutoApprove = findAllowedCommandPattern(actualCommand, patterns) !== undefined
 		}
 
 		// Determine workspace context for telemetry

@@ -598,5 +598,4 @@ export type GenerationConfigType = {
   generation_kwargs?: any;
 };
 import { Tensor } from "./tensor.js";
-export {};
 //# sourceMappingURL=generation.d.ts.map

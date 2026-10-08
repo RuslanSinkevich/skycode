@@ -1,4 +1,4 @@
-import { setTimeout as setTimeoutPromise } from "node:timers/promises"
+
 import * as vscode from "vscode"
 import * as path from "path"
 import pWaitFor from "p-wait-for"
@@ -7,7 +7,7 @@ import { extractChangelog } from "@core/context/SessionChangelog"
 import { isMultiRootEnabled } from "@core/workspace/multi-root-utils"
 import type { WorkspaceRootManager } from "@core/workspace/WorkspaceRootManager"
 import { formatResponse } from "@core/prompts/responses"
-import { getSavedSkycodeMessages, GlobalFileNames } from "@core/storage/disk"
+import { getSavedSkycodeMessages, } from "@core/storage/disk"
 import type { SkycodeIgnoreController } from "@core/ignore/SkycodeIgnoreController"
 import type { FileContextTracker } from "@core/context/context-tracking/FileContextTracker"
 import type { ITerminalManager } from "@integrations/terminal/types"
@@ -37,6 +37,14 @@ export interface EnvironmentDetailsContext {
 	workspaceManager?: WorkspaceRootManager
 	messageStateHandler: MessageStateHandler
 	api: ApiHandler
+	backgroundCommandSummary?: string
+	/**
+	 * [SKYCODE] Правила пользователя с `priority: critical`, уже усечённые.
+	 * Печатаются рядом с `# Current Mode`: напоминание о режиме стоит возле последней реплики
+	 * пользователя, а правила — один раз в конце системного промпта, и при конфликте модель
+	 * выбирала то, что ближе. Теперь критичные правила так же близко.
+	 */
+	criticalRulesReminder?: string
 }
 
 function formatWorkspaceRootsSection(ctx: EnvironmentDetailsContext): string {
@@ -64,8 +72,8 @@ function getPrimaryWorkspaceName(
 	ctx: EnvironmentDetailsContext,
 	primary?: ReturnType<WorkspaceRootManager["getRoots"]>[0],
 ): string {
-	if (primary?.name) return primary.name
-	if (primary?.path) return path.basename(primary.path)
+	if (primary?.name) { return primary.name }
+	if (primary?.path) { return path.basename(primary.path) }
 	return path.basename(ctx.cwd)
 }
 
@@ -134,13 +142,15 @@ export async function buildEnvironmentDetails(
 	const busyTerminals = ctx.terminalManager.getTerminals(true)
 	const inactiveTerminals = ctx.terminalManager.getTerminals(false)
 
-	if (busyTerminals.length > 0 && ctx.taskState.didEditFile) {
-		await setTimeoutPromise(300)
-	}
+	// [SKYCODE] Раньше тут ждали до 15с пока терминал "остынет" — рудимент от Cline,
+	// нужный для блокирующего ask("command_output"). Теперь вывод стримится через say()
+	// и уже попал в историю сообщений, ждать смысла нет.
+	// Оставляем короткий 2с лимит на случай если процесс активно сыпет вывод прямо сейчас —
+	// чтобы успеть забрать его в getUnretrievedOutput для environment details.
 	if (busyTerminals.length > 0) {
 		await pWaitFor(() => busyTerminals.every((t) => !ctx.terminalManager.isProcessHot(t.id)), {
 			interval: 100,
-			timeout: 15_000,
+			timeout: 2_000,
 		}).catch(() => {})
 	}
 
@@ -198,6 +208,10 @@ export async function buildEnvironmentDetails(
 
 	if (terminalDetails) {
 		details += terminalDetails
+	}
+
+	if (ctx.backgroundCommandSummary) {
+		details += `\n\n# Background Commands\n${ctx.backgroundCommandSummary}`
 	}
 
 	const recentlyModifiedFiles = ctx.fileContextTracker.getAndClearRecentlyModifiedFiles()
@@ -271,7 +285,7 @@ export async function buildEnvironmentDetails(
 	const { contextWindow } = getContextWindowInfo(ctx.api)
 
 	const getTotalTokensFromApiReqMessage = (msg: SkycodeMessage) => {
-		if (!msg.text) return 0
+		if (!msg.text) { return 0 }
 		try {
 			const { tokensIn, tokensOut, cacheWrites, cacheReads } = JSON.parse(msg.text)
 			return (tokensIn || 0) + (tokensOut || 0) + (cacheWrites || 0) + (cacheReads || 0)
@@ -283,7 +297,7 @@ export async function buildEnvironmentDetails(
 	const skycodeMessages = ctx.messageStateHandler.getSkycodeMessages()
 	const modifiedMessages = combineApiRequests(combineCommandSequences(skycodeMessages.slice(1)))
 	const lastApiReqMessage = findLast(modifiedMessages, (msg) => {
-		if (msg.say !== "api_req_started") return false
+		if (msg.say !== "api_req_started") { return false }
 		return getTotalTokensFromApiReqMessage(msg) > 0
 	})
 
@@ -325,6 +339,12 @@ export async function buildEnvironmentDetails(
 		default:
 			details += "\nACT MODE"
 			break
+	}
+
+	// [SKYCODE] Сразу после режима — критичные правила пользователя. Порядок важен: правило
+	// должно стоять ПОСЛЕ названия режима, чтобы при конфликте последним прочитанным было оно.
+	if (ctx.criticalRulesReminder) {
+		details += `\n\n# User's Critical Rules (always apply, including in the mode above)\n${ctx.criticalRulesReminder}`
 	}
 
 	return `<environment_details>\n${details.trim()}\n</environment_details>`

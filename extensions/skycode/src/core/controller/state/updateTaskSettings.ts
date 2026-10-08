@@ -38,14 +38,14 @@ export async function updateTaskSettings(controller: Controller, request: Update
 				return "act"
 			case PlanActMode.PAM_ASK:
 				return "ask"
-		case PlanActMode.DEBUG:
-			return "debug"
-		case PlanActMode.CHAT:
-			return "chat"
-		default:
-			return "act"
+			case PlanActMode.DEBUG:
+				return "debug"
+			case PlanActMode.CHAT:
+				return "chat"
+			default:
+				return "act"
+		}
 	}
-}
 
 	try {
 		// Get taskId from request first, otherwise fall back to current task

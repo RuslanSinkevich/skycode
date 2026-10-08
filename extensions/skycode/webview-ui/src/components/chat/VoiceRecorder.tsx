@@ -11,10 +11,8 @@ interface VoiceRecorderProps {
 	onTranscription: (text: string) => void
 	onProcessingStateChange?: (isProcessing: boolean, message?: string) => void
 	onRecordingStateChange?: (isRecording: boolean) => void
-	onAuthRequired?: () => void
 	disabled?: boolean
 	language?: string
-	isAuthenticated?: boolean
 }
 
 const MAX_DURATION = 5 * 60 // 5 minutes
@@ -32,10 +30,8 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 	onTranscription,
 	onProcessingStateChange,
 	onRecordingStateChange,
-	onAuthRequired,
 	disabled = false,
 	language = "ru",
-	isAuthenticated = false,
 }) => {
 	const { t } = useI18n()
 	const [state, setState] = useState<"idle" | "starting" | "recording" | "transcribing">("idle")
@@ -82,12 +78,7 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 	}, [state])
 
 	const handleMicClick = useCallback(async () => {
-		if (disabled || state === "starting" || state === "transcribing") return
-
-		if (!isAuthenticated) {
-			onAuthRequired?.()
-			return
-		}
+		if (disabled || state === "starting" || state === "transcribing") { return }
 
 		// Clear error on click
 		if (error) {
@@ -110,10 +101,10 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 			setError(err instanceof Error ? err.message : t("voice.failedToStart"))
 			setState("idle")
 		}
-	}, [disabled, state, error, isAuthenticated, onAuthRequired, t])
+	}, [disabled, state, error, t])
 
 	const handleStop = useCallback(async () => {
-		if (state !== "recording") return
+		if (state !== "recording") { return }
 
 		setState("transcribing")
 		onProcessingStateChange?.(true, t("chat.transcribing"))
@@ -159,8 +150,8 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 		}
 	}, [state, language, onTranscription, onProcessingStateChange, t])
 
-	const handleCancel = useCallback(async () => {
-		if (state !== "recording") return
+	const _handleCancel = useCallback(async () => {
+		if (state !== "recording") { return }
 
 		try {
 			await DictationServiceClient.cancelRecording(EmptyRequest.create({}))
@@ -173,7 +164,7 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 	// Cleanup on unmount
 	useEffect(() => {
 		return () => {
-			if (pollingRef.current) clearInterval(pollingRef.current)
+			if (pollingRef.current) { clearInterval(pollingRef.current) }
 		}
 	}, [])
 

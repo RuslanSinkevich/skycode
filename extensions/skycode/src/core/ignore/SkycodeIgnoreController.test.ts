@@ -47,7 +47,7 @@ describe("SkycodeIgnoreController", () => {
 				controller.validateAccess("README.md"),
 				controller.validateAccess("package.json"),
 			]
-			results.forEach((result) => result.should.be.true())
+			results.forEach((result) => { result.should.be.true() })
 		})
 
 		it("should block access to .skycodeignore file", async () => {
@@ -65,7 +65,7 @@ describe("SkycodeIgnoreController", () => {
 				controller.validateAccess("nested/deep/file.secret"),
 				controller.validateAccess("private/nested/deep/file.txt"),
 			]
-			results.forEach((result) => result.should.be.false())
+			results.forEach((result) => { result.should.be.false() })
 		})
 
 		it("should allow access to non-ignored files", async () => {
@@ -76,7 +76,7 @@ describe("SkycodeIgnoreController", () => {
 				controller.validateAccess("nested/deep/file.txt"),
 				controller.validateAccess("not-private/data.txt"),
 			]
-			results.forEach((result) => result.should.be.true())
+			results.forEach((result) => { result.should.be.true() })
 		})
 
 		it("should handle pattern edge cases", async () => {

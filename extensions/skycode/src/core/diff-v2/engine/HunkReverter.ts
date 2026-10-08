@@ -13,6 +13,7 @@ import { DiffStore } from '../storage/DiffStore';
 import { FileSnapshotStorage } from '../storage/FileSnapshotStorage';
 import { PositionTracker } from './PositionTracker';
 import { SystemEditGuard } from './SystemEditGuard';
+import { Logger } from "@/shared/services/Logger"
 
 export class HunkReverter {
   constructor(
@@ -26,7 +27,7 @@ export class HunkReverter {
 
   async accept(hunkId: string): Promise<void> {
     const hunk = this.store.getHunk(hunkId);
-    if (!hunk) throw new Error(`[HunkReverter] Hunk not found: ${hunkId}`);
+    if (!hunk) { throw new Error(`[HunkReverter] Hunk not found: ${hunkId}`); }
     if (hunk.status !== 'pending') {
       throw new Error(`[HunkReverter] Hunk ${hunkId} is already ${hunk.status}`);
     }
@@ -38,7 +39,7 @@ export class HunkReverter {
 
   async reject(hunkId: string): Promise<void> {
     const hunk = this.store.getHunk(hunkId);
-    if (!hunk) throw new Error(`[HunkReverter] Hunk not found: ${hunkId}`);
+    if (!hunk) { throw new Error(`[HunkReverter] Hunk not found: ${hunkId}`); }
     if (hunk.status !== 'pending') {
       throw new Error(`[HunkReverter] Hunk ${hunkId} is already ${hunk.status}`);
     }
@@ -49,7 +50,7 @@ export class HunkReverter {
     try {
       doc = await vscode.workspace.openTextDocument(uri);
     } catch {
-      console.warn(`[HunkReverter] File no longer exists, marking hunk as rejected: ${hunkId.slice(0, 8)} ${hunk.fsPath}`);
+      Logger.warn(`[HunkReverter] File no longer exists, marking hunk as rejected: ${hunkId.slice(0, 8)} ${hunk.fsPath}`);
       this.store.updateHunkStatus(hunkId, 'rejected');
       this.updateParentStatuses(hunk.fileChangeId, hunk.responseGroupId);
       return;
@@ -62,7 +63,7 @@ export class HunkReverter {
     if (hunk.type !== 'deletion') {
       const mismatch = this.verifyHunkContent(doc, hunk);
       if (mismatch) {
-        console.warn(`[HunkReverter] Content mismatch for ${hunkId.slice(0, 8)}: ${mismatch}`);
+        Logger.warn(`[HunkReverter] Content mismatch for ${hunkId.slice(0, 8)}: ${mismatch}`);
         const restored = await this.fallbackSnapshotRestore(hunk.fsPath);
         if (restored) {
           const allPending = this.store.getPendingHunksByFile(hunk.fsPath);
@@ -72,7 +73,7 @@ export class HunkReverter {
           }
           return;
         }
-        console.warn(`[HunkReverter] No snapshot available, proceeding with best-effort reject`);
+        Logger.warn(`[HunkReverter] No snapshot available, proceeding with best-effort reject`);
       }
     }
 
@@ -83,7 +84,7 @@ export class HunkReverter {
     // Strip trailing \r from stored lines (they may come from CRLF files)
     const cleanLines = hunk.removedLines.map((l) => l.replace(/\r$/, ''));
 
-    console.log(`[HunkReverter] reject ${hunkId.slice(0, 8)} type=${hunk.type}`,
+    Logger.log(`[HunkReverter] reject ${hunkId.slice(0, 8)} type=${hunk.type}`,
       `range=[${hunk.currentStartLine},${hunk.currentEndLine})`,
       `removedLines=${JSON.stringify(cleanLines.map(l => l.substring(0, 40)))}`);
 
@@ -132,7 +133,7 @@ export class HunkReverter {
       const replaceRange = new vscode.Range(startPos, endPos);
       const replacement = cleanLines.join(editEol) + editEol;
 
-      console.log(`[HunkReverter] replacement range: (${startPos.line},${startPos.character})-(${endPos.line},${endPos.character})`,
+      Logger.log(`[HunkReverter] replacement range: (${startPos.line},${startPos.character})-(${endPos.line},${endPos.character})`,
         `text=${JSON.stringify(replacement.substring(0, 60))}`);
 
       await this.applyEdit(uri, replaceRange, replacement);
@@ -159,7 +160,7 @@ export class HunkReverter {
    */
   private verifyHunkContent(doc: vscode.TextDocument, hunk: { currentStartLine: number; currentEndLine: number; addedLines: string[]; type: string }): string | null {
     const count = hunk.currentEndLine - hunk.currentStartLine;
-    if (count <= 0) return null;
+    if (count <= 0) { return null; }
 
     const startIdx = hunk.currentStartLine - 1;
     if (startIdx >= doc.lineCount) {
@@ -180,7 +181,7 @@ export class HunkReverter {
       (line, i) => normalizeLine(line) !== normalizeLine(hunk.addedLines[i]),
     );
 
-    if (firstMismatchIdx === -1) return null;
+    if (firstMismatchIdx === -1) { return null; }
 
     return `line ${hunk.currentStartLine + firstMismatchIdx} differs: ` +
       `file="${normalizeLine(fileLines[firstMismatchIdx]).substring(0, 50)}" ` +
@@ -195,11 +196,11 @@ export class HunkReverter {
     const snapshot = this.snapshotStorage.getBaselineSnapshot(fsPath);
 
     if (!snapshot) {
-      console.warn(`[HunkReverter] No baseline snapshot for fallback restore of ${fsPath}`);
+      Logger.warn(`[HunkReverter] No baseline snapshot for fallback restore of ${fsPath}`);
       return false;
     }
 
-    console.log(`[HunkReverter] Falling back to baseline snapshot restore for ${fsPath} (messageTs=${snapshot.messageTs})`);
+    Logger.log(`[HunkReverter] Falling back to baseline snapshot restore for ${fsPath} (messageTs=${snapshot.messageTs})`);
     const uri = vscode.Uri.file(fsPath);
 
     await this.editGuard.withSystemEdit(async () => {
@@ -227,14 +228,14 @@ export class HunkReverter {
       const applied = await vscode.workspace.applyEdit(edit);
 
       if (!applied) {
-        console.error(`[HunkReverter] applyEdit FAILED for ${uri.fsPath}`);
+        Logger.error(`[HunkReverter] applyEdit FAILED for ${uri.fsPath}`);
         return;
       }
 
       const doc = vscode.workspace.textDocuments.find(
         (d) => d.uri.fsPath.toLowerCase() === uri.fsPath.toLowerCase(),
       );
-      if (doc) await doc.save();
+      if (doc) { await doc.save(); }
     });
   }
 
@@ -251,7 +252,7 @@ export class HunkReverter {
         await this.accept(hunk.id);
         count++;
       } catch (e) {
-        console.error(`[HunkReverter] Failed to accept ${hunk.id}:`, e);
+        Logger.error(`[HunkReverter] Failed to accept ${hunk.id}:`, e);
       }
     }
     return count;
@@ -268,10 +269,26 @@ export class HunkReverter {
         await this.reject(hunk.id);
         count++;
       } catch (e) {
-        console.error(`[HunkReverter] Failed to reject ${hunk.id}:`, e);
+        Logger.error(`[HunkReverter] Failed to reject ${hunk.id}:`, e);
       }
     }
     return count;
+  }
+
+  /**
+   * Resolve every pending hunk of a file WITHOUT editing the file.
+   *
+   * Used when an external actor (git checkout/reset, another tool) already
+   * rewrote the content: a per-hunk revert would corrupt it, and leaving the
+   * hunks pending would keep a diff that no longer describes the file.
+   */
+  markResolvedWithoutEdit(fsPath: string, status: 'accepted' | 'rejected'): number {
+    const hunks = this.store.getPendingHunksByFile(fsPath);
+    for (const hunk of hunks) {
+      this.store.updateHunkStatus(hunk.id, status);
+      this.updateParentStatuses(hunk.fileChangeId, hunk.responseGroupId);
+    }
+    return hunks.length;
   }
 
   // ==================== Response-group-level bulk ====================
@@ -288,7 +305,7 @@ export class HunkReverter {
         await this.accept(hunk.id);
         count++;
       } catch (e) {
-        console.error(`[HunkReverter] Failed to accept ${hunk.id}:`, e);
+        Logger.error(`[HunkReverter] Failed to accept ${hunk.id}:`, e);
       }
     }
     return count;
@@ -306,7 +323,7 @@ export class HunkReverter {
         await this.reject(hunk.id);
         count++;
       } catch (e) {
-        console.error(`[HunkReverter] Failed to reject ${hunk.id}:`, e);
+        Logger.error(`[HunkReverter] Failed to reject ${hunk.id}:`, e);
       }
     }
     return count;
@@ -316,22 +333,22 @@ export class HunkReverter {
 
   async rejectFileCreation(fileChangeId: string): Promise<void> {
     const fc = this.store.getFileChange(fileChangeId);
-    if (!fc || fc.kind !== 'created') return;
+    if (!fc || fc.kind !== 'created') { return; }
 
     try {
       await vscode.workspace.fs.delete(vscode.Uri.file(fc.fsPath));
     } catch (e) {
-      console.warn('[HunkReverter] Failed to delete created file:', fc.fsPath, e);
+      Logger.warn('[HunkReverter] Failed to delete created file:', fc.fsPath, e);
     }
 
     const hunks = this.store.getPendingHunksByFileChange(fileChangeId);
-    for (const h of hunks) this.store.updateHunkStatus(h.id, 'rejected');
+    for (const h of hunks) { this.store.updateHunkStatus(h.id, 'rejected'); }
     this.store.updateFileChangeStatus(fileChangeId, 'rejected');
   }
 
   async rejectFileDeletion(fileChangeId: string): Promise<void> {
     const fc = this.store.getFileChange(fileChangeId);
-    if (!fc || fc.kind !== 'deleted') return;
+    if (!fc || fc.kind !== 'deleted') { return; }
 
     if (fc.originalSnapshotId) {
       const parts = fc.originalSnapshotId.split('/');
@@ -344,7 +361,7 @@ export class HunkReverter {
     }
 
     const hunks = this.store.getPendingHunksByFileChange(fileChangeId);
-    for (const h of hunks) this.store.updateHunkStatus(h.id, 'rejected');
+    for (const h of hunks) { this.store.updateHunkStatus(h.id, 'rejected'); }
     this.store.updateFileChangeStatus(fileChangeId, 'rejected');
   }
 
@@ -357,8 +374,8 @@ export class HunkReverter {
       const allFC = this.store.getHunksByFileChange(fileChangeId);
       const allAccepted = allFC.every((h) => h.status === 'accepted');
       const allRejected = allFC.every((h) => h.status === 'rejected');
-      if (allAccepted) this.store.updateFileChangeStatus(fileChangeId, 'accepted');
-      else if (allRejected) this.store.updateFileChangeStatus(fileChangeId, 'rejected');
+      if (allAccepted) { this.store.updateFileChangeStatus(fileChangeId, 'accepted'); }
+      else if (allRejected) { this.store.updateFileChangeStatus(fileChangeId, 'rejected'); }
     }
 
     // Update ResponseGroup status
@@ -369,9 +386,9 @@ export class HunkReverter {
       const allRG = this.store.getHunksByResponseGroup(responseGroupId);
       const allAccepted = allRG.every((h) => h.status === 'accepted');
       const allRejected = allRG.every((h) => h.status === 'rejected');
-      if (allAccepted) this.store.updateResponseGroupStatus(responseGroupId, 'accepted');
-      else if (allRejected) this.store.updateResponseGroupStatus(responseGroupId, 'rejected');
-      else this.store.updateResponseGroupStatus(responseGroupId, 'partial');
+      if (allAccepted) { this.store.updateResponseGroupStatus(responseGroupId, 'accepted'); }
+      else if (allRejected) { this.store.updateResponseGroupStatus(responseGroupId, 'rejected'); }
+      else { this.store.updateResponseGroupStatus(responseGroupId, 'partial'); }
     }
   }
 

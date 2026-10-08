@@ -2,7 +2,7 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import * as diff from "diff"
 import * as path from "path"
 import { Mode } from "@/shared/storage/types"
-import { SkycodeIgnoreController, LOCK_TEXT_SYMBOL } from "../ignore/SkycodeIgnoreController"
+import { LOCK_TEXT_SYMBOL, SkycodeIgnoreController } from "../ignore/SkycodeIgnoreController"
 
 export const formatResponse = {
 	duplicateFileReadNotice: () =>
@@ -45,8 +45,14 @@ Otherwise, if you have not completed the task and do not need additional informa
 	tooManyMistakes: (feedback?: string) =>
 		`You seem to be having trouble proceeding. The user has provided the following feedback to help guide you:\n<feedback>\n${feedback}\n</feedback>`,
 
-	missingToolParameterError: (paramName: string) =>
-		`Missing value for required parameter '${paramName}'. Please retry with complete response.\n\n${toolUseInstructionsReminder}`,
+	// [SKYCODE] The tool name is passed in so the retry can show the exact call to write. Without it
+	// the model just re-sent its previous (identical) answer until it hit the mistake limit.
+	missingToolParameterError: (paramName: string, toolName?: string) =>
+		`Missing value for required parameter '${paramName}'. Please retry with complete response.\n\n` +
+		(toolName
+			? `Write that parameter as a tag named after the parameter, inside the tool tag:\n<${toolName}>\n<${paramName}>the value for ${paramName}</${paramName}>\n</${toolName}>\n\n`
+			: "") +
+		toolUseInstructionsReminder,
 
 	invalidMcpToolArgumentError: (serverName: string, toolName: string) =>
 		`Invalid JSON argument used with ${serverName} for ${toolName}. Please retry with a properly formatted JSON argument.`,
@@ -289,16 +295,13 @@ const formatImagesIntoBlocks = (images?: string[]): Anthropic.ImageBlockParam[] 
 }
 
 const toolUseInstructionsReminder = `# Reminder: Instructions for Tool Use
-Tool uses are formatted using XML-style tags. The tool name is enclosed in opening and closing tags, and each parameter is similarly enclosed within its own set of tags. Here's the structure:
-<tool_name>
-<parameter1_name>value1</parameter1_name>
-<parameter2_name>value2</parameter2_name>
-...
-</tool_name>
+Tool uses are formatted using XML-style tags. The tool name is the opening and closing tag of the whole call, and every parameter is a tag named after that parameter itself.
 For example:
 <attempt_completion>
 <result>
 I have completed the task...
 </result>
 </attempt_completion>
+Here the tool is attempt_completion and its parameter is result, so the tags are <attempt_completion> and <result>.
+Generic wrapper tags such as <parameter1_name>, <parameter_name> or <parameter> are not the format — a parameter written that way is dropped and the call fails.
 Always adhere to this format for all tool uses to ensure proper parsing and execution.`

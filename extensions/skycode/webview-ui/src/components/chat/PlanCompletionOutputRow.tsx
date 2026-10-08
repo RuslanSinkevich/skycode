@@ -16,16 +16,19 @@ interface PlanCompletionOutputProps {
 
 function getModeHeaderConfig(mode: Mode | undefined, t: (key: string) => string) {
 	switch (mode) {
-		case "chat":
-			return {
-				icon: <MessageCircleIcon className="size-2" />,
-				title: t("chat.modeResponse"),
-			}
 		case "plan":
-		default:
 			return {
 				icon: <NotepadTextIcon className="size-2" />,
 				title: t("chat.planCreated"),
+			}
+		case "chat":
+		case "ask":
+		case "act":
+		case "debug":
+		default:
+			return {
+				icon: <MessageCircleIcon className="size-2" />,
+				title: t("chat.modeResponse"),
 			}
 	}
 }
@@ -43,7 +46,7 @@ const PlanCompletionOutputRow = memo(({ text, headClassNames, mode }: PlanComple
 	const { icon, title } = getModeHeaderConfig(mode, t)
 
 	const containerStyle = useMemo<CSSProperties | undefined>(() => {
-		if (!modeColor) return undefined
+		if (!modeColor) { return undefined }
 		return {
 			borderColor: `color-mix(in srgb, ${modeColor} 40%, transparent)`,
 			backgroundColor: `color-mix(in srgb, ${modeColor} 6%, transparent)`,
@@ -51,14 +54,14 @@ const PlanCompletionOutputRow = memo(({ text, headClassNames, mode }: PlanComple
 	}, [modeColor])
 
 	const dividerStyle = useMemo<CSSProperties | undefined>(() => {
-		if (!modeColor) return undefined
+		if (!modeColor) { return undefined }
 		return {
 			borderTopColor: `color-mix(in srgb, ${modeColor} 20%, transparent)`,
 		}
 	}, [modeColor])
 
 	const titleStyle = useMemo<CSSProperties | undefined>(() => {
-		if (!modeColor) return undefined
+		if (!modeColor) { return undefined }
 		return { color: modeColor }
 	}, [modeColor])
 

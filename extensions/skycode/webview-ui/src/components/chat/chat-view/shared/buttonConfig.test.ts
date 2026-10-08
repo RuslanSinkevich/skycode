@@ -82,14 +82,16 @@ describe("getButtonConfig", () => {
 			expect(config).toEqual(BUTTON_CONFIGS.command)
 		})
 
-		it("returns command_output config for command_output ask", () => {
+		// [SKYCODE] command_output как ask больше не используется (рудимент Cline убран).
+		// Если такое сообщение приходит — отдаём partial-конфиг (без кнопок).
+		it("returns partial config for command_output ask (legacy)", () => {
 			const commandOutputMessage: SkycodeMessage = {
 				type: "ask",
 				ask: "command_output",
 				ts: Date.now(),
 			}
 			const config = getButtonConfig(commandOutputMessage)
-			expect(config).toEqual(BUTTON_CONFIGS.command_output)
+			expect(config).toEqual(BUTTON_CONFIGS.partial)
 		})
 	})
 

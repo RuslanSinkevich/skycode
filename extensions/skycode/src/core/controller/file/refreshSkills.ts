@@ -51,19 +51,29 @@ async function scanSkillsDirectory(dirPath: string): Promise<SkillInfo[]> {
 		for (const entryName of entries) {
 			const entryPath = path.join(dirPath, entryName)
 			const stats = await fs.stat(entryPath).catch(() => null)
-			if (!stats?.isDirectory()) continue
+			if (!stats?.isDirectory()) {
+				continue
+			}
 
 			const skillMdPath = path.join(entryPath, "SKILL.md")
-			if (!(await fileExistsAtPath(skillMdPath))) continue
+			if (!(await fileExistsAtPath(skillMdPath))) {
+				continue
+			}
 
 			try {
 				const fileContent = await fs.readFile(skillMdPath, "utf-8")
 				const { data: frontmatter } = parseFrontmatter(fileContent)
 
 				// Validate required fields
-				if (!frontmatter.name || typeof frontmatter.name !== "string") continue
-				if (!frontmatter.description || typeof frontmatter.description !== "string") continue
-				if (frontmatter.name !== entryName) continue
+				if (!frontmatter.name || typeof frontmatter.name !== "string") {
+					continue
+				}
+				if (!frontmatter.description || typeof frontmatter.description !== "string") {
+					continue
+				}
+				if (frontmatter.name !== entryName) {
+					continue
+				}
 
 				skills.push(
 					SkillInfo.create({

@@ -1,4 +1,5 @@
 import type { Anthropic } from "@anthropic-ai/sdk"
+import { isBase64ImageSource } from "@/shared/messages/message-interchange"
 
 /**
  * Filters out image blocks from messages since Claude Code doesn't support images.
@@ -16,10 +17,10 @@ export function filterMessagesForClaudeCode(messages: Anthropic.Messages.Message
 			if (block.type === "image") {
 				// Replace image blocks with text placeholders
 				const sourceType = block.source?.type || "unknown"
-				const mediaType = block.source?.media_type || "unknown"
+				const detail = isBase64ImageSource(block.source) ? block.source.media_type : block.source.url
 				return {
 					type: "text" as const,
-					text: `[Image (${sourceType}): ${mediaType} not supported by Claude Code]`,
+					text: `[Image (${sourceType}): ${detail} not supported by Claude Code]`,
 				}
 			}
 			return block

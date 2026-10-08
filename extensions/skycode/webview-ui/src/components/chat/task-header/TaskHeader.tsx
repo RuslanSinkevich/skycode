@@ -12,7 +12,6 @@ import CopyTaskButton from "./buttons/CopyTaskButton"
 import DeleteTaskButton from "./buttons/DeleteTaskButton"
 import NewTaskButton from "./buttons/NewTaskButton"
 import OpenDiskConversationHistoryButton from "./buttons/OpenDiskConversationHistoryButton"
-import { CheckpointError } from "./CheckpointError"
 import { FocusChain } from "./FocusChain"
 import { highlightText } from "./Highlights"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -98,7 +97,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	// Event handlers
 	const toggleTaskExpanded = useCallback(() => setIsTaskExpanded(!isTaskExpanded), [setIsTaskExpanded, isTaskExpanded])
 
-	const handleCheckpointSettingsClick = useCallback(() => {
+	const _handleCheckpointSettingsClick = useCallback(() => {
 		navigateToSettings("editing")
 	}, [navigateToSettings])
 
@@ -114,7 +113,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 			{/* Task Header — compact single row */}
 			<div
 				className={cn(
-					"relative overflow-hidden cursor-pointer rounded-sm flex flex-col z-10 px-2 hover:opacity-100 bg-(--vscode-toolbar-hoverBackground)/65",
+					"relative overflow-hidden cursor-pointer rounded-sm flex flex-col z-10 px-2 hover:opacity-100 bg-user-message-bg",
 					{
 						"opacity-100 border-1 pt-2 pb-2 gap-1.5": isTaskExpanded,
 						"hover:bg-toolbar-hover border-1 py-1": !isTaskExpanded,

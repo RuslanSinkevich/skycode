@@ -255,7 +255,9 @@ export class VscodeCommentReviewController extends CommentReviewController imple
 	 * Add multiple review comments at once
 	 */
 	addReviewComments(comments: ReviewComment[]): void {
-		comments.forEach((comment) => this.addReviewComment(comment))
+		comments.forEach((comment) => {
+			this.addReviewComment(comment)
+		})
 	}
 
 	/**

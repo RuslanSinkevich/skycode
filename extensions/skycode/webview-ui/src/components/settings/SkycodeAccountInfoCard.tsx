@@ -1,25 +1,8 @@
-import { EmptyRequest } from "@shared/proto/skycode/common"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
-import { useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { useSkycodeAuth } from "@/context/SkycodeAuthContext"
-import { AccountServiceClient } from "@/services/grpc-client"
 
 export const SkycodeAccountInfoCard = () => {
-	const { skycodeUser } = useSkycodeAuth()
 	const { navigateToAccount } = useExtensionState()
-	const [isLoading, setIsLoading] = useState(false)
-
-	const user = skycodeUser || undefined
-
-	const handleLogin = () => {
-		setIsLoading(true)
-		AccountServiceClient.accountLoginClicked(EmptyRequest.create())
-			.catch((err) => console.error("Failed to get login URL:", err))
-			.finally(() => {
-				setIsLoading(false)
-			})
-	}
 
 	const handleShowAccount = () => {
 		navigateToAccount()
@@ -27,22 +10,9 @@ export const SkycodeAccountInfoCard = () => {
 
 	return (
 		<div className="max-w-[600px]">
-			{user ? (
-				<VSCodeButton appearance="secondary" onClick={handleShowAccount}>
-					View Billing & Usage
-				</VSCodeButton>
-			) : (
-				<div>
-					<VSCodeButton className="mt-0" disabled={isLoading} onClick={handleLogin}>
-						Sign Up with Skycode
-						{isLoading && (
-							<span className="ml-1 animate-spin">
-								<span className="codicon codicon-refresh"></span>
-							</span>
-						)}
-					</VSCodeButton>
-				</div>
-			)}
+			<VSCodeButton appearance="secondary" onClick={handleShowAccount}>
+				Support Skycode
+			</VSCodeButton>
 		</div>
 	)
 }

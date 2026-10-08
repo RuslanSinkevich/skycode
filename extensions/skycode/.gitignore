@@ -20,6 +20,12 @@ CLAUDE.local.md
 webview-ui/src/**/*.js
 webview-ui/src/**/*.js.map
 
+# Accidental tsc emit next to .ts sources (build goes to dist/ via esbuild)
+src/**/*.js
+src/**/*.js.map
+!src/**/*.config.js
+!src/**/*.config.js.map
+
 # Ignore coverage directories and files
 coverage
 coverage-unit
@@ -54,3 +60,20 @@ vendor/whisper/
 
 # ONNX embedding models (downloaded automatically on first run)
 models/
+
+# Native sqlite prebuilds (regenerated via `npm run rebuild:native`)
+native/sqlite/
+
+# Build/lint scratch logs
+lint.txt
+lint-parsed.json
+fix-lint.mjs
+parse-lint.ps1
+build-out.txt
+fix-out.txt
+parse-out.txt
+tsc-out.txt
+tsc-webview-out.txt
+vsce-out.txt
+test-unit-out.txt
+TODO_LINT_FIXES.md

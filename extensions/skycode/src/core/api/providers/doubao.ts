@@ -6,6 +6,7 @@ import { ApiHandler, CommonApiHandlerOptions } from ".."
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
+import { StreamAborter } from "../utils/abort-support"
 
 interface DoubaoHandlerOptions extends CommonApiHandlerOptions {
 	doubaoApiKey?: string
@@ -15,8 +16,13 @@ interface DoubaoHandlerOptions extends CommonApiHandlerOptions {
 export class DoubaoHandler implements ApiHandler {
 	private options: DoubaoHandlerOptions
 	private client: OpenAI | undefined
+	private aborter = new StreamAborter()
 	constructor(options: DoubaoHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	private ensureClient(): OpenAI {
@@ -57,6 +63,7 @@ export class DoubaoHandler implements ApiHandler {
 			{ role: "system", content: systemPrompt },
 			...convertToOpenAiMessages(messages),
 		]
+		const signal = this.aborter.reset()
 		const stream = await client.chat.completions.create({
 			model: model.id,
 			max_completion_tokens: model.info.maxTokens,
@@ -64,8 +71,12 @@ export class DoubaoHandler implements ApiHandler {
 			stream: true,
 			stream_options: { include_usage: true },
 			temperature: 0,
-		})
+		},
+			{ signal },
+		)
+		this.aborter.track(stream)
 
+		try {
 		for await (const chunk of stream) {
 			const delta = chunk.choices?.[0]?.delta
 			if (delta?.content) {
@@ -77,9 +88,9 @@ export class DoubaoHandler implements ApiHandler {
 
 			if (chunk.usage) {
 				const promptTokens = chunk.usage.prompt_tokens || 0
-				// @ts-ignore-next-line
+				// @ts-expect-error-next-line
 				const cachedTokens = chunk.usage.prompt_cache_hit_tokens || 0
-				// @ts-ignore-next-line
+				// @ts-expect-error-next-line
 				const cacheMissTokens = chunk.usage.prompt_cache_miss_tokens || 0
 				yield {
 					type: "usage",
@@ -89,6 +100,9 @@ export class DoubaoHandler implements ApiHandler {
 					cacheWriteTokens: cacheMissTokens,
 				}
 			}
+		}
+		} finally {
+			this.aborter.clear()
 		}
 	}
 }

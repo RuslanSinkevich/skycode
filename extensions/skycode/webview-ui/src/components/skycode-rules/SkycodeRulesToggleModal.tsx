@@ -484,7 +484,7 @@ const SkycodeRulesToggleModal: React.FC = () => {
 
 	const handleSaveWorkflow = useCallback(
 		(data: WorkflowEditorData) => {
-			if (!editingWorkflow) return
+			if (!editingWorkflow) { return }
 			FileServiceClient.saveWorkflowDefinition(
 				SaveWorkflowDefinitionRequest.create({
 					filePath: editingWorkflow.filePath,

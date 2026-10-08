@@ -67,7 +67,7 @@ export class EventEmitter<T> {
 		this._listeners.push(listener)
 		return { dispose: () => {
 			const idx = this._listeners.indexOf(listener)
-			if (idx >= 0) this._listeners.splice(idx, 1)
+			if (idx >= 0) { this._listeners.splice(idx, 1) }
 		}}
 	}
 
@@ -147,16 +147,16 @@ export function _setConfigOverride(section: string, key: string, value: any) {
 }
 
 export function _clearConfigOverrides() {
-	for (const k of Object.keys(_configOverrides)) delete _configOverrides[k]
+	for (const k of Object.keys(_configOverrides)) { delete _configOverrides[k] }
 }
 
 export const workspace = {
 	getConfiguration: (section?: string) => ({
 		get: (key: string, defaultValue?: any) => {
 			const fullKey = `${section}.${key}`
-			if (fullKey in _configOverrides) return _configOverrides[fullKey]
-			if (section === "skycode" && key === "telemetrySetting") return "enabled"
-			if (section === "telemetry" && key === "telemetryLevel") return "all"
+			if (fullKey in _configOverrides) { return _configOverrides[fullKey] }
+			if (section === "skycode" && key === "telemetrySetting") { return "enabled" }
+			if (section === "telemetry" && key === "telemetryLevel") { return "all" }
 			return defaultValue
 		},
 	}),
@@ -206,6 +206,7 @@ export const workspace = {
 		return docs
 	},
 	onDidChangeTextDocument: (_callback: any) => ({ dispose: () => {} }),
+	onDidSaveTextDocument: (_callback: any) => ({ dispose: () => {} }),
 	fs: {
 		createDirectory: async (_uri: any) => {},
 		writeFile: async (_uri: any, _content: Uint8Array) => {},

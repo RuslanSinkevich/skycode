@@ -6,8 +6,6 @@ export const baseTemplate = `{{${SystemPromptSection.AGENT_ROLE}}}
 
 ====
 
-{{${SystemPromptSection.TODO}}}
-
 ====
 
 {{${SystemPromptSection.CLI_SUBAGENTS}}}

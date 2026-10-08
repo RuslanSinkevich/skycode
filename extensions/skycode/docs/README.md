@@ -37,6 +37,7 @@ AI-ассистент для разработки, интегрированны�
 ### Подсистемы
 - [DIFF_SYSTEM.md](./DIFF_SYSTEM.md) — Inline Diff система v4
 - [INDEXING_SYSTEM.md](./INDEXING_SYSTEM.md) — Семантическая индексация
+- [TERMINAL_SYSTEM.md](./TERMINAL_SYSTEM.md) — Терминал, тайминги команд, фоновые команды
 - [BANNER_SYSTEM.md](./BANNER_SYSTEM.md) — Система баннеров (клиент)
 - [architecture/CONTEXT_MANAGEMENT.md](./architecture/CONTEXT_MANAGEMENT.md) — Управление контекстом (сжатие, суммаризация)
 - [mcp/how-mcp-works.md](./mcp/how-mcp-works.md) — Как работает MCP
@@ -48,6 +49,10 @@ AI-ассистент для разработки, интегрированны�
 
 ### VS Code Fork
 - [VSCODE_FORK_PATCHES.md](./VSCODE_FORK_PATCHES.md) — Патчи ядра VS Code
+
+### Безопасность и история
+- [../../../../SECURITY.md](../../../../SECURITY.md) — политика безопасности (как сообщать о уязвимостях)
+- [../../../../CHANGELOG.md](../../../../CHANGELOG.md) — история изменений (Keep a Changelog)
 
 ### Правила для AI агента
 - [agent-rules/general.md](./agent-rules/general.md) — Общие правила
@@ -88,4 +93,4 @@ skycode/
 
 ## Лицензия
 
-Проприетарная лицензия. Все права защищены.
+[Apache License 2.0](../../../LICENSE). VS Code-основа — MIT (`../../../LICENSE.txt`).

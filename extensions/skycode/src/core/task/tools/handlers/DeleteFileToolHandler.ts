@@ -1,4 +1,4 @@
-import path from "node:path"
+
 import * as vscode from "vscode"
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"

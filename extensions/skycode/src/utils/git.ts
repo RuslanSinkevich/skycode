@@ -357,18 +357,19 @@ export async function getGitStatusCompact(cwd: string): Promise<GitStatusCompact
 		let modified = 0, added = 0, deleted = 0, untracked = 0
 		for (const line of lines) {
 			const code = line.substring(0, 2)
-			if (code.includes("?")) untracked++
-			else if (code.includes("M")) modified++
-			else if (code.includes("A")) added++
-			else if (code.includes("D")) deleted++
-			else modified++ // fallback
+			if (code.includes("?")) { untracked++ }
+			else if (code.includes("M")) { modified++ }
+			else if (code.includes("A")) { added++ }
+			else if (code.includes("D")) { deleted++ }
+			else { modified++ // fallback
+}
 		}
 
 		const parts: string[] = []
-		if (modified > 0) parts.push(`${modified} modified`)
-		if (added > 0) parts.push(`${added} added`)
-		if (deleted > 0) parts.push(`${deleted} deleted`)
-		if (untracked > 0) parts.push(`${untracked} untracked`)
+		if (modified > 0) { parts.push(`${modified} modified`) }
+		if (added > 0) { parts.push(`${added} added`) }
+		if (deleted > 0) { parts.push(`${deleted} deleted`) }
+		if (untracked > 0) { parts.push(`${untracked} untracked`) }
 
 		return {
 			branch,

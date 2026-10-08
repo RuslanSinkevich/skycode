@@ -60,6 +60,13 @@ old_docs/**
 !node_modules/@vscode/codicons/dist/codicon.css
 !node_modules/@vscode/codicons/dist/codicon.ttf
 
+# Include native ONNX runtime used by @xenova/transformers for local embeddings
+!node_modules/onnxruntime-node/**
+
+# SQLite index storage (native binding; must match extension host Electron ABI)
+!node_modules/better-sqlite3/**
+!native/sqlite/**
+
 # Include default themes JSON files used in getTheme
 !src/integrations/theme/default-themes/**
 
@@ -83,6 +90,7 @@ proto/**
 scripts/**
 esbuild.mjs
 vendor/whisper/**
+vendor/**/.cache/**
 biome.jsonc
 knip.json
 playwright.config.ts
@@ -90,3 +98,17 @@ tests/**
 test-setup.js
 .nycrc.unit.json
 .worktreeinclude
+
+# Build/dev artefacts not needed inside the VSIX
+lint.txt
+lint-parsed.json
+parse-lint.ps1
+parse-out.txt
+fix-lint.mjs
+fix-out.txt
+build-out.txt
+tsc-out.txt
+tsc-webview-out.txt
+vsce-out.txt
+TODO_LINT_FIXES.md
+

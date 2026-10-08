@@ -35,6 +35,7 @@ import { OpenAiNativeHandler } from "./providers/openai-native"
 import { OpenRouterHandler } from "./providers/openrouter"
 import { QwenHandler } from "./providers/qwen"
 import { QwenCodeHandler } from "./providers/qwen-code"
+import { QwenWebHandler } from "./providers/qwen-web"
 import { RequestyHandler } from "./providers/requesty"
 import { SambanovaHandler } from "./providers/sambanova"
 import { SapAiCoreHandler } from "./providers/sapaicore"
@@ -55,7 +56,7 @@ export interface ApiHandler {
 	createMessage(systemPrompt: string, messages: SkycodeStorageMessage[], tools?: SkycodeTool[], useResponseApi?: boolean): ApiStream
 	getModel(): ApiHandlerModel
 	getApiStreamUsage?(): Promise<ApiStreamUsageChunk | undefined>
-	abort?(): void
+	abort(): void
 }
 
 export interface ApiHandlerModel {
@@ -151,6 +152,7 @@ function createHandlerForProvider(
 				openAiModelId: isPlan ? options.planModeOpenAiModelId : options.actModeOpenAiModelId,
 				openAiModelInfo: isPlan ? options.planModeOpenAiModelInfo : options.actModeOpenAiModelInfo,
 				reasoningEffort: isPlan ? options.planModeReasoningEffort : options.actModeReasoningEffort,
+				thinkingBudgetTokens: isPlan ? options.planModeThinkingBudgetTokens : options.actModeThinkingBudgetTokens,
 			})
 		case "ollama":
 			return new OllamaHandler({
@@ -239,6 +241,12 @@ function createHandlerForProvider(
 			return new QwenCodeHandler({
 				onRetryAttempt: options.onRetryAttempt,
 				qwenCodeOauthPath: options.qwenCodeOauthPath,
+				apiModelId: isPlan ? options.planModeApiModelId : options.actModeApiModelId,
+			})
+		case "qwen-web":
+			return new QwenWebHandler({
+				onRetryAttempt: options.onRetryAttempt,
+				qwenWebToken: options.qwenWebToken,
 				apiModelId: isPlan ? options.planModeApiModelId : options.actModeApiModelId,
 			})
 		case "doubao":

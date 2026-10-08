@@ -21,7 +21,7 @@ IMPORTANT NOTE: This tool CANNOT be used until you've confirmed from the user th
 			name: "command",
 			required: false,
 			instruction:
-				"A CLI command to execute to show a live demo of the result to the user. For example, use \`start localhost:3000\` to start a locally running development server. ONLY use this for launching servers, opening web URLs, or running executables. Do NOT use \`open\`, \`cat\`, \`echo\`, or any command that merely opens a file or prints text — the user can already see edited files in the editor. If the task was just editing files, do NOT provide a command at all.",
+				"A CLI command to execute to show a live demo of the result to the user. For example, use `start localhost:3000` to start a locally running development server. ONLY use this for launching servers, opening web URLs, or running executables. Do NOT use `open`, `cat`, `echo`, or any command that merely opens a file or prints text — the user can already see edited files in the editor. If the task was just editing files, do NOT provide a command at all.",
 			usage: "Your command here (optional)",
 		},
 		// Different than the vanilla ASK_PROGRESS_PARAMETER
@@ -55,7 +55,7 @@ IMPORTANT NOTE: This tool CANNOT be used until you've confirmed from the user th
 			name: "command",
 			required: false,
 			instruction:
-				"A CLI command to execute to show a live demo of the result to the user. For example, use \`start localhost:3000\` to start a locally running development server. ONLY use this for launching servers, opening web URLs, or running executables. Do NOT use \`open\`, \`cat\`, \`echo\`, or any command that merely opens a file or prints text — the user can already see edited files in the editor. If the task was just editing files, do NOT provide a command at all.",
+				"A CLI command to execute to show a live demo of the result to the user. For example, use `start localhost:3000` to start a locally running development server. ONLY use this for launching servers, opening web URLs, or running executables. Do NOT use `open`, `cat`, `echo`, or any command that merely opens a file or prints text — the user can already see edited files in the editor. If the task was just editing files, do NOT provide a command at all.",
 			usage: "Your command here (optional)",
 		},
 		// Different than the vanilla ASK_PROGRESS_PARAMETER
@@ -121,7 +121,7 @@ const NATIVE_NEXT_GEN: SkycodeToolSpec = {
 			name: "command",
 			required: false,
 			instruction:
-				"An actionable terminal command that is non-verbose that allows user to review the result of your work. For example, use \`start localhost:3000\` to start a locally running development server. Commands like \`echo\` or \`cat\` that merely print text or open a file are not allowed. Ensure the command is properly formatted for user's OS and does not contain any harmful instructions",
+				"An actionable terminal command that is non-verbose that allows user to review the result of your work. For example, use `start localhost:3000` to start a locally running development server. Commands like `echo` or `cat` that merely print text or open a file are not allowed. Ensure the command is properly formatted for user's OS and does not contain any harmful instructions",
 		},
 		{
 			name: "task_progress",

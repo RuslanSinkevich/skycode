@@ -114,16 +114,16 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 				case PlanActMode.PAM_ASK:
 					mode = "ask"
 					break
-			case PlanActMode.DEBUG:
-				mode = "debug"
-				break
-			case PlanActMode.CHAT:
-				mode = "chat"
-				break
-			default:
-				mode = "act"
-		}
-		controller.stateManager.setGlobalState("mode", mode)
+				case PlanActMode.DEBUG:
+					mode = "debug"
+					break
+				case PlanActMode.CHAT:
+					mode = "chat"
+					break
+				default:
+					mode = "act"
+			}
+			controller.stateManager.setGlobalState("mode", mode)
 		}
 
 		if (request.openaiReasoningEffort !== undefined) {
@@ -279,27 +279,12 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 							whisperModel,
 							HP.get().extensionFsPath,
 						)
-						if (!whisper) return
-
-						// Bundled models don't need auth token (local file copy)
-						// CDN models need auth for protected downloads
-						const isBundled = !!(whisper as any).bundledArchivePath
-						if (!isBundled) {
-							const token = await controller.authService.getAuthToken()
-							if (!token) {
-								const updated = { ...dictationSettings, voiceDownloading: false }
-								controller.stateManager.setGlobalState("dictationSettings", updated)
-								await controller.postStateToWebview()
-								HP.window.showMessage({
-									type: ShowMessageType.ERROR,
-									message: t2("voice.downloadFailed", { error: "Not authenticated" }),
-								})
-								return
-							}
-							whisper.authToken = token
+						if (!whisper) {
+							return
 						}
 
 						const DOWNLOAD_TIMEOUT = 20 * 60 * 1000 // 20 minutes
+						const isBundled = !!(whisper as any).bundledArchivePath
 						try {
 							const downloadPromise = whisper.ensureReady((msg: string) => Logger.info(`[VoiceDownload] ${msg}`))
 
@@ -504,6 +489,33 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			controller.stateManager.setGlobalState("lightweightMode", !!request.lightweightMode)
 		}
 
+		// Session budget tier override + custom limits
+		if (request.sessionBudgetMode !== undefined && request.sessionBudgetMode !== "") {
+			const valid = ["auto", "strong", "medium", "weak", "custom"] as const
+			const m = request.sessionBudgetMode as (typeof valid)[number]
+			if ((valid as readonly string[]).includes(m)) {
+				controller.stateManager.setGlobalState("sessionBudgetMode", m)
+			}
+		}
+		if (request.customMaxToolCallsPerTurn !== undefined) {
+			controller.stateManager.setGlobalState(
+				"customMaxToolCallsPerTurn",
+				Math.max(1, Number(request.customMaxToolCallsPerTurn)),
+			)
+		}
+		if (request.customMaxConsecutiveReadOnlyTools !== undefined) {
+			controller.stateManager.setGlobalState(
+				"customMaxConsecutiveReadOnlyTools",
+				Math.max(1, Number(request.customMaxConsecutiveReadOnlyTools)),
+			)
+		}
+		if (request.customForceCompactAfterSteps !== undefined) {
+			controller.stateManager.setGlobalState(
+				"customForceCompactAfterSteps",
+				Math.max(1, Number(request.customForceCompactAfterSteps)),
+			)
+		}
+
 		if (request.optOutOfRemoteConfig !== undefined) {
 			const hadOptedOut = controller.stateManager.getGlobalSettingsKey("optOutOfRemoteConfig")
 			const isOptingOut = !!request.optOutOfRemoteConfig
@@ -578,7 +590,10 @@ function preloadChromiumIfNeeded(): void {
 				Logger.info("Chromium preloaded successfully for web tools")
 			} catch (error) {
 				Logger.error("Failed to preload Chromium:", error)
-				vscode.window.showErrorMessage(`Failed to download Chromium: ${(error as Error).message}`)
+				await HostProvider.window.showMessage({
+					type: ShowMessageType.ERROR,
+					message: `Failed to download Chromium: ${(error as Error).message}`,
+				})
 			}
 		},
 	)

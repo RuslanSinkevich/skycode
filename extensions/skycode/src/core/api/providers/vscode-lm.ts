@@ -9,6 +9,7 @@ import { withRetry } from "../retry"
 import { ApiStream } from "../transform/stream"
 import { convertToVsCodeLmMessages } from "../transform/vscode-lm-format"
 import type { LanguageModelChatSelector as LanguageModelChatSelectorFromTypes } from "./types"
+import { StreamAborter } from "../utils/abort-support"
 
 interface VsCodeLmHandlerOptions extends CommonApiHandlerOptions {
 	vsCodeLmModelSelector?: any
@@ -131,6 +132,7 @@ declare module "vscode" {
 export class VsCodeLmHandler implements ApiHandler, SingleCompletionHandler {
 	private options: VsCodeLmHandlerOptions
 	private client: vscode.LanguageModelChat | null
+	private aborter = new StreamAborter()
 	private disposable: vscode.Disposable | null
 	private currentRequestCancellation: vscode.CancellationTokenSource | null
 
@@ -160,6 +162,10 @@ export class VsCodeLmHandler implements ApiHandler, SingleCompletionHandler {
 				`Skycode <Language Model API>: Failed to initialize handler: ${error instanceof Error ? error.message : "Unknown error"}`,
 			)
 		}
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	/**

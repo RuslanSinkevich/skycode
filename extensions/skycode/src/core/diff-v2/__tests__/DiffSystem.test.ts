@@ -37,7 +37,7 @@ describe('DiffSystem (integration)', () => {
 
   afterEach(() => {
     system.dispose()
-    if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true })
+    if (tmpDir) { fs.rmSync(tmpDir, { recursive: true, force: true }) }
   })
 
   // ==================== Lifecycle ====================
@@ -495,7 +495,7 @@ describe('DiffSystem (integration)', () => {
       await system.acceptChange(hunkId)
 
       // Rollback should find no pending hunks to revert
-      const reverted = await system.rollbackFromMessage(1000)
+      const _reverted = await system.rollbackFromMessage(1000)
       // May revert the RG but file was already accepted
       _getDocumentContent(FILE_A)!.should.containEql('changed') // accepted = kept
     })
@@ -506,7 +506,7 @@ describe('DiffSystem (integration)', () => {
 
       await system.rollbackFromMessage(1000)
       // Second rollback — RG already rejected, should not crash
-      const result = await system.rollbackFromMessage(1000)
+      const _result = await system.rollbackFromMessage(1000)
       // Empty or no-op
       _getDocumentContent(FILE_A)!.should.equal('original')
     })

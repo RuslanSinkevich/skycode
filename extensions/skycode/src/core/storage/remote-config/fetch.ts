@@ -264,7 +264,8 @@ async function ensureUserInOrgWithRemoteConfig(controller: Controller): Promise<
  */
 export async function fetchRemoteConfig(controller: Controller) {
 	try {
-		await ensureUserInOrgWithRemoteConfig(controller)
+		clearRemoteConfig()
+		controller.postStateToWebview()
 	} catch (error) {
 		Logger.error("Failed to fetch remote config", error)
 	}

@@ -9,6 +9,7 @@ import { convertToOpenAiMessages } from "../transform/openai-format"
 import { convertToR1Format } from "../transform/r1-format"
 import { ApiStream } from "../transform/stream"
 import { getOpenAIToolParams, ToolCallProcessor } from "../transform/tool-call-processor"
+import { StreamAborter } from "../utils/abort-support"
 
 interface SambanovaHandlerOptions extends CommonApiHandlerOptions {
 	sambanovaApiKey?: string
@@ -18,9 +19,14 @@ interface SambanovaHandlerOptions extends CommonApiHandlerOptions {
 export class SambanovaHandler implements ApiHandler {
 	private options: SambanovaHandlerOptions
 	private client: OpenAI | undefined
+	private aborter = new StreamAborter()
 
 	constructor(options: SambanovaHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	private ensureClient(): OpenAI {
@@ -58,6 +64,7 @@ export class SambanovaHandler implements ApiHandler {
 		}
 
 		const toolCallProcessor = new ToolCallProcessor()
+		const signal = this.aborter.reset()
 		const stream = await client.chat.completions.create({
 			model: this.getModel().id,
 			messages: openAiMessages,
@@ -65,8 +72,12 @@ export class SambanovaHandler implements ApiHandler {
 			stream: true,
 			stream_options: { include_usage: true },
 			...getOpenAIToolParams(tools),
-		})
+		},
+			{ signal },
+		)
+		this.aborter.track(stream)
 
+		try {
 		for await (const chunk of stream) {
 			const delta = chunk.choices?.[0]?.delta
 			if (delta?.content) {
@@ -87,6 +98,9 @@ export class SambanovaHandler implements ApiHandler {
 					outputTokens: chunk.usage.completion_tokens || 0,
 				}
 			}
+		}
+		} finally {
+			this.aborter.clear()
 		}
 	}
 

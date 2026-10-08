@@ -5,6 +5,7 @@ import { SkycodeStorageMessage } from "@/shared/messages/content"
 import { type ApiHandler, CommonApiHandlerOptions } from ".."
 import { withRetry } from "../retry"
 import { type ApiStream, ApiStreamUsageChunk } from "../transform/stream"
+import { StreamAborter } from "../utils/abort-support"
 
 interface ClaudeCodeHandlerOptions extends CommonApiHandlerOptions {
 	claudeCodePath?: string
@@ -14,9 +15,14 @@ interface ClaudeCodeHandlerOptions extends CommonApiHandlerOptions {
 
 export class ClaudeCodeHandler implements ApiHandler {
 	private options: ClaudeCodeHandlerOptions
+	private aborter = new StreamAborter()
 
 	constructor(options: ClaudeCodeHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	@withRetry({

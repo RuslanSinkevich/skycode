@@ -172,7 +172,7 @@ describe('HunkApplier', () => {
     it('should insert lines at correct position', async () => {
       _addDocument(FILE, CONTENT_5_LINES)
 
-      const hunkId = await applier.applyAddition(FILE, 2, ['inserted1', 'inserted2'], rgId)
+      const _hunkId = await applier.applyAddition(FILE, 2, ['inserted1', 'inserted2'], rgId)
 
       const content = _getDocumentContent(FILE)!
       const lines = content.split('\n')

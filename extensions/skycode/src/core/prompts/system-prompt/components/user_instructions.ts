@@ -2,9 +2,16 @@ import { SystemPromptSection } from "../templates/placeholders"
 import { TemplateEngine } from "../templates/TemplateEngine"
 import type { PromptVariant, SystemPromptContext } from "../types"
 
+// [SKYCODE] Раньше здесь стояло «follow … without interfering with the TOOL USE guidelines»
+// (текст из Cline). Модель читала это как «правила пользователя — второй сорт» и при конфликте
+// выбирала поведение режима: ACT напоминает о себе рядом с каждым сообщением, а правила лежат
+// один раз в конце системного промпта. Теперь приоритет задан прямо: выше правил только формат
+// вызова инструментов и безопасность.
 const USER_CUSTOM_INSTRUCTIONS_TEMPLATE_TEXT = `USER'S CUSTOM INSTRUCTIONS
 
-The following additional instructions are provided by the user, and should be followed to the best of your ability without interfering with the TOOL USE guidelines.
+The following instructions come from the user. They take precedence over your own defaults and over the default behaviour of the current mode. In particular, if an instruction tells you to present a plan, ask for confirmation or wait for explicit approval before changing anything, that applies in every mode — ACT MODE included.
+
+Only two things outrank these instructions: the tool-call format described above, and refusing genuinely harmful work. Never break either one to satisfy an instruction, and never use them as an excuse to skip an instruction you simply find inconvenient.
 
 {{CUSTOM_INSTRUCTIONS}}`
 

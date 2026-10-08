@@ -12,7 +12,6 @@ import Thumbnails from "@/components/common/Thumbnails"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { usePlatform } from "@/context/PlatformContext"
-import { useSkycodeAuth } from "@/context/SkycodeAuthContext"
 import { useI18n } from "@/i18n"
 import { cn } from "@/lib/utils"
 import { TaskServiceClient } from "@/services/grpc-client"
@@ -92,9 +91,8 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			setShowChatModelSelector: setShowModelSelector,
 			dictationSettings,
 			navigateToSettings,
-			navigateToAccount,
+			autoApprovalSettings,
 		} = useExtensionState()
-		const { skycodeUser } = useSkycodeAuth()
 		const [isTextAreaFocused, setIsTextAreaFocused] = useState(false)
 		const [isVoiceRecording, setIsVoiceRecording] = useState(false)
 		const [isVoiceProcessing, setIsVoiceProcessing] = useState(false)
@@ -160,7 +158,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		const buttonRef = useRef<HTMLDivElement>(null)
 		const [_arrowPosition, setArrowPosition] = useState(0)
 		const [_menuPosition, setMenuPosition] = useState(0)
-		const [, metaKeyChar] = useMetaKeyDetection(platform)
+		const [, _metaKeyChar] = useMetaKeyDetection(platform)
 
 		const {
 			isDraggingOver,
@@ -414,11 +412,19 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							scrollbarWidth: "none",
 							// Since we have maxRows, when text is long enough it starts to overflow the bottom padding, appearing behind the thumbnails. To fix this, we use a transparent border to push the text up instead. (https://stackoverflow.com/questions/42631947/maintaining-a-padding-inside-of-text-area/52538410#52538410)
 							// borderTop: "9px solid transparent",
-							borderLeft: 0,
-							borderRight: 0,
-							borderTop: 0,
-							borderBottom: `${thumbnailsHeight}px solid transparent`,
-							borderColor: "transparent",
+							// Longhands only — borderBottom shorthand + borderColor triggers React 18 warnings.
+							borderLeftWidth: 0,
+							borderLeftStyle: "solid",
+							borderLeftColor: "transparent",
+							borderRightWidth: 0,
+							borderRightStyle: "solid",
+							borderRightColor: "transparent",
+							borderTopWidth: 0,
+							borderTopStyle: "solid",
+							borderTopColor: "transparent",
+							borderBottomWidth: thumbnailsHeight,
+							borderBottomStyle: "solid",
+							borderBottomColor: "transparent",
 							// borderRight: "54px solid transparent",
 							// borderLeft: "9px solid transparent", // NOTE: react-textarea-autosize doesn't calculate correct height when using borderLeft/borderRight so we need to use horizontal padding instead
 							// Instead of using boxShadow, we use a div with a border to better replicate the behavior when the textarea is focused
@@ -466,9 +472,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							{dictationSettings?.featureEnabled && (dictationSettings?.dictationEnabled && dictationSettings?.voiceReady ? (
 								<VoiceRecorder
 									disabled={sendingDisabled}
-									isAuthenticated={!!skycodeUser?.uid}
 									language={dictationSettings?.dictationLanguage || "en"}
-									onAuthRequired={navigateToAccount}
 									onProcessingStateChange={(isProcessing, message) => {
 										setIsVoiceProcessing(isProcessing)
 										if (isProcessing && message) {
@@ -593,6 +597,42 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							<ServersToggleModal />
 
 							<SkycodeRulesToggleModal />
+
+							{/* [SKYCODE] Auto-approve commands toggle */}
+							<Tooltip>
+								<TooltipContent>
+									{autoApprovalSettings.actions.executeAllCommands
+										? t("chat.autoApproveCommands")
+										: t("chat.autoApproveCommandsOff")}
+								</TooltipContent>
+								<TooltipTrigger>
+									<VSCodeButton
+										appearance="icon"
+										aria-label={t("chat.autoApproveCommands")}
+										className={cn(
+											"p-0 m-0 flex items-center",
+											autoApprovalSettings.actions.executeAllCommands && "text-(--vscode-charts-green)",
+										)}
+										data-testid="auto-approve-commands-button"
+										onClick={async () => {
+											const { updateAutoApproveSettings } = await import(
+												"@/components/chat/auto-approve-menu/AutoApproveSettingsAPI"
+											)
+											await updateAutoApproveSettings({
+												...autoApprovalSettings,
+												version: (autoApprovalSettings.version ?? 1) + 1,
+												actions: {
+													...autoApprovalSettings.actions,
+													executeAllCommands: !autoApprovalSettings.actions.executeAllCommands,
+												},
+											})
+										}}>
+										<ButtonContainer>
+											<span className="codicon codicon-terminal" />
+										</ButtonContainer>
+									</VSCodeButton>
+								</TooltipTrigger>
+							</Tooltip>
 
 							<ModelContainer ref={modelSelectorRef}>
 								<ModelPickerModal

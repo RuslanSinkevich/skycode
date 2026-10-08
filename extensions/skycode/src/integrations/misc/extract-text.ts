@@ -5,7 +5,7 @@ import { isBinaryFile } from "isbinaryfile"
 import * as chardet from "jschardet"
 import mammoth from "mammoth"
 import * as path from "path"
-// @ts-ignore-next-line
+// @ts-expect-error-next-line
 import pdf from "pdf-parse/lib/pdf-parse"
 import { Logger } from "@/shared/services/Logger"
 import { sanitizeNotebookForLLM } from "./notebook-utils"

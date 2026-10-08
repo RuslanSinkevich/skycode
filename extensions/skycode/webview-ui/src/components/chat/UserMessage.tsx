@@ -1,4 +1,5 @@
 import { Int64Request } from "@shared/proto/skycode/common"
+import { ResendFromMessageRequest } from "@shared/proto/skycode/task"
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import DynamicTextArea from "react-textarea-autosize"
 import Thumbnails from "@/components/common/Thumbnails"
@@ -11,10 +12,11 @@ interface UserMessageProps {
 	files?: string[]
 	images?: string[]
 	messageTs?: number
+	isPending?: boolean
 	sendMessageFromChatRow?: (text: string, images: string[], files: string[]) => void
 }
 
-const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageTs, sendMessageFromChatRow }) => {
+const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageTs, isPending, sendMessageFromChatRow: _sendMessageFromChatRow }) => {
 	const { t } = useI18n()
 	const [isEditing, setIsEditing] = useState(false)
 	const [editedText, setEditedText] = useState(text || "")
@@ -27,7 +29,7 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 	// Delete message and revert all changes from this point
 	const handleDelete = async (e: React.MouseEvent) => {
 		e.stopPropagation()
-		if (!messageTs) return
+		if (!messageTs) { return }
 		try {
 			await TaskServiceClient.deleteFromMessage(Int64Request.create({ value: messageTs }))
 		} catch (err) {
@@ -38,7 +40,7 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 	// Retry: revert changes, delete history, resend same message
 	const handleRetry = async (e: React.MouseEvent) => {
 		e.stopPropagation()
-		if (!messageTs) return
+		if (!messageTs) { return }
 		try {
 			await TaskServiceClient.retryFromMessage(Int64Request.create({ value: messageTs }))
 		} catch (err) {
@@ -46,13 +48,21 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 		}
 	}
 
-	// Resend: delete from this message + send edited text
+	// Resend: atomic backend op — truncates history at this message and sends the
+	// edited text in one round trip. Avoids the down-then-up scroll jitter caused
+	// by separate deleteFromMessage + sendMessage calls (chat sees two state updates).
 	const handleResend = async () => {
 		setIsEditing(false)
-		if (!messageTs || editedText === text) return
+		if (!messageTs || editedText === text) { return }
 		try {
-			await TaskServiceClient.deleteFromMessage(Int64Request.create({ value: messageTs }))
-			sendMessageFromChatRow?.(editedText, images || [], files || [])
+			await TaskServiceClient.resendFromMessage(
+				ResendFromMessageRequest.create({
+					messageTs,
+					text: editedText,
+					images: images || [],
+					files: files || [],
+				}),
+			)
 		} catch (err) {
 			console.error("Resend message error:", err)
 		}
@@ -71,13 +81,11 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 		}
 	}, [isEditing])
 
-	const handleBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => {
-		if (e.relatedTarget === resendButtonRef.current) return
-		setIsEditing(false)
-	}
-
+	// Intentionally no onBlur close — buttons stay visible so the user can
+	// click Cancel/Resend without losing focus first. Escape still exits.
 	const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
 		if (e.key === "Escape") {
+			setEditedText(text || "")
 			setIsEditing(false)
 		} else if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
 			e.preventDefault()
@@ -87,15 +95,15 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 
 	return (
 		<div
-			className="p-2.5 pr-1 my-1 text-badge-foreground rounded-xs"
-			onClick={handleClick}
+			className="p-2.5 pr-1 my-1 rounded-xs bg-user-message-bg text-input-foreground border border-description/15"
+			onClick={isPending ? undefined : handleClick}
 			onMouseEnter={() => setIsHovered(true)}
 			onMouseLeave={() => setIsHovered(false)}
 			style={{
-				backgroundColor: isEditing ? "unset" : "var(--vscode-badge-background)",
 				whiteSpace: "pre-line",
 				wordWrap: "break-word",
 				position: "relative",
+				opacity: isPending ? 0.6 : 1,
 			}}>
 			{/* Delete/Retry buttons on hover */}
 			{isHovered && !isEditing && messageTs && (
@@ -118,7 +126,6 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 				<>
 					<DynamicTextArea
 						autoFocus
-						onBlur={handleBlur}
 						onChange={(e) => setEditedText(e.target.value)}
 						onKeyDown={handleKeyDown}
 						ref={textAreaRef}
@@ -141,28 +148,48 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 						}}
 						value={editedText}
 					/>
-					{editedText !== text && (
-						<div style={{ display: "flex", gap: "8px", marginTop: "8px", justifyContent: "flex-end" }}>
-							<button
-								onClick={(e) => {
-									e.stopPropagation()
-									handleResend()
-								}}
-								ref={resendButtonRef}
-								style={{
-									backgroundColor: "var(--vscode-button-background)",
-									color: "var(--vscode-button-foreground)",
-									border: "none",
-									padding: "4px 8px",
-									borderRadius: "2px",
-									fontSize: "9px",
-									cursor: "pointer",
-								}}
-								title={t("chat.resendEdited")}>
-								{t("chat.resend")}
-							</button>
-						</div>
-					)}
+					{/* Always-visible action row during edit so the user doesn't have
+					    to blur the textarea (which exited edit mode) to find buttons. */}
+					<div style={{ display: "flex", gap: "8px", marginTop: "8px", justifyContent: "flex-end" }}>
+						<button
+							onClick={(e) => {
+								e.stopPropagation()
+								setEditedText(text || "")
+								setIsEditing(false)
+							}}
+							style={{
+								backgroundColor: "var(--vscode-button-secondaryBackground)",
+								color: "var(--vscode-button-secondaryForeground)",
+								border: "none",
+								padding: "4px 8px",
+								borderRadius: "2px",
+								fontSize: "9px",
+								cursor: "pointer",
+							}}
+							title={t("chat.cancelEdit")}>
+							{t("chat.cancel")}
+						</button>
+						<button
+							disabled={editedText === text || editedText.trim().length === 0}
+							onClick={(e) => {
+								e.stopPropagation()
+								handleResend()
+							}}
+							ref={resendButtonRef}
+							style={{
+								backgroundColor: "var(--vscode-button-background)",
+								color: "var(--vscode-button-foreground)",
+								border: "none",
+								padding: "4px 8px",
+								borderRadius: "2px",
+								fontSize: "9px",
+								cursor: editedText === text || editedText.trim().length === 0 ? "not-allowed" : "pointer",
+								opacity: editedText === text || editedText.trim().length === 0 ? 0.5 : 1,
+							}}
+							title={t("chat.resendEdited")}>
+							{t("chat.resend")}
+						</button>
+					</div>
 				</>
 			) : (
 				<span className="ph-no-capture text-sm" style={{ display: "block" }}>

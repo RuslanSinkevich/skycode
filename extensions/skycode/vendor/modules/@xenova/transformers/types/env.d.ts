@@ -24,5 +24,4 @@ declare const localModelPath: any;
 declare const FS_AVAILABLE: boolean;
 declare const WEB_CACHE_AVAILABLE: boolean;
 declare const DEFAULT_CACHE_DIR: any;
-export {};
 //# sourceMappingURL=env.d.ts.map

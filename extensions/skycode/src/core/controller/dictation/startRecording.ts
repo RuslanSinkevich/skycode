@@ -122,17 +122,12 @@ export const startRecording = async (controller: Controller): Promise<RecordingR
 			const { HostProvider: HP } = await import("@/hosts/host-provider")
 			whisper = getWhisperLocalService(HP.get().globalStorageFsPath, whisperModel, HP.get().extensionFsPath)
 		} catch {
-			// WhisperLocalService not initialized — will use cloud fallback
+			// WhisperLocalService not initialized.
 		}
 
 		// If Whisper not ready — download everything first, then start recording
 		if (whisper && !whisper.isReady) {
 			Logger.info("[startRecording] Whisper.cpp not ready, starting download...")
-
-			try {
-				const token = await controller.authService.getAuthToken()
-				whisper.authToken = token
-			} catch {}
 
 			// Return immediately with "preparing" status — don't block UI
 			// Start download in background and tell user to try again

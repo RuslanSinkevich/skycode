@@ -31,6 +31,7 @@ import { ApplyPatchHandler } from "./tools/handlers/ApplyPatchHandler"
 import { AskFollowupQuestionToolHandler } from "./tools/handlers/AskFollowupQuestionToolHandler"
 import { AttemptCompletionHandler } from "./tools/handlers/AttemptCompletionHandler"
 import { BrowserToolHandler } from "./tools/handlers/BrowserToolHandler"
+import { CheckBackgroundCommandHandler } from "./tools/handlers/CheckBackgroundCommandHandler"
 import { CodebaseSearchToolHandler } from "./tools/handlers/CodebaseSearchToolHandler"
 import { CondenseHandler } from "./tools/handlers/CondenseHandler"
 import { ExecuteCommandToolHandler } from "./tools/handlers/ExecuteCommandToolHandler"
@@ -60,6 +61,7 @@ import { TaskConfig, validateTaskConfig } from "./tools/types/TaskConfig"
 import { createUIHelpers } from "./tools/types/UIHelpers"
 import { ToolDisplayUtils } from "./tools/utils/ToolDisplayUtils"
 import { ToolResultUtils } from "./tools/utils/ToolResultUtils"
+import { Logger } from "@/shared/services/Logger"
 
 export class ToolExecutor {
 	private autoApprover: AutoApprove
@@ -127,6 +129,7 @@ export class ToolExecutor {
 		private sayAndCreateMissingParamError: (toolName: SkycodeDefaultTool, paramName: string, relPath?: string) => Promise<any>,
 		private removeLastPartialMessageIfExistsWithType: (type: "ask" | "say", askOrSay: SkycodeAsk | SkycodeSay) => Promise<void>,
 		private executeCommandTool: (command: string, timeoutSeconds: number | undefined) => Promise<[boolean, any]>,
+		private checkBackgroundCommand: (id?: string) => Promise<string>,
 		private doesLatestTaskCompletionHaveNewChanges: () => Promise<boolean>,
 		private updateFCListFromToolResponse: (taskProgress: string | undefined) => Promise<void>,
 		private switchToActMode: () => Promise<boolean>,
@@ -196,6 +199,7 @@ export class ToolExecutor {
 				cancelTask: this.cancelTask,
 				updateTaskHistory: async (_: any) => [],
 				executeCommandTool: this.executeCommandTool,
+				checkBackgroundCommand: this.checkBackgroundCommand,
 				doesLatestTaskCompletionHaveNewChanges: this.doesLatestTaskCompletionHaveNewChanges,
 				updateFCListFromToolResponse: this.updateFCListFromToolResponse,
 				sayAndCreateMissingParamError: this.sayAndCreateMissingParamError,
@@ -246,6 +250,7 @@ export class ToolExecutor {
 		this.coordinator.register(new ListCodeDefinitionNamesToolHandler(validator))
 		this.coordinator.register(new SearchFilesToolHandler(validator))
 		this.coordinator.register(new ExecuteCommandToolHandler(validator))
+		this.coordinator.register(new CheckBackgroundCommandHandler())
 		this.coordinator.register(new UseMcpToolHandler())
 		this.coordinator.register(new AccessMcpResourceHandler())
 		this.coordinator.register(new LoadMcpDocumentationHandler())
@@ -294,7 +299,7 @@ export class ToolExecutor {
 	private async handleError(action: string, error: Error, block: ToolUse): Promise<void> {
 		// Ignore "Skycode instance aborted" errors - task was cancelled
 		if (error.message === "Skycode instance aborted") {
-			console.log(`[ToolExecutor] handleError: task aborted during ${action}, ignoring`)
+			Logger.log(`[ToolExecutor] handleError: task aborted during ${action}, ignoring`)
 			return
 		}
 
@@ -305,7 +310,7 @@ export class ToolExecutor {
 			await this.say("error", errorString)
 		} catch (sayError) {
 			if (sayError instanceof Error && sayError.message === "Skycode instance aborted") {
-				console.log(`[ToolExecutor] handleError: task aborted while reporting error, ignoring`)
+				Logger.log(`[ToolExecutor] handleError: task aborted while reporting error, ignoring`)
 				return
 			}
 			throw sayError
@@ -571,7 +576,13 @@ export class ToolExecutor {
 			return
 		}
 
-		const limits = getSessionLimitsForModel(modelId, providerInfo)
+		const customSettings = {
+			sessionBudgetMode: this.stateManager.getGlobalSettingsKey("sessionBudgetMode"),
+			customMaxToolCallsPerTurn: this.stateManager.getGlobalSettingsKey("customMaxToolCallsPerTurn"),
+			customMaxConsecutiveReadOnlyTools: this.stateManager.getGlobalSettingsKey("customMaxConsecutiveReadOnlyTools"),
+			customForceCompactAfterSteps: this.stateManager.getGlobalSettingsKey("customForceCompactAfterSteps"),
+		}
+		const limits = getSessionLimitsForModel(modelId, providerInfo, customSettings)
 
 		this.taskState.turnToolCallCount++
 
@@ -592,12 +603,15 @@ export class ToolExecutor {
 		}
 
 		// Session budget warning at 80% of limit
+		// [SKYCODE] Счётчик обнуляется в initiateTaskLoop, то есть один бюджет расходуется на весь
+		// прогон до следующего сообщения пользователя, а не на один ответ модели. Формулировки
+		// говорят ровно это — раньше они обещали лимит «на ход» и сбивали модель с толку.
 		const budgetWarningThreshold = Math.floor(limits.maxToolCallsPerTurn * 0.8)
 		if (this.taskState.turnToolCallCount === budgetWarningThreshold) {
 			const remaining = limits.maxToolCallsPerTurn - this.taskState.turnToolCallCount
 			this.taskState.userMessageContent.push({
 				type: "text",
-				text: `[SESSION BUDGET] Warning: You have ${remaining} tool calls remaining in this session. Wrap up your current task and call attempt_completion soon.`,
+				text: `[SESSION BUDGET] Warning: ${remaining} tool calls left before this run is paused (the budget covers everything until the user replies). Wrap up your current task and call attempt_completion soon.`,
 			})
 		}
 
@@ -606,7 +620,7 @@ export class ToolExecutor {
 			this.taskState.sessionBudgetExhausted = true
 			this.taskState.userMessageContent.push({
 				type: "text",
-				text: `[SESSION BUDGET EXHAUSTED] You have reached the maximum number of tool calls (${limits.maxToolCallsPerTurn}) for this session. You MUST call attempt_completion now with whatever progress you have made. Do NOT call any other tool.`,
+				text: `[SESSION BUDGET EXHAUSTED] You have used all ${limits.maxToolCallsPerTurn} tool calls allowed for this run. You MUST call attempt_completion now with whatever progress you have made. Do NOT call any other tool.`,
 			})
 		}
 	}

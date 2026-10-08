@@ -195,7 +195,9 @@ export const RequestStartRow: React.FC<RequestStartRowProps> = ({
 			)}
 			{reasoningContent && (
 				<ThinkingRow
-					isExpanded={isExpanded || showStreamingThinking}
+					// [SKYCODE] Только по клику: showStreamingThinking распахивал рассуждения
+					// сам на время потока, и текст дёргал верстку. Таймер-заголовок остаётся.
+					isExpanded={isExpanded}
 					isThinking={showStreamingThinking}
 					isVisible={true}
 					onToggle={handleToggle}

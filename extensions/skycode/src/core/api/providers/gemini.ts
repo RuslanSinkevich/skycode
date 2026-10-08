@@ -16,6 +16,7 @@ import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { RetriableError, withRetry } from "../retry"
 import { convertAnthropicMessageToGemini } from "../transform/gemini-format"
 import { ApiStream } from "../transform/stream"
+import { StreamAborter } from "../utils/abort-support"
 
 const rateLimitPatterns = [/got status: 429/i, /429 Too Many Requests/i, /rate limit exceeded/i, /too many requests/i]
 
@@ -54,6 +55,11 @@ interface GeminiHandlerOptions extends CommonApiHandlerOptions {
 export class GeminiHandler implements ApiHandler {
 	private options: GeminiHandlerOptions
 	private client: GoogleGenAI | undefined
+	private aborter = new StreamAborter()
+
+	abort(): void {
+		this.aborter.abort()
+	}
 
 	constructor(options: GeminiHandlerOptions) {
 		// Store the options
@@ -179,6 +185,7 @@ export class GeminiHandler implements ApiHandler {
 			}
 		}
 
+		const abortSignal = this.aborter.reset()
 		try {
 			const result = await client.models.generateContentStream({
 				model: modelId,
@@ -190,6 +197,9 @@ export class GeminiHandler implements ApiHandler {
 
 			let isFirstSdkChunk = true
 			for await (const chunk of result) {
+				if (abortSignal.aborted) {
+					throw new Error("Aborted by user")
+				}
 				if (isFirstSdkChunk) {
 					sdkFirstChunkTime = Date.now()
 					ttftSdkMs = sdkFirstChunkTime - sdkCallStartTime
@@ -335,6 +345,7 @@ export class GeminiHandler implements ApiHandler {
 			} else {
 				Logger.warn("GeminiHandler: ulid not available for telemetry in createMessage.")
 			}
+			this.aborter.clear()
 		}
 	}
 

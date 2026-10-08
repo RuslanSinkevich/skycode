@@ -53,7 +53,7 @@ export class LogitsProcessorList extends Callable {
   _call(input_ids, batchedLogits) {
     // NOTE: This is different from the Python code, since vanilla JS does not support vectorized operations.
     // As a result, we apply each processor to each item in the batch.
-    for (let logits of batchedLogits) {
+    for (const logits of batchedLogits) {
       // Modifies logits inplace
       this.processors.forEach((func) => func(input_ids, logits));
     }
@@ -77,7 +77,7 @@ export class LogitsProcessor extends Callable {
    * @param {Tensor} logits The logits to process.
    * @throws {Error} Throws an error if `_call` is not implemented in the subclass.
    */
-  _call(input_ids, logits) {
+  _call(_input_ids, _logits) {
     throw Error("`_call` should be implemented in a subclass");
   }
 }
@@ -106,7 +106,7 @@ export class ForceTokensLogitsProcessor extends LogitsProcessor {
    * @returns {Tensor} The processed logits.
    */
   _call(input_ids, logits) {
-    let map = this.force_token_map[input_ids.length];
+    const map = this.force_token_map[input_ids.length];
     if (exists(map)) {
       // There exists a mapping
       logits.data.fill(-Infinity);
@@ -168,7 +168,7 @@ export class ForcedEOSTokenLogitsProcessor extends LogitsProcessor {
    * @param {number[]} input_ids The input ids.
    * @param {Tensor} logits The logits tensor.
    */
-  _call(input_ids, logits) {
+  _call(_input_ids, _logits) {
     // console.log('call ForcedEOSTokenLogitsProcessor')
     // TODO
   }
@@ -200,7 +200,7 @@ export class SuppressTokensAtBeginLogitsProcessor extends LogitsProcessor {
    */
   _call(input_ids, logits) {
     if (input_ids.length === this.begin_index) {
-      for (let token_id of this.begin_suppress_tokens) {
+      for (const token_id of this.begin_suppress_tokens) {
         logits.data[token_id] = -Infinity;
       }
     }
@@ -721,7 +721,7 @@ export class Sampler extends Callable {
    * @param {number} index
    * @throws {Error}
    */
-  sample(logits, index) {
+  sample(_logits, _index) {
     throw Error("sample should be implemented in subclasses.");
   }
 
@@ -732,14 +732,14 @@ export class Sampler extends Callable {
    * @returns {Float32Array}
    */
   getLogits(logits, index) {
-    let vocabSize = logits.dims.at(-1);
+    const vocabSize = logits.dims.at(-1);
 
     let logs = /** @type {Float32Array} */ (logits.data);
 
     if (index === -1) {
       logs = logs.slice(-vocabSize);
     } else {
-      let startIndex = index * vocabSize;
+      const startIndex = index * vocabSize;
       logs = logs.slice(startIndex, startIndex + vocabSize);
     }
 
@@ -757,7 +757,7 @@ export class Sampler extends Callable {
    */
   randomSelect(probabilities) {
     // Return index of chosen item
-    let sumProbabilities = probabilities.reduce((acc, curr) => acc + curr, 0);
+    const sumProbabilities = probabilities.reduce((acc, curr) => acc + curr, 0);
 
     let r = Math.random() * sumProbabilities;
     for (let i = 0; i < probabilities.length; ++i) {
@@ -812,8 +812,8 @@ class GreedySampler extends Sampler {
    */
   sample(logits, index = -1) {
     // NOTE: no need to do log_softmax here since we only take the maximum
-    let logs = this.getLogits(logits, index);
-    let argmax = max(logs)[1];
+    const logs = this.getLogits(logits, index);
+    const argmax = max(logs)[1];
 
     // Note: score is meaningless in this context, since we are performing
     // greedy search (p = 1 => log(p) = 0)

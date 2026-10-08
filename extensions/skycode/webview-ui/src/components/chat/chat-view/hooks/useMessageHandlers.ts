@@ -40,12 +40,9 @@ export function useMessageHandlers(messages: SkycodeMessage[], chatState: ChatSt
 			}
 
 			if (hasContent) {
-				console.log("[ChatView] handleSendMessage - Sending message:", messageToSend)
-				console.log("[ChatView] messages.length:", messages.length, "skycodeAsk:", skycodeAsk)
 				let messageSent = false
 
 				if (messages.length === 0) {
-					console.log("[ChatView] PATH: newTask (messages.length === 0)")
 					await TaskServiceClient.newTask(
 						NewTaskRequest.create({
 							text: messageToSend,
@@ -55,9 +52,8 @@ export function useMessageHandlers(messages: SkycodeMessage[], chatState: ChatSt
 					)
 					messageSent = true
 				} else if (skycodeAsk) {
-					console.log("[ChatView] PATH: skycodeAsk exists:", skycodeAsk)
-					// Cursor-style: все ask типы используют messageResponse для продолжения чата
-					// resume_task использует yesButtonClicked для возобновления прерванной работы
+					// Cursor-style: все ask типы используют messageResponse для продолжения чата.
+					// resume_task использует yesButtonClicked для возобновления прерванной работы.
 					if (skycodeAsk === "resume_task") {
 						await TaskServiceClient.askResponse(
 							AskResponseRequest.create({
@@ -69,8 +65,8 @@ export function useMessageHandlers(messages: SkycodeMessage[], chatState: ChatSt
 						)
 						messageSent = true
 					} else {
-						// All other ask types (including completion_result, resume_completed_task) use messageResponse
-						// This allows continuous conversation without creating new tasks
+						// All other ask types (including completion_result, resume_completed_task) use messageResponse.
+						// This allows continuous conversation without creating new tasks.
 						switch (skycodeAsk) {
 							case "followup":
 							case "plan_mode_respond":
@@ -99,9 +95,8 @@ export function useMessageHandlers(messages: SkycodeMessage[], chatState: ChatSt
 						}
 					}
 				} else if (messages.length > 0) {
-					// No skycodeAsk - send message directly
-					// Note: If AI is working, InputSection handles queuing
-					console.log("[ChatView] PATH: no skycodeAsk, sending askResponse")
+					// No skycodeAsk - send message directly.
+					// Note: If AI is working, InputSection handles queuing.
 					await TaskServiceClient.askResponse(
 						AskResponseRequest.create({
 							responseType: "messageResponse",
@@ -113,15 +108,15 @@ export function useMessageHandlers(messages: SkycodeMessage[], chatState: ChatSt
 					messageSent = true
 				}
 
-				// Only clear input if message was actually sent
-				// Note: sendingDisabled is managed by buttonConfig in ActionButtons, not here
+				// Only clear input if message was actually sent.
+				// sendingDisabled is managed by buttonConfig in ActionButtons, not here.
 				if (messageSent) {
 					setInputValue("")
 					setActiveQuote(null)
 					setSelectedImages([])
 					setSelectedFiles([])
 
-					// Reset auto-scroll
+					// User just sent something — re-enable auto-scroll for the upcoming response.
 					if ("disableAutoScrollRef" in chatState) {
 						;(chatState as any).disableAutoScrollRef.current = false
 					}

@@ -52,6 +52,7 @@ export const config = createVariant(ModelFamily.NEXT_GEN)
 	.tools(
 		// Strong model: BASH high priority, full toolset
 		SkycodeDefaultTool.BASH,
+		SkycodeDefaultTool.CHECK_BACKGROUND,
 		SkycodeDefaultTool.FILE_READ,
 		SkycodeDefaultTool.FILE_NEW,
 		SkycodeDefaultTool.FILE_EDIT,

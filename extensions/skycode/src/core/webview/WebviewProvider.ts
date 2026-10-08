@@ -110,6 +110,14 @@ export abstract class WebviewProvider {
 				<meta name="theme-color" content="#000000">
 				<link rel="stylesheet" type="text/css" href="${stylesUrl}">
 				<link href="${codiconsUrl}" rel="stylesheet" />
+				<!--
+					Content Security Policy notes:
+					- script-src uses a per-render nonce, so only our bundled script can run. This is the primary defense.
+					- 'unsafe-eval' is retained because bundled libraries (mermaid, highlight.js, Firebase) use new Function / eval.
+					  Removing it breaks mermaid diagrams and model pickers.
+					- connect-src is an explicit allowlist; adding an endpoint requires editing this policy.
+					- style-src 'unsafe-inline' is required by vscode-webview-ui-toolkit dynamic style injection.
+				-->
 				<meta http-equiv="Content-Security-Policy" content="default-src 'none';
 					connect-src https://*.posthog.com https://openrouter.ai https://*.openrouter.ai;
 					font-src ${this.getCspSource()} data:;
@@ -139,7 +147,7 @@ export abstract class WebviewProvider {
 
 		return readFile(portFilePath, "utf8")
 			.then((portFile) => {
-				const port = parseInt(portFile.trim()) || DEFAULT_PORT
+				const port = parseInt(portFile.trim(), 10) || DEFAULT_PORT
 				Logger.info(`[getDevServerPort] Using dev server port ${port} from .vite-port file`)
 
 				return port

@@ -13,6 +13,7 @@ import { ApiKeyField } from "../common/ApiKeyField"
 import { BaseUrlField } from "../common/BaseUrlField"
 import { DebouncedTextField } from "../common/DebouncedTextField"
 import { ModelInfoView } from "../common/ModelInfoView"
+import ThinkingBudgetSlider from "../ThinkingBudgetSlider"
 import { getModeSpecificFields, normalizeApiConfiguration } from "../utils/providerUtils"
 import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
 
@@ -408,6 +409,12 @@ export const OpenAICompatibleProvider = ({ showModelOptions, isPopup, currentMod
 					({t("provider.notePrefix")} {t("provider.noteText")})
 				</span>
 			</p>
+
+			{/* [SKYCODE] Qwen3 раздаётся в основном через свои эндпоинты: слайдер включает режим
+			    размышлений явно. Раньше он включался сам по имени модели, без спроса. */}
+			{showModelOptions && selectedModelId.toLowerCase().includes("qwen3") && (
+				<ThinkingBudgetSlider currentMode={currentMode} />
+			)}
 
 			{showModelOptions && (
 				<ModelInfoView isPopup={isPopup} modelInfo={selectedModelInfo} selectedModelId={selectedModelId} />

@@ -1,5 +1,6 @@
-import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react"
+import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, Trash2Icon } from "lucide-react"
 import { useState } from "react"
+import { StringRequest } from "@shared/proto/skycode/common"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
 import { FileServiceClient, UiServiceClient } from "@/services/grpc-client"
@@ -49,6 +50,24 @@ const PendingChangesBar = ({ style }: PendingChangesBarProps) => {
 			await UiServiceClient.rejectAllPendingChanges({})
 		} catch (error) {
 			console.error("Failed to reject all:", error)
+		}
+	}
+
+	const handleAcceptFile = async (e: React.MouseEvent, fsPath: string) => {
+		e.stopPropagation()
+		try {
+			await UiServiceClient.acceptPendingChangesForFile(StringRequest.create({ value: fsPath }))
+		} catch (error) {
+			console.error("Failed to accept file:", error)
+		}
+	}
+
+	const handleRejectFile = async (e: React.MouseEvent, fsPath: string) => {
+		e.stopPropagation()
+		try {
+			await UiServiceClient.rejectPendingChangesForFile(StringRequest.create({ value: fsPath }))
+		} catch (error) {
+			console.error("Failed to reject file:", error)
 		}
 	}
 
@@ -196,13 +215,31 @@ const PendingChangesBar = ({ style }: PendingChangesBarProps) => {
 					<div className="space-y-0.5">
 						{pendingChanges.map((change) => (
 							<div
-								className="flex items-center justify-between gap-2 py-1 px-2 rounded hover:bg-[var(--vscode-list-hoverBackground)] cursor-pointer"
+								className="group flex items-center justify-between gap-2 py-1 px-2 rounded hover:bg-[var(--vscode-list-hoverBackground)] cursor-pointer"
 								key={change.id}
 								onClick={() => handleOpenFile(change.fsPath)}>
 								<span className="truncate text-sm">{change.fileName}</span>
-								<div className="flex items-center gap-1 text-xs">
+								<div className="flex items-center gap-2 text-xs">
 									{change.addedCount > 0 && <span className="text-green-500">+{change.addedCount}</span>}
 									{change.removedCount > 0 && <span className="text-red-500">-{change.removedCount}</span>}
+									<div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+										<button
+											aria-label={t("pending.rejectFile")}
+											className="p-1 rounded hover:bg-[var(--vscode-toolbar-hoverBackground)] text-muted-foreground hover:text-[var(--vscode-errorForeground)]"
+											onClick={(e) => handleRejectFile(e, change.fsPath)}
+											title={t("pending.rejectFile")}
+											type="button">
+											<Trash2Icon className="size-3.5" />
+										</button>
+										<button
+											aria-label={t("pending.acceptFile")}
+											className="p-1 rounded hover:bg-[var(--vscode-toolbar-hoverBackground)] text-muted-foreground hover:text-[var(--vscode-charts-green)]"
+											onClick={(e) => handleAcceptFile(e, change.fsPath)}
+											title={t("pending.acceptFile")}
+											type="button">
+											<CheckIcon className="size-3.5" />
+										</button>
+									</div>
 								</div>
 							</div>
 						))}

@@ -31,7 +31,6 @@ const TOOL_USE_EXAMPLES_TEMPLATE_TEXT = `# Tool Use Examples
 
 <execute_command>
 <command>npm run dev</command>
-<requires_approval>false</requires_approval>
 {{FOCUS_CHAIN_EXAMPLE_BASH}}</execute_command>
 
 ## Example 2: Requesting to create a new file

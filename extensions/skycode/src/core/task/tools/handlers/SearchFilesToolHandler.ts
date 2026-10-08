@@ -22,7 +22,7 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 	private static readonly SAFE_FILE_PATTERN = "*.{ts,tsx,js,jsx,mjs,cjs,py,go,rs,java,cs,rb,php,vue,svelte,c,cpp,h,hpp}"
 	private static readonly INDEX_SHORTLIST_LIMIT = 8
 
-	constructor(private validator: ToolValidator) {}
+	constructor(_validator: ToolValidator) {}
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name} for '${block.params.regex}'${
@@ -105,17 +105,21 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 				resultCount,
 				success: true,
 				errorType: undefined as "timeout" | "error" | undefined,
+				errorMessage: undefined as string | undefined,
+				searchPath: absolutePath,
 			}
 		} catch (error) {
 			// If search fails in one workspace, return error info
 			Logger.error(`Search failed in ${absolutePath}:`, error)
-			const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+			const rawMessage = error instanceof Error ? error.message : String(error)
 			return {
 				workspaceName,
 				workspaceResults: "",
 				resultCount: 0,
 				success: false,
-				errorType: message.includes("timed out") ? ("timeout" as const) : ("error" as const),
+				errorType: rawMessage.toLowerCase().includes("timed out") ? ("timeout" as const) : ("error" as const),
+				errorMessage: rawMessage,
+				searchPath: absolutePath,
 			}
 		}
 	}
@@ -130,11 +134,29 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 			workspaceResults: string
 			resultCount: number
 			success: boolean
+			errorType?: "timeout" | "error"
+			errorMessage?: string
+			searchPath?: string
 		}>,
 		searchPaths: Array<{ absolutePath: string; workspaceName?: string }>,
 	): string {
 		const allResults: string[] = []
 		let totalResultCount = 0
+
+		// [SKYCODE] Упавший поиск раньше молча превращался в "Found 0 results" — модель делала
+		// вывод, что кода нет, и шла править вслепую. Теперь провал виден и отличим от пустоты.
+		const failures = searchResults.filter((result) => !result.success)
+		const failureNote = failures
+			.map((failure) => {
+				const where = failure.workspaceName || failure.searchPath || "the search path"
+				const reason = failure.errorType === "timeout" ? "timed out" : failure.errorMessage || "unknown error"
+				return `[SEARCH FAILED] ${where}: ${reason}`
+			})
+			.join("\n")
+
+		if (failures.length === searchResults.length) {
+			return `${failureNote}\n\nThe search did not run, so this is NOT a statement about whether the pattern exists. Retry with a narrower path, or use another tool (list_files, read_file) before drawing conclusions.`
+		}
 
 		for (const { workspaceName, workspaceResults, resultCount, success } of searchResults) {
 			if (!success || !workspaceResults) {
@@ -163,17 +185,21 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 			}
 		}
 
-		// Combine results
+		// Combine results. A partial failure is prepended so the model knows the answer is incomplete.
+		const partialFailurePrefix = failureNote
+			? `${failureNote}\n(results below cover only the paths that were searched)\n\n`
+			: ""
+
 		if (config.isMultiRootEnabled && searchPaths.length > 1) {
 			// Multi-workspace search result
 			if (totalResultCount === 0) {
-				return "Found 0 results."
+				return `${partialFailurePrefix}Found 0 results.`
 			} else {
-				return `Found ${totalResultCount === 1 ? "1 result" : `${totalResultCount.toLocaleString()} results`} across ${searchPaths.length} workspace${searchPaths.length > 1 ? "s" : ""}.\n\n${allResults.join("\n\n")}`
+				return `${partialFailurePrefix}Found ${totalResultCount === 1 ? "1 result" : `${totalResultCount.toLocaleString()} results`} across ${searchPaths.length} workspace${searchPaths.length > 1 ? "s" : ""}.\n\n${allResults.join("\n\n")}`
 			}
 		} else {
 			// Single workspace result
-			return allResults[0] || "Found 0 results."
+			return `${partialFailurePrefix}${allResults[0] || "Found 0 results."}`
 		}
 	}
 
@@ -228,8 +254,8 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 
 	private isBroadRegex(regex: string): boolean {
 		const trimmed = regex.trim()
-		if (!trimmed) return true
-		if (trimmed.length < 3) return true
+		if (!trimmed) { return true }
+		if (trimmed.length < 3) { return true }
 		// Simple literals without anchors/context are usually too broad on workspace root.
 		const hasRegexMetachar = /[\\^$.|?*+()[\]{}]/.test(trimmed)
 		return !hasRegexMetachar && trimmed.length < 6
@@ -273,7 +299,7 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
-		const relDirPath: string | undefined = block.params.path
+		const relDirPath: string = (block.params.path ?? "").trim() || "."
 		const regex: string | undefined = block.params.regex
 		const filePattern: string | undefined = block.params.file_pattern
 
@@ -282,14 +308,7 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 		const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
 		const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 
-		// Validate required parameters
-		const pathValidation = this.validator.assertRequiredParams(block, "path")
-		if (!pathValidation.ok) {
-			config.taskState.consecutiveMistakeCount++
-			return await config.callbacks.sayAndCreateMissingParamError(this.name, "path")
-		}
-
-		if (!regex) {
+		if (!regex?.trim()) {
 			config.taskState.consecutiveMistakeCount++
 			return await config.callbacks.sayAndCreateMissingParamError(this.name, "regex")
 		}
@@ -297,10 +316,10 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 		config.taskState.consecutiveMistakeCount = 0
 
 		// Parse workspace hint from the path
-		const { workspaceHint, relPath: parsedPath } = parseWorkspaceInlinePath(relDirPath!)
+		const { workspaceHint, relPath: parsedPath } = parseWorkspaceInlinePath(relDirPath)
 
 		// Determine which paths to search
-		const searchPaths = this.determineSearchPaths(config, parsedPath, workspaceHint, relDirPath!)
+		const searchPaths = this.determineSearchPaths(config, parsedPath, workspaceHint, relDirPath)
 
 		// Determine workspace context for telemetry
 		const primaryWorkspaceRoot = searchPaths[0]?.workspaceRoot
@@ -375,7 +394,7 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 			const blockedResults = `[Guardrail] Your search is too broad for the workspace root. Please:\n1. Use codebase_search first to find relevant directories.\n2. Then call search_files with a specific path and file_pattern.\nExample: search_files with path="src/core" and file_pattern="*.ts"`
 			const blockedMessage = JSON.stringify({
 				tool: "searchFiles",
-				path: getReadablePath(config.cwd, relDirPath!),
+				path: getReadablePath(config.cwd, relDirPath),
 				content: blockedResults,
 				regex: regex,
 				filePattern: effectiveFilePattern,
@@ -440,7 +459,7 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 
 		const sharedMessageProps = {
 			tool: "searchFiles",
-			path: getReadablePath(config.cwd, relDirPath!),
+			path: getReadablePath(config.cwd, relDirPath),
 			content: results,
 			regex: regex,
 			filePattern: effectiveFilePattern,

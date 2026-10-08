@@ -1,5 +1,6 @@
 import type { Anthropic } from "@anthropic-ai/sdk"
 import { buildApiHandler } from "@core/api"
+import { sanitizeTruncatedPlaceholder } from "@shared/proto-conversions/skycode-message"
 import { getHooksEnabledSafe } from "@core/hooks/hooks-utils"
 import { tryAcquireTaskLockWithRetry } from "@core/task/TaskLockUtils"
 import { detectWorkspaceRoots } from "@core/workspace/detection"
@@ -35,7 +36,6 @@ import { ExtensionRegistryInfo } from "@/registry"
 import { AuthService } from "@/services/auth/AuthService"
 import { OcaAuthService } from "@/services/auth/oca/OcaAuthService"
 import { LogoutReason } from "@/services/auth/types"
-import { BannerService } from "@/services/banner/BannerService"
 import { featureFlagsService } from "@/services/feature-flags"
 import { getDistinctId } from "@/services/logging/distinctId"
 import { telemetryService } from "@/services/telemetry"
@@ -45,7 +45,6 @@ import { getAxiosSettings } from "@/shared/net"
 import { ShowMessageType } from "@/shared/proto/host/window"
 import { Logger } from "@/shared/services/Logger"
 import { getLatestAnnouncementId } from "@/utils/announcements"
-import { sendAccountButtonClickedEvent } from "./ui/subscribeToAccountButtonClicked"
 import { getCwd, getDesktopDir } from "@/utils/path"
 import { PromptRegistry } from "../prompts/system-prompt"
 import { getModelCapabilityTier, getSessionLimitsForModel } from "@utils/model-utils"
@@ -123,13 +122,10 @@ export class Controller {
 
 	/**
 	 * Starts the periodic remote config fetching timer
-	 * Fetches immediately and then every hour
+	 * Server-side remote config is retired for the frozen standalone build.
 	 */
 	private startRemoteConfigTimer() {
-		// Initial fetch
-		fetchRemoteConfig(this)
-		// Set up 1-hour interval
-		this.remoteConfigTimer = setInterval(() => fetchRemoteConfig(this), 3600000) // 1 hour
+		Logger.log("[RemoteConfig] Disabled for standalone Skycode build")
 	}
 
 	constructor(readonly context: vscode.ExtensionContext) {
@@ -155,8 +151,12 @@ export class Controller {
 		const initConfig = this.stateManager.getApiConfiguration()
 		if (initConfig.planModeApiProvider === "skycode" || initConfig.actModeApiProvider === "skycode") {
 			const migrated = { ...initConfig }
-			if (migrated.planModeApiProvider === "skycode") migrated.planModeApiProvider = "openrouter" as ApiProvider
-			if (migrated.actModeApiProvider === "skycode") migrated.actModeApiProvider = "openrouter" as ApiProvider
+			if (migrated.planModeApiProvider === "skycode") {
+				migrated.planModeApiProvider = "openrouter" as ApiProvider
+			}
+			if (migrated.actModeApiProvider === "skycode") {
+				migrated.actModeApiProvider = "openrouter" as ApiProvider
+			}
 			this.stateManager.setApiConfiguration(migrated)
 		}
 
@@ -191,6 +191,27 @@ export class Controller {
 			clearInterval(this.remoteConfigTimer)
 			this.remoteConfigTimer = undefined
 		}
+
+		// [SKYCODE-PERF] Clear postState throttle timer + drain any pending resolvers
+		// Otherwise the timer fires after dispose and tries to send state to a dead webview,
+		// and pending promises stay forever in memory.
+		if (this._postStateThrottleTimer) {
+			clearTimeout(this._postStateThrottleTimer)
+			this._postStateThrottleTimer = null
+		}
+		if (this._postStatePromiseResolvers.length > 0) {
+			const resolvers = this._postStatePromiseResolvers
+			this._postStatePromiseResolvers = []
+			for (const r of resolvers) {
+				r()
+			}
+		}
+		this._postStatePending = false
+
+		// [SKYCODE-PERF] Drop heavy caches so GC can collect them
+		this._voiceReadyCache = null
+		this._codexAuthCache = null
+		this._lastDictationSettingsJson = ""
 
 		await this.clearTask()
 		this.mcpHub.dispose()
@@ -248,8 +269,8 @@ export class Controller {
 		this.stateManager.setGlobalState("userInfo", info)
 	}
 
-	// Number of messages a user can send without authentication before being asked to sign in
-	static readonly FREE_REQUEST_LIMIT = 20
+	// Legacy value kept for state compatibility. The standalone build does not gate usage.
+	static readonly FREE_REQUEST_LIMIT = Number.MAX_SAFE_INTEGER
 
 	/**
 	 * Checks if the user has exceeded the free request limit.
@@ -258,29 +279,6 @@ export class Controller {
 	 * @returns true if the request is allowed, false if blocked (limit reached)
 	 */
 	async checkFreeRequestGate(): Promise<boolean> {
-		const authService = AuthService.getInstance()
-		const isAuthenticated = authService["_authenticated"]
-
-		if (isAuthenticated) {
-			return true
-		}
-
-		const freeCount = this.stateManager.getGlobalStateKey("freeRequestCount") ?? 0
-		if (freeCount >= Controller.FREE_REQUEST_LIMIT) {
-			Logger.log(`[FreeGate] Free request limit reached (${freeCount}/${Controller.FREE_REQUEST_LIMIT}), auth required`)
-			// Show notification and navigate to Account view
-			vscode.window.showInformationMessage(t("auth.freeLimit", { limit: String(Controller.FREE_REQUEST_LIMIT) }))
-			try {
-				await sendAccountButtonClickedEvent()
-			} catch (e) {
-				Logger.error("[FreeGate] Failed to navigate to account view:", e)
-			}
-			return false
-		}
-
-		// Increment counter
-		this.stateManager.setGlobalState("freeRequestCount", freeCount + 1)
-		Logger.log(`[FreeGate] Free request ${freeCount + 1}/${Controller.FREE_REQUEST_LIMIT}`)
 		return true
 	}
 
@@ -518,12 +516,12 @@ export class Controller {
 					this.task === undefined ||
 					this.task.taskState.isStreaming === false ||
 					this.task.taskState.didFinishAbortingStream ||
-					this.task.taskState.isWaitingForFirstChunk, // if only first chunk is processed, then there's no need to wait for graceful abort (closes edits, browser, etc)
+					this.task.taskState.isWaitingForFirstChunk,
 				{
-					timeout: 3_000,
+					timeout: 800,
 				},
 			).catch(() => {
-				Logger.error("Failed to abort task")
+				Logger.warn("[Controller.cancelTask] Timed out waiting for stream abort — force-continuing")
 			})
 
 			if (this.task) {
@@ -591,9 +589,12 @@ export class Controller {
 				currentApiConfiguration.actModeApiProvider === "skycode"
 			) {
 				const updatedConfig = { ...currentApiConfiguration }
-				if (updatedConfig.planModeApiProvider === "skycode")
+				if (updatedConfig.planModeApiProvider === "skycode") {
 					updatedConfig.planModeApiProvider = "openrouter" as ApiProvider
-				if (updatedConfig.actModeApiProvider === "skycode") updatedConfig.actModeApiProvider = "openrouter" as ApiProvider
+				}
+				if (updatedConfig.actModeApiProvider === "skycode") {
+					updatedConfig.actModeApiProvider = "openrouter" as ApiProvider
+				}
 				this.stateManager.setApiConfiguration(updatedConfig)
 			}
 
@@ -908,7 +909,9 @@ export class Controller {
 				const resolvers = this._postStatePromiseResolvers
 				this._postStatePromiseResolvers = []
 				await this._doPostStateToWebview()
-				resolvers.forEach((r) => r())
+				for (const r of resolvers) {
+					r()
+				}
 			}
 		}, 300)
 	}
@@ -975,7 +978,9 @@ export class Controller {
 	private _whisperInitialized = false
 
 	private async _ensureWhisperInitialized(selectedModel: string): Promise<void> {
-		if (this._whisperInitialized) return
+		if (this._whisperInitialized) {
+			return
+		}
 		try {
 			const { getWhisperLocalService } = await import("@/services/dictation/WhisperLocalService")
 			getWhisperLocalService(HostProvider.get().globalStorageFsPath, selectedModel, HostProvider.get().extensionFsPath)
@@ -1059,7 +1064,7 @@ export class Controller {
 		const autoCondenseThreshold = this.stateManager.getGlobalSettingsKey("autoCondenseThreshold")
 
 		const currentTaskItem = this.task?.taskId ? (taskHistory || []).find((item) => item.id === this.task?.taskId) : undefined
-		const skycodeMessages = this.task?.messageStateHandler.getSkycodeMessages() || []
+		const skycodeMessages = (this.task?.messageStateHandler.getSkycodeMessages() || []).map(sanitizeTruncatedPlaceholder)
 		const currentSessionId = this.sessionManager.activeSessionId ?? undefined
 		// [SKYCODE] TEMPORARILY DISABLED — legacy Cline checkpoint error message
 		const checkpointManagerErrorMessage = undefined // was: this.task?.taskState.checkpointManagerErrorMessage
@@ -1192,6 +1197,11 @@ export class Controller {
 			optOutOfRemoteConfig: this.stateManager.getGlobalSettingsKey("optOutOfRemoteConfig"),
 			// Skycode AI: Lightweight mode for weak models
 			lightweightMode: this.stateManager.getGlobalSettingsKey("lightweightMode"),
+			// Skycode AI: Session budget — tier override + custom limits
+			sessionBudgetMode: this.stateManager.getGlobalSettingsKey("sessionBudgetMode"),
+			customMaxToolCallsPerTurn: this.stateManager.getGlobalSettingsKey("customMaxToolCallsPerTurn"),
+			customMaxConsecutiveReadOnlyTools: this.stateManager.getGlobalSettingsKey("customMaxConsecutiveReadOnlyTools"),
+			customForceCompactAfterSteps: this.stateManager.getGlobalSettingsKey("customForceCompactAfterSteps"),
 			// Skycode AI: Active prompt profile (variant + tier + limits)
 			promptProfile: (() => {
 				try {
@@ -1201,28 +1211,63 @@ export class Controller {
 					const providerId = (isPlan ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 					const modeKey = isPlan ? "planMode" : "actMode"
 					const providerModelSuffix: Record<string, string> = {
-						openrouter: "OpenRouterModelId", skycode: "OpenRouterModelId",
-						openai: "OpenAiModelId", ollama: "OllamaModelId",
-						lmstudio: "LmStudioModelId", litellm: "LiteLlmModelId",
-						requesty: "RequestyModelId", together: "TogetherModelId",
-						fireworks: "FireworksModelId", groq: "GroqModelId",
-						baseten: "BasetenModelId", huggingface: "HuggingFaceModelId",
-						sapaicore: "SapAiCoreModelId", "huawei-cloud-maas": "HuaweiCloudMaasModelId",
-						oca: "OcaModelId", aihubmix: "AihubmixModelId",
-						hicap: "HicapModelId", nousResearch: "NousResearchModelId",
+						openrouter: "OpenRouterModelId",
+						skycode: "OpenRouterModelId",
+						openai: "OpenAiModelId",
+						ollama: "OllamaModelId",
+						lmstudio: "LmStudioModelId",
+						litellm: "LiteLlmModelId",
+						requesty: "RequestyModelId",
+						together: "TogetherModelId",
+						fireworks: "FireworksModelId",
+						groq: "GroqModelId",
+						baseten: "BasetenModelId",
+						huggingface: "HuggingFaceModelId",
+						sapaicore: "SapAiCoreModelId",
+						"huawei-cloud-maas": "HuaweiCloudMaasModelId",
+						oca: "OcaModelId",
+						aihubmix: "AihubmixModelId",
+						hicap: "HicapModelId",
+						nousResearch: "NousResearchModelId",
 						"vercel-ai-gateway": "VercelAiGatewayModelId",
 					}
-					const configModelId = (apiConfig as Record<string, unknown>)[`${modeKey}${providerModelSuffix[providerId] ?? "ApiModelId"}`] as string | undefined
+					const configModelId = (apiConfig as Record<string, unknown>)[
+						`${modeKey}${providerModelSuffix[providerId] ?? "ApiModelId"}`
+					] as string | undefined
 					const modelId = this.task?.api?.getModel()?.id ?? configModelId ?? "unknown"
 					const providerInfo = { model: { id: modelId, info: {} as ModelInfo }, providerId, mode }
-					const tier = getModelCapabilityTier(modelId, providerInfo)
-					const limits = getSessionLimitsForModel(modelId, providerInfo)
+					// Read user's session budget override (auto / strong / medium / weak / custom).
+					// Without this, the prompt profile pill always shows the auto-detected tier
+					// even after the user explicitly chose a different one in Settings.
+					const sessionBudgetMode = this.stateManager.getGlobalSettingsKey("sessionBudgetMode") ?? "auto"
+					const customSettings = {
+						sessionBudgetMode,
+						customMaxToolCallsPerTurn: this.stateManager.getGlobalSettingsKey("customMaxToolCallsPerTurn") ?? 80,
+						customMaxConsecutiveReadOnlyTools:
+							this.stateManager.getGlobalSettingsKey("customMaxConsecutiveReadOnlyTools") ?? 12,
+						customForceCompactAfterSteps:
+							this.stateManager.getGlobalSettingsKey("customForceCompactAfterSteps") ?? 40,
+					}
+					const tierOverride =
+						sessionBudgetMode === "strong" || sessionBudgetMode === "medium" || sessionBudgetMode === "weak"
+							? sessionBudgetMode
+							: "auto"
+					const detectedTier = getModelCapabilityTier(modelId, providerInfo, tierOverride)
+					const limits = getSessionLimitsForModel(modelId, providerInfo, customSettings)
+					// Show "custom" explicitly in the UI when limits are user-defined.
+					const tier = sessionBudgetMode === "custom" ? "custom" : detectedTier
 					const registry = PromptRegistry.getInstance()
 					const variant = registry.getModelFamily({
 						providerInfo,
 						lightweightMode: this.stateManager.getGlobalSettingsKey("lightweightMode") === true,
 					} as any)
-					return { variant, tier, maxToolCalls: limits.maxToolCallsPerTurn, maxReadOnly: limits.maxConsecutiveReadOnlyTools, compactEvery: limits.forceCompactAfterSteps }
+					return {
+						variant,
+						tier,
+						maxToolCalls: limits.maxToolCallsPerTurn,
+						maxReadOnly: limits.maxConsecutiveReadOnlyTools,
+						compactEvery: limits.forceCompactAfterSteps,
+					}
 				} catch {
 					return undefined
 				}
@@ -1249,6 +1294,7 @@ export class Controller {
 			// allow-any-unicode-next-line
 			// Indexing progress — captured at start of function before any awaits (see top of getStateToPostToWebview)
 			indexingProgress: indexingProgressSnapshot,
+			indexingPromptDismissed: this.context.globalState.get<boolean>("skycode.indexingPromptDismissed", false),
 			// Skycode AI: Pending changes for inline diffs
 			pendingChanges: this.getPendingChangesInfo(),
 			banners,
@@ -1265,7 +1311,9 @@ export class Controller {
 	private getPendingChangesInfo(): PendingChangeInfo[] {
 		try {
 			const storage = getPendingChangesStorage()
-			const fileStats = storage.getFileStats()
+			// [SKYCODE] Бар внизу показывает изменения ТЕКУЩЕЙ задачи. Раньше он брал все правки
+			// workspace, поэтому в новой вкладке висели файлы, изменённые агентом в прошлой.
+			const fileStats = storage.getFileStats(this.task?.taskId)
 			return fileStats.map((stats) => ({
 				id: stats.fsPath, // Use fsPath as id for grouping
 				fileName: stats.fileName,
@@ -1290,6 +1338,9 @@ export class Controller {
 		try {
 			const diffSystem = getDiffSystem()
 			await diffSystem.finishCheckpoint()
+			// [SKYCODE] И снимаем привязку: до этого currentTaskId оставался от закрытой задачи,
+			// так что правки, сделанные между задачами (например inline edit), уезжали в её бар.
+			diffSystem.setCurrentTaskId(null)
 		} catch {
 			// DiffSystem may not be initialized
 		}
@@ -1330,11 +1381,6 @@ export class Controller {
 	}
 
 	async getBanners(): Promise<BannerCardData[]> {
-		try {
-			return BannerService.get().getActiveBanners()
-		} catch (err) {
-			Logger.log(err)
-			return []
-		}
+		return []
 	}
 }

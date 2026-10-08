@@ -1,6 +1,11 @@
+import { sdkMessageUsage } from "@/shared/messages/message-interchange"
 import { Anthropic } from "@anthropic-ai/sdk"
 import { Content, GenerateContentResponse, Part } from "@google/genai"
-import { SkycodeStorageMessage } from "@/shared/messages/content"
+import {
+	SkycodeAssistantToolUseBlock,
+	SkycodeStorageMessage,
+	SkycodeTextContentBlock,
+} from "@/shared/messages/content"
 
 // Source: https://ai.google.dev/gemini-api/docs/thought-signatures#faqs
 // While injecting custom function call blocks into the request is strongly discouraged,
@@ -18,7 +23,7 @@ export function convertAnthropicContentToGemini(content: string | SkycodeStorage
 		.flatMap((block): Part | undefined => {
 			switch (block.type) {
 				case "text":
-					return { text: block.text, thoughtSignature: block.signature }
+					return { text: block.text, thoughtSignature: (block as SkycodeTextContentBlock).signature }
 				case "image":
 					if (block.source.type !== "base64") {
 						throw new Error("Unsupported image source type")
@@ -36,7 +41,7 @@ export function convertAnthropicContentToGemini(content: string | SkycodeStorage
 							args: block.input as Record<string, unknown>,
 						},
 						// Thought signature is required, so provide a dummy one if not present
-						thoughtSignature: block.signature || GEMINI_DUMMY_THOUGHT_SIGNATURE,
+						thoughtSignature: (block as SkycodeAssistantToolUseBlock).signature || GEMINI_DUMMY_THOUGHT_SIGNATURE,
 					}
 				case "tool_result":
 					return {
@@ -106,13 +111,15 @@ export function convertGeminiResponseToAnthropic(response: GenerateContentRespon
 		role: "assistant",
 		content,
 		model: "",
+		container: null,
+		stop_details: null,
 		stop_reason,
 		stop_sequence: null, // Gemini doesn't provide this information
-		usage: {
+		usage: sdkMessageUsage({
 			input_tokens: response.usageMetadata?.promptTokenCount ?? 0,
 			output_tokens: response.usageMetadata?.candidatesTokenCount ?? 0,
 			cache_creation_input_tokens: null,
 			cache_read_input_tokens: null,
-		},
+		}),
 	}
 }

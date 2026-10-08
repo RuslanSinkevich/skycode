@@ -5,10 +5,7 @@ import type { WorkflowDefinition } from "@core/workflow/types"
 import { Logger } from "@/shared/services/Logger"
 import { Controller } from ".."
 
-export async function saveWorkflowDefinition(
-	_controller: Controller,
-	request: SaveWorkflowDefinitionRequest,
-): Promise<Empty> {
+export async function saveWorkflowDefinition(_controller: Controller, request: SaveWorkflowDefinitionRequest): Promise<Empty> {
 	const filePath = request.filePath
 	if (!filePath) {
 		throw new Error("Missing file path")

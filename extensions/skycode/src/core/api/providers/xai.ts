@@ -10,6 +10,7 @@ import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
 import { getOpenAIToolParams, ToolCallProcessor } from "../transform/tool-call-processor"
+import { StreamAborter } from "../utils/abort-support"
 
 interface XAIHandlerOptions extends CommonApiHandlerOptions {
 	xaiApiKey?: string
@@ -20,9 +21,14 @@ interface XAIHandlerOptions extends CommonApiHandlerOptions {
 export class XAIHandler implements ApiHandler {
 	private options: XAIHandlerOptions
 	private client: OpenAI | undefined
+	private aborter = new StreamAborter()
 
 	constructor(options: XAIHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	private ensureClient(): OpenAI {
@@ -55,19 +61,25 @@ export class XAIHandler implements ApiHandler {
 				reasoningEffort = undefined
 			}
 		}
-		const stream = await client.chat.completions.create({
-			model: modelId,
-			max_completion_tokens: this.getModel().info.maxTokens,
-			temperature: 0,
-			messages: [{ role: "system", content: systemPrompt }, ...convertToOpenAiMessages(messages)],
-			stream: true,
-			stream_options: { include_usage: true },
-			reasoning_effort: reasoningEffort,
-			...getOpenAIToolParams(tools),
-		})
+		const signal = this.aborter.reset()
+		const stream = await client.chat.completions.create(
+			{
+				model: modelId,
+				max_completion_tokens: this.getModel().info.maxTokens,
+				temperature: 0,
+				messages: [{ role: "system", content: systemPrompt }, ...convertToOpenAiMessages(messages)],
+				stream: true,
+				stream_options: { include_usage: true },
+				reasoning_effort: reasoningEffort,
+				...getOpenAIToolParams(tools),
+			},
+			{ signal },
+		)
+		this.aborter.track(stream)
 
 		const toolCallProcessor = new ToolCallProcessor()
 
+		try {
 		for await (const chunk of stream) {
 			const delta = chunk.choices?.[0]?.delta
 			if (delta?.content) {
@@ -86,7 +98,7 @@ export class XAIHandler implements ApiHandler {
 				if (!shouldSkipReasoningForModel(modelId)) {
 					yield {
 						type: "reasoning",
-						// @ts-ignore-next-line
+						// @ts-expect-error-next-line
 						reasoning: delta.reasoning_content,
 					}
 				}
@@ -94,10 +106,8 @@ export class XAIHandler implements ApiHandler {
 
 			if (chunk.usage) {
 				const promptTokens = chunk.usage.prompt_tokens || 0
-				// @ts-ignore-next-line
-				const cachedTokens = chunk.usage.prompt_tokens_details?.cached_tokens || 0
-				// @ts-ignore-next-line
-				const cacheMissTokens = chunk.usage.prompt_cache_miss_tokens || 0
+				const cachedTokens = (chunk.usage as { prompt_tokens_details?: { cached_tokens?: number } }).prompt_tokens_details?.cached_tokens || 0
+				const cacheMissTokens = (chunk.usage as { prompt_cache_miss_tokens?: number }).prompt_cache_miss_tokens || 0
 				yield {
 					type: "usage",
 					inputTokens: promptTokens - cachedTokens,
@@ -106,6 +116,9 @@ export class XAIHandler implements ApiHandler {
 					cacheWriteTokens: cacheMissTokens,
 				}
 			}
+		}
+		} finally {
+			this.aborter.clear()
 		}
 	}
 

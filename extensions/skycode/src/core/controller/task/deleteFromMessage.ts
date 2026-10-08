@@ -5,6 +5,7 @@ import { getApiMetrics } from "@shared/getApiMetrics"
 import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
 import { Controller } from ".."
+import { Logger } from "@/shared/services/Logger"
 
 /**
  * Deletes a message and reverts all file changes from that message onwards.
@@ -18,16 +19,16 @@ import { Controller } from ".."
 export async function deleteFromMessage(controller: Controller, request: Int64Request): Promise<Empty> {
 	const messageTs = Number(request.value)
 
-	console.log(`[deleteFromMessage] ===== START ===== ts=${messageTs}`)
+	Logger.log(`[deleteFromMessage] ===== START ===== ts=${messageTs}`)
 
 	// 1. Try to rollback file changes (non-blocking)
 	try {
 		const { getDiffSystem } = await import("@core/diff-v2")
 		const diffSystem = getDiffSystem()
 		const revertedCheckpoints = await diffSystem.rollbackFromMessage(messageTs)
-		console.log(`[deleteFromMessage] Reverted ${revertedCheckpoints.length} checkpoints`)
+		Logger.log(`[deleteFromMessage] Reverted ${revertedCheckpoints.length} checkpoints`)
 	} catch (error) {
-		console.error("[deleteFromMessage] DiffSystem rollback failed (continuing):", error)
+		Logger.error("[deleteFromMessage] DiffSystem rollback failed (continuing):", error)
 	}
 
 	// 2. Truncate skycodeMessages and API history (persist to disk)
@@ -35,10 +36,10 @@ export async function deleteFromMessage(controller: Controller, request: Int64Re
 		const messageStateHandler = controller.task.messageStateHandler
 		const skycodeMessages = messageStateHandler.getSkycodeMessages()
 
-		console.log(`[deleteFromMessage] Total skycodeMessages: ${skycodeMessages.length}`)
+		Logger.log(`[deleteFromMessage] Total skycodeMessages: ${skycodeMessages.length}`)
 
 		const messageIndex = skycodeMessages.findIndex((m) => m.ts === messageTs)
-		console.log(`[deleteFromMessage] messageIndex: ${messageIndex}`)
+		Logger.log(`[deleteFromMessage] messageIndex: ${messageIndex}`)
 
 		if (messageIndex !== -1) {
 			// Aggregate cost/token metrics from messages being deleted
@@ -67,13 +68,13 @@ export async function deleteFromMessage(controller: Controller, request: Int64Re
 						cost: deletedApiReqsMetrics.totalCost,
 					} satisfies SkycodeApiReqInfo),
 				})
-				console.log(
+				Logger.log(
 					`[deleteFromMessage] Preserved deleted metrics: cost=${deletedApiReqsMetrics.totalCost}, tokensIn=${deletedApiReqsMetrics.totalTokensIn}, tokensOut=${deletedApiReqsMetrics.totalTokensOut}`,
 				)
 			}
 
 			await messageStateHandler.overwriteSkycodeMessages(messagesToKeep)
-			console.log(`[deleteFromMessage] Truncated skycodeMessages: ${skycodeMessages.length} -> ${messagesToKeep.length}`)
+			Logger.log(`[deleteFromMessage] Truncated skycodeMessages: ${skycodeMessages.length} -> ${messagesToKeep.length}`)
 
 			// Truncate API history
 			const targetMessage = skycodeMessages[messageIndex]
@@ -82,10 +83,10 @@ export async function deleteFromMessage(controller: Controller, request: Int64Re
 				const apiHistory = messageStateHandler.getApiConversationHistory()
 				const apiHistoryToKeep = apiHistory.slice(0, apiHistoryIndex)
 				await messageStateHandler.overwriteApiConversationHistory(apiHistoryToKeep)
-				console.log(`[deleteFromMessage] Truncated API history: ${apiHistory.length} -> ${apiHistoryToKeep.length}`)
+				Logger.log(`[deleteFromMessage] Truncated API history: ${apiHistory.length} -> ${apiHistoryToKeep.length}`)
 			}
 		} else {
-			console.error(`[deleteFromMessage] Message ts=${messageTs} NOT FOUND`)
+			Logger.error(`[deleteFromMessage] Message ts=${messageTs} NOT FOUND`)
 		}
 	}
 
@@ -95,10 +96,10 @@ export async function deleteFromMessage(controller: Controller, request: Int64Re
 	// - Saving the truncated state
 	// - Re-creating the task from the truncated history
 	// - Showing the resume UI with the correct truncated messages
-	console.log(`[deleteFromMessage] Calling cancelTask()...`)
+	Logger.log(`[deleteFromMessage] Calling cancelTask()...`)
 	await controller.cancelTask()
-	console.log(`[deleteFromMessage] cancelTask() done`)
+	Logger.log(`[deleteFromMessage] cancelTask() done`)
 
-	console.log(`[deleteFromMessage] ===== END =====`)
+	Logger.log(`[deleteFromMessage] ===== END =====`)
 	return Empty.create({})
 }

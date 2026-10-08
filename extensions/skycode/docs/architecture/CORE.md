@@ -9,15 +9,20 @@ src/core/
 ├── controller/    # gRPC обработчики, управление задачами
 ├── task/          # AI задачи: API запросы + выполнение инструментов
 ├── diff-v2/       # Inline Diff System V4 (snapshot-based)
-├── session/       # ApprovalGate (ask/response flow)
+├── session/       # ApprovalGate, Pipeline, SessionManager
 ├── indexing/      # Семантическая индексация (Tree-sitter + embeddings)
 ├── prompts/       # Система промптов (TemplateEngine + PromptBuilder)
 ├── api/           # API провайдеры (OpenAI, Anthropic, Gemini, ...)
 ├── workspace/     # Multi-root workspace resolver
 ├── context/       # Context management (файлы, правила, focus chain)
+├── workflow/      # Многошаговый YAML workflow engine (WorkflowOrchestrator)
+├── inline-edit/   # Ctrl+Shift+K — правка выделения без чата
 ├── hooks/         # Lifecycle hooks (TaskStart, TaskComplete, ...)
 ├── ignore/        # .skycodeignore controller
+├── locks/         # Кросс-вызовные локи (например, init эмбеддингов)
 ├── mentions/      # @-упоминания в чате
+├── slash-commands/# Парсинг slash-команд
+├── commands/      # Реализация VS Code команд
 └── permissions/   # Контроль доступа: CommandPermissionController + CommandSafetyClassifier
 ```
 
@@ -78,6 +83,22 @@ Promise-based ask/response замена pWaitFor. Early response queue реша�
 - Runtime tool blocking for weak models
 - EditNotebook (edit_notebook) — Jupyter .ipynb cell editing (insert/replace)
 
+### Inline Edit (`src/core/inline-edit/InlineEditController.ts`)
+Команда `skycode.inlineEdit` (`Ctrl+Shift+K` / `Cmd+Shift+K`). Доступна при непустом выделении:
+
+- Собирает `system + user` prompt (file path, язык, before/after context, выделение, инструкция).
+- Стримит ответ из текущего `ApiHandler`, накапливая текст.
+- Прокидывает результат через `DiffSystem.replaceLines()` — изменение появляется как обычный inline diff (Accept/Reject).
+- Независима от панели чата.
+
+### Workflow (`src/core/workflow/`)
+`WorkflowOrchestrator` выполняет многошаговые YAML-сценарии поверх стандартного agent loop:
+
+- Каждый включённый шаг инжектит step-prompt как user-message и вызывает `Task.initiateStepLoop()`.
+- История разговора общая для всех шагов — поздние шаги видят, что делал агент раньше.
+- `WorkflowParser` валидирует YAML; UI — таб «Сценарии» (load / edit / run, шаблоны).
+- Между шагами проверяется `task.isAborted()` — пользователь может отменить выполнение.
+
 ### Permissions (`src/core/permissions/`)
 Контроль доступа к действиям агента.
 
@@ -87,6 +108,27 @@ Promise-based ask/response замена pWaitFor. Early response queue реша�
   - unsafe = всё остальное (rm, npm install, git push, curl, sudo, ...)
   - Pipe/chain: ВСЕ сегменты должны быть safe
   - Redirect (>, >>) = всегда unsafe
+
+### URL safety (`src/services/browser/urlSafety.ts`)
+Защита от SSRF перед любыми исходящими HTTP-запросами, инициированными инструментами.
+
+`assertSafeUrl(rawUrl, opts?)`:
+- Принимает только `http` / `https` (настраивается).
+- Отклоняет URL с credentials (`user:pass@host`).
+- Отклоняет loopback / link-local / private / CGNAT / multicast IPv4 и IPv6.
+- Отклоняет cloud metadata (AWS/GCP/Azure `169.254.169.254`, `metadata.google.internal`).
+- Отклоняет `localhost`, `*.local`, `*.internal` и схожие hostnames.
+
+Интегрирован в:
+- `UrlContentFetcher.urlToMarkdown()` — перед `page.goto()`.
+- `WebFetchToolHandler.execute()` — ранний отказ до запуска Puppeteer.
+
+В случае отказа возвращает `UnsafeUrlError` — сообщение видно модели. Подробности политики безопасности — в корневом `SECURITY.md` на уровне монорепы.
+
+### Workspace containment и Zip Slip
+
+- `core/controller/file/openFileRelativePath` — `path.resolve()` + сверка с `vscode.workspace.workspaceFolders`. Открытие файла вне workspace отклоняется и логируется.
+- `services/browser/utils.downloadSkycodeChromium` — перед `zip.extractAllTo()` каждая запись архива проверяется на абсолютные пути и containment в корне распаковки.
 
 ### AutoApprove (`src/core/task/tools/autoApprove.ts`)
 Решает, нужно ли спрашивать пользователя перед выполнением инструмента.
@@ -149,4 +191,4 @@ globalStorage/snapshots/{responseGroupId}/{hash}.snapshot
 
 ---
 
-*Последнее обновление: 2026-03-02*
+*Последнее обновление: 2026-05-07*

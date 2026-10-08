@@ -8,6 +8,8 @@ import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
+import { Logger } from "@/shared/services/Logger"
+import { StreamAborter } from "../utils/abort-support"
 
 const GIGACHAT_OAUTH_URL = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
 const GIGACHAT_BASE_URL = "https://gigachat.devices.sberbank.ru/api/v1"
@@ -142,10 +144,15 @@ interface GigaChatToken {
 
 export class GigaChatHandler implements ApiHandler {
 	private options: GigaChatHandlerOptions
+	private aborter = new StreamAborter()
 	private cachedToken: GigaChatToken | undefined
 
 	constructor(options: GigaChatHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	/**
@@ -164,7 +171,7 @@ export class GigaChatHandler implements ApiHandler {
 		const scope = this.options.gigaChatScope || "GIGACHAT_API_PERS"
 
 		// Use native https.request with our custom CA agent for OAuth
-		console.log(`[GigaChat] ${t("gigachat.log.oauthStarting")}`)
+		Logger.log(`[GigaChat] ${t("gigachat.log.oauthStarting")}`)
 		const data = await new Promise<{ access_token: string; expires_at: number }>((resolve, reject) => {
 			const url = new URL(GIGACHAT_OAUTH_URL)
 			const body = `scope=${scope}`
@@ -189,24 +196,24 @@ export class GigaChatHandler implements ApiHandler {
 						responseData += chunk.toString()
 					})
 					res.on("end", () => {
-						console.log(`[GigaChat] ${t("gigachat.log.oauthStatus", { status: String(res.statusCode) })}`)
+						Logger.log(`[GigaChat] ${t("gigachat.log.oauthStatus", { status: String(res.statusCode) })}`)
 						if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
 							try {
 								const parsed = JSON.parse(responseData)
-								console.log(`[GigaChat] ${t("gigachat.log.oauthTokenReceived", { expiresAt: String(parsed.expires_at) })}`)
+								Logger.log(`[GigaChat] ${t("gigachat.log.oauthTokenReceived", { expiresAt: String(parsed.expires_at) })}`)
 								resolve(parsed)
-							} catch (e) {
+							} catch (_e) {
 								reject(new Error(t("gigachat.error.oauthInvalidResponse", { details: responseData })))
 							}
 						} else {
-						console.error(`[GigaChat] OAuth error: ${responseData}`)
+						Logger.error(`[GigaChat] OAuth error: ${responseData}`)
 						reject(new Error(t("gigachat.error.oauthFailed", { status: String(res.statusCode), details: responseData })))
 						}
 					})
 				},
 			)
 			req.on("error", (err) => {
-				console.error(`[GigaChat] ${t("gigachat.error.oauthRequest", { error: err.message })}`)
+				Logger.error(`[GigaChat] ${t("gigachat.error.oauthRequest", { error: err.message })}`)
 				reject(err)
 			})
 			req.write(body)
@@ -276,9 +283,9 @@ export class GigaChatHandler implements ApiHandler {
 			} else if (Array.isArray(msg.content)) {
 				content = msg.content
 					.map((part: any) => {
-						if (typeof part === "string") return part
-						if (part.type === "text" && part.text) return part.text
-						if (part.type === "image_url") return "[image]"
+						if (typeof part === "string") { return part }
+						if (part.type === "text" && part.text) { return part.text }
+						if (part.type === "image_url") { return "[image]" }
 						return ""
 					})
 					.filter(Boolean)
@@ -344,9 +351,9 @@ export class GigaChatHandler implements ApiHandler {
 			requestBody.function_call = "auto"
 		}
 
-		console.log(`[GigaChat] ${t("gigachat.log.chatRequest", { model: model.id, count: String(gigaChatMessages.length) })}`)
+		Logger.log(`[GigaChat] ${t("gigachat.log.chatRequest", { model: model.id, count: String(gigaChatMessages.length) })}`)
 		if (tools?.length) {
-			console.log(`[GigaChat] Sending ${tools.length} native functions`)
+			Logger.log(`[GigaChat] Sending ${tools.length} native functions`)
 		}
 
 		const response = await gigaChatFetch(`${GIGACHAT_BASE_URL}/chat/completions`, {
@@ -361,7 +368,7 @@ export class GigaChatHandler implements ApiHandler {
 
 		if (!response.ok) {
 			const errorText = await response.text()
-			console.error(`[GigaChat] ${t("gigachat.error.apiFailed", { status: String(response.status), details: errorText })}`)
+			Logger.error(`[GigaChat] ${t("gigachat.error.apiFailed", { status: String(response.status), details: errorText })}`)
 			throw new Error(t("gigachat.error.apiFailed", { status: String(response.status), details: errorText }))
 		}
 
@@ -380,7 +387,7 @@ export class GigaChatHandler implements ApiHandler {
 
 		while (true) {
 			const { done, value } = await reader.read()
-			if (done) break
+			if (done) { break }
 
 			buffer += decoder.decode(value, { stream: true })
 			const lines = buffer.split("\n")
@@ -388,8 +395,8 @@ export class GigaChatHandler implements ApiHandler {
 
 			for (const line of lines) {
 				const trimmed = line.trim()
-				if (!trimmed || trimmed === "data: [DONE]") continue
-				if (!trimmed.startsWith("data: ")) continue
+				if (!trimmed || trimmed === "data: [DONE]") { continue }
+				if (!trimmed.startsWith("data: ")) { continue }
 
 				try {
 					const json = JSON.parse(trimmed.slice(6))
@@ -405,7 +412,7 @@ export class GigaChatHandler implements ApiHandler {
 						}
 						if (fc.name) {
 							accFunctionCall.name = fc.name
-							console.log(`[GigaChat] Function call: ${fc.name}`)
+							Logger.log(`[GigaChat] Function call: ${fc.name}`)
 						}
 						if (fc.arguments !== undefined) {
 							// arguments can be string or object

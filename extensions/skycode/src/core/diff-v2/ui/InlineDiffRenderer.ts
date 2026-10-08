@@ -20,6 +20,7 @@ import * as vscode from 'vscode';
 import { DiffStore } from '../storage/DiffStore';
 import { Hunk, DiffStoreEvent } from '../storage/types';
 import { t } from '../../../i18n/backend-i18n';
+import { Logger } from "@/shared/services/Logger"
 
 interface InsetRecord {
 	inset: vscode.WebviewEditorInset;
@@ -53,6 +54,18 @@ export class InlineDiffRenderer implements vscode.Disposable {
 	private positionFlushScheduled = false;
 	/** When true, per-hunk green decoration refresh is suppressed (batch mode) */
 	private _suppressGreenRefresh = false;
+
+	/**
+	 * Mutex for in-flight createZonesForHunk operations.
+	 * Prevents race: hasZonesFor() returns false, await createWebviewTextEditorInset(),
+	 * meanwhile a second caller also passes the check → duplicate insets appear.
+	 * Used by parallel paths: onHunkAdded + restoreZonesForEditors + flush.
+	 */
+	private readonly inFlightCreation = new Map<string, Promise<void>>();
+
+	/** Hunks marked as removed after their owning hunks were dropped/rejected.
+	 *  Used to filter the suspended pendingQueue at flush time so stale renderers don't fire. */
+	private readonly droppedHunkIds = new Set<string>();
 
 	// ==================== Position formulas ====================
 
@@ -107,13 +120,13 @@ export class InlineDiffRenderer implements vscode.Disposable {
 	 * Groups hunks by file and creates zones in parallel per file.
 	 */
 	async flush(): Promise<void> {
-		if (this.suspendDepth > 0) this.suspendDepth--;
-		if (this.suspendDepth > 0) return;
+		if (this.suspendDepth > 0) { this.suspendDepth--; }
+		if (this.suspendDepth > 0) { return; }
 
 		await this.flushPositionChanges();
 
 		const queued = this.pendingQueue.splice(0);
-		if (queued.length === 0) return;
+		if (queued.length === 0) { return; }
 
 		const byFile = new Map<string, Hunk[]>();
 		for (const hunk of queued) {
@@ -129,7 +142,11 @@ export class InlineDiffRenderer implements vscode.Disposable {
 		const tasks = Array.from(byFile.entries()).map(async ([normPath, hunks]) => {
 			let editor: vscode.TextEditor | undefined;
 			for (const hunk of hunks) {
-				if (this.hasZonesFor(hunk.id)) continue;
+				if (this.hasZonesFor(hunk.id)) { continue; }
+				if (this.droppedHunkIds.has(hunk.id)) { continue; }
+				// Hunk may have been accepted/rejected while we were suspended.
+				const live = this.store?.getHunk(hunk.id);
+				if (!live || live.status !== 'pending') { continue; }
 				if (!editor) {
 					editor = vscode.window.visibleTextEditors.find(
 						(e) => e.document.uri.fsPath.toLowerCase() === normPath,
@@ -139,7 +156,7 @@ export class InlineDiffRenderer implements vscode.Disposable {
 					await this.createZonesForHunk(editor, hunk);
 				}
 			}
-			if (editor) editorsToRefresh.push(editor);
+			if (editor) { editorsToRefresh.push(editor); }
 		});
 
 		await Promise.all(tasks);
@@ -173,12 +190,16 @@ export class InlineDiffRenderer implements vscode.Disposable {
 	}
 
 	private async onHunkAdded(hunk: Hunk): Promise<void> {
+		// New live hunk replaces any stale dropped flag (rare: same ID is impossible
+		// in practice — generateUuid — but the flag is queueMicrotask-cleaned anyway).
+		this.droppedHunkIds.delete(hunk.id);
+
 		if (this.suspendDepth > 0) {
 			this.pendingQueue.push(hunk);
 			return;
 		}
 
-		if (this.hasZonesFor(hunk.id)) return;
+		if (this.hasZonesFor(hunk.id)) { return; }
 
 		const editor = vscode.window.visibleTextEditors.find(
 			(e) => e.document.uri.fsPath.toLowerCase() === hunk.fsPath.toLowerCase(),
@@ -190,7 +211,7 @@ export class InlineDiffRenderer implements vscode.Disposable {
 
 	private onHunkPositionChanged(hunkId: string, fsPath: string): void {
 		this.pendingPositionChanges.set(hunkId, fsPath);
-		if (this.suspendDepth > 0) return;
+		if (this.suspendDepth > 0) { return; }
 		if (!this.positionFlushScheduled) {
 			this.positionFlushScheduled = true;
 			queueMicrotask(() => this.flushPositionChanges());
@@ -201,11 +222,11 @@ export class InlineDiffRenderer implements vscode.Disposable {
 		this.positionFlushScheduled = false;
 		const batch = new Map(this.pendingPositionChanges);
 		this.pendingPositionChanges.clear();
-		if (batch.size === 0) return;
+		if (batch.size === 0) { return; }
 
 		const byFile = new Map<string, string[]>();
 		for (const [hunkId, fsPath] of batch) {
-			if (!this.hasZonesFor(hunkId)) continue;
+			if (!this.hasZonesFor(hunkId)) { continue; }
 			const key = fsPath.toLowerCase();
 			let arr = byFile.get(key);
 			if (!arr) { arr = []; byFile.set(key, arr); }
@@ -222,7 +243,7 @@ export class InlineDiffRenderer implements vscode.Disposable {
 			const editor = vscode.window.visibleTextEditors.find(
 				(e) => e.document.uri.fsPath.toLowerCase() === normPath,
 			);
-			if (!editor) continue;
+			if (!editor) { continue; }
 
 			this._suppressGreenRefresh = true;
 			for (const hunkId of hunkIds) {
@@ -257,8 +278,22 @@ export class InlineDiffRenderer implements vscode.Disposable {
 	// ==================== Zone creation ====================
 
 	async createZonesForHunk(editor: vscode.TextEditor, hunk: Hunk): Promise<void> {
-		if (this.hasZonesFor(hunk.id)) return; // Prevent duplicates
+		if (this.hasZonesFor(hunk.id)) { return; }
+		if (this.droppedHunkIds.has(hunk.id)) { return; }
 
+		const inFlight = this.inFlightCreation.get(hunk.id);
+		if (inFlight) { return inFlight; }
+
+		const promise = this.doCreateZonesForHunk(editor, hunk);
+		this.inFlightCreation.set(hunk.id, promise);
+		try {
+			await promise;
+		} finally {
+			this.inFlightCreation.delete(hunk.id);
+		}
+	}
+
+	private async doCreateZonesForHunk(editor: vscode.TextEditor, hunk: Hunk): Promise<void> {
 		const hasRemoved = hunk.removedLines.length > 0;
 		// Use currentEndLine - currentStartLine to check for added lines
 		// (more reliable than addedLines.length after user merges)
@@ -270,10 +305,10 @@ export class InlineDiffRenderer implements vscode.Disposable {
 		// Runtime assertions — warn but don't throw to avoid breaking UX
 		// insetLine is 0-based; -1 is valid (maps to afterLineNumber=0, before first line)
 		if (insetLine < -1) {
-			console.warn('[InlineDiffRenderer] ASSERT: insetLine < -1', { insetLine, hunk: hunk.id, currentStartLine: hunk.currentStartLine });
+			Logger.warn('[InlineDiffRenderer] ASSERT: insetLine < -1', { insetLine, hunk: hunk.id, currentStartLine: hunk.currentStartLine });
 		}
 		if (insetLine >= lineCount) {
-			console.warn('[InlineDiffRenderer] ASSERT: insetLine >= lineCount', { insetLine, lineCount, hunk: hunk.id });
+			Logger.warn('[InlineDiffRenderer] ASSERT: insetLine >= lineCount', { insetLine, lineCount, hunk: hunk.id });
 		}
 
 		if (hasRemoved && hasAdded) {
@@ -282,10 +317,10 @@ export class InlineDiffRenderer implements vscode.Disposable {
 			this.applyGreenDecorations(editor, hunk);
 			const buttonsLine = InlineDiffRenderer.calculateButtonsLine(hunk);
 			if (buttonsLine < insetLine) {
-				console.warn('[InlineDiffRenderer] ASSERT: buttonsLine < insetLine', { buttonsLine, insetLine, hunk: hunk.id });
+				Logger.warn('[InlineDiffRenderer] ASSERT: buttonsLine < insetLine', { buttonsLine, insetLine, hunk: hunk.id });
 			}
 			if (buttonsLine >= lineCount) {
-				console.warn('[InlineDiffRenderer] ASSERT: buttonsLine >= lineCount (replacement)', { buttonsLine, lineCount, hunk: hunk.id });
+				Logger.warn('[InlineDiffRenderer] ASSERT: buttonsLine >= lineCount (replacement)', { buttonsLine, lineCount, hunk: hunk.id });
 			}
 			await this.createButtonsZone(editor, buttonsLine, hunk.id);
 		} else if (hasRemoved) {
@@ -298,9 +333,15 @@ export class InlineDiffRenderer implements vscode.Disposable {
 			this.applyGreenDecorations(editor, hunk);
 			const buttonsLine = InlineDiffRenderer.calculateButtonsLine(hunk);
 			if (buttonsLine >= lineCount) {
-				console.warn('[InlineDiffRenderer] ASSERT: buttonsLine >= lineCount (addition)', { buttonsLine, lineCount, hunk: hunk.id });
+				Logger.warn('[InlineDiffRenderer] ASSERT: buttonsLine >= lineCount (addition)', { buttonsLine, lineCount, hunk: hunk.id });
 			}
 			await this.createButtonsZone(editor, buttonsLine, hunk.id);
+		}
+
+		// If the hunk was dropped while we were awaiting (e.g. user clicked Accept All
+		// mid-creation), tear the freshly-created zones down immediately.
+		if (this.droppedHunkIds.has(hunk.id)) {
+			this.removeZonesForHunk(hunk.id);
 		}
 	}
 
@@ -314,7 +355,7 @@ export class InlineDiffRenderer implements vscode.Disposable {
 		// Use currentEndLine - currentStartLine for range size
 		// (more reliable than addedLines.length after user merges)
 		const lineCount = hunk.currentEndLine - hunk.currentStartLine;
-		if (lineCount <= 0) return;
+		if (lineCount <= 0) { return; }
 
 		const startLine0 = hunk.currentStartLine - 1; // 0-based
 		const endLine0 = startLine0 + lineCount - 1;
@@ -331,11 +372,11 @@ export class InlineDiffRenderer implements vscode.Disposable {
 	 */
 	private removeGreenDecorations(hunkId: string): void {
 		const entry = this.greenRanges.get(hunkId);
-		if (!entry) return;
+		if (!entry) { return; }
 
 		this.greenRanges.delete(hunkId);
 
-		if (this._suppressGreenRefresh) return;
+		if (this._suppressGreenRefresh) { return; }
 
 		const editor = vscode.window.visibleTextEditors.find(
 			(e) => e.document.uri.fsPath.toLowerCase() === entry.fsPath.toLowerCase(),
@@ -390,7 +431,7 @@ export class InlineDiffRenderer implements vscode.Disposable {
 			});
 			inset.onDidDispose(() => this.removeInsetFromArray(hunkId, inset));
 		} catch (error) {
-			console.error('[InlineDiffRenderer] Failed to create deletion zone:', error);
+			Logger.error('[InlineDiffRenderer] Failed to create deletion zone:', error);
 		}
 	}
 
@@ -417,7 +458,7 @@ export class InlineDiffRenderer implements vscode.Disposable {
 			});
 			inset.onDidDispose(() => this.removeInsetFromArray(hunkId, inset));
 		} catch (error) {
-			console.error('[InlineDiffRenderer] Failed to create buttons zone:', error);
+			Logger.error('[InlineDiffRenderer] Failed to create buttons zone:', error);
 		}
 	}
 
@@ -443,6 +484,13 @@ export class InlineDiffRenderer implements vscode.Disposable {
 	// ==================== Zone management ====================
 
 	removeZonesForHunk(hunkId: string): void {
+		// Mark as dropped so any in-flight createZonesForHunk() tears its zones
+		// down when it finishes (race-safe path).
+		this.droppedHunkIds.add(hunkId);
+
+		// Drop pending suspended/queued work for this hunk so flush() won't render it.
+		this.dropFromPendingQueues(hunkId);
+
 		const records = this.insets.get(hunkId);
 		if (records) {
 			for (const rec of records) {
@@ -451,6 +499,26 @@ export class InlineDiffRenderer implements vscode.Disposable {
 			this.insets.delete(hunkId);
 		}
 		this.removeGreenDecorations(hunkId);
+
+		// Allow re-creation later (e.g. tab reopened after data restore).
+		// Defer cleanup so racing creators see the dropped flag and bail out.
+		// Skip cleanup while a creator is still in-flight — it will be reaped later.
+		queueMicrotask(() => {
+			if (!this.inFlightCreation.has(hunkId) && !this.insets.has(hunkId)) {
+				this.droppedHunkIds.delete(hunkId);
+			}
+		});
+	}
+
+	private dropFromPendingQueues(hunkId: string): void {
+		if (this.pendingQueue.length > 0) {
+			for (let i = this.pendingQueue.length - 1; i >= 0; i--) {
+				if (this.pendingQueue[i].id === hunkId) {
+					this.pendingQueue.splice(i, 1);
+				}
+			}
+		}
+		this.pendingPositionChanges.delete(hunkId);
 	}
 
 	hasZonesFor(hunkId: string): boolean {
@@ -460,14 +528,34 @@ export class InlineDiffRenderer implements vscode.Disposable {
 
 	clearForFile(fsPath: string): void {
 		const norm = fsPath.toLowerCase();
+
+		// Drop any queued hunks for this file so flush() won't render zombie zones
+		// after a bulk accept/reject/preReject.
+		if (this.pendingQueue.length > 0) {
+			for (let i = this.pendingQueue.length - 1; i >= 0; i--) {
+				const h = this.pendingQueue[i];
+				if (h.fsPath.toLowerCase() === norm) {
+					this.droppedHunkIds.add(h.id);
+					this.pendingQueue.splice(i, 1);
+				}
+			}
+		}
+		for (const [hunkId, fp] of this.pendingPositionChanges) {
+			if (fp.toLowerCase() === norm) {
+				this.droppedHunkIds.add(hunkId);
+				this.pendingPositionChanges.delete(hunkId);
+			}
+		}
+
 		for (const [hunkId, records] of this.insets.entries()) {
 			const matching = records.filter((r) => r.fsPath.toLowerCase() === norm);
 			for (const r of matching) {
+				this.droppedHunkIds.add(hunkId);
 				try { r.inset.dispose(); } catch { /* already disposed */ }
 			}
 			const remaining = records.filter((r) => r.fsPath.toLowerCase() !== norm);
-			if (remaining.length === 0) this.insets.delete(hunkId);
-			else this.insets.set(hunkId, remaining);
+			if (remaining.length === 0) { this.insets.delete(hunkId); }
+			else { this.insets.set(hunkId, remaining); }
 		}
 		// Clear green decorations for this file
 		for (const [hunkId, entry] of this.greenRanges.entries()) {
@@ -481,10 +569,27 @@ export class InlineDiffRenderer implements vscode.Disposable {
 		if (editor) {
 			editor.setDecorations(addedLineDecorationType, []);
 		}
+
+		// Release the dropped flags on the next microtask so any in-flight
+		// createZonesForHunk() observes the flag and tears its zones down.
+		queueMicrotask(() => {
+			for (const id of [...this.droppedHunkIds]) {
+				if (!this.insets.has(id) && !this.inFlightCreation.has(id)) {
+					this.droppedHunkIds.delete(id);
+				}
+			}
+		});
 	}
 
 	clearAll(): void {
-		for (const records of this.insets.values()) {
+		// Drop any suspended/queued state so flush() can't resurrect zones.
+		for (const h of this.pendingQueue) { this.droppedHunkIds.add(h.id); }
+		this.pendingQueue.length = 0;
+		for (const id of this.pendingPositionChanges.keys()) { this.droppedHunkIds.add(id); }
+		this.pendingPositionChanges.clear();
+
+		for (const [hunkId, records] of this.insets) {
+			this.droppedHunkIds.add(hunkId);
 			for (const r of records) {
 				try { r.inset.dispose(); } catch { /* already disposed */ }
 			}
@@ -496,10 +601,12 @@ export class InlineDiffRenderer implements vscode.Disposable {
 		for (const editor of vscode.window.visibleTextEditors) {
 			editor.setDecorations(addedLineDecorationType, []);
 		}
+
+		queueMicrotask(() => this.droppedHunkIds.clear());
 	}
 
 	private async restoreZonesForEditors(editors: readonly vscode.TextEditor[]): Promise<void> {
-		if (!this.store) return;
+		if (!this.store) { return; }
 		for (const editor of editors) {
 			const fsPath = editor.document.uri.fsPath;
 			const hunks = this.store.getPendingHunksByFile(fsPath);
@@ -521,23 +628,33 @@ export class InlineDiffRenderer implements vscode.Disposable {
 				try { r.inset.dispose(); } catch { /* already disposed */ }
 			}
 			const remaining = records.filter((r) => openPaths.has(r.fsPath.toLowerCase()));
-			if (remaining.length === 0) this.insets.delete(hunkId);
-			else this.insets.set(hunkId, remaining);
+			if (remaining.length === 0) { this.insets.delete(hunkId); }
+			else { this.insets.set(hunkId, remaining); }
 		}
 	}
 
 	private addInset(hunkId: string, record: InsetRecord): void {
 		const existing = this.insets.get(hunkId) || [];
-		existing.push(record);
-		this.insets.set(hunkId, existing);
+		const deduped: InsetRecord[] = [];
+
+		for (const old of existing) {
+			if (old.zoneType === record.zoneType && old.fsPath.toLowerCase() === record.fsPath.toLowerCase()) {
+				try { old.inset.dispose(); } catch { /* already disposed */ }
+				continue;
+			}
+			deduped.push(old);
+		}
+
+		deduped.push(record);
+		this.insets.set(hunkId, deduped);
 	}
 
 	private removeInsetFromArray(hunkId: string, inset: vscode.WebviewEditorInset): void {
 		const records = this.insets.get(hunkId);
 		if (records) {
 			const filtered = records.filter((r) => r.inset !== inset);
-			if (filtered.length === 0) this.insets.delete(hunkId);
-			else this.insets.set(hunkId, filtered);
+			if (filtered.length === 0) { this.insets.delete(hunkId); }
+			else { this.insets.set(hunkId, filtered); }
 		}
 	}
 
@@ -619,7 +736,7 @@ let _lt=0;document.addEventListener('wheel',e=>{const n=Date.now();if(n-_lt<32){
 
 	dispose(): void {
 		this.clearAll();
-		for (const d of this.disposables) d.dispose();
+		for (const d of this.disposables) { d.dispose(); }
 		this.disposables.length = 0;
 	}
 }

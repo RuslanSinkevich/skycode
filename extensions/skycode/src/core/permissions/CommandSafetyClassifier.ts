@@ -349,7 +349,7 @@ export class CommandSafetyClassifier {
 
 		for (const segment of segments) {
 			const segmentTrimmed = segment.trim()
-			if (!segmentTrimmed) continue
+			if (!segmentTrimmed) { continue }
 
 			const result = this.classifySegment(segmentTrimmed)
 			if (result.safety === "unsafe") {
@@ -406,7 +406,7 @@ export class CommandSafetyClassifier {
 		// Extract the base command name (first word)
 		const baseName = baseCmd.split(" ")[0]
 		const flags = UNSAFE_FLAGS[baseName]
-		if (!flags || flags.length === 0) return null
+		if (!flags || flags.length === 0) { return null }
 
 		// Parse arguments (simple split, respecting quotes would be better but this covers 95%)
 		const args = fullCommand.split(/\s+/)

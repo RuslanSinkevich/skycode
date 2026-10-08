@@ -6,6 +6,7 @@ import { ApiHandler, CommonApiHandlerOptions } from ".."
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
+import { StreamAborter } from "../utils/abort-support"
 
 interface FireworksHandlerOptions extends CommonApiHandlerOptions {
 	fireworksApiKey?: string
@@ -17,9 +18,14 @@ interface FireworksHandlerOptions extends CommonApiHandlerOptions {
 export class FireworksHandler implements ApiHandler {
 	private options: FireworksHandlerOptions
 	private client: OpenAI | undefined
+	private aborter = new StreamAborter()
 
 	constructor(options: FireworksHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	private ensureClient(): OpenAI {
@@ -50,15 +56,20 @@ export class FireworksHandler implements ApiHandler {
 			...convertToOpenAiMessages(messages),
 		]
 
+		const signal = this.aborter.reset()
 		const stream = await client.chat.completions.create({
 			model: modelId,
 			messages: openAiMessages,
 			stream: true,
 			stream_options: { include_usage: true },
 			temperature: 0,
-		})
+		},
+			{ signal },
+		)
+		this.aborter.track(stream)
 
 		let reasoning: string | null = null
+		try {
 		for await (const chunk of stream) {
 			const delta = chunk.choices?.[0]?.delta
 			if (reasoning || delta?.content?.includes("<think>")) {
@@ -85,9 +96,9 @@ export class FireworksHandler implements ApiHandler {
 
 			if (chunk.usage) {
 				const promptTokens = chunk.usage.prompt_tokens || 0
-				// @ts-ignore-next-line
+				// @ts-expect-error-next-line
 				const cachedTokens = chunk.usage.prompt_cache_hit_tokens || 0
-				// @ts-ignore-next-line
+				// @ts-expect-error-next-line
 				const cacheMissTokens = chunk.usage.prompt_cache_miss_tokens || 0
 				// prompt_tokens total includes cache hits/misses (DeepSeek-style); we subtract hits so input+cache is not double-counted. See https://api-docs.deepseek.com/guides/kv_cache
 				yield {
@@ -98,6 +109,9 @@ export class FireworksHandler implements ApiHandler {
 					cacheWriteTokens: cacheMissTokens,
 				}
 			}
+		}
+		} finally {
+			this.aborter.clear()
 		}
 	}
 

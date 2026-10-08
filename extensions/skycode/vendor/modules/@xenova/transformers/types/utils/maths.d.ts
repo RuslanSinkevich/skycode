@@ -321,5 +321,4 @@ declare class NP2FFT {
   transform(output: any, input: any): void;
   realTransform(output: any, input: any): void;
 }
-export {};
 //# sourceMappingURL=maths.d.ts.map

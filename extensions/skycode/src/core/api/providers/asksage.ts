@@ -5,6 +5,7 @@ import { Logger } from "@/shared/services/Logger"
 import { ApiHandler, CommonApiHandlerOptions } from ".."
 import { withRetry } from "../retry"
 import { ApiStream } from "../transform/stream"
+import { StreamAborter } from "../utils/abort-support"
 
 interface AskSageHandlerOptions extends CommonApiHandlerOptions {
 	asksageApiKey?: string
@@ -55,6 +56,7 @@ type AskSageResponse = {
 
 export class AskSageHandler implements ApiHandler {
 	private options: AskSageHandlerOptions
+	private aborter = new StreamAborter()
 	private apiUrl: string
 	private apiKey: string
 
@@ -67,6 +69,10 @@ export class AskSageHandler implements ApiHandler {
 		if (!this.apiKey) {
 			throw new Error("AskSage API key is required")
 		}
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	@withRetry()

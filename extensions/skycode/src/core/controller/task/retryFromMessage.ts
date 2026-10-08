@@ -6,6 +6,7 @@ import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
 import pWaitFor from "p-wait-for"
 import { Controller } from ".."
+import { Logger } from "@/shared/services/Logger"
 
 /**
  * Retries from a specific message: reverts all file changes from that message onwards,
@@ -22,7 +23,7 @@ import { Controller } from ".."
 export async function retryFromMessage(controller: Controller, request: Int64Request): Promise<Empty> {
 	const messageTs = Number(request.value)
 
-	console.log(`[retryFromMessage] ===== START ===== ts=${messageTs}`)
+	Logger.log(`[retryFromMessage] ===== START ===== ts=${messageTs}`)
 
 	// 0. Get the original message text before anything else
 	let originalMessageText = ""
@@ -33,7 +34,7 @@ export async function retryFromMessage(controller: Controller, request: Int64Req
 		const messageStateHandler = controller.task.messageStateHandler
 		const skycodeMessages = messageStateHandler.getSkycodeMessages()
 
-		console.log(`[retryFromMessage] Total skycodeMessages: ${skycodeMessages.length}`)
+		Logger.log(`[retryFromMessage] Total skycodeMessages: ${skycodeMessages.length}`)
 
 		const message = skycodeMessages.find((m) => m.ts === messageTs)
 
@@ -41,9 +42,9 @@ export async function retryFromMessage(controller: Controller, request: Int64Req
 			originalMessageText = message.text || ""
 			originalImages = message.images || []
 			originalFiles = message.files || []
-			console.log(`[retryFromMessage] Found message (say=${message.say}): "${originalMessageText.substring(0, 60)}"`)
+			Logger.log(`[retryFromMessage] Found message (say=${message.say}): "${originalMessageText.substring(0, 60)}"`)
 		} else {
-			console.error(`[retryFromMessage] Message ts=${messageTs} NOT FOUND`)
+			Logger.error(`[retryFromMessage] Message ts=${messageTs} NOT FOUND`)
 		}
 	}
 
@@ -52,9 +53,9 @@ export async function retryFromMessage(controller: Controller, request: Int64Req
 		const { getDiffSystem } = await import("@core/diff-v2")
 		const diffSystem = getDiffSystem()
 		const revertedCheckpoints = await diffSystem.rollbackFromMessage(messageTs)
-		console.log(`[retryFromMessage] Reverted ${revertedCheckpoints.length} checkpoints`)
+		Logger.log(`[retryFromMessage] Reverted ${revertedCheckpoints.length} checkpoints`)
 	} catch (error) {
-		console.error("[retryFromMessage] DiffSystem rollback failed (continuing):", error)
+		Logger.error("[retryFromMessage] DiffSystem rollback failed (continuing):", error)
 	}
 
 	// 2. Truncate skycodeMessages and API history (persist to disk)
@@ -63,7 +64,7 @@ export async function retryFromMessage(controller: Controller, request: Int64Req
 		const skycodeMessages = messageStateHandler.getSkycodeMessages()
 
 		const messageIndex = skycodeMessages.findIndex((m) => m.ts === messageTs)
-		console.log(`[retryFromMessage] messageIndex: ${messageIndex}`)
+		Logger.log(`[retryFromMessage] messageIndex: ${messageIndex}`)
 
 		if (messageIndex !== -1) {
 			// Aggregate cost/token metrics from messages being deleted
@@ -92,13 +93,13 @@ export async function retryFromMessage(controller: Controller, request: Int64Req
 						cost: deletedApiReqsMetrics.totalCost,
 					} satisfies SkycodeApiReqInfo),
 				})
-				console.log(
+				Logger.log(
 					`[retryFromMessage] Preserved deleted metrics: cost=${deletedApiReqsMetrics.totalCost}, tokensIn=${deletedApiReqsMetrics.totalTokensIn}, tokensOut=${deletedApiReqsMetrics.totalTokensOut}`,
 				)
 			}
 
 			await messageStateHandler.overwriteSkycodeMessages(messagesToKeep)
-			console.log(`[retryFromMessage] Truncated skycodeMessages: ${skycodeMessages.length} -> ${messagesToKeep.length}`)
+			Logger.log(`[retryFromMessage] Truncated skycodeMessages: ${skycodeMessages.length} -> ${messagesToKeep.length}`)
 
 			// Truncate API history
 			const targetMessage = skycodeMessages[messageIndex]
@@ -107,17 +108,17 @@ export async function retryFromMessage(controller: Controller, request: Int64Req
 				const apiHistory = messageStateHandler.getApiConversationHistory()
 				const apiHistoryToKeep = apiHistory.slice(0, apiHistoryIndex)
 				await messageStateHandler.overwriteApiConversationHistory(apiHistoryToKeep)
-				console.log(`[retryFromMessage] Truncated API history: ${apiHistory.length} -> ${apiHistoryToKeep.length}`)
+				Logger.log(`[retryFromMessage] Truncated API history: ${apiHistory.length} -> ${apiHistoryToKeep.length}`)
 			}
 		} else {
-			console.error(`[retryFromMessage] Message not found for truncation`)
+			Logger.error(`[retryFromMessage] Message not found for truncation`)
 		}
 	}
 
 	// 3. Cancel the current task — aborts it, re-initializes from the truncated history on disk
-	console.log(`[retryFromMessage] Calling cancelTask()...`)
+	Logger.log(`[retryFromMessage] Calling cancelTask()...`)
 	await controller.cancelTask()
-	console.log(`[retryFromMessage] cancelTask() done. task exists: ${!!controller.task}`)
+	Logger.log(`[retryFromMessage] cancelTask() done. task exists: ${!!controller.task}`)
 
 	// 4. Wait for the re-initialized task to have a pending ask (resume prompt)
 	if (originalMessageText && controller.task) {
@@ -126,17 +127,17 @@ export async function retryFromMessage(controller: Controller, request: Int64Req
 				() => controller.task?.taskState.isInitialized === true && controller.task?.approvalGate.hasPending === true,
 				{ timeout: 5_000 },
 			)
-			console.log(`[retryFromMessage] Task ready, auto-responding with: "${originalMessageText.substring(0, 50)}"`)
+			Logger.log(`[retryFromMessage] Task ready, auto-responding with: "${originalMessageText.substring(0, 50)}"`)
 
 			// 5. Auto-respond to the resume ask with the original message
 			await controller.task.handleWebviewAskResponse("messageResponse", originalMessageText, originalImages, originalFiles)
 		} catch (error) {
-			console.error("[retryFromMessage] Failed to auto-resume:", error)
+			Logger.error("[retryFromMessage] Failed to auto-resume:", error)
 		}
 	} else {
-		console.log(`[retryFromMessage] No original text or no task, skipping auto-resend`)
+		Logger.log(`[retryFromMessage] No original text or no task, skipping auto-resend`)
 	}
 
-	console.log(`[retryFromMessage] ===== END =====`)
+	Logger.log(`[retryFromMessage] ===== END =====`)
 	return Empty.create({})
 }

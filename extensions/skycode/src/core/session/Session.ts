@@ -15,13 +15,7 @@ import { EventEmitter } from "node:events"
 import type { SkycodeMessage } from "@shared/ExtensionMessage"
 import type { Task } from "../task"
 import { Pipeline } from "./Pipeline"
-import type {
-	ApprovalResult,
-	PipelineProgress,
-	SessionEvent,
-	SessionState,
-	UserMessage,
-} from "./SessionEvents"
+import type { ApprovalResult, PipelineProgress, SessionEvent, SessionState, UserMessage } from "./SessionEvents"
 
 // ---------------------------------------------------------------------------
 // Типизированный EventEmitter для SessionEvent
@@ -163,7 +157,7 @@ export class Session {
 
 	/** Изменить состояние и эмитнуть событие */
 	setState(state: SessionState, reason?: string): void {
-		if (this._state === state) return
+		if (this._state === state) { return }
 		this._state = state
 		this.emit({
 			type: "state_changed",

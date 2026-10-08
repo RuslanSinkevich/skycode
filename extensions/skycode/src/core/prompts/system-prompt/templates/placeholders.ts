@@ -6,7 +6,9 @@ export enum SystemPromptSection {
 	EDITING_FILES = "EDITING_FILES_SECTION",
 	ACT_VS_PLAN = "ACT_VS_PLAN_SECTION",
 	CLI_SUBAGENTS = "CLI_SUBAGENTS_SECTION",
-	TODO = "TODO_SECTION",
+	// [SKYCODE] TODO_SECTION удалён: компонента для него не существовало, поэтому каждая сборка
+	// промпта писала в лог "Component 'TODO_SECTION' not found" (сотни строк за сессию).
+	// Чек-листы делает TASK_PROGRESS.
 	CAPABILITIES = "CAPABILITIES_SECTION",
 	SKILLS = "SKILLS_SECTION",
 	RULES = "RULES_SECTION",
@@ -53,7 +55,6 @@ export const REQUIRED_PLACEHOLDERS: StandardPlaceholder[] = [STANDARD_PLACEHOLDE
 export const OPTIONAL_PLACEHOLDERS: StandardPlaceholder[] = [
 	STANDARD_PLACEHOLDERS.FEEDBACK,
 	STANDARD_PLACEHOLDERS.USER_INSTRUCTIONS,
-	STANDARD_PLACEHOLDERS.TODO,
 ]
 
 /**

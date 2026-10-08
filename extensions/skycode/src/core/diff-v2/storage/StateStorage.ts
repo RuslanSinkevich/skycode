@@ -45,8 +45,7 @@ export class StateStorage {
   private static readonly PENDING_FILE_DELETES_KEY = 'skycode.pendingFileDeletes';
 
   constructor(
-    private workspaceState: vscode.Memento,
-    private globalState: vscode.Memento
+    private workspaceState: vscode.Memento,_globalState: vscode.Memento
   ) {}
 
   // ==================== PENDING CHANGES ====================

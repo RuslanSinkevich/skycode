@@ -4,7 +4,7 @@ import axios from "axios"
 import * as fs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
-// @ts-ignore
+// @ts-expect-error
 import PCR from "puppeteer-chromium-resolver"
 import { launch } from "puppeteer-core"
 import { HostProvider } from "@/hosts/host-provider"
@@ -26,9 +26,9 @@ function getSkycodeChromiumUrl(): string | undefined {
 	const platform = os.platform()
 	const arch = os.arch()
 
-	if (platform === "win32") return SKYCODE_CHROMIUM_URLS["win64"]
-	if (platform === "linux") return SKYCODE_CHROMIUM_URLS["linux64"]
-	if (platform === "darwin" && arch === "arm64") return SKYCODE_CHROMIUM_URLS["mac-arm64"]
+	if (platform === "win32") { return SKYCODE_CHROMIUM_URLS["win64"] }
+	if (platform === "linux") { return SKYCODE_CHROMIUM_URLS["linux64"] }
+	if (platform === "darwin" && arch === "arm64") { return SKYCODE_CHROMIUM_URLS["mac-arm64"] }
 
 	return undefined
 }
@@ -47,7 +47,7 @@ async function findExecutableInDir(dir: string): Promise<string | undefined> {
 				}
 				if (entry.isDirectory()) {
 					const found = await search(fullPath)
-					if (found) return found
+					if (found) { return found }
 				}
 			}
 		} catch {
@@ -100,6 +100,18 @@ async function downloadSkycodeChromium(
 		await fs.mkdir(extractDir, { recursive: true })
 
 		const zip = new AdmZip(Buffer.from(response.data))
+		const resolvedExtractDir = path.resolve(extractDir)
+		for (const entry of zip.getEntries()) {
+			const entryName = entry.entryName.replace(/\\/g, "/")
+			if (path.isAbsolute(entryName) || entryName.includes("..")) {
+				throw new Error(`Archive contains unsafe path: ${entry.entryName}`)
+			}
+			const target = path.resolve(resolvedExtractDir, entryName)
+			const relative = path.relative(resolvedExtractDir, target)
+			if (relative.startsWith("..") || path.isAbsolute(relative)) {
+				throw new Error(`Archive entry escapes extract dir: ${entry.entryName}`)
+			}
+		}
 		zip.extractAllTo(extractDir, true)
 
 		if (os.platform() !== "win32") {

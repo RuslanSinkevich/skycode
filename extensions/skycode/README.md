@@ -29,6 +29,10 @@ AI-ассистент для разработки, интегрированны�
 ### VS Code Fork
 - [docs/VSCODE_FORK_PATCHES.md](./docs/VSCODE_FORK_PATCHES.md) — Патчи ядра
 
+### Безопасность и история
+- [../../../SECURITY.md](../../../SECURITY.md) — политика безопасности (корень монорепы)
+- [../../../CHANGELOG.md](../../../CHANGELOG.md) — история изменений (корень монорепы)
+
 ### Правила для AI
 - [docs/agent-rules/](./docs/agent-rules/) — Правила для AI агента
 

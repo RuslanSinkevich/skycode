@@ -64,14 +64,13 @@ const ChecklistRenderer: React.FC<ChecklistRendererProps> = ({ text }) => {
 			if (currentLastCompletedIndex >= 0 && currentLastCompletedIndex !== lastCompletedIndex) {
 				setLastCompletedIndex(currentLastCompletedIndex)
 
-				// Use scrollIntoView for more accurate positioning
+				// Scroll this list only. scrollIntoView() would also scroll every
+				// scrollable ancestor, which yanked the whole chat on each tick.
 				const container = containerRef.current
-				const itemElements = container.children
-				if (itemElements[currentLastCompletedIndex]) {
-					itemElements[currentLastCompletedIndex].scrollIntoView({
-						behavior: "smooth",
-						block: "start",
-					})
+				const item = container.children[currentLastCompletedIndex] as HTMLElement | undefined
+				if (item) {
+					const top = item.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop
+					container.scrollTo({ top, behavior: "smooth" })
 				}
 			}
 		}

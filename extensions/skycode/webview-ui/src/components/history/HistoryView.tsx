@@ -510,9 +510,22 @@ export const highlight = (fuseSearchResult: FuseResult<any>[], highlightClassNam
 		return merged
 	}
 
+	// Escape HTML special characters before building highlighted markup.
+	// Without this, a value that comes from a remote API (e.g. model list) could contain
+	// "<img onerror=...>" which would be interpreted as real HTML by dangerouslySetInnerHTML.
+	const escapeHtml = (unsafe: string): string =>
+		unsafe
+			.replace(/&/g, "&amp;")
+			.replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;")
+			.replace(/"/g, "&quot;")
+			.replace(/'/g, "&#39;")
+
+	const safeClassName = escapeHtml(highlightClassName)
+
 	const generateHighlightedText = (inputText: string, regions: [number, number][] = []) => {
 		if (regions.length === 0) {
-			return inputText
+			return escapeHtml(inputText)
 		}
 
 		// Sort and merge overlapping regions
@@ -527,16 +540,16 @@ export const highlight = (fuseSearchResult: FuseResult<any>[], highlightClassNam
 			const lastRegionNextIndex = end + 1
 
 			content += [
-				inputText.substring(nextUnhighlightedRegionStartingIndex, start),
-				`<span class="${highlightClassName}">`,
-				inputText.substring(start, lastRegionNextIndex),
+				escapeHtml(inputText.substring(nextUnhighlightedRegionStartingIndex, start)),
+				`<span class="${safeClassName}">`,
+				escapeHtml(inputText.substring(start, lastRegionNextIndex)),
 				"</span>",
 			].join("")
 
 			nextUnhighlightedRegionStartingIndex = lastRegionNextIndex
 		})
 
-		content += inputText.substring(nextUnhighlightedRegionStartingIndex)
+		content += escapeHtml(inputText.substring(nextUnhighlightedRegionStartingIndex))
 
 		return content
 	}

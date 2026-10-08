@@ -8,6 +8,7 @@ import { sanitizeAnthropicMessages } from "../transform/anthropic-format"
 import { convertAnthropicMessageToGemini } from "../transform/gemini-format"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
+import { StreamAborter } from "../utils/abort-support"
 
 interface AIhubmixHandlerOptions extends CommonApiHandlerOptions {
 	apiKey?: string
@@ -23,6 +24,7 @@ export class AIhubmixHandler implements ApiHandler {
 	private anthropicClient: Anthropic | undefined
 	private openaiClient: OpenAI | undefined
 	private geminiClient: GoogleGenAI | undefined
+	private aborter = new StreamAborter()
 
 	constructor(options: AIhubmixHandlerOptions) {
 		const { baseURL, appCode, ...rest } = options
@@ -31,6 +33,10 @@ export class AIhubmixHandler implements ApiHandler {
 			appCode: appCode ?? "KUWF9311",
 			...rest,
 		}
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	private ensureAnthropicClient(): Anthropic {
@@ -148,6 +154,7 @@ export class AIhubmixHandler implements ApiHandler {
 		// Sanitize messages to remove Skycode-specific fields like call_id that are not allowed by Anthropic API
 		const sanitizedMessages = sanitizeAnthropicMessages(messages, false)
 
+		this.aborter.reset()
 		const stream = await client.messages.create({
 			model: modelId,
 			temperature: 0,
@@ -156,7 +163,9 @@ export class AIhubmixHandler implements ApiHandler {
 			messages: sanitizedMessages,
 			stream: true,
 		})
+		this.aborter.track(stream)
 
+		try {
 		for await (const chunk of stream) {
 			switch (chunk?.type) {
 				case "message_start":
@@ -193,6 +202,9 @@ export class AIhubmixHandler implements ApiHandler {
 					}
 					break
 			}
+		}
+		} finally {
+			this.aborter.clear()
 		}
 	}
 
@@ -256,8 +268,11 @@ export class AIhubmixHandler implements ApiHandler {
 
 		const fixedRequestBody = this.fixToolChoice(requestBody)
 
-		const stream = await client.chat.completions.create(fixedRequestBody)
+		const signal = this.aborter.reset()
+		const stream = await client.chat.completions.create(fixedRequestBody, { signal })
+		this.aborter.track(stream)
 
+		try {
 		for await (const chunk of stream as any) {
 			const delta = chunk.choices?.[0]?.delta
 			if (delta?.content) {
@@ -274,6 +289,9 @@ export class AIhubmixHandler implements ApiHandler {
 					outputTokens: chunk.usage.completion_tokens || 0,
 				}
 			}
+		}
+		} finally {
+			this.aborter.clear()
 		}
 	}
 

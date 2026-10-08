@@ -23,14 +23,14 @@ export async function togglePlanActModeProto(controller: Controller, request: To
 			case PlanActMode.PAM_ASK:
 				mode = "ask"
 				break
-		case PlanActMode.DEBUG:
-			mode = "debug"
-			break
-		case PlanActMode.CHAT:
-			mode = "chat"
-			break
-		default:
-			throw new Error(`Invalid mode value: ${request.mode}`)
+			case PlanActMode.DEBUG:
+				mode = "debug"
+				break
+			case PlanActMode.CHAT:
+				mode = "chat"
+				break
+			default:
+				throw new Error(`Invalid mode value: ${request.mode}`)
 		}
 		const chatContent = request.chatContent
 

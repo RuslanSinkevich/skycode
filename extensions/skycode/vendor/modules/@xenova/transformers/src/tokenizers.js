@@ -173,14 +173,14 @@ function clean_up_tokenization(text) {
   return text
     .replace(/ \./g, ".")
     .replace(/ \?/g, "?")
-    .replace(/ \!/g, "!")
+    .replace(/ !/g, "!")
     .replace(/ ,/g, ",")
-    .replace(/ \' /g, "'")
-    .replace(/ n\'t/g, "n't")
-    .replace(/ \'m/g, "'m")
-    .replace(/ \'s/g, "'s")
-    .replace(/ \'ve/g, "'ve")
-    .replace(/ \'re/g, "'re");
+    .replace(/ ' /g, "'")
+    .replace(/ n't/g, "n't")
+    .replace(/ 'm/g, "'m")
+    .replace(/ 's/g, "'s")
+    .replace(/ 've/g, "'ve")
+    .replace(/ 're/g, "'re");
 }
 
 /**
@@ -309,7 +309,7 @@ export class TokenizerModel extends Callable {
       case "WordPiece":
         return new WordPieceTokenizer(config);
       case "Unigram":
-        // @ts-ignore
+        // @ts-expect-error
         return new Unigram(config, ...args);
 
       case "BPE":
@@ -317,7 +317,7 @@ export class TokenizerModel extends Callable {
 
       default:
         if (config.vocab) {
-          // @ts-ignore
+          // @ts-expect-error
           return new LegacyTokenizerModel(config, ...args);
         }
         throw new Error(`Unknown TokenizerModel type: ${config.type}`);
@@ -344,7 +344,7 @@ export class TokenizerModel extends Callable {
    * @returns {string[]} The encoded tokens.
    * @throws Will throw an error if not implemented in a subclass.
    */
-  encode(tokens) {
+  encode(_tokens) {
     throw Error("encode should be implemented in subclass.");
   }
 
@@ -529,7 +529,7 @@ class Unigram extends TokenizerModel {
       let hasSingleNode = false;
       const tokens = [];
 
-      for (let token of this.trie.commonPrefixSearch(
+      for (const token of this.trie.commonPrefixSearch(
         sentence.slice(beginPos),
       )) {
         tokens.push(token);
@@ -730,7 +730,7 @@ class BPE extends TokenizerModel {
         const node = queue.pop();
 
         // Check that this merge is still possible
-        if (node.deleted || !node.next || node.next.deleted) continue;
+        if (node.deleted || !node.next || node.next.deleted) { continue; }
 
         // Here, we mark the current node (left side of the merge) and the next node (right side of the merge) as deleted.
         // This is because they will both be replaced by a new node representing the merge result.
@@ -923,7 +923,7 @@ class Normalizer extends Callable {
    * @throws {Error} If an unknown Normalizer type is specified in the config.
    */
   static fromConfig(config) {
-    if (config === null) return null;
+    if (config === null) { return null; }
     switch (config.type) {
       case "BertNormalizer":
         return new BertNormalizer(config);
@@ -959,7 +959,7 @@ class Normalizer extends Callable {
    * @returns {string} The normalized text.
    * @throws {Error} If this method is not implemented in a subclass.
    */
-  normalize(text) {
+  normalize(_text) {
     throw Error("normalize should be implemented in subclass.");
   }
 
@@ -1289,7 +1289,7 @@ class PreTokenizer extends Callable {
    * @throws {Error} If the provided configuration object does not correspond to any known pre-tokenizer.
    */
   static fromConfig(config) {
-    if (config === null) return null;
+    if (config === null) { return null; }
 
     switch (config.type) {
       case "BertPreTokenizer":
@@ -1325,7 +1325,7 @@ class PreTokenizer extends Callable {
    * @returns {string[]} The pre-tokenized text.
    * @throws {Error} If the method is not implemented in the subclass.
    */
-  pre_tokenize_text(text, options) {
+  pre_tokenize_text(_text, _options) {
     throw Error("pre_tokenize_text should be implemented in subclass.");
   }
 
@@ -1364,7 +1364,7 @@ class BertPreTokenizer extends PreTokenizer {
    *
    * @param {Object} config The configuration object.
    */
-  constructor(config) {
+  constructor(_config) {
     super();
     // Construct a pattern which matches the rust implementation:
     // https://github.com/huggingface/tokenizers/blob/b4fcc9ce6e4ad5806e82826f816acfdfdc4fcc67/tokenizers/src/pre_tokenizers/bert.rs#L11
@@ -1381,7 +1381,7 @@ class BertPreTokenizer extends PreTokenizer {
    * @param {Object} [options] Additional options for the pre-tokenization logic.
    * @returns {string[]} An array of tokens.
    */
-  pre_tokenize_text(text, options) {
+  pre_tokenize_text(text, _options) {
     return text.trim().match(this.pattern) || [];
   }
 }
@@ -1430,7 +1430,7 @@ class ByteLevelPreTokenizer extends PreTokenizer {
    * @param {Object} [options] Additional options for the pre-tokenization logic.
    * @returns {string[]} An array of tokens.
    */
-  pre_tokenize_text(text, options) {
+  pre_tokenize_text(text, _options) {
     // Add a leading space if the option is enabled
     if (this.add_prefix_space && !text.startsWith(" ")) {
       text = " " + text;
@@ -1480,7 +1480,7 @@ class SplitPreTokenizer extends PreTokenizer {
    * @param {Object} [options] Additional options for the pre-tokenization logic.
    * @returns {string[]} An array of tokens.
    */
-  pre_tokenize_text(text, options) {
+  pre_tokenize_text(text, _options) {
     if (this.pattern === null) {
       return [];
     }
@@ -1517,7 +1517,7 @@ class PunctuationPreTokenizer extends PreTokenizer {
    * @param {Object} [options] Additional options for the pre-tokenization logic.
    * @returns {string[]} An array of tokens.
    */
-  pre_tokenize_text(text, options) {
+  pre_tokenize_text(text, _options) {
     return text.match(this.pattern) || [];
   }
 }
@@ -1546,7 +1546,7 @@ class DigitsPreTokenizer extends PreTokenizer {
    * @param {Object} [options] Additional options for the pre-tokenization logic.
    * @returns {string[]} An array of tokens.
    */
-  pre_tokenize_text(text, options) {
+  pre_tokenize_text(text, _options) {
     return text.match(this.pattern) || [];
   }
 }
@@ -1584,7 +1584,7 @@ class PostProcessor extends Callable {
    * @throws {Error} If an unknown PostProcessor type is encountered.
    */
   static fromConfig(config) {
-    if (config === null) return null;
+    if (config === null) { return null; }
     switch (config.type) {
       case "TemplateProcessing":
         return new TemplateProcessing(config);
@@ -1610,7 +1610,7 @@ class PostProcessor extends Callable {
    * @returns {PostProcessedOutput} The post-processed tokens.
    * @throws {Error} If the method is not implemented in subclass.
    */
-  post_process(tokens, ...args) {
+  post_process(_tokens, ..._args) {
     throw Error("post_process should be implemented in subclass.");
   }
 
@@ -1776,7 +1776,7 @@ class Decoder extends Callable {
    * @throws {Error} If an unknown decoder type is provided.
    */
   static fromConfig(config) {
-    if (config === null) return null;
+    if (config === null) { return null; }
     switch (config.type) {
       case "WordPiece":
         return new WordPieceDecoder(config);
@@ -1832,7 +1832,7 @@ class Decoder extends Callable {
    * @returns {string[]} The decoded list of tokens.
    * @throws {Error} If the `decode_chain` method is not implemented in the subclass.
    */
-  decode_chain(tokens) {
+  decode_chain(_tokens) {
     throw Error("`decode_chain` should be implemented in subclass.");
   }
 }
@@ -1867,7 +1867,7 @@ class ByteFallback extends Decoder {
         token.endsWith(">")
       ) {
         const byte = parseInt(token.slice(3, 5), 16);
-        if (!isNaN(byte)) {
+        if (!Number.isNaN(byte)) {
           bytes = byte;
         }
       }
@@ -1924,7 +1924,6 @@ class StripDecoder extends Decoder {
       for (let i = 0; i < this.start; ++i) {
         if (token[i] === this.content) {
           start_cut = i + 1;
-          continue;
         } else {
           break;
         }
@@ -1935,7 +1934,6 @@ class StripDecoder extends Decoder {
         const index = token.length - i - 1;
         if (token[index] === this.content) {
           stop_cut = index;
-          continue;
         } else {
           break;
         }
@@ -2071,7 +2069,7 @@ class CTCDecoder extends Decoder {
    * @returns {string} The decoded string.
    */
   convert_tokens_to_string(tokens) {
-    if (tokens.length === 0) return "";
+    if (tokens.length === 0) { return ""; }
 
     // group same tokens into non-repeating tokens in CTC style decoding
     const grouped_tokens = [tokens[0]];
@@ -2226,7 +2224,7 @@ class MetaspaceDecoder extends Decoder {
     const result = [];
     for (let i = 0; i < tokens.length; ++i) {
       let normalized = tokens[i].replaceAll(this.replacement, " ");
-      if (this.addPrefixSpace && i == 0 && normalized.startsWith(" ")) {
+      if (this.addPrefixSpace && i === 0 && normalized.startsWith(" ")) {
         normalized = normalized.substring(1);
       }
       result.push(normalized);
@@ -2338,7 +2336,7 @@ class WhitespaceSplit extends PreTokenizer {
    * Creates an instance of WhitespaceSplit.
    * @param {Object} config The configuration object for the pre-tokenizer sequence.
    */
-  constructor(config) {
+  constructor(_config) {
     super();
   }
   /**
@@ -2347,7 +2345,7 @@ class WhitespaceSplit extends PreTokenizer {
    * @param {Object} [options] Additional options for the pre-tokenization logic.
    * @returns {string[]} An array of tokens produced by splitting the input text on whitespace.
    */
-  pre_tokenize_text(text, options) {
+  pre_tokenize_text(text, _options) {
     return whitespace_split(text);
   }
 }
@@ -2372,7 +2370,7 @@ class ReplacePreTokenizer extends PreTokenizer {
    * @param {Object} [options] Additional options for the pre-tokenization logic.
    * @returns {string[]} An array of tokens produced by replacing certain characters.
    */
-  pre_tokenize_text(text, options) {
+  pre_tokenize_text(text, _options) {
     if (this.pattern === null) {
       return [text];
     }
@@ -2547,7 +2545,7 @@ export class PreTrainedTokenizer extends Callable {
     for (const key of keys) {
       const item = this._tokenizer_config[key];
 
-      if (!item) continue;
+      if (!item) { continue; }
 
       if (typeof item === "object") {
         if (item.__type === "AddedToken") {
@@ -2591,8 +2589,8 @@ export class PreTrainedTokenizer extends Callable {
       legacy,
     });
 
-    // @ts-ignore
-    return new this(...info);
+    // @ts-expect-error
+    return new PreTrainedTokenizer(...info);
   }
 
   /**
@@ -2696,7 +2694,6 @@ export class PreTrainedTokenizer extends Callable {
       // Perform padding and/or truncation
       for (let i = 0; i < encodedTokens.length; ++i) {
         if (encodedTokens[i].input_ids.length === max_length) {
-          continue;
         } else if (encodedTokens[i].input_ids.length > max_length) {
           // possibly truncate
           if (truncation) {
@@ -2777,7 +2774,7 @@ export class PreTrainedTokenizer extends Callable {
    * @returns {string[]|null} The encoded tokens.
    */
   _encode_text(text) {
-    if (text === null) return null;
+    if (text === null) { return null; }
 
     // Actual function which does encoding, for a single text
     // First, we take care of special tokens. Needed to avoid issues arising from
@@ -2787,7 +2784,7 @@ export class PreTrainedTokenizer extends Callable {
       : [text];
 
     const tokens = sections
-      .map((x, section_index) => {
+      .flatMap((x, section_index) => {
         const addedToken = this.added_tokens.find((t) => t.content === x);
         if (addedToken !== undefined) {
           // Ignore added tokens
@@ -2815,8 +2812,7 @@ export class PreTrainedTokenizer extends Callable {
 
           return tokens;
         }
-      })
-      .flat();
+      });
 
     return tokens;
   }
@@ -3203,7 +3199,7 @@ export class LlamaTokenizer extends PreTrainedTokenizer {
    * @returns {string[]} The encoded tokens.
    */
   _encode_text(text) {
-    if (text === null) return null;
+    if (text === null) { return null; }
 
     if (this.legacy || text.length === 0) {
       return super._encode_text(text);
@@ -3500,9 +3496,9 @@ const WHISPER_LANGUAGES = [
   ["su", "sundanese"],
 ];
 
-// @ts-ignore
+// @ts-expect-error
 const WHISPER_LANGUAGE_MAPPING = new Map(WHISPER_LANGUAGES);
-// @ts-ignore
+// @ts-expect-error
 const WHISPER_TO_LANGUAGE_CODE_MAPPING = new Map([
   ...WHISPER_LANGUAGES.map(([k, v]) => [v, k]),
   ...[
@@ -3744,7 +3740,7 @@ export class WhisperTokenizer extends PreTrainedTokenizer {
           current_tokens.push(token);
 
           if (returnWordTimestamps) {
-            let start_time = round(token_timestamps[i] + time_offset, 2);
+            const start_time = round(token_timestamps[i] + time_offset, 2);
 
             let end_time;
             if (i + 1 < token_timestamps.length) {
@@ -3759,7 +3755,7 @@ export class WhisperTokenizer extends PreTrainedTokenizer {
       }
 
       if ("stride" in output) {
-        const [chunk_len, stride_left, stride_right] = output.stride;
+        const [chunk_len, _stride_left, stride_right] = output.stride;
         time_offset += chunk_len - stride_right;
       }
 
@@ -3854,12 +3850,12 @@ export class WhisperTokenizer extends PreTrainedTokenizer {
     // exactly the same way.
     let leftSequence = sequences[0];
     let leftLength = leftSequence.length;
-    let totalSequence = [];
+    const totalSequence = [];
 
     const use_token_timestamp_sequences =
       Array.isArray(token_timestamp_sequences) &&
       token_timestamp_sequences.length > 0;
-    let total_token_timestamp_sequence = use_token_timestamp_sequences
+    const total_token_timestamp_sequence = use_token_timestamp_sequences
       ? []
       : null;
     let left_token_timestamp_sequence = use_token_timestamp_sequences
@@ -4004,7 +4000,7 @@ export class WhisperTokenizer extends PreTrainedTokenizer {
   /** @type {PreTrainedTokenizer['decode']} */
   decode(token_ids, decode_args) {
     let text;
-    // @ts-ignore
+    // @ts-expect-error
     if (decode_args && decode_args.decode_with_timestamps) {
       if (token_ids instanceof Tensor) {
         token_ids = prepareTensorForDecode(token_ids);
@@ -4059,7 +4055,7 @@ export class WhisperTokenizer extends PreTrainedTokenizer {
    */
   splitTokensOnUnicode(tokens) {
     const decoded_full = this.decode(tokens, {
-      // @ts-ignore
+      // @ts-expect-error
       decode_with_timestamps: true,
     });
     const replacement_char = "\uFFFD";
@@ -4078,7 +4074,7 @@ export class WhisperTokenizer extends PreTrainedTokenizer {
       current_indices.push(token_idx);
 
       const decoded = this.decode(current_tokens, {
-        // @ts-ignore
+        // @ts-expect-error
         decode_with_timestamps: true,
       });
 
@@ -4119,7 +4115,7 @@ export class WhisperTokenizer extends PreTrainedTokenizer {
       const subword_tokens = subword_tokens_list[i];
       const subword_indices = subword_indices_list[i];
 
-      // @ts-ignore
+      // @ts-expect-error
       const special =
         subword_tokens[0] >= this.model.tokens_to_ids.get("<|endoftext|>");
       const with_space = subword.startsWith(" ");
@@ -4349,7 +4345,7 @@ export class MarianTokenizer extends PreTrainedTokenizer {
    * @returns {Array} The encoded tokens.
    */
   _encode_text(text) {
-    if (text === null) return null;
+    if (text === null) { return null; }
 
     // Check if text starts with language code:
     const [matchInfo, ...remainder] = text.trim().split(this.languageRegex);
@@ -4489,7 +4485,7 @@ export class AutoTokenizer {
       tokenizerConfig.tokenizer_class?.replace(/Fast$/, "") ??
       "PreTrainedTokenizer";
 
-    let cls = this.TOKENIZER_CLASS_MAPPING[tokenizerName];
+    let cls = AutoTokenizer.TOKENIZER_CLASS_MAPPING[tokenizerName];
     if (!cls) {
       console.warn(
         `Unknown tokenizer class "${tokenizerName}", attempting to construct from base class.`,

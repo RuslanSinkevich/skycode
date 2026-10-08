@@ -14,7 +14,7 @@ const QWEN_AGENT_ROLE_TEMPLATE = (context: SystemPromptContext) => {
 	].join("")
 }
 
-const QWEN_TOOL_USE_TEMPLATE = `Before implementing, gather context efficiently: use codebase_search for semantic queries OR search_files for exact patterns (not both). Read only the files you need. Limit exploration to 3-4 calls.
+const QWEN_TOOL_USE_TEMPLATE = `Before implementing, gather context efficiently: use codebase_search for semantic queries OR search_files for exact patterns (not both). Read only the files you need, but read enough of them to edit safely.
 
 Tool invocation policy: One tool per message. Wait for result before next tool. Never assume tool outcomes.
 
@@ -37,8 +37,8 @@ You accomplish tasks iteratively, breaking them into clear steps.
 5. The user may provide feedback for improvements. Do NOT engage in back-and-forth conversation.
 
 SESSION LIMITS — CRITICAL:
-- You have a LIMITED number of tool calls per session. Do NOT waste them on unnecessary exploration.
-- Maximum 3-4 read/search calls before you MUST start making changes. If you need more context, ask the user.
+- The number of tool calls for this run is limited. Do NOT waste them on unnecessary exploration.
+- Read what you genuinely need to make a correct edit, then start editing. Editing a file you have not read is worse than one more read.
 - Do NOT read the same file twice. Do NOT search for the same thing with different tools.
 - If you receive a [SESSION GUARD] or [SESSION BUDGET] warning, IMMEDIATELY stop exploring and take action.
 - Plan your approach in <think> tags BEFORE making tool calls. Decide what you need to read, then read it all, then act.`
@@ -68,7 +68,7 @@ General:
 Efficiency:
 - NEVER read a file you already read in this session. Use the content from the previous read.
 - NEVER run multiple search tools for the same query. Pick one (codebase_search OR search_files), not both.
-- Limit exploration to 3-4 tool calls maximum before starting edits. If unsure, ask the user.
+- Keep exploration proportional to the task: enough reads to edit safely, no browsing "just in case".
 - When you receive a [SESSION GUARD] warning, STOP exploring and start implementing immediately.
 `
 
@@ -84,7 +84,6 @@ Each tool supports an optional task_progress parameter for maintaining a Markdow
 Example:
 <execute_command>
 <command>npm install react</command>
-<requires_approval>false</requires_approval>
 <task_progress>
 - [x] Set up project structure
 - [x] Install dependencies

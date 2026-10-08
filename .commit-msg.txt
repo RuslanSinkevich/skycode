@@ -1,0 +1,7 @@
+chore(skycode): lint cleanup, sqlite ABI fallback, indexing banner
+
+- biome lint -> 0 errors (Logger, host bridge, for...of)
+- native/sqlite prebuilds per Electron + runtime binding select
+- proto-lint.mjs replaces bash; rebuild-native.mjs for vsix
+- IndexingPromptBanner UI; embedding worker patches
+- .gitignore: src/**/*.js(.map), native/sqlite, build logs

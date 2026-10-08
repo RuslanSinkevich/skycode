@@ -198,7 +198,7 @@ export class CharTrie {
    * @param {string[]} texts The strings to add to the trie.
    */
   extend(texts) {
-    for (let text of texts) {
+    for (const text of texts) {
       this.push(text);
     }
   }
@@ -209,7 +209,7 @@ export class CharTrie {
    */
   push(text) {
     let node = this.root;
-    for (let ch of text) {
+    for (const ch of text) {
       let child = node.children.get(ch);
       if (child === undefined) {
         child = CharTrieNode.default();
@@ -315,14 +315,14 @@ export class TokenLattice {
     const len = this.len;
     let pos = 0;
     while (pos <= len) {
-      if (this.beginNodes[pos].length == 0) {
+      if (this.beginNodes[pos].length === 0) {
         return [];
       }
-      for (let rnode of this.beginNodes[pos]) {
+      for (const rnode of this.beginNodes[pos]) {
         rnode.prev = null;
         let bestScore = 0.0;
         let bestNode = null;
-        for (let lnode of this.endNodes[pos]) {
+        for (const lnode of this.endNodes[pos]) {
           const score = lnode.backtraceScore + rnode.score;
           if (bestNode === null || score > bestScore) {
             bestNode = lnode.clone();

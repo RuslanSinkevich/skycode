@@ -29,13 +29,13 @@ export class PositionTracker {
     delta: number,
     excludeHunkId?: string,
   ): HunkPositionUpdate[] {
-    if (delta === 0) return [];
+    if (delta === 0) { return []; }
 
     const updates: HunkPositionUpdate[] = [];
     const pendingHunks = this.store.getPendingHunksByFile(fsPath);
 
     for (const hunk of pendingHunks) {
-      if (excludeHunkId && hunk.id === excludeHunkId) continue;
+      if (excludeHunkId && hunk.id === excludeHunkId) { continue; }
 
       if (hunk.currentStartLine > editEndLine) {
         // Hunk is entirely BELOW the edit → shift both start and end

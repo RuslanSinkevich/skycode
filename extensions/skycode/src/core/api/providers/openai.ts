@@ -11,7 +11,6 @@ import { convertToR1Format } from "../transform/r1-format"
 import { ApiStream } from "../transform/stream"
 import { getOpenAIToolParams, ToolCallProcessor } from "../transform/tool-call-processor"
 import { ThinkTagStreamParser } from "../transform/think-tag-parser"
-import { Logger } from "@/shared/services/Logger"
 
 interface OpenAiHandlerOptions extends CommonApiHandlerOptions {
 	openAiApiKey?: string
@@ -22,20 +21,31 @@ interface OpenAiHandlerOptions extends CommonApiHandlerOptions {
 	openAiModelId?: string
 	openAiModelInfo?: OpenAiCompatibleModelInfo
 	reasoningEffort?: string
+	thinkingBudgetTokens?: number
 }
 
 export class OpenAiHandler implements ApiHandler {
 	private options: OpenAiHandlerOptions
 	private client: OpenAI | undefined
+	private currentStream: any = null
 
 	constructor(options: OpenAiHandlerOptions) {
 		this.options = options
 	}
 
+	abort(): void {
+		try {
+			this.currentStream?.controller?.abort?.()
+		} catch {
+			// stream may already be closed
+		}
+		this.currentStream = null
+	}
+
 	private getAzureAudienceScope(baseUrl?: string): string {
 		const url = baseUrl?.toLowerCase() ?? ""
-		if (url.includes("azure.us")) return "https://cognitiveservices.azure.us/.default"
-		if (url.includes("azure.com")) return "https://cognitiveservices.azure.com/.default"
+		if (url.includes("azure.us")) { return "https://cognitiveservices.azure.us/.default" }
+		if (url.includes("azure.com")) { return "https://cognitiveservices.azure.com/.default" }
 		return "https://cognitiveservices.azure.com/.default"
 	}
 
@@ -97,25 +107,23 @@ export class OpenAiHandler implements ApiHandler {
 			["o1", "o3", "o4", "gpt-5"].some((prefix) => modelId.includes(prefix)) && !modelId.includes("chat")
 		// Qwen3/Qwen3.5 models: enable thinking mode so reasoning goes into <think> tags
 		// parsed by ThinkTagStreamParser instead of appearing as plain text.
-		// Matches: qwen3, qwen3.5, qwen-3, Qwen/Qwen3.5-..., etc.
+		// [SKYCODE] Только по явному запросу: раньше режим включался всем моделям с "qwen3" в id,
+		// без настройки и без следа в UI, а сообщение пользователя молча переписывалось.
 		const modelIdLower = modelId.toLowerCase()
-		const isQwen3ThinkingModel =
-			modelIdLower.includes("qwen3") ||
-			modelIdLower.includes("qwen3.") ||
-			modelIdLower.includes("qwen-3") ||
-			/qwen\/qwen3/i.test(modelId)
+		const thinkingRequested = (this.options.thinkingBudgetTokens ?? 0) > 0
+		const isQwen3ThinkingModel = thinkingRequested && (modelIdLower.includes("qwen3") || modelIdLower.includes("qwen-3"))
 
 		let openAiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
 			{ role: "system", content: systemPrompt },
 			...convertToOpenAiMessages(messages),
 		]
-		let temperature: number | undefined
-		if (this.options.openAiModelInfo?.temperature !== undefined) {
-			const tempValue = Number(this.options.openAiModelInfo.temperature)
-			temperature = tempValue === 0 ? undefined : tempValue
-		} else {
-			temperature = openAiModelInfoSaneDefaults.temperature
-		}
+		// [SKYCODE] Заданная температура отправляется как есть, включая 0. Раньше явный 0
+		// означал «не отправлять параметр» — то есть выставленный руками ноль давал дефолт
+		// провайдера, а получить настоящий 0 можно было только оставив поле пустым.
+		const configuredTemperature = Number(this.options.openAiModelInfo?.temperature)
+		let temperature: number | undefined = Number.isFinite(configuredTemperature)
+			? configuredTemperature
+			: openAiModelInfoSaneDefaults.temperature
 		let reasoningEffort: ChatCompletionReasoningEffort | undefined
 		let maxTokens: number | undefined
 
@@ -163,6 +171,7 @@ export class OpenAiHandler implements ApiHandler {
 			stream_options: { include_usage: true },
 			...getOpenAIToolParams(tools),
 		})
+		this.currentStream = stream as any
 
 		const toolCallProcessor = new ToolCallProcessor()
 		const thinkParser = new ThinkTagStreamParser()
@@ -185,8 +194,8 @@ export class OpenAiHandler implements ApiHandler {
 					yield { type: "text", text: delta.content }
 				} else {
 					const { reasoning, text } = thinkParser.process(delta.content)
-					if (reasoning) yield { type: "reasoning", reasoning }
-					if (text) yield { type: "text", text }
+					if (reasoning) { yield { type: "reasoning", reasoning } }
+					if (text) { yield { type: "text", text } }
 				}
 			}
 
@@ -197,7 +206,7 @@ export class OpenAiHandler implements ApiHandler {
 			if (chunk.usage) {
 				const promptTokens = chunk.usage.prompt_tokens || 0
 				const cachedTokens = chunk.usage.prompt_tokens_details?.cached_tokens || 0
-				// @ts-ignore-next-line
+				// @ts-expect-error-next-line
 				const cacheMissTokens = chunk.usage.prompt_cache_miss_tokens || 0
 				yield {
 					type: "usage",

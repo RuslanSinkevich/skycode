@@ -1,5 +1,4 @@
 import { setTimeout as setTimeoutPromise } from "node:timers/promises"
-import * as vscode from "vscode"
 import { ApiHandler, ApiProviderInfo, buildApiHandler } from "@core/api"
 import { ApiStream } from "@core/api/transform/stream"
 import { AssistantMessageContent, parseAssistantMessageV2, ToolUse } from "@core/assistant-message"
@@ -9,17 +8,18 @@ import { EnvironmentContextTracker } from "@core/context/context-tracking/Enviro
 import { FileContextTracker } from "@core/context/context-tracking/FileContextTracker"
 import { ModelContextTracker } from "@core/context/context-tracking/ModelContextTracker"
 import {
-	getGlobalSkycodeRules,
-	getLocalSkycodeRules,
-	refreshSkycodeRulesToggles,
-} from "@core/context/instructions/user-instructions/skycode-rules"
-import {
 	getLocalAgentsRules,
 	getLocalCursorRules,
 	getLocalWindsurfRules,
 	refreshExternalRulesToggles,
 } from "@core/context/instructions/user-instructions/external-rules"
+import {
+	getGlobalSkycodeRules,
+	getLocalSkycodeRules,
+	refreshSkycodeRulesToggles,
+} from "@core/context/instructions/user-instructions/skycode-rules"
 import { sendPartialMessageEvent } from "@core/controller/ui/subscribeToPartialMessage"
+import { getDiffSystem } from "@core/diff-v2"
 import { getHooksEnabledSafe } from "@core/hooks/hooks-utils"
 import { executePreCompactHookWithCleanup, HookCancellationError, HookExecution } from "@core/hooks/precompact-executor"
 import { SkycodeIgnoreController } from "@core/ignore/SkycodeIgnoreController"
@@ -27,6 +27,8 @@ import { parseMentions } from "@core/mentions"
 import { CommandPermissionController } from "@core/permissions"
 import { summarizeTask } from "@core/prompts/contextManagement"
 import { formatResponse } from "@core/prompts/responses"
+import { ApprovalGate } from "@core/session/ApprovalGate"
+import type { Session } from "@core/session/Session"
 import { parseSlashCommands } from "@core/slash-commands"
 import {
 	ensureRulesDirectoryExists,
@@ -43,35 +45,34 @@ import { WorkspaceRootManager } from "@core/workspace/WorkspaceRootManager"
 // import { ensureCheckpointInitialized } from "@integrations/checkpoints/initializer"
 // import { ICheckpointManager } from "@integrations/checkpoints/types"
 import { DiffViewProvider } from "@integrations/editor/DiffViewProvider"
-import { getDiffSystem } from "@core/diff-v2"
 import { formatContentBlockToMarkdown } from "@integrations/misc/export-markdown"
 import { processFilesIntoText } from "@integrations/misc/extract-text"
 import { showSystemNotification } from "@integrations/notifications"
 import { ITerminalManager } from "@integrations/terminal/types"
+import { AuthService } from "@services/auth/AuthService"
 import { BrowserSession } from "@services/browser/BrowserSession"
 import { UrlContentFetcher } from "@services/browser/UrlContentFetcher"
-import { featureFlagsService } from "@services/feature-flags"
-import { AuthService } from "@services/auth/AuthService"
-import { listFiles } from "@services/glob/list-files"
 import { McpHub } from "@services/mcp/McpHub"
 import { ApiConfiguration } from "@shared/api"
-import { findLast, findLastIndex } from "@shared/array"
-import { combineApiRequests } from "@shared/combineApiRequests"
-import { combineCommandSequences } from "@shared/combineCommandSequences"
+import { findLastIndex } from "@shared/array"
 import { SkycodeApiReqCancelReason, SkycodeApiReqInfo, SkycodeAsk, SkycodeMessage, SkycodeSay } from "@shared/ExtensionMessage"
 import { HistoryItem } from "@shared/HistoryItem"
 import { getLanguageKey, LanguageDisplay } from "@shared/Languages"
 import { USER_CONTENT_TAGS } from "@shared/messages/constants"
 import { convertSkycodeMessageToProto } from "@shared/proto-conversions/skycode-message"
-import { SkycodeDefaultTool, READ_ONLY_TOOLS } from "@shared/tools"
-import { SkycodeAskResponse } from "@shared/WebviewMessage"
 import { getApiSettingsMode, isReadOnlyMode } from "@shared/storage/types"
-import { isClaude4PlusModelFamily, isGPT5ModelFamily, isLocalModel, isNextGenModelFamily, getModelCapabilityTier, getSessionLimitsForModel } from "@utils/model-utils"
+import { SkycodeDefaultTool } from "@shared/tools"
+import { SkycodeAskResponse } from "@shared/WebviewMessage"
+import {
+	getModelCapabilityTier,
+	getSessionLimitsForModel,
+	isGPT5ModelFamily,
+	isLocalModel,
+	isNextGenModelFamily,
+} from "@utils/model-utils"
 import cloneDeep from "clone-deep"
 import Mutex from "p-mutex"
 import pWaitFor from "p-wait-for"
-import { ApprovalGate } from "@core/session/ApprovalGate"
-import type { Session } from "@core/session/Session"
 import * as path from "path"
 import { ulid } from "ulid"
 import type { SystemPromptContext } from "@/core/prompts/system-prompt"
@@ -84,7 +85,7 @@ import {
 	FullCommandExecutorConfig,
 	StandaloneTerminalManager,
 } from "@/integrations/terminal"
-import { SkycodeError, SkycodeErrorType, ErrorService } from "@/services/error"
+import { ErrorService, SkycodeError, SkycodeErrorType } from "@/services/error"
 import { telemetryService } from "@/services/telemetry"
 import {
 	SkycodeAssistantContent,
@@ -97,9 +98,8 @@ import {
 	SkycodeUserContent,
 } from "@/shared/messages"
 import { ApiFormat } from "@/shared/proto/skycode/models"
-import { ShowMessageType } from "@/shared/proto/index.host"
 import { Logger } from "@/shared/services/Logger"
-import { isSkycodeCliInstalled, isCliSubagentContext } from "@/utils/cli-detector"
+import { isCliSubagentContext, isSkycodeCliInstalled } from "@/utils/cli-detector"
 import { getGitStatusCompact } from "@/utils/git"
 import { RuleContextBuilder } from "../context/instructions/user-instructions/RuleContextBuilder"
 import { ensureLocalSkycodeDirExists } from "../context/instructions/user-instructions/rule-helpers"
@@ -108,12 +108,12 @@ import { refreshWorkflowToggles } from "../context/instructions/user-instruction
 import { Controller } from "../controller"
 import { executeHook } from "../hooks/hook-executor"
 import { StateManager } from "../storage/StateManager"
+import { buildEnvironmentDetails } from "./environmentDetails"
 import { FocusChainManager } from "./focus-chain"
 import { MessageStateHandler } from "./message-state"
 import { StreamResponseHandler } from "./StreamResponseHandler"
 import { TaskState } from "./TaskState"
 import { ToolExecutor } from "./ToolExecutor"
-import { buildEnvironmentDetails } from "./environmentDetails"
 import { extractProviderDomainFromUrl, updateApiReqMsg } from "./utils"
 import { buildUserFeedbackContent } from "./utils/buildUserFeedbackContent"
 
@@ -150,6 +150,11 @@ export class Task {
 	private taskIsFavorited?: boolean
 	private cwd: string
 	private taskInitializationStartTime: number
+	/**
+	 * [SKYCODE] Правила, помеченные `priority: critical`, в усечённом виде.
+	 * Повторяются в environment_details каждое сообщение — см. место их чтения ниже.
+	 */
+	private criticalRulesReminder?: string
 
 	taskState: TaskState
 
@@ -223,7 +228,7 @@ export class Task {
 	private mcpHub: McpHub
 
 	// Service handlers
-	api: ApiHandler
+	api!: ApiHandler
 	terminalManager: ITerminalManager
 	private urlContentFetcher: UrlContentFetcher
 	browserSession: BrowserSession
@@ -409,55 +414,13 @@ export class Task {
 		// }
 		// --- END DISABLED BLOCK ---
 
-		// Prepare effective API configuration
-		const apiConfiguration = this.stateManager.getApiConfiguration()
-		const effectiveApiConfiguration: ApiConfiguration = {
-			...apiConfiguration,
-			ulid: this.ulid,
-			onRetryAttempt: async (attempt: number, maxRetries: number, delay: number, error: any) => {
-				const skycodeMessages = this.messageStateHandler.getSkycodeMessages()
-				const lastApiReqStartedIndex = findLastIndex(skycodeMessages, (m) => m.say === "api_req_started")
-				if (lastApiReqStartedIndex !== -1) {
-					try {
-						const currentApiReqInfo: SkycodeApiReqInfo = JSON.parse(skycodeMessages[lastApiReqStartedIndex].text || "{}")
-						currentApiReqInfo.retryStatus = {
-							attempt: attempt, // attempt is already 1-indexed from retry.ts
-							maxAttempts: maxRetries, // total attempts
-							delaySec: Math.round(delay / 1000),
-							errorSnippet: error?.message ? `${String(error.message).substring(0, 50)}...` : undefined,
-						}
-						// Clear previous cancelReason and streamingFailedMessage if we are retrying
-						delete currentApiReqInfo.cancelReason
-						delete currentApiReqInfo.streamingFailedMessage
-						await this.messageStateHandler.updateSkycodeMessage(lastApiReqStartedIndex, {
-							text: JSON.stringify(currentApiReqInfo),
-						})
+		// Build API handler from current settings (also refreshed before each API attempt — see syncApiHandlerFromSettings)
+		this.syncApiHandlerFromSettings()
 
-						// Post the updated state to the webview so the UI reflects the retry attempt
-						await this.postStateToWebview().catch((e) =>
-							Logger.error("Error posting state to webview in onRetryAttempt:", e),
-						)
-					} catch (e) {
-						Logger.error(`[Task ${this.taskId}] Error updating api_req_started with retryStatus:`, e)
-					}
-				}
-			},
-		}
+		const apiConfiguration = this.stateManager.getApiConfiguration()
 		const mode = this.stateManager.getGlobalSettingsKey("mode")
 		const apiMode = getApiSettingsMode(mode)
 		const currentProvider = apiMode === "plan" ? apiConfiguration.planModeApiProvider : apiConfiguration.actModeApiProvider
-
-		const openaiReasoningEffort = this.stateManager.getGlobalSettingsKey("openaiReasoningEffort")
-		if (currentProvider === "openai" || currentProvider === "openai-native" || currentProvider === "sapaicore") {
-			if (apiMode === "plan") {
-				effectiveApiConfiguration.planModeReasoningEffort = openaiReasoningEffort
-			} else {
-				effectiveApiConfiguration.actModeReasoningEffort = openaiReasoningEffort
-			}
-		}
-
-		// Now that ulid is initialized, we can build the API handler
-		this.api = buildApiHandler(effectiveApiConfiguration, mode)
 
 		// Set ulid on browserSession for telemetry tracking
 		this.browserSession.setUlid(this.ulid)
@@ -549,6 +512,7 @@ export class Task {
 			this.sayAndCreateMissingParamError.bind(this),
 			this.removeLastPartialMessageIfExistsWithType.bind(this),
 			this.executeCommandTool.bind(this),
+			this.checkBackgroundCommand.bind(this),
 			() => Promise.resolve(false), // [SKYCODE] TEMPORARILY DISABLED — legacy Cline checkpoint doesLatestTaskCompletionHaveNewChanges
 			this.FocusChainManager?.updateFCListFromToolResponse.bind(this.FocusChainManager) || (async () => {}),
 			this.switchToActModeCallback.bind(this),
@@ -579,6 +543,12 @@ export class Task {
 		if (this.taskState.abort && type !== "resume_task" && type !== "resume_completed_task") {
 			throw new Error("Skycode instance aborted")
 		}
+		const providerInfo = this.getCurrentProviderInfo()
+		const modelInfo: SkycodeMessageModelInfo = {
+			providerId: providerInfo.providerId,
+			modelId: providerInfo.model.id,
+			mode: providerInfo.mode,
+		}
 		let askTs: number
 		if (partial !== undefined) {
 			const skycodeMessages = this.messageStateHandler.getSkycodeMessages()
@@ -590,10 +560,14 @@ export class Task {
 			if (partial) {
 				if (isUpdatingPreviousPartial) {
 					// existing partial message, so update it
-					await this.messageStateHandler.updateSkycodeMessage(lastMessageIndex, {
-						text,
-						partial,
-					})
+					await this.messageStateHandler.updateSkycodeMessage(
+						lastMessageIndex,
+						{
+							text,
+							partial,
+						},
+						{ persist: false },
+					)
 					// todo be more efficient about saving and posting only new data or one whole message at a time so ignore partial for saves, and only post parts of partial message instead of whole array in new listener
 					// await this.saveSkycodeMessagesAndUpdateHistory()
 					// await this.postStateToWebview()
@@ -613,6 +587,7 @@ export class Task {
 						ask: type,
 						text,
 						partial,
+						modelInfo,
 					})
 					await this.postStateToWebview()
 					throw new Error("Current ask promise was ignored 2")
@@ -620,7 +595,7 @@ export class Task {
 			} else {
 				// partial=false means its a complete version of a previously partial message
 				if (isUpdatingPreviousPartial) {
-				// this is the complete version of a previously partial message
+					// this is the complete version of a previously partial message
 
 					/*
 					Bug for the history books:
@@ -639,14 +614,15 @@ export class Task {
 					const protoMessage = convertSkycodeMessageToProto(lastMessage)
 					await sendPartialMessageEvent(protoMessage)
 				} else {
-				// this is a new partial=false message, so add it like normal
-				askTs = Date.now()
+					// this is a new partial=false message, so add it like normal
+					askTs = Date.now()
 					this.taskState.lastMessageTs = askTs
 					await this.messageStateHandler.addToSkycodeMessages({
 						ts: askTs,
 						type: "ask",
 						ask: type,
 						text,
+						modelInfo,
 					})
 					await this.postStateToWebview()
 				}
@@ -660,6 +636,7 @@ export class Task {
 				type: "ask",
 				ask: type,
 				text,
+				modelInfo,
 			})
 			await this.postStateToWebview()
 		}
@@ -692,7 +669,7 @@ export class Task {
 		const askTs = approvalId ? Number(approvalId) : undefined
 		const handled = this.approvalGate.handleResponse(askResponse, text, images, files, askTs)
 		if (!handled) {
-			console.warn("[Task] handleWebviewAskResponse: no pending ask found, response dropped")
+			Logger.warn("[Task] handleWebviewAskResponse: no pending ask found, response dropped")
 		}
 	}
 
@@ -805,7 +782,7 @@ export class Task {
 				relPath ? ` for '${relPath.toPosix()}'` : ""
 			} without value for required parameter '${paramName}'. Retrying...`,
 		)
-		return formatResponse.toolError(formatResponse.missingToolParameterError(paramName))
+		return formatResponse.toolError(formatResponse.missingToolParameterError(paramName, toolName))
 	}
 
 	async removeLastPartialMessageIfExistsWithType(type: "ask" | "say", askOrSay: SkycodeAsk | SkycodeSay) {
@@ -1199,17 +1176,17 @@ export class Task {
 			// Start a NEW checkpoint for this follow-up message.
 			// This allows per-message rollback: deleting this message
 			// only reverts changes made after it, not the entire task.
-			console.log(`[Task] Feedback message sent, feedbackTs=${feedbackTs}, will start checkpoint`)
+			Logger.log(`[Task] Feedback message sent, feedbackTs=${feedbackTs}, will start checkpoint`)
 			if (feedbackTs) {
 				try {
 					const diffSystem = getDiffSystem()
 					await diffSystem.startCheckpoint(`Feedback: ${text?.substring(0, 50)}...`, feedbackTs)
-					console.log(`[Task] Checkpoint started for feedback ts=${feedbackTs}`)
+					Logger.log(`[Task] Checkpoint started for feedback ts=${feedbackTs}`)
 				} catch (error) {
 					Logger.error("Failed to start checkpoint for feedback:", error)
 				}
 			} else {
-				console.warn(`[Task] feedbackTs is undefined, no checkpoint created`)
+				Logger.warn(`[Task] feedbackTs is undefined, no checkpoint created`)
 			}
 
 			responseText = text
@@ -1411,7 +1388,7 @@ export class Task {
 		this.taskState.stepCompleted = false
 		this.taskState.isWorkflowStep = true
 
-		let nextUserContent: SkycodeContent[] = userContent
+		const nextUserContent: SkycodeContent[] = userContent
 		while (!this.taskState.abort && !this.taskState.stepCompleted) {
 			this._session?.pipeline.nextIteration()
 
@@ -1480,7 +1457,9 @@ export class Task {
 			isAborted: () => this.taskState.abort,
 			initiateStepLoop: (userContent) => this.initiateStepLoop(userContent as SkycodeUserContent[]),
 			sayTaskProgress: (text) => this.sayTaskProgress(text),
-			sayWorkflowStepStart: (data) => this.say("workflow_step_start", JSON.stringify(data)),
+			sayWorkflowStepStart: async (data) => {
+				await this.say("workflow_step_start", JSON.stringify(data))
+			},
 			setSilentStep: (silent) => {
 				this.taskState.isSilentStep = silent
 			},
@@ -1547,6 +1526,11 @@ export class Task {
 
 	async abortTask() {
 		try {
+			// PHASE 0: Immediately kill the LLM stream so the for-await loop exits ASAP.
+			// This is the single biggest source of cancel latency — the HTTP stream
+			// stays open until the next chunk arrives (can be seconds on slow models).
+			this.api.abort?.()
+
 			// PHASE 1: Check if TaskCancel should run BEFORE any cleanup
 			// We must capture this state now because subsequent cleanup will
 			// clear the active work indicators that shouldRunTaskCancelHook checks
@@ -1692,8 +1676,19 @@ export class Task {
 	}
 
 	// Tools
-	async executeCommandTool(command: string, timeoutSeconds: number | undefined): Promise<[boolean, SkycodeToolResponseContent]> {
+	async executeCommandTool(
+		command: string,
+		timeoutSeconds: number | undefined,
+	): Promise<[boolean, SkycodeToolResponseContent]> {
 		return this.commandExecutor.execute(command, timeoutSeconds)
+	}
+
+	/**
+	 * Check the status of a background command (or all background commands if no id provided).
+	 * Returns a formatted string with the command status and output.
+	 */
+	async checkBackgroundCommand(id?: string): Promise<string> {
+		return this.commandExecutor.checkBackgroundCommand(id)
 	}
 
 	/**
@@ -1747,11 +1742,67 @@ export class Task {
 		}
 	}
 
+	/**
+	 * Rebuild {@link api} from the latest StateManager settings. The handler was historically created only in
+	 * the constructor, which made the active model/provider lag behind the settings UI until a new task.
+	 */
+	private syncApiHandlerFromSettings(): void {
+		const apiConfiguration = this.stateManager.getApiConfiguration()
+		const effectiveApiConfiguration: ApiConfiguration = {
+			...apiConfiguration,
+			ulid: this.ulid,
+			onRetryAttempt: async (attempt: number, maxRetries: number, delay: number, error: any) => {
+				const skycodeMessages = this.messageStateHandler.getSkycodeMessages()
+				const lastApiReqStartedIndex = findLastIndex(skycodeMessages, (m) => m.say === "api_req_started")
+				if (lastApiReqStartedIndex !== -1) {
+					try {
+						const currentApiReqInfo: SkycodeApiReqInfo = JSON.parse(
+							skycodeMessages[lastApiReqStartedIndex].text || "{}",
+						)
+						currentApiReqInfo.retryStatus = {
+							attempt: attempt, // attempt is already 1-indexed from retry.ts
+							maxAttempts: maxRetries, // total attempts
+							delaySec: Math.round(delay / 1000),
+							errorSnippet: error?.message ? `${String(error.message).substring(0, 50)}...` : undefined,
+						}
+						delete currentApiReqInfo.cancelReason
+						delete currentApiReqInfo.streamingFailedMessage
+						await this.messageStateHandler.updateSkycodeMessage(lastApiReqStartedIndex, {
+							text: JSON.stringify(currentApiReqInfo),
+						})
+
+						await this.postStateToWebview().catch((e) =>
+							Logger.error("Error posting state to webview in onRetryAttempt:", e),
+						)
+					} catch (e) {
+						Logger.error(`[Task ${this.taskId}] Error updating api_req_started with retryStatus:`, e)
+					}
+				}
+			},
+		}
+		const mode = this.stateManager.getGlobalSettingsKey("mode")
+		const apiMode = getApiSettingsMode(mode)
+		const currentProvider = apiMode === "plan" ? apiConfiguration.planModeApiProvider : apiConfiguration.actModeApiProvider
+
+		const openaiReasoningEffort = this.stateManager.getGlobalSettingsKey("openaiReasoningEffort")
+		if (currentProvider === "openai" || currentProvider === "openai-native" || currentProvider === "sapaicore") {
+			if (apiMode === "plan") {
+				effectiveApiConfiguration.planModeReasoningEffort = openaiReasoningEffort
+			} else {
+				effectiveApiConfiguration.actModeReasoningEffort = openaiReasoningEffort
+			}
+		}
+
+		this.api = buildApiHandler(effectiveApiConfiguration, mode)
+	}
+
 	private getCurrentProviderInfo(): ApiProviderInfo {
 		const model = this.api.getModel()
 		const apiConfig = this.stateManager.getApiConfiguration()
 		const mode = this.stateManager.getGlobalSettingsKey("mode")
-		const providerId = (getApiSettingsMode(mode) === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
+		const providerId = (
+			getApiSettingsMode(mode) === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider
+		) as string
 		const customPrompt = this.stateManager.getGlobalSettingsKey("customPrompt")
 		return { model, providerId, customPrompt, mode }
 	}
@@ -1828,6 +1879,8 @@ export class Task {
 	}
 
 	async *attemptApiRequest(previousApiReqIndex: number): ApiStream {
+		this.syncApiHandlerFromSettings()
+
 		// Wait for MCP servers to be connected before generating system prompt
 		await pWaitFor(() => this.mcpHub.isConnecting !== true, {
 			timeout: 10_000,
@@ -1877,6 +1930,10 @@ export class Task {
 		const globalSkycodeRulesFilePath = await ensureRulesDirectoryExists()
 		const globalRules = await getGlobalSkycodeRules(globalSkycodeRulesFilePath, globalToggles, { evaluationContext })
 		const globalSkycodeRulesFileInstructions = globalRules.instructions
+		// [SKYCODE] Правила с `priority: critical` дублируем в environment_details рядом с
+		// `# Current Mode`, иначе они проигрывают напоминанию о режиме: то стоит возле последней
+		// реплики пользователя, а правила — один раз в конце системного промпта.
+		this.criticalRulesReminder = truncateCriticalRules(globalRules.criticalContent)
 
 		const localRules = await getLocalSkycodeRules(this.cwd, localToggles, { evaluationContext })
 		const localSkycodeRulesFileInstructions = localRules.instructions
@@ -1937,11 +1994,13 @@ export class Task {
 
 		// Get compact git status for context
 		const gitStatusRaw = await getGitStatusCompact(this.cwd)
-		const gitStatus = gitStatusRaw ? {
-			branch: gitStatusRaw.branch,
-			hasChanges: gitStatusRaw.hasChanges,
-			summary: gitStatusRaw.summary,
-		} : undefined
+		const gitStatus = gitStatusRaw
+			? {
+					branch: gitStatusRaw.branch,
+					hasChanges: gitStatusRaw.hasChanges,
+					summary: gitStatusRaw.summary,
+				}
+			: undefined
 
 		const promptContext: SystemPromptContext = {
 			cwd: this.cwd,
@@ -2126,7 +2185,9 @@ export class Task {
 					)
 					if (autoRetryApiReqIndex !== -1) {
 						const skycodeMessages = this.messageStateHandler.getSkycodeMessages()
-						const currentApiReqInfo: SkycodeApiReqInfo = JSON.parse(skycodeMessages[autoRetryApiReqIndex].text || "{}")
+						const currentApiReqInfo: SkycodeApiReqInfo = JSON.parse(
+							skycodeMessages[autoRetryApiReqIndex].text || "{}",
+						)
 						delete currentApiReqInfo.streamingFailedMessage
 						await this.messageStateHandler.updateSkycodeMessage(autoRetryApiReqIndex, {
 							text: JSON.stringify(currentApiReqInfo),
@@ -2148,6 +2209,8 @@ export class Task {
 							}),
 						)
 					}
+					// Clear large context after exhausting retries to prevent context overflow
+					await this.clearLargeSessionContext()
 					const askResult = await this.ask("api_req_failed", streamingFailedMessage)
 					response = askResult.response
 					if (response === "yesButtonClicked") {
@@ -2332,6 +2395,83 @@ export class Task {
 		}
 	}
 
+	/**
+	 * Truncate large *plain-text* messages in the conversation tail (excluding the last N) after
+	 * exhausted retries, to keep the context window from overflowing on the next attempt.
+	 *
+	 * IMPORTANT: only messages whose `text` is free-form prose are touched. Many SkycodeMessage
+	 * variants store a serialized JSON payload in `text` (api_req_started -> SkycodeApiReqInfo,
+	 * tool / use_mcp_server / browser_action / api_req_failed / etc.) — replacing those with a
+	 * placeholder string would crash the webview at JSON.parse(message.text). The whitelist
+	 * below covers the only kinds where `text` is safe to overwrite. The last N messages stay
+	 * intact so the model still has fresh dialogue context.
+	 */
+	private async clearLargeSessionContext(): Promise<void> {
+		const skycodeMessages = this.messageStateHandler.getSkycodeMessages()
+		const keepLast = 10
+		const maxSizeChars = 5000
+		const maxImages = 2
+
+		if (skycodeMessages.length <= keepLast) {
+			return
+		}
+
+		// `text` here is plain prose — safe to truncate.
+		const PLAIN_TEXT_SAYS: ReadonlySet<SkycodeSay> = new Set<SkycodeSay>([
+			"text",
+			"user_feedback",
+			"reasoning",
+			"completion_result",
+		])
+		// `text` here is plain prose — safe to truncate.
+		const PLAIN_TEXT_ASKS: ReadonlySet<SkycodeAsk> = new Set<SkycodeAsk>([
+			"followup",
+			"plan_mode_respond",
+			"completion_result",
+			"resume_task",
+			"resume_completed_task",
+		])
+
+		const isPlainText = (msg: SkycodeMessage) =>
+			(msg.type === "say" && PLAIN_TEXT_SAYS.has(msg.say as SkycodeSay)) ||
+			(msg.type === "ask" && PLAIN_TEXT_ASKS.has(msg.ask as SkycodeAsk))
+
+		const tailStart = skycodeMessages.length - keepLast
+		let truncatedCount = 0
+
+		const rebuilt = skycodeMessages.map((msg, i) => {
+			if (i >= tailStart) {
+				return msg
+			}
+			const textLen = (msg.text || "").length
+			const imagesCount = msg.images?.length ?? 0
+			const canTruncateText = textLen > maxSizeChars && isPlainText(msg)
+			const canTrimImages = imagesCount > maxImages
+			if (!canTruncateText && !canTrimImages) {
+				return msg
+			}
+			truncatedCount++
+			const next = { ...msg }
+			if (canTruncateText) {
+				next.text = `[Large message truncated: ${textLen} chars → ${maxSizeChars} chars. Full context available in task history.]`
+			}
+			if (canTrimImages) {
+				next.images = msg.images?.slice(0, maxImages) ?? []
+			}
+			return next
+		})
+
+		if (truncatedCount === 0) {
+			return
+		}
+
+		await this.messageStateHandler.overwriteSkycodeMessages(rebuilt)
+		await this.messageStateHandler.saveSkycodeMessagesAndUpdateHistory()
+		await this.postStateToWebview()
+
+		Logger.log(`[Task ${this.taskId}] Truncated ${truncatedCount} large messages after exhausted retries`)
+	}
+
 	async recursivelyMakeSkycodeRequests(userContent: SkycodeContent[], includeFileDetails: boolean = false): Promise<boolean> {
 		// Check abort flag at the very start to prevent any execution after cancellation
 		if (this.taskState.abort) {
@@ -2342,10 +2482,12 @@ export class Task {
 		if (this.taskState.sessionBudgetExhausted) {
 			await this.say(
 				"error",
-				"Session budget exhausted — the model reached its tool call limit for this turn. The task will be paused. You can continue with a new message.",
+				"Session budget exhausted — the model used up the tool calls allotted for this run. The task is paused; send a message to continue. Raise or disable the cap in the Session Budget setting.",
 			)
 			return true
 		}
+
+		this.syncApiHandlerFromSettings()
 
 		// Increment API request counter for focus chain list management
 		this.taskState.apiRequestCount++
@@ -2385,7 +2527,7 @@ export class Task {
 			}
 			const { response, text, images, files } = await this.ask(
 				"mistake_limit_reached",
-			`This model may be too weak for this task. Try a simpler request, or enable "Lightweight mode" in provider settings.`,
+				`This model may be too weak for this task. Try a simpler request, or enable "Lightweight mode" in provider settings.`,
 			)
 			if (response === "messageResponse") {
 				// Display the user's message in the chat UI
@@ -2420,10 +2562,14 @@ export class Task {
 		}
 
 		// get previous api req's index to check token usage and determine if we need to truncate conversation history
-		const previousApiReqIndex = findLastIndex(this.messageStateHandler.getSkycodeMessages(), (m) => m.say === "api_req_started")
+		const previousApiReqIndex = findLastIndex(
+			this.messageStateHandler.getSkycodeMessages(),
+			(m) => m.say === "api_req_started",
+		)
 
 		// Save checkpoint if this is the first API request
-		const isFirstRequest = this.messageStateHandler.getSkycodeMessages().filter((m) => m.say === "api_req_started").length === 0
+		const isFirstRequest =
+			this.messageStateHandler.getSkycodeMessages().filter((m) => m.say === "api_req_started").length === 0
 
 		// [SKYCODE] TEMPORARILY DISABLED — legacy Cline shadow-git checkpoint system.
 		// ensureCheckpointInitialized, checkpoint_created message, and initial commit are all disabled.
@@ -2503,12 +2649,16 @@ export class Task {
 		// token-based threshold hasn't been reached (weak models degrade before filling context).
 		if (!shouldCompact) {
 			const currentProviderInfo = this.getCurrentProviderInfo()
-			const modelTier = getModelCapabilityTier(currentProviderInfo.model.id, currentProviderInfo)
-			if (modelTier !== "strong") {
-				const limits = getSessionLimitsForModel(currentProviderInfo.model.id, currentProviderInfo)
-				if (this.taskState.apiRequestCount > 0 && this.taskState.apiRequestCount % limits.forceCompactAfterSteps === 0) {
-					shouldCompact = true
-				}
+			const _modelTier = getModelCapabilityTier(currentProviderInfo.model.id, currentProviderInfo)
+			const customSettings = {
+				sessionBudgetMode: this.stateManager.getGlobalSettingsKey("sessionBudgetMode"),
+				customMaxToolCallsPerTurn: this.stateManager.getGlobalSettingsKey("customMaxToolCallsPerTurn"),
+				customMaxConsecutiveReadOnlyTools: this.stateManager.getGlobalSettingsKey("customMaxConsecutiveReadOnlyTools"),
+				customForceCompactAfterSteps: this.stateManager.getGlobalSettingsKey("customForceCompactAfterSteps"),
+			}
+			const limits = getSessionLimitsForModel(currentProviderInfo.model.id, currentProviderInfo, customSettings)
+			if (this.taskState.apiRequestCount > 0 && this.taskState.apiRequestCount % limits.forceCompactAfterSteps === 0) {
+				shouldCompact = true
 			}
 		}
 
@@ -2892,6 +3042,8 @@ export class Task {
 								errorMessage,
 							}),
 						)
+						// Clear large context after exhausting retries to prevent context overflow
+						await this.clearLargeSessionContext()
 					}
 
 					// needs to happen after the say, otherwise the say would fail
@@ -3167,6 +3319,8 @@ export class Task {
 							errorMessage: noResponseErrorMessage,
 						}),
 					)
+					// Clear large context to prevent context overflow
+					await this.clearLargeSessionContext()
 					const askResult = await this.ask("api_req_failed", noResponseErrorMessage)
 					response = askResult.response
 					// Reset retry counter if user chooses to manually retry
@@ -3332,6 +3486,15 @@ export class Task {
 	}
 
 	async getEnvironmentDetails(includeFileDetails: boolean = false) {
+		let backgroundCommandSummary: string | undefined
+		if (this.commandExecutor.hasActiveBackgroundCommand()) {
+			try {
+				backgroundCommandSummary = await this.commandExecutor.checkBackgroundCommand()
+			} catch {
+				// non-fatal
+			}
+		}
+
 		return buildEnvironmentDetails(
 			{
 				cwd: this.cwd,
@@ -3344,8 +3507,31 @@ export class Task {
 				workspaceManager: this.workspaceManager,
 				messageStateHandler: this.messageStateHandler,
 				api: this.api,
+				backgroundCommandSummary,
+				criticalRulesReminder: this.criticalRulesReminder,
 			},
 			includeFileDetails,
 		)
 	}
+}
+
+/**
+ * [SKYCODE] Обрезает повтор критичных правил. Повтор уходит в КАЖДОЕ сообщение, поэтому размер
+ * ограничен: у пользователя может быть десяток файлов правил на десятки килобайт, и если пометить
+ * критичными много, каждый запрос раздуется. Режем по границе строки, чтобы не обрывать на полуслове.
+ */
+const CRITICAL_RULES_MAX_CHARS = 1500
+
+function truncateCriticalRules(content?: string): string | undefined {
+	const trimmed = content?.trim()
+	if (!trimmed) {
+		return undefined
+	}
+	if (trimmed.length <= CRITICAL_RULES_MAX_CHARS) {
+		return trimmed
+	}
+	const head = trimmed.slice(0, CRITICAL_RULES_MAX_CHARS)
+	const lastBreak = head.lastIndexOf("\n")
+	const cut = lastBreak > CRITICAL_RULES_MAX_CHARS / 2 ? head.slice(0, lastBreak) : head
+	return `${cut.trimEnd()}\n…`
 }

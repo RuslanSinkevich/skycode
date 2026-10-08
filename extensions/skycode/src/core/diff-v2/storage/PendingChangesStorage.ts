@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { Logger } from "@/shared/services/Logger"
 
 /**
  * Структура сохранённого pending change
@@ -12,6 +13,13 @@ export interface StoredPendingChange {
   addedLines: string[];
   timestamp: number;
   checkpointId?: string;
+  /**
+   * [SKYCODE] Задача, чей агент сделал это изменение. Нужна барy внизу чата: без неё он
+   * показывал все правки workspace сразу, поэтому в новой вкладке висели файлы от прошлой.
+   * Записи без taskId (старые, либо сделанные когда активной задачи не было) видны всегда —
+   * иначе их было бы нечем принять.
+   */
+  taskId?: string;
 }
 
 /**
@@ -47,7 +55,7 @@ export class PendingChangesStorage {
   private constructor() {}
 
   private schedulePersist(): void {
-    if (this._persistScheduled) return;
+    if (this._persistScheduled) { return; }
     this._persistScheduled = true;
     queueMicrotask(() => {
       this._persistScheduled = false;
@@ -59,7 +67,7 @@ export class PendingChangesStorage {
   }
 
   private scheduleChangeEvent(): void {
-    if (this._changeScheduled) return;
+    if (this._changeScheduled) { return; }
     this._changeScheduled = true;
     queueMicrotask(() => {
       this._changeScheduled = false;
@@ -79,7 +87,7 @@ export class PendingChangesStorage {
    */
   initialize(context: vscode.ExtensionContext): void {
     this._context = context;
-    console.log('[PendingChangesStorage] Initialized (workspace-scoped)');
+    Logger.log('[PendingChangesStorage] Initialized (workspace-scoped)');
   }
 
   private ensureInitialized(): void {
@@ -96,7 +104,7 @@ export class PendingChangesStorage {
     if (!this._cache) {
       const data = this._context!.workspaceState.get<StoredPendingChange[]>(STORAGE_KEY, []);
       if (!Array.isArray(data)) {
-        console.warn('[PendingChangesStorage] Invalid data in storage, resetting to empty array');
+        Logger.warn('[PendingChangesStorage] Invalid data in storage, resetting to empty array');
         this._cache = [];
         this._dirty = true;
         this.schedulePersist();
@@ -211,10 +219,24 @@ export class PendingChangesStorage {
   }
 
   /**
-   * Получить статистику по файлам
+   * [SKYCODE] Относится ли запись к указанной задаче.
+   *
+   * `taskId === undefined` у аргумента означает «нет активной задачи» — тогда видны только
+   * записи без привязки. Записи без привязки видны при любой активной задаче: иначе старые
+   * (сделанные до появления этого поля) остались бы навсегда невидимыми в баре.
    */
-  getFileStats(): FileChangeStats[] {
-    const all = this.getAll();
+  private belongsToTask(change: StoredPendingChange, taskId?: string): boolean {
+    if (change.taskId === undefined) {
+      return true;
+    }
+    return change.taskId === taskId;
+  }
+
+  /**
+   * Получить статистику по файлам. С `taskId` — только изменения этой задачи.
+   */
+  getFileStats(taskId?: string): FileChangeStats[] {
+    const all = this.getAll().filter((c) => this.belongsToTask(c, taskId));
     const statsMap = new Map<string, FileChangeStats>();
 
     for (const change of all) {
@@ -243,10 +265,10 @@ export class PendingChangesStorage {
   }
 
   /**
-   * Получить общую статистику
+   * Получить общую статистику. С `taskId` — только по изменениям этой задачи.
    */
-  getTotalStats(): { files: number; added: number; removed: number } {
-    const fileStats = this.getFileStats();
+  getTotalStats(taskId?: string): { files: number; added: number; removed: number } {
+    const fileStats = this.getFileStats(taskId);
     return {
       files: fileStats.length,
       added: fileStats.reduce((sum, f) => sum + f.addedCount, 0),
@@ -257,8 +279,8 @@ export class PendingChangesStorage {
   /**
    * Получить список уникальных файлов с pending changes
    */
-  getFilesWithChanges(): string[] {
-    const all = this.getAll();
+  getFilesWithChanges(taskId?: string): string[] {
+    const all = this.getAll().filter((c) => this.belongsToTask(c, taskId));
     const files = new Set<string>();
     for (const change of all) {
       files.add(change.fsPath);

@@ -57,6 +57,13 @@ class LinkPreview extends React.Component<LinkPreviewProps, LinkPreviewState> {
 	componentDidMount() {
 		// Only fetch if we haven't completed a fetch yet
 		if (!this.state.hasCompletedFetch) {
+			// Heartbeat to update elapsed time while loading. Cleared once the fetch
+			// completes (cleanup() in both branches of fetchOpenGraphData).
+			this.heartbeatId = setInterval(() => {
+				if (this.state.loading) {
+					this.forceUpdate()
+				}
+			}, 1000)
 			this.fetchOpenGraphData()
 		}
 	}
@@ -141,17 +148,8 @@ class LinkPreview extends React.Component<LinkPreviewProps, LinkPreviewState> {
 				})
 			}
 
-			// Clean up the heartbeat interval
-			// (No message listener is needed with gRPC, unlike the previous message-based approach)
+			// Fetch finished — stop the loading heartbeat.
 			this.cleanup()
-
-			// Set up heartbeat for loading indicator
-			this.heartbeatId = setInterval(() => {
-				const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000)
-				if (elapsedSeconds > 0) {
-					this.forceUpdate() // Just update the component to show new elapsed time
-				}
-			}, 1000)
 		} catch (err) {
 			this.setState({
 				error: "general",

@@ -39,7 +39,6 @@ export const config = createVariant(ModelFamily.GEMINI_3)
 		SystemPromptSection.CAPABILITIES,
 		SystemPromptSection.EDITING_FILES,
 		SystemPromptSection.FEEDBACK,
-		SystemPromptSection.TODO,
 		SystemPromptSection.TASK_PROGRESS,
 		SystemPromptSection.SYSTEM_INFO,
 		SystemPromptSection.OBJECTIVE,
@@ -48,6 +47,7 @@ export const config = createVariant(ModelFamily.GEMINI_3)
 	)
 	.tools(
 		SkycodeDefaultTool.BASH,
+		SkycodeDefaultTool.CHECK_BACKGROUND,
 		SkycodeDefaultTool.FILE_READ,
 		SkycodeDefaultTool.FILE_NEW,
 		SkycodeDefaultTool.FILE_EDIT,

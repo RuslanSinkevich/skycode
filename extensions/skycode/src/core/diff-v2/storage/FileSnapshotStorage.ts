@@ -14,6 +14,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import { Logger } from "@/shared/services/Logger"
 
 /** A single file snapshot for rollback */
 export interface FileSnapshot {
@@ -23,6 +24,8 @@ export interface FileSnapshot {
   fsPath: string;
   /** Full file content at snapshot time */
   content: string;
+  /** SHA-256 of content — used by hard guard to detect external changes */
+  contentHash: string;
   /** Timestamp of creation */
   timestamp: number;
   /** ResponseGroup that triggered this snapshot */
@@ -59,41 +62,42 @@ export class FileSnapshotStorage {
    * Metadata (fsPath, messageTs) is embedded in the file header as JSON.
    */
   private loadFromDisk(): void {
-    if (!fs.existsSync(this.snapshotsDir)) return;
+    if (!fs.existsSync(this.snapshotsDir)) { return; }
 
     let loaded = 0;
     try {
       const rgDirs = fs.readdirSync(this.snapshotsDir, { withFileTypes: true });
       for (const rgDir of rgDirs) {
-        if (!rgDir.isDirectory()) continue;
+        if (!rgDir.isDirectory()) { continue; }
         const rgPath = path.join(this.snapshotsDir, rgDir.name);
         const files = fs.readdirSync(rgPath);
         for (const file of files) {
-          if (!file.endsWith('.snapshot')) continue;
+          if (!file.endsWith('.snapshot')) { continue; }
           try {
             const filePath = path.join(rgPath, file);
             const raw = fs.readFileSync(filePath, 'utf-8');
 
             // Try to parse header (first line is JSON metadata)
             const nlIndex = raw.indexOf('\n');
-            if (nlIndex === -1) continue;
+            if (nlIndex === -1) { continue; }
 
             const headerStr = raw.substring(0, nlIndex);
             const content = raw.substring(nlIndex + 1);
 
-            let header: { fsPath: string; messageTs: number; id: string; timestamp: number } | undefined;
+            let header: { fsPath: string; messageTs: number; id: string; timestamp: number; contentHash?: string } | undefined;
             try {
               header = JSON.parse(headerStr);
             } catch {
               // Legacy format (no header) — skip, can't reconstruct metadata
               continue;
             }
-            if (!header || !header.fsPath || !header.messageTs) continue;
+            if (!header || !header.fsPath || !header.messageTs) { continue; }
 
             const snapshot: FileSnapshot = {
               id: header.id || this.generateId(),
               fsPath: header.fsPath,
               content,
+              contentHash: header.contentHash || FileSnapshotStorage.contentHash(content),
               timestamp: header.timestamp || Date.now(),
               responseGroupId: rgDir.name,
               messageTs: header.messageTs,
@@ -116,11 +120,11 @@ export class FileSnapshotStorage {
         }
       }
     } catch (e) {
-      console.error('[FileSnapshotStorage] Failed to load snapshots from disk:', e);
+      Logger.error('[FileSnapshotStorage] Failed to load snapshots from disk:', e);
     }
 
     if (loaded > 0) {
-      console.log(`[FileSnapshotStorage] Loaded ${loaded} snapshots from disk`);
+      Logger.log(`[FileSnapshotStorage] Loaded ${loaded} snapshots from disk`);
     }
   }
 
@@ -151,6 +155,7 @@ export class FileSnapshotStorage {
       id,
       fsPath,
       content,
+      contentHash: FileSnapshotStorage.contentHash(content),
       timestamp: Date.now(),
       responseGroupId,
       messageTs,
@@ -161,7 +166,7 @@ export class FileSnapshotStorage {
     // Persist to disk
     this.persistToDisk(snapshot);
 
-    console.log(`[FileSnapshotStorage] Saved snapshot ${id} for ${path.basename(fsPath)} (messageTs: ${messageTs}, rgId: ${responseGroupId})`);
+    Logger.log(`[FileSnapshotStorage] Saved snapshot ${id} for ${path.basename(fsPath)} (messageTs: ${messageTs}, rgId: ${responseGroupId})`);
     return id;
   }
 
@@ -182,7 +187,7 @@ export class FileSnapshotStorage {
       const altKey = fsPath.toLowerCase();
       const altSnapshots = this.chain.get(altKey);
       if (!altSnapshots || altSnapshots.length === 0) {
-        console.log(`[FileSnapshotStorage] getSnapshotForRollback: no snapshots for ${path.basename(fsPath)} (keys in chain: ${this.chain.size})`);
+        Logger.log(`[FileSnapshotStorage] getSnapshotForRollback: no snapshots for ${path.basename(fsPath)} (keys in chain: ${this.chain.size})`);
         return undefined;
       }
       return this.findBestSnapshot(altSnapshots, messageTs, fsPath);
@@ -194,14 +199,14 @@ export class FileSnapshotStorage {
     // 1. Exact match
     const exact = snapshots.find(s => s.messageTs === messageTs);
     if (exact) {
-      console.log(`[FileSnapshotStorage] Found exact snapshot for ${path.basename(fsPath)} (messageTs=${messageTs})`);
+      Logger.log(`[FileSnapshotStorage] Found exact snapshot for ${path.basename(fsPath)} (messageTs=${messageTs})`);
       return exact;
     }
 
     // 2. First snapshot at or after target
     const atOrAfter = snapshots.find(s => s.messageTs >= messageTs);
     if (atOrAfter) {
-      console.log(`[FileSnapshotStorage] Found snapshot >= target for ${path.basename(fsPath)} (snap.ts=${atOrAfter.messageTs}, target=${messageTs})`);
+      Logger.log(`[FileSnapshotStorage] Found snapshot >= target for ${path.basename(fsPath)} (snap.ts=${atOrAfter.messageTs}, target=${messageTs})`);
       return atOrAfter;
     }
 
@@ -209,11 +214,11 @@ export class FileSnapshotStorage {
     const beforeTarget = snapshots.filter(s => s.messageTs < messageTs);
     if (beforeTarget.length > 0) {
       const latest = beforeTarget[beforeTarget.length - 1];
-      console.log(`[FileSnapshotStorage] Found closest snapshot < target for ${path.basename(fsPath)} (snap.ts=${latest.messageTs}, target=${messageTs})`);
+      Logger.log(`[FileSnapshotStorage] Found closest snapshot < target for ${path.basename(fsPath)} (snap.ts=${latest.messageTs}, target=${messageTs})`);
       return latest;
     }
 
-    console.log(`[FileSnapshotStorage] No snapshot found for ${path.basename(fsPath)} (target=${messageTs}, chain size=${snapshots.length})`);
+    Logger.log(`[FileSnapshotStorage] No snapshot found for ${path.basename(fsPath)} (target=${messageTs}, chain size=${snapshots.length})`);
     return undefined;
   }
 
@@ -224,7 +229,7 @@ export class FileSnapshotStorage {
   getSnapshotsFromMessageTs(fsPath: string, messageTs: number): FileSnapshot[] {
     const key = this.normalizeKey(fsPath);
     const snapshots = this.chain.get(key);
-    if (!snapshots) return [];
+    if (!snapshots) { return []; }
     return snapshots.filter(s => s.messageTs >= messageTs);
   }
 
@@ -234,7 +239,7 @@ export class FileSnapshotStorage {
   hasSnapshotForResponseGroup(fsPath: string, responseGroupId: string): boolean {
     const key = this.normalizeKey(fsPath);
     const snapshots = this.chain.get(key);
-    if (!snapshots) return false;
+    if (!snapshots) { return false; }
     return snapshots.some(s => s.responseGroupId === responseGroupId);
   }
 
@@ -245,7 +250,7 @@ export class FileSnapshotStorage {
   deleteSnapshotsFromMessageTs(fsPath: string, messageTs: number): void {
     const key = this.normalizeKey(fsPath);
     const snapshots = this.chain.get(key);
-    if (!snapshots) return;
+    if (!snapshots) { return; }
 
     const toDelete = snapshots.filter(s => s.messageTs >= messageTs);
     const toKeep = snapshots.filter(s => s.messageTs < messageTs);
@@ -262,7 +267,7 @@ export class FileSnapshotStorage {
     }
 
     if (toDelete.length > 0) {
-      console.log(`[FileSnapshotStorage] Deleted ${toDelete.length} snapshots for ${path.basename(fsPath)} (messageTs >= ${messageTs})`);
+      Logger.log(`[FileSnapshotStorage] Deleted ${toDelete.length} snapshots for ${path.basename(fsPath)} (messageTs >= ${messageTs})`);
     }
   }
 
@@ -273,14 +278,14 @@ export class FileSnapshotStorage {
   cleanupForFile(fsPath: string): void {
     const key = this.normalizeKey(fsPath);
     const snapshots = this.chain.get(key);
-    if (!snapshots) return;
+    if (!snapshots) { return; }
 
     for (const snap of snapshots) {
       this.deleteFromDisk(snap.responseGroupId, snap.fsPath);
     }
 
     this.chain.delete(key);
-    console.log(`[FileSnapshotStorage] Cleaned up all snapshots for ${path.basename(fsPath)}`);
+    Logger.log(`[FileSnapshotStorage] Cleaned up all snapshots for ${path.basename(fsPath)}`);
   }
 
   /**
@@ -291,7 +296,7 @@ export class FileSnapshotStorage {
   getBaselineSnapshot(fsPath: string): FileSnapshot | undefined {
     const key = this.normalizeKey(fsPath);
     const snapshots = this.chain.get(key);
-    if (!snapshots || snapshots.length === 0) return undefined;
+    if (!snapshots || snapshots.length === 0) { return undefined; }
     return snapshots[0];
   }
 
@@ -302,13 +307,14 @@ export class FileSnapshotStorage {
   updateBaselineContent(fsPath: string, newContent: string): void {
     const key = this.normalizeKey(fsPath);
     const snapshots = this.chain.get(key);
-    if (!snapshots || snapshots.length === 0) return;
+    if (!snapshots || snapshots.length === 0) { return; }
 
     snapshots[0].content = newContent;
+    snapshots[0].contentHash = FileSnapshotStorage.contentHash(newContent);
     snapshots[0].timestamp = Date.now();
     this.persistToDisk(snapshots[0]);
 
-    console.log(`[FileSnapshotStorage] Updated baseline for ${path.basename(fsPath)} (${newContent.length} chars)`);
+    Logger.log(`[FileSnapshotStorage] Updated baseline for ${path.basename(fsPath)} (${newContent.length} chars)`);
   }
 
   /**
@@ -338,7 +344,7 @@ export class FileSnapshotStorage {
 
   getSnapshot(responseGroupId: string, fileChangeId: string): string | undefined {
     const snapshotPath = path.join(this.snapshotsDir, responseGroupId, `${fileChangeId}.original`);
-    if (!fs.existsSync(snapshotPath)) return undefined;
+    if (!fs.existsSync(snapshotPath)) { return undefined; }
     try {
       return fs.readFileSync(snapshotPath, 'utf-8');
     } catch {
@@ -361,7 +367,7 @@ export class FileSnapshotStorage {
   }
 
   async cleanup(olderThanDays: number = 7): Promise<number> {
-    if (!fs.existsSync(this.snapshotsDir)) return 0;
+    if (!fs.existsSync(this.snapshotsDir)) { return 0; }
     const cutoff = Date.now() - olderThanDays * 24 * 60 * 60 * 1000;
     let deleted = 0;
 
@@ -385,6 +391,11 @@ export class FileSnapshotStorage {
     return 'snap-' + crypto.randomBytes(8).toString('hex');
   }
 
+  /** SHA-256 hex hash of file content */
+  static contentHash(content: string): string {
+    return crypto.createHash('sha256').update(content).digest('hex');
+  }
+
   private fsPathHash(fsPath: string): string {
     return crypto.createHash('md5').update(fsPath.toLowerCase()).digest('hex').slice(0, 16);
   }
@@ -406,7 +417,7 @@ export class FileSnapshotStorage {
       });
       fs.writeFileSync(filePath, header + '\n' + snapshot.content, 'utf-8');
     } catch (e) {
-      console.error('[FileSnapshotStorage] Failed to persist snapshot to disk:', e);
+      Logger.error('[FileSnapshotStorage] Failed to persist snapshot to disk:', e);
     }
   }
 

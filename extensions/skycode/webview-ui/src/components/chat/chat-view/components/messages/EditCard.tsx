@@ -1,7 +1,7 @@
 import { SkycodeMessage, SkycodeSayTool } from "@shared/ExtensionMessage"
 import { StringRequest } from "@shared/proto/skycode/common"
 import { FileCode2Icon, FileMinus2Icon, FilePlus2Icon, PencilIcon } from "lucide-react"
-import { memo, useCallback, useEffect, useMemo, useRef } from "react"
+import { memo, useCallback, useMemo } from "react"
 import { cleanPathPrefix } from "@/components/common/CodeAccordian"
 import { useI18n } from "@/i18n"
 import { cn } from "@/lib/utils"
@@ -67,56 +67,43 @@ export const EditCard = memo(({ message }: EditCardProps) => {
 		)
 	}, [filePath, startLine, hunkId])
 
-	// Extract diff preview lines from content (no limit — blocks are small)
-	const preview = useMemo(() => {
+	// [SKYCODE] Вместо развёрнутого превью диффа — его объём одной парой чисел.
+	// Сам дифф уже виден подсветкой в редакторе и в баре изменений внизу, а в чате он
+	// занимал полэкрана и автоскроллился на стриминге. Клик по строке и так ведёт на правку,
+	// поэтому разворачивать нечего — но масштаб правки по строке понятен без перехода.
+	const { added, removed } = useMemo(() => {
 		if (!tool.content) {
-			return null
+			return { added: 0, removed: 0 }
 		}
-		const lines = tool.content.split("\n")
-		if (lines.length === 0) {
-			return null
+		let plus = 0
+		let minus = 0
+		for (const line of tool.content.split("\n")) {
+			// `---` разделяет блоки, `@@ line N @@` — заголовок, `+++/---` — шапка диффа
+			if (line.startsWith("---") || line.startsWith("+++") || line.startsWith("@@")) {
+				continue
+			}
+			if (line.startsWith("+")) {
+				plus++
+			} else if (line.startsWith("-")) {
+				minus++
+			}
 		}
-		return lines
+		return { added: plus, removed: minus }
 	}, [tool.content])
 
-	// Авто-скролл вниз при стриминге (пока сообщение partial)
-	const previewRef = useRef<HTMLPreElement>(null)
-	useEffect(() => {
-		if (message.partial && previewRef.current) {
-			previewRef.current.scrollTop = previewRef.current.scrollHeight
-		}
-	}, [preview, message.partial])
-
 	return (
-		<div className="px-4 py-1">
+		<div className="px-4 py-0.5">
 			<button
-				className="w-full text-left rounded border border-description/10 bg-black/10 hover:bg-black/20 transition-colors cursor-pointer p-2"
+				className="flex items-center gap-1.5 w-full text-left text-[12px] cursor-pointer hover:underline decoration-description/40"
 				onClick={handleClick}
+				title={filePath}
 				type="button">
-				{/* Header */}
-				<div className="flex items-center gap-1.5 text-[12px]">
-					<Icon className={cn("size-3.5 shrink-0", accent)} />
-					<span className={cn("font-medium", accent)}>{label}</span>
-					<span className="text-description opacity-70 truncate">{cleanPath}</span>
-					{startLine && <span className="text-description opacity-40 text-[11px] ml-auto shrink-0">:{startLine}</span>}
-				</div>
-
-			{/* Diff preview */}
-			{preview && (
-				<pre ref={previewRef} className="mt-1 text-[10px] leading-[15px] opacity-50 whitespace-pre-wrap break-words font-mono max-h-[200px] overflow-y-auto">
-					{preview.map((line, i) => (
-						<div
-							className={cn({
-								"text-red-400/70": line.startsWith("-"),
-								"text-green-400/70": line.startsWith("+"),
-							})}
-							// biome-ignore lint/suspicious/noArrayIndexKey: diff lines can repeat, index needed for stable key
-							key={`${line}-${i}`}>
-							{line}
-						</div>
-					))}
-				</pre>
-			)}
+				<Icon className={cn("size-3.5 shrink-0", accent)} />
+				<span className={cn("font-medium shrink-0", accent)}>{label}</span>
+				<span className="text-description opacity-70 truncate">{cleanPath}</span>
+				{added > 0 && <span className="text-green-400/80 shrink-0 text-[11px]">+{added}</span>}
+				{removed > 0 && <span className="text-red-400/80 shrink-0 text-[11px]">−{removed}</span>}
+				{startLine && <span className="text-description opacity-40 text-[11px] shrink-0">:{startLine}</span>}
 			</button>
 		</div>
 	)

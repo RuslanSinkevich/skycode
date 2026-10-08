@@ -1,6 +1,5 @@
 import { AutoApprovalSettings, DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
 import {
-	ANTHROPIC_MIN_THINKING_BUDGET,
 	ApiProvider,
 	DEFAULT_API_PROVIDER,
 	LiteLLMModelInfo,
@@ -142,7 +141,7 @@ const API_HANDLER_SETTINGS_FIELDS = {
 
 	// Plan mode configurations
 	planModeApiModelId: { default: undefined as string | undefined },
-	planModeThinkingBudgetTokens: { default: ANTHROPIC_MIN_THINKING_BUDGET as number | undefined },
+	planModeThinkingBudgetTokens: { default: 0 as number | undefined },
 	geminiPlanModeThinkingLevel: { default: undefined as string | undefined },
 	planModeReasoningEffort: { default: undefined as string | undefined },
 	planModeVerbosity: { default: undefined as string | undefined },
@@ -184,7 +183,7 @@ const API_HANDLER_SETTINGS_FIELDS = {
 
 	// Act mode configurations
 	actModeApiModelId: { default: undefined as string | undefined },
-	actModeThinkingBudgetTokens: { default: ANTHROPIC_MIN_THINKING_BUDGET as number | undefined },
+	actModeThinkingBudgetTokens: { default: 0 as number | undefined },
 	geminiActModeThinkingLevel: { default: undefined as string | undefined },
 	actModeReasoningEffort: { default: undefined as string | undefined },
 	actModeVerbosity: { default: undefined as string | undefined },
@@ -272,11 +271,21 @@ const USER_SETTINGS_FIELDS = {
 	autoCondenseThreshold: { default: 0.75 as number }, // number from 0 to 1
 	subagentsEnabled: { default: false as boolean },
 	enableParallelToolCalling: { default: false as boolean },
-	backgroundEditEnabled: { default: false as boolean },
+	backgroundEditEnabled: { default: true as boolean },
 	skillsEnabled: { default: false as boolean },
 	lightweightMode: { default: false as boolean },
 	optOutOfRemoteConfig: { default: false as boolean },
 	confirmDeleteFile: { default: false as boolean },
+
+	// Session Budget settings (user-overridable limits per tier).
+	// "auto" — auto-detect tier from model id (default).
+	// "strong" / "medium" / "weak" — force the chosen preset for ALL models
+	// (handy when auto-detect underrates a model).
+	// "custom" — use the customMax* values below.
+	sessionBudgetMode: { default: "auto" as "auto" | "strong" | "medium" | "weak" | "custom" },
+	customMaxToolCallsPerTurn: { default: 80 as number },
+	customMaxConsecutiveReadOnlyTools: { default: 12 as number },
+	customForceCompactAfterSteps: { default: 40 as number },
 
 	// OpenTelemetry configuration
 	openTelemetryEnabled: { default: true as boolean },
@@ -321,6 +330,7 @@ const SECRETS_KEYS = [
 	"togetherApiKey",
 	"fireworksApiKey",
 	"qwenApiKey",
+	"qwenWebToken",
 	"doubaoApiKey",
 	"mistralApiKey",
 	"liteLlmApiKey",

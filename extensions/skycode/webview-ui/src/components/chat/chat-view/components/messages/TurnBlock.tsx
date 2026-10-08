@@ -1,7 +1,7 @@
 import { SkycodeMessage } from "@shared/ExtensionMessage"
-import React, { memo, useCallback, useRef, useState, useEffect } from "react"
+import React, { memo, useCallback, useState, } from "react"
 import UserMessage from "@/components/chat/UserMessage"
-import { MessageHandlers } from "../../types/chatTypes"
+import { MessageHandlers, ToggleRowExpansion } from "../../types/chatTypes"
 import { TurnData } from "../../utils/messageUtils"
 import { MessageRenderer } from "./MessageRenderer"
 
@@ -14,8 +14,7 @@ interface TurnBlockProps {
 	totalTurns: number
 	modifiedMessages: SkycodeMessage[]
 	expandedRows: Record<number, boolean>
-	onToggleExpand: (ts: number) => void
-	onHeightChange: (isTaller: boolean) => void
+	onToggleExpand: ToggleRowExpansion
 	onSetQuote: (quote: string | null) => void
 	inputValue: string
 	messageHandlers: MessageHandlers
@@ -35,7 +34,6 @@ export const TurnBlock: React.FC<TurnBlockProps> = memo(({
 	modifiedMessages,
 	expandedRows,
 	onToggleExpand,
-	onHeightChange,
 	onSetQuote,
 	inputValue,
 	messageHandlers,
@@ -58,14 +56,10 @@ export const TurnBlock: React.FC<TurnBlockProps> = memo(({
 					style={{ position: "sticky", top: 0, zIndex: 10 }}>
 					<div className="pt-2.5 px-[15px]">
 					{isLong && !isExpanded ? (
-						/* Collapsed: two-line preview with badge background */
+						/* Collapsed: two-line preview */
 						<div
 							onClick={toggleExpanded}
-							className="flex items-center gap-1.5 cursor-pointer p-2.5 pr-2 my-1 rounded-xs hover:brightness-110"
-							style={{
-								backgroundColor: "var(--vscode-badge-background)",
-								color: "var(--vscode-badge-foreground)",
-							}}>
+							className="flex items-center gap-1.5 cursor-pointer p-2.5 pr-2 my-1 rounded-xs bg-user-message-bg text-input-foreground border border-description/15 hover:bg-list-hover">
 							<span
 								className="text-sm flex-1 min-w-0"
 								style={{
@@ -122,7 +116,6 @@ export const TurnBlock: React.FC<TurnBlockProps> = memo(({
 					messageHandlers={messageHandlers}
 					messageOrGroup={item}
 					modifiedMessages={modifiedMessages}
-					onHeightChange={onHeightChange}
 					onSetQuote={onSetQuote}
 					onToggleExpand={onToggleExpand}
 				/>

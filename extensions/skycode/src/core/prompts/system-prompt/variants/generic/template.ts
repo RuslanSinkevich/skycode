@@ -136,10 +136,10 @@ export const GENERIC_SYSTEM_INFO = (context: SystemPromptContext) => {
 		const formatPath = (p: string) => {
 			// Convert to relative path if possible
 			if (cwd && p.toLowerCase().startsWith(cwd.toLowerCase())) {
-				return p.slice(cwd.length).replace(/^[\/\\]/, "")
+				return p.slice(cwd.length).replace(/^[/\\]/, "")
 			}
 			// Just filename if path is too long
-			const parts = p.split(/[\/\\]/)
+			const parts = p.split(/[/\\]/)
 			return parts.length > 3 ? ".../" + parts.slice(-2).join("/") : p
 		}
 		const files = context.editorTabs.visible.slice(0, 10).map(formatPath)

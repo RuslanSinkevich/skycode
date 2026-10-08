@@ -226,5 +226,4 @@ declare class TokenLatticeNode {
    */
   clone(): TokenLatticeNode;
 }
-export {};
 //# sourceMappingURL=data-structures.d.ts.map

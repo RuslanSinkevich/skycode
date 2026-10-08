@@ -37,6 +37,59 @@ describe("rule loading with paths frontmatter", () => {
 		}
 	})
 
+	// [SKYCODE] Правила с `priority: critical` повторяются в environment_details каждое сообщение.
+	it("собирает в criticalContent только правила с priority: critical", async () => {
+		const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "skycode-rules-test-"))
+		try {
+			const rulesDir = path.join(tmp, ".skycoderules")
+			await fs.mkdir(rulesDir, { recursive: true })
+			await fs.writeFile(path.join(rulesDir, "plain.md"), "Обычное правило")
+			await fs.writeFile(path.join(rulesDir, "main.md"), `---\npriority: critical\n---\n\nСначала план, потом файлы`)
+			await fs.writeFile(path.join(rulesDir, "loud.md"), `---\npriority: CRITICAL\n---\n\nРегистр не важен`)
+			// Критичное, но отфильтрованное по paths — в повтор попадать не должно
+			await fs.writeFile(
+				path.join(rulesDir, "scoped.md"),
+				`---\npriority: critical\npaths:\n  - "src/**"\n---\n\nТолько для src`,
+			)
+
+			const files = ["plain.md", "main.md", "loud.md", "scoped.md"]
+			const toggles: Record<string, boolean> = Object.fromEntries(files.map((f) => [path.join(rulesDir, f), true]))
+
+			const res = await getRuleFilesTotalContentWithMetadata(files, rulesDir, toggles, {
+				evaluationContext: { paths: ["docs/readme.md"] },
+			})
+
+			expect(res.criticalContent).to.contain("Сначала план, потом файлы")
+			expect(res.criticalContent).to.contain("Регистр не важен")
+			expect(res.criticalContent).to.not.contain("Обычное правило")
+			expect(res.criticalContent).to.not.contain("Только для src")
+			// В повторе не должно быть ни имён файлов, ни самого frontmatter
+			expect(res.criticalContent).to.not.contain("main.md")
+			expect(res.criticalContent).to.not.contain("priority:")
+			// Полный список правил при этом собирается как раньше
+			expect(res.content).to.contain("Обычное правило")
+		} finally {
+			await fs.rm(tmp, { recursive: true, force: true })
+		}
+	})
+
+	it("не возвращает criticalContent, когда критичных правил нет", async () => {
+		const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "skycode-rules-test-"))
+		try {
+			const rulesDir = path.join(tmp, ".skycoderules")
+			await fs.mkdir(rulesDir, { recursive: true })
+			await fs.writeFile(path.join(rulesDir, "plain.md"), "Обычное правило")
+
+			const res = await getRuleFilesTotalContentWithMetadata(["plain.md"], rulesDir, {
+				[path.join(rulesDir, "plain.md")]: true,
+			})
+
+			expect(res.criticalContent).to.equal(undefined)
+		} finally {
+			await fs.rm(tmp, { recursive: true, force: true })
+		}
+	})
+
 	it("treats invalid YAML frontmatter as fail-open and preserves the raw frontmatter for the LLM", async () => {
 		const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "skycode-rules-test-"))
 		try {

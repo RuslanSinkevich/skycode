@@ -1,4 +1,5 @@
 import { Anthropic } from "@anthropic-ai/sdk"
+import { isBase64ImageSource } from "@/shared/messages/message-interchange"
 import { AssistantMessage } from "@mistralai/mistralai/models/components/assistantmessage"
 import { SystemMessage } from "@mistralai/mistralai/models/components/systemmessage"
 import { ToolMessage } from "@mistralai/mistralai/models/components/toolmessage"
@@ -30,10 +31,13 @@ export function convertToMistralMessages(anthropicMessages: Anthropic.Messages.M
 						role: "user",
 						content: textAndImageBlocks.map((part) => {
 							if (part.type === "image") {
+								const url = isBase64ImageSource(part.source)
+									? `data:${part.source.media_type};base64,${part.source.data}`
+									: part.source.url
 								return {
 									type: "image_url",
 									imageUrl: {
-										url: `data:${part.source.media_type};base64,${part.source.data}`,
+										url,
 									},
 								}
 							}

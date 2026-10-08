@@ -16,7 +16,7 @@
  * @private
  */
 export function dispatchCallback(progress_callback, data) {
-  if (progress_callback) progress_callback(data);
+  if (progress_callback) { progress_callback(data); }
 }
 
 /**
@@ -60,9 +60,7 @@ export const Callable = /** @type {any} */ (
        * @param {...any} args Zero or more arguments to pass to the '_call' method.
        * @returns {*} The result of calling the '_call' method.
        */
-      let closure = function (...args) {
-        return closure._call(...args);
-      };
+      const closure = (...args) => closure._call(...args);
       return Object.setPrototypeOf(closure, new.target.prototype);
     }
 
@@ -73,7 +71,7 @@ export const Callable = /** @type {any} */ (
      * @param {any[]} args
      * @throws {Error} If the subclass does not implement the `_call` method.
      */
-    _call(...args) {
+    _call(..._args) {
       throw Error("Must implement _call method in subclass");
     }
   }

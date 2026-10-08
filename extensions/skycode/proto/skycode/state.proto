@@ -46,6 +46,12 @@ message AutoApprovalActions {
   optional bool execute_all_commands = 6;
   optional bool use_browser = 7;
   optional bool use_mcp = 8;
+  optional bool delete_files = 9;
+  optional bool edit_notebooks = 10;
+  // Wildcard patterns (* and ?) whose matching commands are auto-approved
+  repeated string allowed_command_patterns = 11;
+  // Built-in safe patterns the user switched off
+  repeated string disabled_default_command_patterns = 12;
 }
 
 // Auto approval settings for task execution
@@ -103,6 +109,7 @@ message Secrets {
   optional string oca_api_key = 41;
   optional string oca_refresh_token = 42;
   optional string mcp_o_auth_secrets = 43;
+  optional string qwen_web_token = 46;
 }
 
 // NOTE: Add new fields under API_HANDLER_SETTINGS_FIELDS or USER_SETTINGS_FIELDS
@@ -445,6 +452,12 @@ message UpdateSettingsRequest {
   optional bool block_on_syntax_errors = 44;
   // Lightweight mode: use simplified prompt for weak models
   optional bool lightweight_mode = 45;
+  // Session budget tier override + custom limits (see model-utils.ts).
+  // mode: "auto" | "strong" | "medium" | "weak" | "custom"
+  optional string session_budget_mode = 46;
+  optional int32 custom_max_tool_calls_per_turn = 47;
+  optional int32 custom_max_consecutive_read_only_tools = 48;
+  optional int32 custom_force_compact_after_steps = 49;
 }
 
 message UpdateTerminalConnectionTimeoutRequest {

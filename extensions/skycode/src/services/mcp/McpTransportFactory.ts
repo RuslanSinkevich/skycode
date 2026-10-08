@@ -8,7 +8,6 @@ import { Logger } from "@/shared/services/Logger"
 import { expandEnvironmentVariables } from "@/utils/envExpansion"
 import { McpOAuthManager } from "./McpOAuthManager"
 import { ServerConfigSchema } from "./schemas"
-import type { McpConnection, Transport } from "./types"
 
 type TransportErrorHandler = (name: string, error: unknown) => Promise<void>
 type TransportCloseHandler = (name: string) => Promise<void>

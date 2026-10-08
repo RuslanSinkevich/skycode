@@ -9,6 +9,7 @@ import * as vscode from "vscode"
 import type { IndexingService } from "./IndexingService"
 import { rerankResults } from "./Reranker"
 import { filePathSearch, keywordSearch } from "./storage/KeywordSearch"
+import { Logger } from "@/shared/services/Logger"
 
 /**
  * Check if a query contains mostly non-Latin characters.
@@ -21,7 +22,7 @@ import { filePathSearch, keywordSearch } from "./storage/KeywordSearch"
 function isNonLatinQuery(query: string): boolean {
 	// Remove whitespace, digits, and common punctuation
 	const cleaned = query.replace(/[\s\d\-_.,;:!?()[\]{}<>"/\\|@#$%^&*+=~`']+/g, "")
-	if (cleaned.length === 0) return false
+	if (cleaned.length === 0) { return false }
 
 	// Count Latin characters (a-z, A-Z)
 	let latinCount = 0
@@ -67,10 +68,10 @@ export class SearchEngine {
 			return
 		}
 		if (payload !== undefined) {
-			console.log(message, payload)
+			Logger.log(message, payload)
 			return
 		}
-		console.log(message)
+		Logger.log(message)
 	}
 
 	/**
@@ -103,7 +104,7 @@ export class SearchEngine {
 				})),
 			)
 		} catch (error) {
-			console.warn("[Skycode Indexing] Semantic search failed, falling back to keyword-only search:", error)
+			Logger.warn("[Skycode Indexing] Semantic search failed, falling back to keyword-only search:", error)
 		}
 
 		// Keyword search still runs (may catch exact matches in comments, strings, etc.)

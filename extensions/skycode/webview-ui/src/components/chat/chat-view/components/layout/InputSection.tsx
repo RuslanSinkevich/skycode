@@ -48,27 +48,41 @@ export const InputSection: React.FC<InputSectionProps> = ({
 		handleFocusChange,
 	} = chatState
 
-	const { isAtBottom, scrollToBottomAuto } = scrollBehavior
+	const { isAtBottom, keepAtBottom } = scrollBehavior
 	const prevTextAreaHeightRef = useRef(0)
 
-	// Handle send - queue if AI is working, send directly otherwise
+	// Handle send - queue if AI is working, send directly otherwise.
+	// Snapshot input state up-front so any later state churn (e.g. webview re-render
+	// while sending) can't silently swallow the user's message.
 	const handleSend = () => {
 		const text = inputValue.trim()
-		if (!text && selectedImages.length === 0 && selectedFiles.length === 0) {
+		const imagesSnapshot = selectedImages.slice()
+		const filesSnapshot = selectedFiles.slice()
+		if (!text && imagesSnapshot.length === 0 && filesSnapshot.length === 0) {
 			return
 		}
 
 		if (isAiWorking && messageQueue) {
 			// AI is working - add to queue instead of sending
-			messageQueue.addToQueue(text, selectedImages, selectedFiles)
+			messageQueue.addToQueue(text, imagesSnapshot, filesSnapshot)
 			setInputValue("")
 			setSelectedImages([])
 			setSelectedFiles([])
 			setActiveQuote(null)
-		} else {
-			// AI not working - send directly
-			messageHandlers.handleSendMessage(inputValue, selectedImages, selectedFiles)
+			return
 		}
+
+		// AI not working - send directly. If the send throws (e.g. backend
+		// crashed or webview just remounted), restore the input so the user
+		// doesn't lose their message.
+		Promise.resolve()
+			.then(() => messageHandlers.handleSendMessage(inputValue, imagesSnapshot, filesSnapshot))
+			.catch((err) => {
+				console.error("[InputSection] handleSendMessage failed, restoring input:", err)
+				setInputValue(text)
+				setSelectedImages(imagesSnapshot)
+				setSelectedFiles(filesSnapshot)
+			})
 	}
 
 	return (
@@ -93,7 +107,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
 				const grew = prevTextAreaHeightRef.current > 0 && height > prevTextAreaHeightRef.current
 				prevTextAreaHeightRef.current = height
 				if (grew && isAtBottom) {
-					scrollToBottomAuto()
+					keepAtBottom()
 				}
 			}}
 				onSelectFilesAndImages={selectFilesAndImages}

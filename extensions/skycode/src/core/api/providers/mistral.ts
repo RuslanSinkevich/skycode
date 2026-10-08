@@ -9,6 +9,7 @@ import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { withRetry } from "../retry"
 import { convertToMistralMessages } from "../transform/mistral-format"
 import { ApiStream } from "../transform/stream"
+import { StreamAborter } from "../utils/abort-support"
 
 interface MistralHandlerOptions extends CommonApiHandlerOptions {
 	mistralApiKey?: string
@@ -18,9 +19,14 @@ interface MistralHandlerOptions extends CommonApiHandlerOptions {
 export class MistralHandler implements ApiHandler {
 	private options: MistralHandlerOptions
 	private client: Mistral | undefined
+	private aborter = new StreamAborter()
 
 	constructor(options: MistralHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	private ensureClient(): Mistral {
@@ -66,19 +72,20 @@ export class MistralHandler implements ApiHandler {
 	@withRetry()
 	async *createMessage(systemPrompt: string, messages: SkycodeStorageMessage[], tools?: OpenAITool[]): ApiStream {
 		const client = this.ensureClient()
+		const signal = this.aborter.reset()
 		const stream = await client.chat
-			.stream({
-				model: this.getModel().id,
-				// max_completion_tokens: this.getModel().info.maxTokens,
-				temperature: 0,
-				messages: [{ role: "system", content: systemPrompt }, ...convertToMistralMessages(messages)],
-				stream: true,
-				tools: tools?.length ? (tools as MistralTool[]) : undefined,
-				toolChoice: tools?.length ? "any" : undefined,
-			})
+			.stream(
+				{
+					model: this.getModel().id,
+					temperature: 0,
+					messages: [{ role: "system", content: systemPrompt }, ...convertToMistralMessages(messages)],
+					stream: true,
+					tools: tools?.length ? (tools as MistralTool[]) : undefined,
+					toolChoice: tools?.length ? "any" : undefined,
+				},
+				{ fetchOptions: { signal } },
+			)
 			.catch((err) => {
-				// The Mistal SDK uses statusCode instead of status
-				// However, if they introduce status for something, I don't want to override it
 				if ("statusCode" in err && !("status" in err)) {
 					err.status = err.statusCode
 				}
@@ -86,6 +93,7 @@ export class MistralHandler implements ApiHandler {
 				throw err
 			})
 
+		try {
 		for await (const chunk of stream) {
 			const delta = chunk.data.choices[0]?.delta
 			if (delta.toolCalls) {
@@ -121,6 +129,9 @@ export class MistralHandler implements ApiHandler {
 					outputTokens: chunk.data.usage.completionTokens || 0,
 				}
 			}
+		}
+		} finally {
+			this.aborter.clear()
 		}
 	}
 

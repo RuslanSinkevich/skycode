@@ -227,6 +227,11 @@ export function getConfiguredProviders(apiConfiguration: ApiConfiguration | unde
 		configured.push("qwen-code")
 	}
 
+	// Qwen Web - requires browser session token
+	if (apiConfiguration.qwenWebToken) {
+		configured.push("qwen-web")
+	}
+
 	// OCA - requires base URL
 	if (apiConfiguration.ocaBaseUrl) {
 		configured.push("oca")

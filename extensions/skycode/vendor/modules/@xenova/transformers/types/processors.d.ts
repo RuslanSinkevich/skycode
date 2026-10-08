@@ -821,5 +821,4 @@ export type SamImageProcessorResult = {
 };
 import { RawImage } from "./utils/image.js";
 import { Tensor } from "./utils/tensor.js";
-export {};
 //# sourceMappingURL=processors.d.ts.map

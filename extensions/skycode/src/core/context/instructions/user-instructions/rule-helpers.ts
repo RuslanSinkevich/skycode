@@ -165,6 +165,15 @@ export const RULE_SOURCE_PREFIX = {
 export type RuleLoadResult = {
 	content: string
 	activatedConditionalRules: ActivatedConditionalRule[]
+	/**
+	 * [SKYCODE] Тела правил с `priority: critical` во frontmatter.
+	 *
+	 * Такие правила кроме системного промпта повторяются в environment_details рядом с
+	 * `# Current Mode` — то есть в каждом сообщении. Причина: напоминание о режиме стоит
+	 * рядом с последней репликой пользователя, а правила лежат один раз в конце большого
+	 * системного промпта, и при конфликте модель выбирала то, что ближе.
+	 */
+	criticalContent?: string
 }
 
 /**
@@ -174,6 +183,8 @@ export type RuleLoadResult = {
 export type RuleLoadResultWithInstructions = {
 	instructions?: string
 	activatedConditionalRules: ActivatedConditionalRule[]
+	/** См. RuleLoadResult.criticalContent. */
+	criticalContent?: string
 }
 
 export const getRuleFilesTotalContentWithMetadata = async (
@@ -188,6 +199,8 @@ export const getRuleFilesTotalContentWithMetadata = async (
 	type RuleLoadPart = {
 		contentPart: string | null
 		activatedRule: ActivatedConditionalRule | null
+		/** Тело правила, если оно помечено `priority: critical` — см. RuleLoadResult.criticalContent. */
+		criticalPart?: string | null
 	}
 
 	const parts = await Promise.all(
@@ -221,9 +234,21 @@ export const getRuleFilesTotalContentWithMetadata = async (
 					? { name: `${prefix}:${ruleFilePathRelative}`, matchedConditions }
 					: null
 
-			return { contentPart: `${ruleFilePathRelative}\n${body.trim()}`, activatedRule }
+			const trimmedBody = body.trim()
+			const isCritical = typeof data.priority === "string" && data.priority.trim().toLowerCase() === "critical"
+
+			return {
+				contentPart: `${ruleFilePathRelative}\n${trimmedBody}`,
+				activatedRule,
+				criticalPart: isCritical ? trimmedBody : null,
+			}
 		}),
 	)
+
+	const criticalContent = parts
+		.map((p) => p.criticalPart)
+		.filter(Boolean)
+		.join("\n\n")
 
 	return {
 		content: parts
@@ -233,6 +258,7 @@ export const getRuleFilesTotalContentWithMetadata = async (
 		activatedConditionalRules: parts
 			.map((p) => p.activatedRule)
 			.filter((rule): rule is ActivatedConditionalRule => rule !== null),
+		criticalContent: criticalContent || undefined,
 	}
 }
 
@@ -247,27 +273,27 @@ export function getRemoteRulesTotalContentWithMetadata(
 
 	for (const rule of remoteRules) {
 		const isEnabled = rule.alwaysEnabled || remoteToggles[rule.name] !== false
-		if (!isEnabled) continue
+		if (!isEnabled) { continue }
 
 		const raw = (rule.contents || "").trim()
-		if (!raw) continue
+		if (!raw) { continue }
 
 		const { data, body, hadFrontmatter, parseError } = parseYamlFrontmatter(raw)
 		if (hadFrontmatter && parseError) {
 			// Fail open: include entire raw contents
-			if (combinedContent) combinedContent += "\n\n"
+			if (combinedContent) { combinedContent += "\n\n" }
 			combinedContent += `${rule.name}\n${raw}`
 			continue
 		}
 
 		const { passed, matchedConditions } = evaluateRuleConditionals(data, evaluationContext)
-		if (!passed) continue
+		if (!passed) { continue }
 
 		if (hadFrontmatter && Object.keys(matchedConditions).length > 0) {
 			activatedConditionalRules.push({ name: `${RULE_SOURCE_PREFIX.remote}:${rule.name}`, matchedConditions })
 		}
 
-		if (combinedContent) combinedContent += "\n\n"
+		if (combinedContent) { combinedContent += "\n\n" }
 		combinedContent += `${rule.name}\n${body.trim()}`
 	}
 

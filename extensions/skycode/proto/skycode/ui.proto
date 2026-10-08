@@ -288,6 +288,12 @@ service UiService {
   // Reject all pending changes (Skycode AI diff system)
   rpc rejectAllPendingChanges(EmptyRequest) returns (Empty);
 
+  // Accept all pending changes for a single file (path as value)
+  rpc acceptPendingChangesForFile(StringRequest) returns (Empty);
+
+  // Reject all pending changes for a single file (path as value)
+  rpc rejectPendingChangesForFile(StringRequest) returns (Empty);
+
   // Navigate to previous pending diff hunk (cross-file)
   rpc navigatePrevHunk(EmptyRequest) returns (Empty);
 

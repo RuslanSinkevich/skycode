@@ -4,6 +4,7 @@ import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import {
 	DatabaseZap,
 	FlaskConical,
+	Gauge,
 	Layers,
 	type LucideIcon,
 	Mic,
@@ -35,6 +36,7 @@ import GeneralSettingsSection from "./sections/GeneralSettingsSection"
 import IndexingSettingsSection from "./sections/IndexingSettingsSection"
 import McpSection from "./sections/McpSection"
 import PermissionsSection from "./sections/PermissionsSection"
+import SessionBudgetSection from "./sections/SessionBudgetSection"
 import TerminalSettingsSection from "./sections/TerminalSettingsSection"
 import VoiceSection from "./sections/VoiceSection"
 
@@ -85,6 +87,13 @@ export const SETTINGS_TABS: SettingsTab[] = [
 		tooltipKey: "settings.tabs.context.tooltip",
 		headerKey: "settings.tabs.context.header",
 		icon: Layers,
+	},
+	{
+		id: "sessionBudget",
+		nameKey: "settings.tabs.sessionBudget.name",
+		tooltipKey: "settings.tabs.sessionBudget.tooltip",
+		headerKey: "settings.tabs.sessionBudget.header",
+		icon: Gauge,
 	},
 	{
 		id: "terminal",
@@ -153,6 +162,7 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 			permissions: PermissionsSection,
 			editing: EditingSection,
 			context: ContextSection,
+			sessionBudget: SessionBudgetSection,
 			general: GeneralSettingsSection,
 			browser: BrowserSettingsSection,
 			terminal: TerminalSettingsSection,
@@ -201,9 +211,9 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 
 	const [activeTab, setActiveTab] = useState<string>(() => {
 		// Map old tab IDs to new ones for backward compatibility
-		if (targetSection === "api-config") return "providers"
-		if (targetSection === "features") return "permissions"
-		if (targetSection === "about") return "general"
+		if (targetSection === "api-config") { return "providers" }
+		if (targetSection === "features") { return "permissions" }
+		if (targetSection === "about") { return "general" }
 		return targetSection || SETTINGS_TABS[0].id
 	})
 
@@ -213,7 +223,7 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 
 	useLayoutEffect(() => {
 		const el = containerRef.current
-		if (!el) return
+		if (!el) { return }
 		const ro = new ResizeObserver(([entry]) => {
 			setIsCompact(entry.contentRect.width < 500)
 		})
@@ -262,9 +272,9 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 
 			// Map old IDs
 			let mappedTabId = tabId
-			if (tabId === "api-config") mappedTabId = "providers"
-			if (tabId === "features") mappedTabId = "permissions"
-			if (tabId === "about") mappedTabId = "general"
+			if (tabId === "api-config") { mappedTabId = "providers" }
+			if (tabId === "features") { mappedTabId = "permissions" }
+			if (tabId === "about") { mappedTabId = "general" }
 
 			// Check if valid tab ID
 			if (SETTINGS_TABS.some((tab) => tab.id === mappedTabId)) {
@@ -306,9 +316,9 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 	useEffect(() => {
 		if (targetSection) {
 			let mapped = targetSection
-			if (targetSection === "api-config") mapped = "providers"
-			if (targetSection === "features") mapped = "permissions"
-			if (targetSection === "about") mapped = "general"
+			if (targetSection === "api-config") { mapped = "providers" }
+			if (targetSection === "features") { mapped = "permissions" }
+			if (targetSection === "about") { mapped = "general" }
 			setActiveTab(mapped)
 		}
 	}, [targetSection])

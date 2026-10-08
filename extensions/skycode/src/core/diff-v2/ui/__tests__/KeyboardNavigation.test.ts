@@ -6,11 +6,11 @@ import { InMemoryMemento } from '@/test/test-helpers'
 
 describe('KeyboardNavigation', () => {
   let store: DiffStore
-  let nav: KeyboardNavigation
+  let _nav: KeyboardNavigation
 
   beforeEach(() => {
     store = new DiffStore(new InMemoryMemento() as any)
-    nav = new KeyboardNavigation(store)
+    _nav = new KeyboardNavigation(store)
   })
 
   function addHunkAtLine(fsPath: string, startLine: number, endLine: number): string {

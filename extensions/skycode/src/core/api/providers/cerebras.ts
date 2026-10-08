@@ -5,6 +5,7 @@ import { fetch } from "@/shared/net"
 import { ApiHandler, CommonApiHandlerOptions } from "../index"
 import { withRetry } from "../retry"
 import { ApiStream } from "../transform/stream"
+import { StreamAborter } from "../utils/abort-support"
 
 interface CerebrasHandlerOptions extends CommonApiHandlerOptions {
 	cerebrasApiKey?: string
@@ -20,9 +21,14 @@ const CEREBRAS_DEFAULT_MAX_TOKENS = 16_384
 export class CerebrasHandler implements ApiHandler {
 	private options: CerebrasHandlerOptions
 	private client: Cerebras | undefined
+	private aborter = new StreamAborter()
 
 	constructor(options: CerebrasHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	private ensureClient(): Cerebras {

@@ -5,6 +5,7 @@ import { BANNER_DATA, BannerAction, BannerActionType, BannerCardData } from "@sh
 import { GitBranch } from "lucide-react"
 import React, { useCallback, useEffect, useMemo, useState } from "react"
 import BannerCarousel from "@/components/common/BannerCarousel"
+import IndexingPromptBanner from "@/components/common/IndexingPromptBanner"
 import HistoryPreview from "@/components/history/HistoryPreview"
 import { useApiConfigurationHandlers } from "@/components/settings/utils/useApiConfigurationHandlers"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -14,7 +15,7 @@ import CreateWorktreeModal from "@/components/worktrees/CreateWorktreeModal"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useSkycodeAuth } from "@/context/SkycodeAuthContext"
 import { useI18n } from "@/i18n"
-import { AccountServiceClient, StateServiceClient, UiServiceClient, WorktreeServiceClient } from "@/services/grpc-client"
+import { StateServiceClient, UiServiceClient, WorktreeServiceClient } from "@/services/grpc-client"
 import { convertBannerData } from "@/utils/bannerUtils"
 import { getCurrentPlatform } from "@/utils/platformUtils"
 import { WelcomeSectionProps } from "../../types/chatTypes"
@@ -63,7 +64,6 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 		subagentsEnabled,
 		worktreesEnabled,
 		banners,
-		freeRequestLimit,
 	} = useExtensionState()
 	const { handleFieldsChange } = useApiConfigurationHandlers()
 
@@ -96,7 +96,7 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 	)
 
 	/**
-	 * Banner configuration: local tips + remote (from BannerService API).
+	 * Banner configuration: local tips only.
 	 * BANNER_DATA is kept empty — local tips are built here with t().
 	 */
 	const bannerConfig = useMemo((): BannerCardData[] => {
@@ -146,15 +146,15 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 						actModeOpenRouterModelId: modelId,
 						planModeOpenRouterModelInfo: openRouterModels[modelId],
 						actModeOpenRouterModelInfo: openRouterModels[modelId],
-						planModeApiProvider: "skycode",
-						actModeApiProvider: "skycode",
+						planModeApiProvider: "openrouter",
+						actModeApiProvider: "openrouter",
 					})
 					setTimeout(() => setShowChatModelSelector(true), 10)
 					break
 				}
 
 				case BannerActionType.ShowAccount:
-					AccountServiceClient.accountLoginClicked({}).catch((err) => console.error("Failed to get login URL:", err))
+					navigateToAccount()
 					break
 
 			case BannerActionType.ShowApiSettings:
@@ -175,7 +175,7 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 					console.warn("Unknown banner action:", action.action)
 			}
 		},
-		[handleFieldsChange, openRouterModels, setShowChatModelSelector, navigateToSettings],
+		[handleFieldsChange, openRouterModels, setShowChatModelSelector, navigateToSettings, navigateToAccount],
 	)
 
 	/**
@@ -228,25 +228,7 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 		<div className="flex flex-col flex-1 w-full h-full p-0 m-0">
 			<div className="overflow-y-auto flex flex-col pb-2.5">
 				<HomeHeader shouldShowQuickWins={shouldShowQuickWins} />
-				{/* Free trial banner for unauthenticated users */}
-				{!skycodeUser && (
-					<div className="mx-5 mb-3 p-4 rounded-lg border border-[var(--vscode-editorWidget-border,rgba(127,127,127,0.2))] bg-[var(--vscode-editorWidget-background,var(--vscode-editor-background))]">
-						<div className="flex items-start gap-3">
-							<span className="text-xl leading-none mt-0.5">👋</span>
-							<div className="flex-1 flex flex-col gap-2.5">
-								<p className="m-0 text-sm text-[var(--vscode-foreground)]">
-									{t("account.freeTrialWelcome", { limit: String(freeRequestLimit ?? 20) })}
-								</p>
-								<button
-									type="button"
-									className="self-start px-3 py-1.5 text-xs font-medium rounded cursor-pointer border-none text-[var(--vscode-button-foreground)] bg-[var(--vscode-button-background)] hover:bg-[var(--vscode-button-hoverBackground)] transition-colors"
-									onClick={navigateToAccount}>
-									{t("account.freeTrialSignIn")}
-								</button>
-							</div>
-						</div>
-					</div>
-				)}
+				<IndexingPromptBanner />
 				<BannerCarousel banners={activeBanners} />
 				{!shouldShowQuickWins && taskHistory.length > 0 && <HistoryPreview showHistoryView={showHistoryView} />}
 				{/* Quick launch worktree button */}

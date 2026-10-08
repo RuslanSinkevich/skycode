@@ -579,7 +579,7 @@ export class SkycodeApiServerMock {
 		const server = SkycodeApiServerMock.globalSharedServer.server
 
 		// Clean shutdown - destroy all socket connections first
-		SkycodeApiServerMock.globalSockets.forEach((socket) => socket.destroy())
+		SkycodeApiServerMock.globalSockets.forEach((socket) => { socket.destroy() })
 		SkycodeApiServerMock.globalSockets.clear()
 
 		await new Promise<void>((resolve, reject) => {

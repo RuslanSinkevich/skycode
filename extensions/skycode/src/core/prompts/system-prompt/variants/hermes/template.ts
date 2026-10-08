@@ -16,8 +16,6 @@ export const baseTemplate = `{{${SystemPromptSection.AGENT_ROLE}}}
 
 ## {{${SystemPromptSection.EDITING_FILES}}}
 
-## {{${SystemPromptSection.TODO}}}
-
 ## {{${SystemPromptSection.MCP}}}
 
 ## {{${SystemPromptSection.TASK_PROGRESS}}}

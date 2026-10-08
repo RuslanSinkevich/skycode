@@ -14,7 +14,7 @@ export function useAutoApproveActions() {
 				case "enableNotifications":
 					return autoApprovalSettings.enableNotifications
 				default:
-					return autoApprovalSettings.actions[action.id] ?? false
+					return (autoApprovalSettings.actions[action.id] as boolean | undefined) ?? false
 			}
 		},
 		[autoApprovalSettings],
@@ -34,14 +34,14 @@ export function useAutoApproveActions() {
 			const newActions = {
 				...autoApprovalSettings.actions,
 				[actionId]: value,
-			}
+			} as AutoApprovalSettings["actions"]
 
 			if (value === false && subActionId) {
-				newActions[subActionId] = false
+				Object.assign(newActions, { [subActionId]: false })
 			}
 
 			if (value === true && action.parentActionId) {
-				newActions[action.parentActionId as keyof AutoApprovalSettings["actions"]] = true
+				Object.assign(newActions, { [action.parentActionId]: true })
 			}
 
 			await updateAutoApproveSettings({

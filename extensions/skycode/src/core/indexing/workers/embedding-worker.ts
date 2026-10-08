@@ -12,8 +12,7 @@ import * as fs from "node:fs"
 import * as https from "node:https"
 import * as http from "node:http"
 import { pathToFileURL } from "node:url"
-import { createUnzip } from "node:zlib"
-import { pipeline as streamPipeline, Writable } from "node:stream"
+import { Logger } from "@/shared/services/Logger"
 
 // ── Message types ──────────────────────────────────────────────
 
@@ -62,6 +61,26 @@ interface ErrorMessage {
 
 let pipeline: any = null
 let modelRequiresPrefix = false
+let modelDimensions = 384
+
+// ── Input sanitisation ─────────────────────────────────────────
+
+/**
+ * Strip null bytes / lone surrogates / non-printable control chars.
+ * onnxruntime occasionally rejects tokenized input as "Tensor.data must be
+ * a typed array for numeric tensor" when the tokenizer emits something it
+ * can't materialise into a typed array — empty or all-control-char inputs
+ * are the usual culprits. Replace such inputs with a single space so the
+ * tokenizer still produces a valid (single-token) tensor and the caller
+ * gets a deterministic shape back, instead of crashing the whole batch.
+ */
+function sanitizeText(text: string): string {
+	if (typeof text !== "string") { return " " }
+	// Replace null bytes and ASCII control chars (except tab/newline/cr).
+	const cleaned = text.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, " ")
+	const trimmed = cleaned.trim()
+	return trimmed.length === 0 ? " " : trimmed
+}
 
 // ── Model download from Skycode CDN ────────────────────────────
 
@@ -72,16 +91,19 @@ function sendProgress(phase: string, percent: number): void {
 async function httpGet(url: string): Promise<http.IncomingMessage> {
 	return new Promise((resolve, reject) => {
 		const mod = url.startsWith("https") ? https : http
-		mod.get(url, { headers: { "User-Agent": "Skycode" } }, (res) => {
+		const req = mod.get(url, { headers: { "User-Agent": "Skycode" }, timeout: 60000 }, (res) => {
 			if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
 				const next = res.headers.location.startsWith("http")
 					? res.headers.location
 					: new URL(res.headers.location, url).href
+				res.resume()
 				httpGet(next).then(resolve, reject)
 				return
 			}
 			resolve(res)
-		}).on("error", reject)
+		})
+		req.on("timeout", () => req.destroy(new Error("Connection timed out")))
+		req.on("error", reject)
 	})
 }
 
@@ -92,7 +114,7 @@ async function ensureModelDownloaded(
 ): Promise<void> {
 	const modelDir = path.join(modelsDir, huggingFaceId)
 	const onnxPath = path.join(modelDir, "onnx", "model_quantized.onnx")
-	if (fs.existsSync(onnxPath)) return
+	if (fs.existsSync(onnxPath)) { return }
 
 	sendProgress("downloading", 0)
 	const res = await httpGet(downloadUrl)
@@ -106,23 +128,68 @@ async function ensureModelDownloaded(
 
 	await new Promise<void>((resolve, reject) => {
 		let downloaded = 0
+		let settled = false
+		let timer: ReturnType<typeof setTimeout>
+		const fail = (err: Error) => {
+			if (settled) { return }
+			settled = true
+			clearTimeout(timer)
+			reject(err)
+		}
+		// Inactivity timeout — reset per chunk so large models on slow links
+		// aren't aborted mid-transfer, but a real stall still fails fast.
+		const armTimer = () => {
+			clearTimeout(timer)
+			timer = setTimeout(() => fail(new Error("Download stalled")), 120000)
+		}
+		armTimer()
 		const ws = fs.createWriteStream(zipPath)
 		res.on("data", (chunk: Buffer) => {
 			downloaded += chunk.length
+			armTimer()
 			if (totalBytes > 0) {
 				sendProgress("downloading", Math.round((downloaded / totalBytes) * 100))
 			}
 		})
 		res.pipe(ws)
-		ws.on("finish", () => { ws.close(); resolve() })
-		ws.on("error", reject)
-		res.on("error", reject)
+		ws.on("finish", () => {
+			if (settled) { return }
+			settled = true
+			clearTimeout(timer)
+			ws.close()
+			resolve()
+		})
+		ws.on("error", fail)
+		res.on("error", fail)
 	})
 
 	sendProgress("extracting", 0)
 	await extractZip(zipPath, modelDir)
 	fs.unlinkSync(zipPath)
 	sendProgress("extracting", 100)
+}
+
+interface ZipEntry {
+	name: string
+	compMethod: number
+	dataStart: number
+	compSize: number
+	uncompSize: number
+}
+
+/**
+ * Compute a single common top-level directory shared by every entry.
+ * Some archives wrap all files in a folder named after the model
+ * (e.g. "multilingual-e5-base/config.json"); we strip it so files land
+ * directly under destDir, matching the layout transformers.js expects.
+ */
+function commonTopDir(names: string[]): string {
+	const files = names.filter((n) => !n.endsWith("/"))
+	if (files.length === 0) { return "" }
+	const firstSeg = files[0].split("/")[0]
+	if (!firstSeg) { return "" }
+	const prefix = `${firstSeg}/`
+	return files.every((n) => n.startsWith(prefix)) ? prefix : ""
 }
 
 async function extractZip(zipPath: string, destDir: string): Promise<void> {
@@ -133,33 +200,43 @@ async function extractZip(zipPath: string, destDir: string): Promise<void> {
 	await fh.read(buf, 0, stat.size, 0)
 	await fh.close()
 
+	// First pass: collect entries, normalizing separators (archives packed
+	// on Windows may use "\" instead of the zip-standard "/").
+	const entries: ZipEntry[] = []
 	let offset = 0
 	while (offset < buf.length) {
 		const sig = buf.readUInt32LE(offset)
-		if (sig !== 0x04034b50) break
+		if (sig !== 0x04034b50) { break }
 
 		const compMethod = buf.readUInt16LE(offset + 8)
 		const compSize = buf.readUInt32LE(offset + 18)
 		const uncompSize = buf.readUInt32LE(offset + 22)
 		const nameLen = buf.readUInt16LE(offset + 26)
 		const extraLen = buf.readUInt16LE(offset + 28)
-		const fileName = buf.toString("utf8", offset + 30, offset + 30 + nameLen)
+		const fileName = buf.toString("utf8", offset + 30, offset + 30 + nameLen).replace(/\\/g, "/")
 		const dataStart = offset + 30 + nameLen + extraLen
 
-		if (!fileName.endsWith("/")) {
-			const outPath = path.join(destDir, fileName)
-			fs.mkdirSync(path.dirname(outPath), { recursive: true })
-
-			if (compMethod === 0) {
-				fs.writeFileSync(outPath, buf.subarray(dataStart, dataStart + uncompSize))
-			} else if (compMethod === 8) {
-				const { inflateRawSync } = await import("node:zlib")
-				const inflated = inflateRawSync(buf.subarray(dataStart, dataStart + compSize))
-				fs.writeFileSync(outPath, inflated)
-			}
-		}
-
+		entries.push({ name: fileName, compMethod, dataStart, compSize, uncompSize })
 		offset = dataStart + compSize
+	}
+
+	const strip = commonTopDir(entries.map((e) => e.name))
+
+	const { inflateRawSync } = await import("node:zlib")
+	for (const entry of entries) {
+		if (entry.name.endsWith("/")) { continue }
+		const relName = strip && entry.name.startsWith(strip) ? entry.name.slice(strip.length) : entry.name
+		if (!relName) { continue }
+
+		const outPath = path.join(destDir, relName)
+		fs.mkdirSync(path.dirname(outPath), { recursive: true })
+
+		if (entry.compMethod === 0) {
+			fs.writeFileSync(outPath, buf.subarray(entry.dataStart, entry.dataStart + entry.uncompSize))
+		} else if (entry.compMethod === 8) {
+			const inflated = inflateRawSync(buf.subarray(entry.dataStart, entry.dataStart + entry.compSize))
+			fs.writeFileSync(outPath, inflated)
+		}
 	}
 }
 
@@ -195,11 +272,14 @@ async function initModel(msg: InitMessage): Promise<void> {
 		const { env, pipeline: createPipeline } = await import(transformersUrl)
 
 		env.allowLocalModels = true
-		env.allowRemoteModels = false
+		// If `models/<hf-id>/` is missing (not shipped with the extension), load from Hugging Face
+		// on first use. When files exist under localModelPath, they are preferred.
+		env.allowRemoteModels = true
 		env.localModelPath = modelsDir
 
 		pipeline = await createPipeline("feature-extraction", huggingFaceId)
 		modelRequiresPrefix = requiresPrefix
+		modelDimensions = dimensions
 
 		parentPort?.postMessage({ type: "ready", dimensions } satisfies ReadyMessage)
 	} catch (err: any) {
@@ -213,6 +293,16 @@ async function initModel(msg: InitMessage): Promise<void> {
 
 // ── Embedding computation ──────────────────────────────────────
 
+/**
+ * Sub-batch size for the batched forward pass.
+ * Texts are sorted by length and grouped in chunks of this size, so each
+ * sub-batch contains items of similar length and padding overhead is bounded.
+ * 8 was chosen as a compromise: large enough to amortize ONNX kernel launch
+ * overhead, small enough that O(N²·B) attention on the longest item in the
+ * sub-batch stays well below the worker's memory ceiling.
+ */
+const SUB_BATCH_SIZE = 8
+
 async function computeEmbeddings(id: number, texts: string[], textType?: "query" | "passage"): Promise<void> {
 	if (!pipeline) {
 		parentPort?.postMessage({
@@ -224,23 +314,94 @@ async function computeEmbeddings(id: number, texts: string[], textType?: "query"
 	}
 
 	try {
-		const results: number[][] = []
+		// Sanitize first, then optionally prefix. Inputs that survive as
+		// pure whitespace / control characters get replaced with " " so
+		// the tokenizer can't trip onnxruntime's tensor validation.
+		const sanitized = texts.map(sanitizeText)
 		const prefixed = modelRequiresPrefix && textType
-			? texts.map((t) => `${textType}: ${t}`)
-			: texts
+			? sanitized.map((t) => `${textType}: ${t}`)
+			: sanitized
 
-		for (let i = 0; i < prefixed.length; i++) {
-			const output = await pipeline([prefixed[i]], {
-				pooling: "mean",
-				normalize: true,
-			})
-			results.push(...output.tolist())
+		const zeroVec = (): number[] => new Array(modelDimensions).fill(0)
+
+		// Sort indices by text length ascending so each sub-batch contains
+		// items of similar length. Padding to the longest item in a sub-batch
+		// drives both runtime and peak memory, so length-bucketing avoids the
+		// worst case where one long outlier inflates the whole batch.
+		const order = prefixed
+			.map((t, i) => ({ i, len: t.length }))
+			.sort((a, b) => a.len - b.len)
+			.map((x) => x.i)
+
+		const sortedResults: number[][] = new Array(prefixed.length)
+
+		for (let start = 0; start < order.length; start += SUB_BATCH_SIZE) {
+			const idxSlice = order.slice(start, start + SUB_BATCH_SIZE)
+			const subBatch = idxSlice.map((idx) => prefixed[idx])
+
+			let batchOk = false
+			try {
+				const output = await pipeline(subBatch, {
+					pooling: "mean",
+					normalize: true,
+				})
+				const vectors: number[][] = output.tolist()
+				if (vectors.length !== subBatch.length) {
+					throw new Error(
+						`Batched forward returned ${vectors.length} vectors for a sub-batch of ${subBatch.length}`,
+					)
+				}
+				for (let k = 0; k < idxSlice.length; k++) {
+					sortedResults[idxSlice[k]] = vectors[k]
+				}
+				batchOk = true
+			} catch (batchErr: any) {
+				// Batched forward can fail under memory pressure (RangeError /
+				// OOM) when a sub-batch contains an unusually long text after
+				// padding, or onnxruntime can reject the tokenizer output as
+				// "Tensor.data must be a typed array...". Fall back to per-text
+				// for just this sub-batch — the worker stays alive and the rest
+				// of the request still benefits from batching.
+				Logger.warn(
+					`[Skycode Worker] Batched forward failed for sub-batch (size=${subBatch.length}), ` +
+						`falling back to per-text: ${batchErr?.message ?? batchErr}`,
+				)
+			}
+
+			if (!batchOk) {
+				for (let k = 0; k < idxSlice.length; k++) {
+					try {
+						const single = await pipeline([subBatch[k]], {
+							pooling: "mean",
+							normalize: true,
+						})
+						const singleVec: number[][] = single.tolist()
+						sortedResults[idxSlice[k]] = singleVec[0] ?? zeroVec()
+					} catch (singleErr: any) {
+						// Don't let a single poisonous chunk kill the whole
+						// batch (and ultimately abort indexing after 5 such
+						// batches). Return a zero vector so IndexingService
+						// can skip it and keep going.
+						Logger.warn(
+							`[Skycode Worker] Per-text embedding failed for chunk len=${subBatch[k].length}: ` +
+								`${singleErr?.message ?? singleErr}`,
+						)
+						sortedResults[idxSlice[k]] = zeroVec()
+					}
+				}
+			}
+		}
+
+		// Final safety: replace any holes (shouldn't happen, but be defensive
+		// — IndexingService treats undefined as a hard failure of the batch).
+		for (let i = 0; i < sortedResults.length; i++) {
+			if (!sortedResults[i]) { sortedResults[i] = zeroVec() }
 		}
 
 		parentPort?.postMessage({
 			type: "result",
 			id,
-			embeddings: results,
+			embeddings: sortedResults,
 		} satisfies EmbedResultMessage)
 	} catch (err: any) {
 		parentPort?.postMessage({

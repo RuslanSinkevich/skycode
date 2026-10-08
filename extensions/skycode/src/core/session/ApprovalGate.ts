@@ -13,6 +13,7 @@
  */
 
 import type { SkycodeAskResponse } from "@shared/WebviewMessage"
+import { Logger } from "@/shared/services/Logger"
 
 // ---------------------------------------------------------------------------
 // Типы
@@ -72,7 +73,7 @@ export class ApprovalGate {
 		// Check if a response already arrived before we started waiting (race condition fix)
 		if (this.earlyResponses.length > 0) {
 			const early = this.earlyResponses.shift()!
-			console.log(`[ApprovalGate] Delivering early response for ask ${type} (ts=${askTs}): ${early.response}`)
+			Logger.log(`[ApprovalGate] Delivering early response for ask ${type} (ts=${askTs}): ${early.response}`)
 			return Promise.resolve(early)
 		}
 
@@ -116,7 +117,7 @@ export class ApprovalGate {
 				return true
 			}
 			// No pending ask for this ts — queue for later
-			console.log(`[ApprovalGate] No pending ask for ts=${askTs}, queueing early response`)
+			Logger.log(`[ApprovalGate] No pending ask for ts=${askTs}, queueing early response`)
 			this.earlyResponses.push({ response, text, images, files })
 			return true
 		}
@@ -133,7 +134,7 @@ export class ApprovalGate {
 		}
 
 		// No pending ask at all — queue for later delivery
-		console.log(`[ApprovalGate] No pending ask found, queueing early response: ${response}`)
+		Logger.log(`[ApprovalGate] No pending ask found, queueing early response: ${response}`)
 		this.earlyResponses.push({ response, text, images, files })
 		return true
 	}

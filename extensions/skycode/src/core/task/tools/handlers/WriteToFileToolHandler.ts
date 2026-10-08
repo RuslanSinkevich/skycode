@@ -1,19 +1,16 @@
 import path from "node:path"
-import { setTimeout as setTimeoutPromise } from "node:timers/promises"
 import * as vscode from "vscode"
 import * as diff from "diff"
 import type { ToolUse } from "@core/assistant-message"
 import { constructNewFileContent, getLineNumberFromCharIndex } from "@core/assistant-message/diff"
 import { formatResponse } from "@core/prompts/responses"
-import { getWorkspaceBasename, resolveWorkspacePath } from "@core/workspace"
-import { processFilesIntoText } from "@integrations/misc/extract-text"
+import { resolveWorkspacePath } from "@core/workspace"
 import { SkycodeSayTool } from "@shared/ExtensionMessage"
 import { fileExistsAtPath } from "@utils/fs"
 import { arePathsEqual, getReadablePath, isLocatedInWorkspace } from "@utils/path"
 import { telemetryService } from "@/services/telemetry"
 import { SkycodeDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
-import { showNotificationForApproval } from "../../utils"
 import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
@@ -22,6 +19,7 @@ import { applyModelContentFixes } from "../utils/ModelContentProcessor"
 import { ToolDisplayUtils } from "../utils/ToolDisplayUtils"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
 import { getDiffSystem } from "@/core/diff-v2"
+import { Logger } from "@/shared/services/Logger"
 
 /** A single diff block produced by writeFileAndVisualizeDiff */
 interface WriteDiffBlock {
@@ -44,7 +42,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 
 	async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
 		const relPath = block.params.path || block.params.absolutePath
-		if (!relPath) return
+		if (!relPath) { return }
 
 		const config = uiHelpers.getConfig()
 		const readablePath = getReadablePath(config.cwd, uiHelpers.removeClosingTag(block, "path", relPath))
@@ -52,7 +50,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 
 		const isWrite = block.name === "write_to_file" || block.name === "new_rule"
 		const raw = isWrite ? block.params.content : block.params.diff
-		if (!raw) return
+		if (!raw) { return }
 
 		// Очистить незакрытые теги в partial-блоке, чтобы текст был валидным
 		const cleaned = uiHelpers.removeClosingTag(block, isWrite ? "content" : "diff", raw)
@@ -143,10 +141,10 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 		} catch (error) {
 			// Ignore "Skycode instance aborted" errors - task was cancelled, don't propagate
 			if (error instanceof Error && error.message === "Skycode instance aborted") {
-				console.log('[WriteToFileToolHandler] Task aborted, ignoring error');
+				Logger.log('[WriteToFileToolHandler] Task aborted, ignoring error');
 				return formatResponse.toolResult("Operation cancelled");
 			}
-			console.error('[WriteToFileToolHandler] DiffSystem error:', error);
+			Logger.error('[WriteToFileToolHandler] DiffSystem error:', error);
 			throw error;
 		}
 	}
@@ -171,7 +169,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
         let matchIndices: number[] = [];
         let replacements: Array<{ start: number; end: number; originalContent: string; content: string }> | undefined = [];
         let diffContent = rawDiff;
-        let content = rawContent;
+        const content = rawContent;
 
         if (block.name === "replace_in_file" && diffContent) {
             diffContent = applyModelContentFixes(diffContent, config.api.getModel().id, resolvedPath);
@@ -182,14 +180,14 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
                 replacements = result.replacements;
             } catch (error) {
                 // Handle diff error similar to original
-                const errorResponse = formatResponse.toolError(`${(error as Error)?.message}\n\n` + formatResponse.diffError(resolvedPath, originalContent));
+                const _errorResponse = formatResponse.toolError(`${(error as Error)?.message}\n\n` + formatResponse.diffError(resolvedPath, originalContent));
                 // Push error response... (simplified for brevity, should match original)
                 throw error;
             }
         } else if (content) {
              newContent = content;
-             if (newContent.startsWith("```")) newContent = newContent.split("\n").slice(1).join("\n").trim();
-             if (newContent.endsWith("```")) newContent = newContent.split("\n").slice(0, -1).join("\n").trim();
+             if (newContent.startsWith("```")) { newContent = newContent.split("\n").slice(1).join("\n").trim(); }
+             if (newContent.endsWith("```")) { newContent = newContent.split("\n").slice(0, -1).join("\n").trim(); }
              newContent = applyModelContentFixes(newContent, config.api.getModel().id, resolvedPath);
         }
 
@@ -221,7 +219,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
                 // Keep only the first hunk; silently accept extras so they leave pending state
                 const [creationHunk, ...extraHunks] = pendingHunks;
                 for (const extra of extraHunks) {
-                    console.log(`[WriteToFile] Accepting extra pending hunk ${extra.id} to merge into primary`);
+                    Logger.log(`[WriteToFile] Accepting extra pending hunk ${extra.id} to merge into primary`);
                     diffSystem.getStore().updateHunkStatus(extra.id, 'accepted');
                 }
 
@@ -230,7 +228,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
                 const addedLines = allLines.slice(creationHunk.currentStartLine - 1);
                 const addedCount = addedLines.length;
 
-                console.log(`[WriteToFile] Updating pending creation hunk ${creationHunk.id}: total=${allLines.length} added=${addedCount} startLine=${creationHunk.currentStartLine}`);
+                Logger.log(`[WriteToFile] Updating pending creation hunk ${creationHunk.id}: total=${allLines.length} added=${addedCount} startLine=${creationHunk.currentStartLine}`);
 
                 await diffSystem.writeFileContent(absolutePath, newContent);
 
@@ -292,7 +290,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
                     // Existing file — normal diff
                     appliedBlocks = await this.writeFileAndVisualizeDiff(diffSystem, absolutePath, originalContent, newContent);
                 } else {
-                    console.log('[WriteToFile] No changes detected');
+                    Logger.log('[WriteToFile] No changes detected');
                 }
             }
 
@@ -312,12 +310,12 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
             }
 
             if (errorMessage.includes('Too many changes')) {
-                console.warn('[WriteToFileToolHandler] Change too large:', errorMessage);
+                Logger.warn('[WriteToFileToolHandler] Change too large:', errorMessage);
                 return formatResponse.toolError(errorMessage);
             }
 
             // Other DiffSystem errors — log and return to model
-            console.error('[WriteToFileToolHandler] DiffSystem error:', diffError);
+            Logger.error('[WriteToFileToolHandler] DiffSystem error:', diffError);
             return formatResponse.toolError(
                 `Failed to apply changes: ${errorMessage}\n\nPlease try a smaller, more targeted change.`
             );
@@ -328,7 +326,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
             const postEditDoc = await vscode.workspace.openTextDocument(absolutePath);
             const postEditContent = postEditDoc.getText();
             if (postEditContent === originalContent) {
-                console.log(`[WriteToFile] No-op detected: file unchanged after ${block.name}`);
+                Logger.log(`[WriteToFile] No-op detected: file unchanged after ${block.name}`);
                 config.taskState.consecutiveMistakeCount++;
                 return formatResponse.toolError(
                     `No changes were made to the file. The replacement content is identical to the original. ` +
@@ -444,13 +442,13 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
         for (let i = 0; i < changes.length; i++) {
             const change = changes[i];
             const lines = change.value.split('\n');
-            if (lines.at(-1) === '') lines.pop();
+            if (lines.at(-1) === '') { lines.pop(); }
 
             if (change.removed) {
                 const nextChange = changes[i + 1];
                 if (nextChange && nextChange.added) {
                     const nextLines = nextChange.value.split('\n');
-                    if (nextLines.at(-1) === '') nextLines.pop();
+                    if (nextLines.at(-1) === '') { nextLines.pop(); }
 
                     diffBlocks.push({
                         type: 'replacement',
@@ -488,8 +486,8 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
             }
         }
 
-        console.log('[WriteToFile] Computed', diffBlocks.length, 'diff blocks');
-        if (diffBlocks.length === 0) return [];
+        Logger.log('[WriteToFile] Computed', diffBlocks.length, 'diff blocks');
+        if (diffBlocks.length === 0) { return []; }
 
         // 3. v4: Validate change size (only for write_to_file with existing files)
         let totalChangedLines = 0;
@@ -531,7 +529,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 
                 block.hunkId = hunkId;
 
-                console.log('[WriteToFile] Applied block via DiffSystem:', block.type,
+                Logger.log('[WriteToFile] Applied block via DiffSystem:', block.type,
                     'origLine:', block.lineInOldFile, 'adjustedLine:', adjustedLine,
                     'removed:', block.removedLines.length, 'added:', block.addedLines.length,
                     'offset:', cumulativeOffset, 'hunkId:', hunkId?.slice(0, 8));
@@ -560,13 +558,13 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
         for (let i = 0; i < changes.length; i++) {
             const change = changes[i];
             const lines = change.value.split('\n');
-            if (lines.at(-1) === '') lines.pop();
+            if (lines.at(-1) === '') { lines.pop(); }
 
             if (change.removed) {
                 const nextChange = changes[i + 1];
                 if (nextChange && nextChange.added) {
                     const nextLines = nextChange.value.split('\n');
-                    if (nextLines.at(-1) === '') nextLines.pop();
+                    if (nextLines.at(-1) === '') { nextLines.pop(); }
                     diffBlocks.push({ type: 'replacement', lineInOldFile: lineInOld, lineInNewFile: lineInNew, removedLines: lines, addedLines: nextLines });
                     lineInOld += lines.length;
                     lineInNew += nextLines.length;
@@ -788,7 +786,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 	 * Uses indentation-based block detection for reliable deletion
 	 */
 	private async executeDeleteBlock(
-		config: TaskConfig,
+		_config: TaskConfig,
 		absolutePath: string,
 		originalContent: string,
 		query: string,
@@ -847,7 +845,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 	 * Supports whitespace normalization and line number removal from copy-paste
 	 */
 	private async executeReplaceText(
-		config: TaskConfig,
+		_config: TaskConfig,
 		absolutePath: string,
 		originalContent: string,
 		query: string,
@@ -974,7 +972,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 		};
 
 		const anchorIndent = getIndent(lines[anchorLine]);
-		let startLine = anchorLine;
+		const startLine = anchorLine;
 		let endLine = anchorLine;
 
 		// Find end of block (lines with greater indent, or same indent if continuation)

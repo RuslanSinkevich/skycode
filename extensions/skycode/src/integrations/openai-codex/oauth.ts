@@ -70,7 +70,7 @@ interface IdTokenClaims {
  */
 function parseJwtClaims(token: string): IdTokenClaims | undefined {
 	const parts = token.split(".")
-	if (parts.length !== 3) return undefined
+	if (parts.length !== 3) { return undefined }
 	try {
 		// Use base64url decoding (Node.js Buffer handles this)
 		const payload = Buffer.from(parts[1], "base64url").toString("utf-8")
@@ -100,7 +100,7 @@ function extractAccountId(tokens: { id_token?: string; access_token: string }): 
 	if (tokens.id_token) {
 		const claims = parseJwtClaims(tokens.id_token)
 		const accountId = claims && extractAccountIdFromClaims(claims)
-		if (accountId) return accountId
+		if (accountId) { return accountId }
 	}
 	// Fall back to access_token
 	if (tokens.access_token) {

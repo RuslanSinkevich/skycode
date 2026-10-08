@@ -1,9 +1,11 @@
 import { Controller } from "@core/controller"
 import { Empty, StringRequest } from "@shared/proto/skycode/common"
 import * as pathUtils from "@utils/path"
+import * as fsUtils from "@utils/fs"
 import { expect } from "chai"
 import { afterEach, beforeEach, describe, it } from "mocha"
 import * as sinon from "sinon"
+import { HostProvider } from "@/hosts/host-provider"
 import { Logger } from "@/shared/services/Logger"
 import { openFileRelativePath } from "../openFileRelativePath"
 
@@ -12,16 +14,51 @@ describe("openFileRelativePath", () => {
 	let mockController: Controller
 	let getWorkspacePathStub: sinon.SinonStub
 	let consoleErrorStub: sinon.SinonStub
+	let hostProviderInitialized = false
 
 	beforeEach(() => {
 		sandbox = sinon.createSandbox()
-		mockController = {} as any
+		mockController = {} as Controller
 		getWorkspacePathStub = sandbox.stub(pathUtils, "getWorkspacePath")
 		consoleErrorStub = sandbox.stub(Logger, "error")
+		sandbox.stub(Logger, "warn")
+		sandbox.stub(fsUtils, "isDirectory").resolves(false)
+
+		if (!HostProvider.isInitialized()) {
+			const mockHostBridge = {
+				workspaceClient: {
+					getWorkspacePaths: sandbox.stub().resolves({ paths: ["/workspace"] }),
+					openInFileExplorerPanel: sandbox.stub().resolves({}),
+				},
+				windowClient: {
+					showTextDocument: sandbox.stub().resolves({ documentPath: "", isActive: false }),
+				},
+				envClient: {},
+				diffClient: {},
+			}
+
+			HostProvider.initialize(
+				() => null as never,
+				() => null as never,
+				() => null as never,
+				() => null as never,
+				mockHostBridge as never,
+				() => {},
+				async () => "http://localhost",
+				async () => "",
+				"/test/extension",
+				"/test/storage",
+			)
+			hostProviderInitialized = true
+		}
 	})
 
 	afterEach(() => {
 		sandbox.restore()
+		if (hostProviderInitialized) {
+			HostProvider.reset()
+			hostProviderInitialized = false
+		}
 	})
 
 	it("should return Empty response on successful execution", async () => {
@@ -42,7 +79,6 @@ describe("openFileRelativePath", () => {
 			value: "src/components/Test.tsx",
 		})
 
-		// Should not throw — function uses vscode.window.showTextDocument internally
 		const result = await openFileRelativePath(mockController, request)
 		expect(result).to.deep.equal(Empty.create())
 	})

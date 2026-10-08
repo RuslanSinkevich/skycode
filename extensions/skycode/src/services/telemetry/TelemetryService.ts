@@ -1,10 +1,8 @@
 import { HostProvider } from "@hosts/host-provider"
 import type { BrowserSettings } from "@shared/BrowserSettings"
-import { ShowMessageType } from "@shared/proto/host/window"
 import type { TaskFeedbackType } from "@shared/WebviewMessage"
 import * as os from "os"
 import { SkycodeAccountUserInfo } from "@/services/auth/AuthService"
-import { Setting } from "@/shared/proto/index.host"
 import { Logger } from "@/shared/services/Logger"
 import { Mode } from "@/shared/storage/types"
 import { version as extensionVersion } from "../../../package.json"
@@ -374,7 +372,7 @@ export class TelemetryService {
 		// First check global telemetry level - telemetry should only be enabled when level is "all"
 
 		// We only enable telemetry if global host telemetry is enabled
-		const hostSetting = await HostProvider.env.getTelemetrySettings({})
+		const _hostSetting = await HostProvider.env.getTelemetrySettings({})
 		// --- SKYCODE_FORK_BEGIN: suppress telemetry warning ---
 		// OSS builds have telemetry disabled by default, no need to nag users about it.
 		// --- SKYCODE_FORK_END ---

@@ -185,6 +185,7 @@ message ModelsApiSecrets {
   optional string aihubmix_api_key = 39;
   optional string giga_chat_api_key = 40;
   optional string yandex_gpt_api_key = 41;
+  optional string qwen_web_token = 42;
 }
 
 // API configuration options (non-secret settings)
@@ -444,6 +445,7 @@ enum ApiProvider {
   OPENAI_CODEX = 40;
   GIGACHAT = 41;
   YANDEXGPT = 42;
+  QWEN_WEB = 43;
 }
 
 enum ApiFormat {
@@ -584,6 +586,7 @@ message ModelsApiConfiguration {
   optional string giga_chat_scope = 88;
   optional string yandex_gpt_api_key = 89;
   optional string yandex_gpt_folder_id = 90;
+  optional string qwen_web_token = 91;
 
   // Plan mode configurations
   optional ApiProvider plan_mode_api_provider = 100;

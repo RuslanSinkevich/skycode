@@ -109,6 +109,10 @@
 			"label": "Qwen Code"
 		},
 		{
+			"value": "qwen-web",
+			"label": "Qwen Web (chat.qwen.ai)"
+		},
+		{
 			"value": "doubao",
 			"label": "Bytedance Doubao"
 		},

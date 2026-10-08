@@ -112,6 +112,31 @@ export function isQwenModelFamily(id: string): boolean {
 	return modelId.includes("qwen")
 }
 
+// Flagship Qwen models with strong reasoning, large context (>=131k) and high parameter count.
+// These deserve "strong" tier session limits, otherwise they get unnecessarily throttled
+// (e.g. qwen3-coder-plus has a 1M context but would only use 65% of it as medium tier).
+const STRONG_QWEN_MODEL_IDS = ["qwen3-max", "qwen3-coder-plus", "qwen3-235b-a22b"]
+
+export function isStrongQwenModel(id: string): boolean {
+	const modelId = normalize(id)
+	return STRONG_QWEN_MODEL_IDS.some((m) => modelId === m || modelId.endsWith(`/${m}`))
+}
+
+// Flagship GLM models with comparable capability to next-gen flagships.
+// Without this, glm-4.6 (sonnet-class coding model) would be throttled to medium.
+const STRONG_GLM_MODEL_IDS = ["glm-4.6", "glm-4-6"]
+
+export function isStrongGlmModel(id: string): boolean {
+	const modelId = normalize(id)
+	return STRONG_GLM_MODEL_IDS.some((m) => modelId === m || modelId.endsWith(`/${m}`) || modelId.includes(m))
+}
+
+// Flagship Hermes — Hermes-4 405B is on par with strong-tier reasoning.
+export function isStrongHermesModel(id: string): boolean {
+	const modelId = normalize(id)
+	return modelId.includes("hermes-4-405b") || modelId.includes("hermes4-405b")
+}
+
 export function isHermesModelFamily(id: string): boolean {
 	const modelId = normalize(id)
 	return (
@@ -165,6 +190,11 @@ export function isLocalModel(providerInfo: ApiProviderInfo): boolean {
 	return localProviders.includes(normalize(providerInfo.providerId))
 }
 
+/** Свой OpenAI-совместимый эндпоинт: модель раздаёт сам пользователь, id произвольный. */
+export function isSelfHostedCompatibleProvider(providerInfo: ApiProviderInfo): boolean {
+	return normalize(providerInfo.providerId) === "openai"
+}
+
 /**
  * Parses a price string and converts it from per-token to per-million-tokens
  * @param priceString The price string to parse (e.g. from API responses)
@@ -203,19 +233,39 @@ export function isNativeToolCallingConfig(providerInfo: ApiProviderInfo, enableN
 /**
  * Determines capability tier based on model family and provider.
  * Quantized local models and weak cloud models get stricter session limits.
+ *
+ * Tier override (set via the "Session Budget" setting) wins over auto-detect.
  */
-export function getModelCapabilityTier(modelId: string, providerInfo?: ApiProviderInfo): ModelCapabilityTier {
+export function getModelCapabilityTier(
+	modelId: string,
+	providerInfo?: ApiProviderInfo,
+	tierOverride?: ModelCapabilityTier | "auto",
+): ModelCapabilityTier {
+	if (tierOverride && tierOverride !== "auto") {
+		return tierOverride
+	}
+
 	const id = normalize(modelId)
 
 	if (isNextGenModelFamily(id)) {
 		return "strong"
 	}
 
-	// Local quantized models are weak by definition
+	// Flagship open-source models that previously sat in medium and got
+	// throttled at 40 tool calls. Promote them to strong.
+	if (isStrongQwenModel(id) || isStrongGlmModel(id) || isStrongHermesModel(id)) {
+		return "strong"
+	}
+
+	// [SKYCODE] Сильно квантованные веса — признак слабой модели независимо от того, кто их
+	// раздаёт: локальный рантайм или свой OpenAI-совместимый шлюз. Раньше проверка работала
+	// только для ollama/lmstudio, хотя self-hosted vLLM — самый частый способ раздать q4-сборку.
+	if (providerInfo && isQuantizedModel(id) && (isLocalModel(providerInfo) || isSelfHostedCompatibleProvider(providerInfo))) {
+		return "weak"
+	}
+
+	// Non-quantized local models — medium
 	if (providerInfo && isLocalModel(providerInfo)) {
-		if (isQuantizedModel(id)) {
-			return "weak"
-		}
 		return "medium"
 	}
 
@@ -233,14 +283,52 @@ export function getModelCapabilityTier(modelId: string, providerInfo?: ApiProvid
 }
 
 /**
- * Detects quantized models by common naming patterns (q4, q5, q8, gguf, etc.)
+ * Detects lossy-quantized models by common naming patterns (q4, gguf, awq, int4, ...).
+ *
+ * [SKYCODE] fp16 и fp8 здесь намеренно отсутствуют: это варианты точности, а не сжатие с
+ * потерями. Тег fp16 у локальной сборки обычно означает лучшую из доступных, а не худшую,
+ * и прежний список записывал её в "weak" вместе с q2.
  */
 function isQuantizedModel(modelId: string): boolean {
-	return /[_-](q[2-8][_-]|gguf|gptq|awq|exl2|fp16|fp8|int[48])/.test(modelId)
+	return /[_-](q[2-8][_-]|gguf|gptq|awq|exl2|int[48])/.test(modelId)
 }
 
-export function getSessionLimitsForModel(modelId: string, providerInfo?: ApiProviderInfo): WeakModelSessionLimits {
+export interface CustomSessionBudgetSettings {
+	/** "auto" — auto-detect tier from model id.
+	 *  "strong" / "medium" / "weak" — force that preset tier (recommended).
+	 *  "custom" — fully custom limits below. */
+	sessionBudgetMode: "auto" | "strong" | "medium" | "weak" | "custom"
+	customMaxToolCallsPerTurn: number
+	customMaxConsecutiveReadOnlyTools: number
+	customForceCompactAfterSteps: number
+}
+
+export function getSessionLimitsForModel(
+	modelId: string,
+	providerInfo?: ApiProviderInfo,
+	customSettings?: CustomSessionBudgetSettings,
+): WeakModelSessionLimits {
+	const mode = customSettings?.sessionBudgetMode ?? "auto"
+
+	// Preset tier override — easiest knob for "this model is stronger than
+	// auto-detect thinks, give it more rope".
+	if (mode === "strong" || mode === "medium" || mode === "weak") {
+		return MODEL_SESSION_LIMITS[mode]
+	}
+
 	const tier = getModelCapabilityTier(modelId, providerInfo)
+
+	// Fully custom limits — power-user mode.
+	if (mode === "custom") {
+		const base = MODEL_SESSION_LIMITS[tier]
+		return {
+			maxToolCallsPerTurn: customSettings!.customMaxToolCallsPerTurn,
+			maxConsecutiveReadOnlyTools: customSettings!.customMaxConsecutiveReadOnlyTools,
+			forceCompactAfterSteps: customSettings!.customForceCompactAfterSteps,
+			contextWindowUsageRatio: base.contextWindowUsageRatio,
+		}
+	}
+
 	return MODEL_SESSION_LIMITS[tier]
 }
 

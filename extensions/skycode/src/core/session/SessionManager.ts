@@ -43,7 +43,7 @@ export class SessionManager {
 
 	/** Текущая активная сессия (для обратной совместимости с controller.task) */
 	get currentSession(): Session | null {
-		if (!this._activeSessionId) return null
+		if (!this._activeSessionId) { return null }
 		return this.sessions.get(this._activeSessionId) || null
 	}
 

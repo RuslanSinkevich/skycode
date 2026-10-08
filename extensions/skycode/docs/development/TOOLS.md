@@ -127,6 +127,14 @@ export const config = createVariant(ModelFamily.GENERIC)
   .build()
 ```
 
+> **Этот шаг обязателен.** Список `.tools(...)` — единственный источник
+> инструментов и для текстовых промптов, и для native tool calls
+> (`PromptBuilder.getEnabledTools` / `SkycodeToolSet.getNativeTools`).
+> Спецификация и хэндлер без записи в конфигах вариантов — мёртвый код: модель
+> инструмент не увидит, а вызвать его не сможет. Добавляйте во **все** варианты,
+> где инструмент имеет смысл (`generic`, `next-gen`, `native-*`, `gemini-3`,
+> `glm`, `hermes`, `devstral`, `qwen`).
+
 ### Шаг 6: Создать хэндлер
 
 ```typescript
@@ -179,6 +187,14 @@ export const toolParamNames = [
   "input",  // ваш новый параметр
 ] as const
 ```
+
+### Шаг 9: Отрисовать строку в чате
+
+Если хэндлер шлёт `say("tool", JSON.stringify({ tool: "my_tool", ... }))`,
+добавьте ветку в `webview-ui/src/components/chat/ToolRow.tsx` и имя
+инструмента в тип `SkycodeSayTool` (`src/shared/ExtensionMessage.ts`).
+Без ветки `default` рисует `InvisibleSpacer` — пользователь не увидит ничего.
+Тексты заголовков — в `webview-ui/src/i18n/locales/{en,ru}.json`.
 
 ## Продвинутые возможности
 
@@ -297,6 +313,7 @@ if (didAutoApprove) {
 | `replace_text` | `replace_text.ts` | Замена текста |
 | `codebase_search` | `codebase_search.ts` | Семантический поиск |
 | `edit_notebook` | `edit_notebook.ts` | Jupyter notebook editing |
+| `check_background_command` | `check_background_command.ts` | Статус фоновой команды |
 
 ## См. также
 

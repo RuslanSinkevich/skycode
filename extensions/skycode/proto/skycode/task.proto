@@ -48,6 +48,17 @@ service TaskService {
   rpc deleteFromMessage(Int64Request) returns (Empty);
   // Retries from a message: reverts changes, deletes history, resends the message
   rpc retryFromMessage(Int64Request) returns (Empty);
+  // Resends from a message with edited text/attachments (atomic delete + send)
+  rpc resendFromMessage(ResendFromMessageRequest) returns (Empty);
+}
+
+// Request for resending a message with edited content
+message ResendFromMessageRequest {
+  Metadata metadata = 1;
+  int64 message_ts = 2;
+  string text = 3;
+  repeated string images = 4;
+  repeated string files = 5;
 }
 
 // Request message for creating a new task

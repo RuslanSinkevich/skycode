@@ -68,7 +68,7 @@ export interface UseSessionReturn {
 // ---------------------------------------------------------------------------
 
 function mapProtoState(state: SessionStateProto | string | undefined): SessionState {
-	if (state === undefined) return "idle"
+	if (state === undefined) { return "idle" }
 	const s = typeof state === "string" ? state : String(state)
 	switch (s) {
 		case "SESSION_RUNNING":
@@ -112,7 +112,7 @@ export function useSession(sessionId: string | null): UseSessionReturn {
 
 	// Subscribe to session events
 	useEffect(() => {
-		if (!sessionId) return
+		if (!sessionId) { return }
 
 		const unsub = SessionServiceClient.subscribeToSession(
 			StringRequest.create({ value: sessionId }),
@@ -182,7 +182,7 @@ export function useSession(sessionId: string | null): UseSessionReturn {
 
 	const inject = useCallback(
 		(text: string, images?: string[], files?: string[]) => {
-			if (!sessionId) return
+			if (!sessionId) { return }
 			SessionServiceClient.sendMessage(
 				SendMessageRequest.create({
 					sessionId,
@@ -199,7 +199,7 @@ export function useSession(sessionId: string | null): UseSessionReturn {
 
 	const approve = useCallback(
 		(approvalId: string, feedback?: string) => {
-			if (!sessionId) return
+			if (!sessionId) { return }
 			SessionServiceClient.respondToApproval(
 				ApprovalResponse.create({
 					sessionId,
@@ -216,7 +216,7 @@ export function useSession(sessionId: string | null): UseSessionReturn {
 
 	const reject = useCallback(
 		(approvalId: string, feedback?: string) => {
-			if (!sessionId) return
+			if (!sessionId) { return }
 			SessionServiceClient.respondToApproval(
 				ApprovalResponse.create({
 					sessionId,
@@ -232,21 +232,21 @@ export function useSession(sessionId: string | null): UseSessionReturn {
 	)
 
 	const abort = useCallback(() => {
-		if (!sessionId) return
+		if (!sessionId) { return }
 		SessionServiceClient.abortSession(StringRequest.create({ value: sessionId })).catch((error) => {
 			console.error("[useSession] abort error:", error)
 		})
 	}, [sessionId])
 
 	const pause = useCallback(() => {
-		if (!sessionId) return
+		if (!sessionId) { return }
 		SessionServiceClient.pauseSession(StringRequest.create({ value: sessionId })).catch((error) => {
 			console.error("[useSession] pause error:", error)
 		})
 	}, [sessionId])
 
 	const resume = useCallback(() => {
-		if (!sessionId) return
+		if (!sessionId) { return }
 		SessionServiceClient.resumeSession(StringRequest.create({ value: sessionId })).catch((error) => {
 			console.error("[useSession] resume error:", error)
 		})

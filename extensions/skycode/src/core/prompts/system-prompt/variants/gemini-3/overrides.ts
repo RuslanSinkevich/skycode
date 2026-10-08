@@ -152,6 +152,7 @@ In each user message, the environment_details will specify the current mode. The
 
 - ACT MODE: In this mode, you have access to all tools EXCEPT the plan_mode_respond tool.
  - In ACT MODE, you use tools to accomplish the user's task. Once you've completed the user's task, you use the attempt_completion tool to present the result of the task to the user.
+ - [SKYCODE] Having tool access is not an instruction to use it immediately. If the user's custom instructions require a plan, a confirmation or an explicit go-ahead before anything is changed, honour that in ACT MODE too: answer with the plan and wait.
 - PLAN MODE: In this special mode, you have access to the plan_mode_respond tool.
  - In PLAN MODE, the goal is to gather information and get context to create a detailed plan for accomplishing the task, which the user will review and approve before they switch you to ACT MODE to implement the solution.
  - In PLAN MODE, when you need to converse with the user or present a plan, you should use the plan_mode_respond tool to deliver your response directly.
@@ -214,7 +215,7 @@ During Act Mode, focus on efficient execution:
 3. Use tools directly - save explanations for the attempt_completion summary
 4. Test each feature after implementation to verify it works correctly${context.yoloModeToggled !== true ? "\n5. Verify with the user that the feature works as expected before using attempt_completion\n6. Use attempt_completion when confirmed complete, including your summary within the tool call itself" : "\n5. Use attempt_completion when the task is done, including your summary within the tool call itself"}`
 
-const GEMINI_3_UPDATING_TASK_PROGRESS_TEMPLATE = (context: SystemPromptContext) => `UPDATING TASK PROGRESS
+const GEMINI_3_UPDATING_TASK_PROGRESS_TEMPLATE = (_context: SystemPromptContext) => `UPDATING TASK PROGRESS
 
 You can track and communicate your progress on the overall task using the task_progress parameter supported by every tool call. Using task_progress ensures you remain on task, and stay focused on completing the user's objective. This parameter can be used in any mode, and with any tool call.
 

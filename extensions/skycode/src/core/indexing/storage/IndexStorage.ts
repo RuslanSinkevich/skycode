@@ -16,7 +16,9 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import * as crypto from "node:crypto"
 import * as os from "node:os"
+import * as vscode from "vscode"
 import type { ChunkRow, IndexMetadata } from "../types"
+import { Logger } from "@/shared/services/Logger"
 
 type SqliteDbLike = {
 	pragma(sql: string): void
@@ -50,11 +52,19 @@ export class IndexStorage {
 	private lastFinalizeLoggedChunks = -1
 	private chunks: ChunkRow[] = []
 	private vectors: Float32Array = new Float32Array(0)
+	/** Logical number of floats used in `vectors` (actual capacity may be larger). */
+	private vectorsLength = 0
 	private metadata: IndexMetadata | null = null
 	private metadataStore = new Map<string, string>()
 	private dimensions: number = 0
+	/** Fast lookup: filePath → fileHash from the last observed chunk of that file. */
+	private fileHashIndex = new Map<string, string>()
+	/** Fast lookup: filePath → all chunk indices in `chunks` array (for O(1) removal). */
+	private fileChunkIndex = new Map<string, Set<number>>()
+	private readonly extensionPath: string
 
-	constructor(workspacePath: string) {
+	constructor(workspacePath: string, extensionPath = "") {
+		this.extensionPath = extensionPath
 		const hash = workspaceHash(workspacePath)
 		this.indexDir = path.join(getIndexBaseDir(), hash)
 		this.dbPath = path.join(this.indexDir, "index.db")
@@ -67,28 +77,44 @@ export class IndexStorage {
 		await fs.promises.mkdir(this.indexDir, { recursive: true })
 	}
 
+	private resolveSqliteNativeBinding(): string {
+		const electron = process.versions.electron
+		if (this.extensionPath && electron) {
+			const versioned = path.join(
+				this.extensionPath,
+				"native",
+				"sqlite",
+				`electron-${electron}-${process.platform}-${process.arch}`,
+				"better_sqlite3.node",
+			)
+			if (fs.existsSync(versioned)) {
+				return versioned
+			}
+		}
+		const betterSqlite3Dir = path.dirname(require.resolve("better-sqlite3/package.json"))
+		const fallback = path.join(betterSqlite3Dir, "build", "Release", "better_sqlite3.node")
+		if (fs.existsSync(fallback)) {
+			return fallback
+		}
+		throw new Error(
+			`better_sqlite3.node not found (electron=${electron ?? "unknown"}, ext=${this.extensionPath || "n/a"})`,
+		)
+	}
+
 	private openDb(): boolean {
 		if (this.db) {
 			return true
 		}
 		try {
 			const Database = require("better-sqlite3")
-			// Resolve native binding path explicitly to avoid `bindings` lookup failures
-			// in Electron/VS Code extension host environment.
-			const betterSqlite3Dir = path.dirname(require.resolve("better-sqlite3/package.json"))
-			const nativeBindingPath = path.join(
-				betterSqlite3Dir,
-				"build",
-				"Release",
-				"better_sqlite3.node",
-			)
+			const nativeBindingPath = this.resolveSqliteNativeBinding()
 			this.db = new Database(this.dbPath, { nativeBinding: nativeBindingPath })
 			;(this.db as any).pragma("journal_mode = WAL")
 			;(this.db as any).pragma("synchronous = NORMAL")
 			this.createTables()
 			this.backend = "sqlite"
 			if (!this.backendInfoLogged) {
-				console.log("[Skycode Indexing] Storage backend: sqlite")
+				Logger.log("[Skycode Indexing] Storage backend: sqlite")
 				this.backendInfoLogged = true
 			}
 			return true
@@ -96,11 +122,18 @@ export class IndexStorage {
 			this.db = null
 			this.backend = "json"
 			if (!this.backendWarningLogged) {
-				console.warn("[Skycode Indexing] SQLite unavailable, fallback to JSON storage:", error)
+				Logger.warn("[Skycode Indexing] SQLite unavailable, fallback to JSON storage:", error)
 				this.backendWarningLogged = true
+				// JSON backend rewrites the entire index on every save and is orders of
+				// magnitude slower than sqlite on big repos — surface this once so the
+				// user can fix the install (usually a missing native binding).
+				void vscode.window.showWarningMessage(
+					// allow-any-unicode-next-line
+					"Skycode: SQLite недоступен, используется медленный JSON backend. Переустановите расширение или сообщите в поддержку.",
+				)
 			}
 			if (!this.backendInfoLogged) {
-				console.log("[Skycode Indexing] Storage backend: json")
+				Logger.log("[Skycode Indexing] Storage backend: json")
 				this.backendInfoLogged = true
 			}
 			return false
@@ -138,9 +171,44 @@ export class IndexStorage {
 	private resetInMemory(): void {
 		this.chunks = []
 		this.vectors = new Float32Array(0)
+		this.vectorsLength = 0
 		this.metadata = null
 		this.metadataStore.clear()
 		this.dimensions = 0
+		this.fileHashIndex.clear()
+		this.fileChunkIndex.clear()
+	}
+
+	/** Grow `this.vectors` to at least `minCapacity` floats, doubling when needed. */
+	private ensureVectorCapacity(minCapacity: number): void {
+		if (this.vectors.length >= minCapacity) { return }
+		let newCapacity = this.vectors.length > 0 ? this.vectors.length : 1024 * this.dimensions
+		while (newCapacity < minCapacity) {
+			newCapacity *= 2
+		}
+		const grown = new Float32Array(newCapacity)
+		grown.set(this.vectors.subarray(0, this.vectorsLength))
+		this.vectors = grown
+	}
+
+	/** Register a chunk in the per-file indices (used for O(1) isFileChanged/removeFile). */
+	private indexChunk(chunk: ChunkRow, chunkIdx: number): void {
+		this.fileHashIndex.set(chunk.filePath, chunk.fileHash)
+		let set = this.fileChunkIndex.get(chunk.filePath)
+		if (!set) {
+			set = new Set<number>()
+			this.fileChunkIndex.set(chunk.filePath, set)
+		}
+		set.add(chunkIdx)
+	}
+
+	/** Rebuild `fileHashIndex` and `fileChunkIndex` from `this.chunks`. */
+	private rebuildFileIndex(): void {
+		this.fileHashIndex.clear()
+		this.fileChunkIndex.clear()
+		for (let i = 0; i < this.chunks.length; i++) {
+			this.indexChunk(this.chunks[i], i)
+		}
 	}
 
 	async load(): Promise<boolean> {
@@ -184,7 +252,10 @@ export class IndexStorage {
 					.all()
 
 				this.chunks = []
-				const vectors: number[] = []
+				// Pre-allocate once; no per-chunk reallocation.
+				const totalFloats = rows.length * this.dimensions
+				this.vectors = new Float32Array(totalFloats)
+				this.vectorsLength = totalFloats
 				let vectorOffset = 0
 				for (const row of rows) {
 					const vec = new Float32Array(
@@ -192,6 +263,7 @@ export class IndexStorage {
 						row.vector.byteOffset,
 						row.vector.byteLength / Float32Array.BYTES_PER_ELEMENT,
 					)
+					this.vectors.set(vec, vectorOffset)
 					this.chunks.push({
 						id: row.id,
 						filePath: row.file_path,
@@ -203,13 +275,10 @@ export class IndexStorage {
 						fileHash: row.file_hash,
 					})
 					vectorOffset += this.dimensions
-					for (const value of vec) {
-						vectors.push(value)
-					}
 				}
 
-				this.vectors = new Float32Array(vectors)
-				console.log("[Skycode Indexing] Index loaded from sqlite:", this.chunks.length, "chunks")
+				this.rebuildFileIndex()
+				Logger.log("[Skycode Indexing] Index loaded from sqlite:", this.chunks.length, "chunks")
 				// Empty index is treated as not loaded — triggers re-indexing
 				return this.chunks.length > 0
 			}
@@ -232,7 +301,9 @@ export class IndexStorage {
 						vectorsBuffer.byteOffset + vectorsBuffer.byteLength,
 					),
 				)
-				console.log("[Skycode Indexing] Index loaded from json:", this.chunks.length, "chunks")
+				this.vectorsLength = this.vectors.length
+				this.rebuildFileIndex()
+				Logger.log("[Skycode Indexing] Index loaded from json:", this.chunks.length, "chunks")
 				return this.chunks.length > 0
 			}
 
@@ -252,12 +323,12 @@ export class IndexStorage {
 			;(this.db as any)
 				.prepare(
 					`INSERT INTO metadata (id, embedding_provider_id, dimensions, last_indexed_at, total_chunks)
-				 VALUES (1, ?, ?, ?, ?)
-				 ON CONFLICT(id) DO UPDATE SET
-				 embedding_provider_id=excluded.embedding_provider_id,
-				 dimensions=excluded.dimensions,
-				 last_indexed_at=excluded.last_indexed_at,
-				 total_chunks=excluded.total_chunks`,
+					VALUES (1, ?, ?, ?, ?)
+					ON CONFLICT(id) DO UPDATE SET
+					embedding_provider_id=excluded.embedding_provider_id,
+					dimensions=excluded.dimensions,
+					last_indexed_at=excluded.last_indexed_at,
+					total_chunks=excluded.total_chunks`,
 				)
 				.run(
 					this.metadata.embeddingProviderId,
@@ -268,8 +339,8 @@ export class IndexStorage {
 
 			const upsertMetadata = (this.db as any).prepare(
 				`INSERT INTO metadata_store (key, value)
-				 VALUES (?, ?)
-				 ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+					VALUES (?, ?)
+					ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
 			)
 			const writeMetadataStore = (this.db as any).transaction((entries: Array<[string, string]>) => {
 				for (const [key, value] of entries) {
@@ -289,10 +360,12 @@ export class IndexStorage {
 			"utf-8",
 		)
 		await fs.promises.writeFile(this.jsonChunksPath, JSON.stringify(this.chunks), "utf-8")
+		// Write only the used portion of the growable buffer, not any over-allocated tail.
+		const used = this.vectors.subarray(0, this.vectorsLength)
 		const vectorBuffer = Buffer.from(
-			this.vectors.buffer,
-			this.vectors.byteOffset,
-			this.vectors.byteLength,
+			used.buffer,
+			used.byteOffset,
+			used.byteLength,
 		)
 		await fs.promises.writeFile(this.jsonVectorsPath, vectorBuffer)
 	}
@@ -324,6 +397,7 @@ export class IndexStorage {
 
 		this.chunks = []
 		this.vectors = new Float32Array(0)
+		this.vectorsLength = 0
 		this.dimensions = dimensions
 		this.metadata = {
 			embeddingProviderId,
@@ -332,20 +406,22 @@ export class IndexStorage {
 			totalChunks: 0,
 		}
 		this.metadataStore.clear()
+		this.fileHashIndex.clear()
+		this.fileChunkIndex.clear()
 	}
 
 	addChunks(newChunks: ChunkRow[], newVectors: number[][]): void {
 		if (newChunks.length !== newVectors.length) {
 			throw new Error("Chunks and vectors arrays must have the same length")
 		}
-		if (newChunks.length === 0) return
+		if (newChunks.length === 0) { return }
 
-		const startOffset = this.vectors.length
+		const startOffset = this.vectorsLength
 		if (this.backend === "sqlite" && this.db) {
 			const insert = (this.db as any).prepare(
 				`INSERT OR REPLACE INTO chunks
-				 (id, file_path, content, start_line, end_line, language, file_hash, vector)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+					(id, file_path, content, start_line, end_line, language, file_hash, vector)
+					VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 			)
 			const insertMany = (this.db as any).transaction((chunks: ChunkRow[], vectors: number[][]) => {
 				for (let i = 0; i < chunks.length; i++) {
@@ -371,20 +447,21 @@ export class IndexStorage {
 			insertMany(newChunks, newVectors)
 		}
 
+		// Grow the backing buffer ONCE per call (amortized O(1) via doubling capacity).
+		// The previous implementation allocated and copied the entire vectors array on
+		// every batch, which made full indexing O(N²) in total memcopy bytes.
+		const addedFloats = newVectors.length * this.dimensions
+		this.ensureVectorCapacity(startOffset + addedFloats)
+
 		for (let i = 0; i < newChunks.length; i++) {
-			newChunks[i].vectorOffset = startOffset + i * this.dimensions
+			const offset = startOffset + i * this.dimensions
+			this.vectors.set(newVectors[i], offset)
+			newChunks[i].vectorOffset = offset
+			const chunkIdx = this.chunks.length
 			this.chunks.push(newChunks[i])
+			this.indexChunk(newChunks[i], chunkIdx)
 		}
-
-		const flatVectors = new Float32Array(newVectors.length * this.dimensions)
-		for (let i = 0; i < newVectors.length; i++) {
-			flatVectors.set(newVectors[i], i * this.dimensions)
-		}
-
-		const combined = new Float32Array(this.vectors.length + flatVectors.length)
-		combined.set(this.vectors)
-		combined.set(flatVectors, this.vectors.length)
-		this.vectors = combined
+		this.vectorsLength = startOffset + addedFloats
 	}
 
 	async finalize(): Promise<void> {
@@ -397,7 +474,7 @@ export class IndexStorage {
 		const chunksChanged = this.lastFinalizeLoggedChunks !== this.chunks.length
 		const enoughTimePassed = now - this.lastFinalizeLogAt >= 15000
 		if (chunksChanged || enoughTimePassed) {
-			console.log("[Skycode Indexing] Index persisted:", this.backend, this.chunks.length, "chunks")
+			Logger.log("[Skycode Indexing] Index persisted:", this.backend, this.chunks.length, "chunks")
 			this.lastFinalizeLogAt = now
 			this.lastFinalizeLoggedChunks = this.chunks.length
 		}
@@ -408,28 +485,66 @@ export class IndexStorage {
 			;(this.db as any).prepare("DELETE FROM chunks WHERE file_path = ?").run(filePath)
 		}
 
-		const before = this.chunks.length
-		this.chunks = this.chunks.filter((c) => c.filePath !== filePath)
+		const indices = this.fileChunkIndex.get(filePath)
+		if (!indices || indices.size === 0) {
+			return 0
+		}
 
-		return before - this.chunks.length
+		// Rebuild chunks array without entries for this file. The associated vector
+		// slots in `this.vectors` remain allocated but are no longer referenced; they
+		// will be garbage-collected on next full reindex (matches previous behaviour).
+		const toDelete = indices
+		const removed = toDelete.size
+		const newChunks: ChunkRow[] = []
+		for (let i = 0; i < this.chunks.length; i++) {
+			if (!toDelete.has(i)) {
+				newChunks.push(this.chunks[i])
+			}
+		}
+		this.chunks = newChunks
+
+		// fileHashIndex is keyed by filePath only (not by chunk index), so a full
+		// rebuild after every removeFile() was wasted work — it's O(chunks) per
+		// delete, which is what made batch deletes during reindex visibly slow.
+		// Keep the hash map intact, just drop the deleted file's entry.
+		this.fileHashIndex.delete(filePath)
+
+		// fileChunkIndex DOES contain stale indices after the splice above; rebuild
+		// it from the new chunks array in a single pass.
+		this.fileChunkIndex.clear()
+		for (let i = 0; i < this.chunks.length; i++) {
+			const c = this.chunks[i]
+			let set = this.fileChunkIndex.get(c.filePath)
+			if (!set) {
+				set = new Set<number>()
+				this.fileChunkIndex.set(c.filePath, set)
+			}
+			set.add(i)
+		}
+		return removed
 	}
 
 	isFileChanged(filePath: string, currentHash: string): boolean {
-		const existing = this.chunks.find((c) => c.filePath === filePath)
-		if (!existing) return true
-		return existing.fileHash !== currentHash
+		const existingHash = this.fileHashIndex.get(filePath)
+		if (existingHash === undefined) { return true }
+		return existingHash !== currentHash
 	}
 
 	getChunks(): ChunkRow[] {
 		return this.chunks
 	}
 
+	/**
+	 * Return a zero-copy Float32Array view into the underlying buffer.
+	 * Callers MUST NOT mutate the returned view — it is shared with the storage.
+	 */
 	getVector(offset: number): Float32Array {
-		return this.vectors.slice(offset, offset + this.dimensions)
+		return this.vectors.subarray(offset, offset + this.dimensions)
 	}
 
+	/** Return a view of only the used portion of the vector buffer (no over-allocated tail). */
 	getAllVectors(): Float32Array {
-		return this.vectors
+		return this.vectors.subarray(0, this.vectorsLength)
 	}
 
 	getDimensions(): number {

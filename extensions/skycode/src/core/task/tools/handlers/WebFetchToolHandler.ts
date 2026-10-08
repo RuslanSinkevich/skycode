@@ -1,6 +1,7 @@
 import { SkycodeSayTool } from "@shared/ExtensionMessage"
 import { SkycodeDefaultTool } from "@shared/tools"
 import { UrlContentFetcher } from "@/services/browser/UrlContentFetcher"
+import { assertSafeUrl, UnsafeUrlError } from "@/services/browser/urlSafety"
 import { telemetryService } from "@/services/telemetry"
 
 import { ToolUse } from "../../../assistant-message"
@@ -57,9 +58,14 @@ export class WebFetchToolHandler implements IFullyManagedTool {
 			config.taskState.consecutiveMistakeCount = 0
 
 			try {
-				new URL(url)
-			} catch {
+				assertSafeUrl(url)
+			} catch (err) {
 				config.taskState.consecutiveMistakeCount++
+				if (err instanceof UnsafeUrlError) {
+					return formatResponse.toolError(
+						`URL rejected for safety reasons (${err.reason}). Only public http(s) URLs are allowed.`,
+					)
+				}
 				return formatResponse.toolError(`Invalid URL: ${url}`)
 			}
 

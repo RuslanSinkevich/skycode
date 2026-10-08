@@ -1,5 +1,13 @@
 import { ResponseInput, ResponseInputMessageContentList, ResponseReasoningItem } from "openai/resources/responses/responses"
+import { Anthropic } from "@anthropic-ai/sdk"
+import { isBase64ImageSource } from "@/shared/messages/message-interchange"
 import { SkycodeStorageMessage } from "@/shared/messages/content"
+
+/** Stored messages may include Skycode/OpenAI-trace fields not on SDK param types. */
+type StoredContentBlock = Anthropic.ContentBlockParam & {
+	call_id?: string
+	summary?: unknown
+}
 
 /**
  * Converts an array of SkycodeStorageMessage objects (extension of Anthropic format) to a ResponseInput array to use with OpenAI's Responses API.
@@ -81,13 +89,15 @@ export function convertToOpenAIResponsesInput(messages: SkycodeStorageMessage[])
 			continue
 		}
 
+		const storedBlocks = m.content as StoredContentBlock[]
+
 		if (m.role === "assistant") {
 			// For assistant messages, we must ensure reasoning items are IMMEDIATELY followed
 			// by their corresponding message or function_call. Process the entire assistant
 			// turn and ensure proper pairing.
 			const assistantItems: any[] = []
 
-			for (const part of m.content) {
+			for (const part of storedBlocks) {
 				switch (part.type) {
 					case "thinking":
 						// Only include reasoning item if it has actual content (thinking text or summary)
@@ -148,12 +158,13 @@ export function convertToOpenAIResponsesInput(messages: SkycodeStorageMessage[])
 						}
 						assistantItems.push(messageItem)
 						break
-					case "image":
+					case "image": {
 						// Message ID goes at the message level, not in the content
+						const label = isBase64ImageSource(part.source) ? part.source.media_type : part.source.url
 						const imageItem: any = {
 							type: "message",
 							role: "assistant",
-							content: [{ type: "output_text", text: `[image:${part.source.media_type}]` }],
+							content: [{ type: "output_text", text: `[image:${label}]` }],
 						}
 						// Set message-level id if available (though images typically don't have call_id)
 						if (part.call_id) {
@@ -161,6 +172,7 @@ export function convertToOpenAIResponsesInput(messages: SkycodeStorageMessage[])
 						}
 						assistantItems.push(imageItem)
 						break
+					}
 					case "tool_use": {
 						// Function calls use call_id, not related to reasoning item ID
 						const call_id = part.call_id || part.id
@@ -185,7 +197,7 @@ export function convertToOpenAIResponsesInput(messages: SkycodeStorageMessage[])
 			// User messages - collect all content
 			const messageContent: ResponseInputMessageContentList = []
 
-			for (const part of m.content) {
+			for (const part of storedBlocks) {
 				switch (part.type) {
 					case "text":
 						messageContent.push({ type: "input_text", text: part.text })
@@ -194,7 +206,9 @@ export function convertToOpenAIResponsesInput(messages: SkycodeStorageMessage[])
 						messageContent.push({
 							type: "input_image",
 							detail: "auto",
-							image_url: `data:${part.source.media_type};base64,${part.source.data}`,
+							image_url: isBase64ImageSource(part.source)
+								? `data:${part.source.media_type};base64,${part.source.data}`
+								: part.source.url,
 						})
 						break
 					case "tool_result": {

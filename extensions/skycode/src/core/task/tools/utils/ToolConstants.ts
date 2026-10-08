@@ -59,6 +59,7 @@ export const TASK_CALLBACKS_KEYS = [
 	"sayAndCreateMissingParamError",
 	"removeLastPartialMessageIfExistsWithType",
 	"executeCommandTool",
+	"checkBackgroundCommand",
 	"doesLatestTaskCompletionHaveNewChanges",
 	"updateFCListFromToolResponse",
 	"shouldAutoApproveToolWithPath",
@@ -127,7 +128,7 @@ export function removeClosingTag(block: ToolUse, tag: ToolParamName, text?: stri
 	}
 
 	const tagRegex = new RegExp(
-		`\\s?<\/?${tag
+		`\\s?</?${tag
 			.split("")
 			.map((char) => `(?:${char})?`)
 			.join("")}$`,

@@ -114,8 +114,8 @@ async function constructSession(
   options,
 ) {
   // TODO add option for user to force specify their desired execution provider
-  let modelFileName = `onnx/${fileName}${options.quantized ? "_quantized" : ""}.onnx`;
-  let buffer = await getModelFile(
+  const modelFileName = `onnx/${fileName}${options.quantized ? "_quantized" : ""}.onnx`;
+  const buffer = await getModelFile(
     pretrained_model_name_or_path,
     modelFileName,
     true,
@@ -183,7 +183,7 @@ function validateInputs(session, inputs) {
   if (numInputsProvided > numInputsNeeded) {
     // No missing inputs, but too many inputs were provided.
     // Warn the user and ignore the extra inputs.
-    let ignored = Object.keys(inputs).filter(
+    const ignored = Object.keys(inputs).filter(
       (inputName) => !session.inputNames.includes(inputName),
     );
     console.warn(
@@ -208,14 +208,22 @@ function validateInputs(session, inputs) {
 async function sessionRun(session, inputs) {
   const checkedInputs = validateInputs(session, inputs);
   try {
-    // @ts-ignore
+    // @ts-expect-error
     let output = await session.run(checkedInputs);
     output = replaceTensors(output);
     return output;
   } catch (e) {
-    // This usually occurs when the inputs are of the wrong type.
-    console.error(`An error occurred during model execution: "${e}".`);
-    console.error("Inputs given to model:", checkedInputs);
+    // [SKYCODE] Don't dump the full tensor objects to the console — under a
+    // failure storm (e.g. tokenizer/onnxruntime version mismatch) this can
+    // print thousands of multi-megabyte BigInt64Array dumps and freeze the
+    // extension host. Just log the input shapes for diagnostics.
+    const shapeSummary = Object.fromEntries(
+      Object.entries(checkedInputs).map(([k, v]) => [
+        k,
+        v && typeof v === "object" && "dims" in v ? `${v.type}[${v.dims.join("x")}]` : typeof v,
+      ]),
+    );
+    console.error(`An error occurred during model execution: "${e}".`, shapeSummary);
     throw e;
   }
 }
@@ -227,7 +235,7 @@ async function sessionRun(session, inputs) {
  * @private
  */
 function replaceTensors(obj) {
-  for (let prop in obj) {
+  for (const prop in obj) {
     if (obj[prop] instanceof ONNXTensor) {
       obj[prop] = new Tensor(obj[prop]);
     } else if (typeof obj[prop] === "object") {
@@ -285,21 +293,21 @@ function toI64Tensor(items) {
  */
 function prepareAttentionMask(self, tokens) {
   // Prepare attention mask
-  let pad_token_id = self.config.pad_token_id ?? null;
+  const pad_token_id = self.config.pad_token_id ?? null;
   let eos_token_id = self.config.eos_token_id ?? null;
   if (isIntegralNumber(eos_token_id)) {
     eos_token_id = [eos_token_id];
   }
 
-  let is_pad_token_in_inputs = tokens.indexOf(pad_token_id) !== -1;
-  let is_pad_token_not_equal_to_eos_token_id =
+  const is_pad_token_in_inputs = tokens.indexOf(pad_token_id) !== -1;
+  const is_pad_token_not_equal_to_eos_token_id =
     eos_token_id === null || !eos_token_id.includes(pad_token_id);
 
   if (is_pad_token_in_inputs && is_pad_token_not_equal_to_eos_token_id) {
-    let data = BigInt64Array.from(
+    const data = BigInt64Array.from(
       // Note: != so that int matches bigint
-      // @ts-ignore
-      tokens.data.map((x) => x != pad_token_id),
+      // @ts-expect-error
+      tokens.data.map((x) => x !== pad_token_id),
     );
     return new Tensor("int64", data, tokens.dims);
   } else {
@@ -316,13 +324,13 @@ function prepareAttentionMask(self, tokens) {
  * @private
  */
 function preparePositionIds(session, feeds, use_cache_branch) {
-  if (!session.inputNames.includes("position_ids")) return;
+  if (!session.inputNames.includes("position_ids")) { return; }
 
   const data = new BigInt64Array(feeds.attention_mask.data.length);
 
   // Compute cumulative sum of the attention mask along the sequence length dimension
   for (let i = 0; i < feeds.attention_mask.dims[0]; ++i) {
-    let start = i * feeds.attention_mask.dims[1];
+    const start = i * feeds.attention_mask.dims[1];
     let sum = BigInt(0);
     for (let j = 0; j < feeds.attention_mask.dims[1]; ++j) {
       const index = start + j;
@@ -369,7 +377,7 @@ async function seq2seqForward(self, model_inputs) {
     encoder_outputs = (await encoderForward(self, model_inputs))
       .last_hidden_state;
   }
-  let decoderFeeds = {
+  const decoderFeeds = {
     input_ids: model_inputs.decoder_input_ids,
     encoder_hidden_states: encoder_outputs,
   };
@@ -396,7 +404,7 @@ async function seq2seqForward(self, model_inputs) {
     self.decoder_merged_session,
     decoderFeeds,
   );
-  let logits = decoderResults.logits;
+  const logits = decoderResults.logits;
   past_key_values = self.getPastKeyValues(decoderResults, past_key_values);
 
   // Get cross attention and/or decoder attentions if they are present
@@ -423,12 +431,12 @@ function seq2seqStartBeams(
   self,
   inputTokenIds,
   generation_config,
-  numOutputTokens,
+  _numOutputTokens,
 ) {
-  let beams = [];
+  const beams = [];
   let beamId = 0;
 
-  // @ts-ignore
+  // @ts-expect-error
   const requires_attention_mask = self.requires_attention_mask ?? true;
 
   // decoder_input_ids == output_token_ids
@@ -446,14 +454,14 @@ function seq2seqStartBeams(
     decoder_input_ids = [decoder_input_ids];
   }
 
-  for (let tokens of inputTokenIds) {
+  for (const tokens of inputTokenIds) {
     // TODO: Improve
     // Currently, just add back batch dimension.
     // In future, allow for true parallel execution
     tokens.dims = [1, ...tokens.dims];
 
     // Create beam
-    let start = {
+    const start = {
       inputs: tokens,
       encoder_outputs: null,
       prev_model_outputs: null,
@@ -494,7 +502,7 @@ async function seq2seqRunBeam(self, beam) {
   }
 
   // 1. Prepare
-  let model_inputs = {
+  const model_inputs = {
     [input_name]: beam.inputs,
     decoder_input_ids: toI64Tensor(decoder_input_ids),
     encoder_outputs: beam.encoder_outputs,
@@ -505,7 +513,7 @@ async function seq2seqRunBeam(self, beam) {
   }
 
   // 2. Run
-  let output = await self.forward(model_inputs);
+  const output = await self.forward(model_inputs);
 
   // 3. Update
   beam.prev_model_outputs = output;
@@ -560,7 +568,7 @@ async function encoderForward(self, model_inputs) {
  */
 async function decoderForward(self, model_inputs) {
   let { input_ids, past_key_values, attention_mask } = model_inputs;
-  let decoderFeeds = {
+  const decoderFeeds = {
     input_ids: input_ids,
     attention_mask: attention_mask ?? prepareAttentionMask(self, input_ids),
   };
@@ -574,9 +582,9 @@ async function decoderForward(self, model_inputs) {
 
   self.addPastKeyValues(decoderFeeds, past_key_values);
 
-  let decoderResults = await sessionRun(self.session, decoderFeeds);
+  const decoderResults = await sessionRun(self.session, decoderFeeds);
 
-  let logits = decoderResults.logits;
+  const logits = decoderResults.logits;
 
   past_key_values = self.getPastKeyValues(decoderResults, past_key_values);
   return { logits, past_key_values };
@@ -595,15 +603,15 @@ async function decoderForward(self, model_inputs) {
 function decoderStartBeams(
   self,
   inputTokenIds,
-  generation_config,
+  _generation_config,
   numOutputTokens,
   inputs_attention_mask,
 ) {
-  let beams = [];
+  const beams = [];
 
   let beamId = 0;
-  for (let tokens of inputTokenIds) {
-    let output_token_ids = tokens.tolist().map(Number);
+  for (const tokens of inputTokenIds) {
+    const output_token_ids = tokens.tolist().map(Number);
 
     // TODO: Improve
     // Currently, just add back batch dimension.
@@ -618,7 +626,7 @@ function decoderStartBeams(
       attn_mask = prepareAttentionMask(self, tokens);
     }
 
-    let start = {
+    const start = {
       input: tokens,
       model_input_ids: tokens,
       attention_mask: attn_mask,
@@ -651,17 +659,17 @@ function decoderStartBeams(
  * @private
  */
 async function decoderRunBeam(self, beam) {
-  let attnMaskData = new BigInt64Array(beam.output_token_ids.length).fill(1n);
+  const attnMaskData = new BigInt64Array(beam.output_token_ids.length).fill(1n);
 
   // 1. Prepare
-  let model_inputs = {
+  const model_inputs = {
     input_ids: beam.model_input_ids,
     attention_mask: new Tensor("int64", attnMaskData, [1, attnMaskData.length]),
     past_key_values: beam.prev_model_outputs?.past_key_values,
   };
 
   // 2. Run
-  let output = await self.forward(model_inputs);
+  const output = await self.forward(model_inputs);
 
   // 3. Update
   beam.prev_model_outputs = output;
@@ -740,9 +748,9 @@ export class PreTrainedModel extends Callable {
    */
   async dispose() {
     const promises = [];
-    for (let key of Object.keys(this)) {
+    for (const key of Object.keys(this)) {
       const item = this[key];
-      // @ts-ignore
+      // @ts-expect-error
       if (item instanceof InferenceSession) {
         promises.push(item.handler.dispose());
       }
@@ -777,7 +785,7 @@ export class PreTrainedModel extends Callable {
       model_file_name = null,
     } = {},
   ) {
-    let options = {
+    const options = {
       quantized,
       progress_callback,
       config,
@@ -787,7 +795,7 @@ export class PreTrainedModel extends Callable {
       model_file_name,
     };
 
-    const modelName = MODEL_CLASS_TO_NAME_MAPPING.get(this);
+    const modelName = MODEL_CLASS_TO_NAME_MAPPING.get(PreTrainedModel);
     const modelType = MODEL_TYPE_MAPPING.get(modelName);
 
     let info;
@@ -874,8 +882,8 @@ export class PreTrainedModel extends Callable {
       ]);
     }
 
-    // @ts-ignore
-    return new this(...info);
+    // @ts-expect-error
+    return new PreTrainedModel(...info);
   }
 
   /**
@@ -1086,7 +1094,7 @@ export class PreTrainedModel extends Callable {
   _get_generation_config(generation_config) {
     // Create empty generation config (contains defaults)
     // We pass `this.config` so that if `eos_token_id` or `bos_token_id` exist in the model's config, we will use them
-    let gen_config = new GenerationConfig(this.config);
+    const gen_config = new GenerationConfig(this.config);
 
     // Apply model's generation config, if it exists
     if ("generation_config" in this) {
@@ -1199,9 +1207,9 @@ export class PreTrainedModel extends Callable {
     const useMaxLength =
       Number.isInteger(generation_config.max_length) &&
       (generation_config.max_new_tokens ?? null) === null;
-    let sampler = Sampler.getSampler(generation_config);
+    const sampler = Sampler.getSampler(generation_config);
 
-    // @ts-ignore
+    // @ts-expect-error
     let beams = this.getStartBeams(
       inputs,
       generation_config,
@@ -1211,7 +1219,7 @@ export class PreTrainedModel extends Callable {
 
     while (beams.some((x) => !x.done) && numOutputTokens < maxOutputTokens) {
       let newest_beams = [];
-      for (let beam of beams) {
+      for (const beam of beams) {
         if (beam.done) {
           // Add this beam back into the pool
           newest_beams.push(beam);
@@ -1227,8 +1235,8 @@ export class PreTrainedModel extends Callable {
           continue;
         }
 
-        // @ts-ignore
-        let output = await this.runBeam(beam);
+        // @ts-expect-error
+        const output = await this.runBeam(beam);
 
         // add attentions/scores to beam only if user requested
         if (generation_config.output_attentions) {
@@ -1242,18 +1250,18 @@ export class PreTrainedModel extends Callable {
         // In most cases, this will be [batch_size, 1, vocab_size]
         // So, we select the last token's logits:
         // (equivalent to `logits = outputs.logits[:, -1, :]`)
-        let logits = output.logits.slice(null, -1, null);
+        const logits = output.logits.slice(null, -1, null);
 
         // Apply logits processor
         logits_processor(beam.output_token_ids, logits);
 
-        let sampledTokens = sampler(logits);
-        for (let [newTokenId, logProb] of sampledTokens) {
+        const sampledTokens = sampler(logits);
+        for (const [newTokenId, logProb] of sampledTokens) {
           // use previous beam as a starting point
-          let newBeam = { ...beam };
+          const newBeam = { ...beam };
 
           // update new beam
-          // @ts-ignore
+          // @ts-expect-error
           this.updateBeam(newBeam, newTokenId);
 
           newBeam.score += logProb;
@@ -1290,7 +1298,7 @@ export class PreTrainedModel extends Callable {
 
     const getFlattened = (key) =>
       groupedBeams
-        .map((batch) => {
+        .flatMap((batch) => {
           if (generation_config.num_return_sequences > 1) {
             return batch
               .slice(0, generation_config.num_return_sequences)
@@ -1298,8 +1306,7 @@ export class PreTrainedModel extends Callable {
           } else {
             return [batch[0][key]];
           }
-        })
-        .flat(); // Flatten across batches (depth=1)
+        }); // Flatten across batches (depth=1)
 
     const sequences = getFlattened("output_token_ids"); // [1, seqLength]
 
@@ -1394,7 +1401,7 @@ export class PreTrainedModel extends Callable {
 
     for (const name in decoderResults) {
       if (name.startsWith("present")) {
-        let newName = name.replace("present", "past_key_values");
+        const newName = name.replace("present", "past_key_values");
 
         if (pastKeyValues && name.includes("encoder")) {
           // Optimization introduced by optimum to reuse past key values. So, we just replace the constant
@@ -1444,23 +1451,23 @@ export class PreTrainedModel extends Callable {
       // TODO support batches (i.e., batch_size > 1)
       const batch_size = 1;
 
-      // @ts-ignore
+      // @ts-expect-error
       if (this.config.is_encoder_decoder && (this.add_encoder_pkv ?? true)) {
-        // @ts-ignore
-        let encoder_dims = [
+        // @ts-expect-error
+        const encoder_dims = [
           batch_size,
           this.num_encoder_heads,
           0,
           this.encoder_dim_kv,
         ];
-        // @ts-ignore
-        let decoder_dims = [
+        // @ts-expect-error
+        const decoder_dims = [
           batch_size,
           this.num_decoder_heads,
           0,
           this.decoder_dim_kv,
         ];
-        // @ts-ignore
+        // @ts-expect-error
         for (let i = 0; i < this.num_decoder_layers; ++i) {
           decoderFeeds[`past_key_values.${i}.encoder.key`] = new Tensor(
             "float32",
@@ -1485,9 +1492,9 @@ export class PreTrainedModel extends Callable {
         }
       } else if (this.config.model_type === "falcon") {
         // NOTE: Custom implementation for Falcon
-        // @ts-ignore
-        let dims = [batch_size * this.num_heads, 0, this.dim_kv];
-        // @ts-ignore
+        // @ts-expect-error
+        const dims = [batch_size * this.num_heads, 0, this.dim_kv];
+        // @ts-expect-error
         for (let i = 0; i < this.num_layers; ++i) {
           decoderFeeds[`past_key_values.${i}.key`] = new Tensor(
             "float32",
@@ -1502,9 +1509,9 @@ export class PreTrainedModel extends Callable {
         }
       } else if (this.config.multi_query) {
         // e.g., for `gpt_bigcode`
-        // @ts-ignore
-        let dims = [batch_size * this.num_heads, 0, 2 * this.dim_kv];
-        // @ts-ignore
+        // @ts-expect-error
+        const dims = [batch_size * this.num_heads, 0, 2 * this.dim_kv];
+        // @ts-expect-error
         for (let i = 0; i < this.num_layers; ++i) {
           decoderFeeds[`past_key_values.${i}.key_value`] = new Tensor(
             "float32",
@@ -1515,11 +1522,11 @@ export class PreTrainedModel extends Callable {
       } else if (this.config.model_type === "bloom") {
         // NOTE: Custom implementation for Bloom
 
-        // @ts-ignore
-        let keyDims = [batch_size * this.num_heads, this.dim_kv, 0]; // [batch_size x num_heads,64,past_sequence_length]
-        // @ts-ignore
-        let valueDims = [batch_size * this.num_heads, 0, this.dim_kv]; // [batch_size x num_heads,past_sequence_length,64]
-        // @ts-ignore
+        // @ts-expect-error
+        const keyDims = [batch_size * this.num_heads, this.dim_kv, 0]; // [batch_size x num_heads,64,past_sequence_length]
+        // @ts-expect-error
+        const valueDims = [batch_size * this.num_heads, 0, this.dim_kv]; // [batch_size x num_heads,past_sequence_length,64]
+        // @ts-expect-error
         for (let i = 0; i < this.num_layers; ++i) {
           decoderFeeds[`past_key_values.${i}.key`] = new Tensor(
             "float32",
@@ -1534,9 +1541,9 @@ export class PreTrainedModel extends Callable {
         }
       } else {
         // Decoder-only
-        // @ts-ignore
-        let dims = [batch_size, this.num_heads, 0, this.dim_kv];
-        // @ts-ignore
+        // @ts-expect-error
+        const dims = [batch_size, this.num_heads, 0, this.dim_kv];
+        // @ts-expect-error
         for (let i = 0; i < this.num_layers; ++i) {
           decoderFeeds[`past_key_values.${i}.key`] = new Tensor(
             "float32",
@@ -3111,7 +3118,7 @@ export class WhisperForConditionalGeneration extends WhisperPreTrainedModel {
     const batchedMatrices = generate_outputs.cross_attentions.map((batch) => {
       // Create a list with `decoder_layers` elements, each a tensor of shape
       // (batch size, attention_heads, output length, input length).
-      let cross_attentions = Array.from(
+      const cross_attentions = Array.from(
         { length: this.config.decoder_layers },
         (_, i) =>
           cat(
@@ -3129,22 +3136,22 @@ export class WhisperForConditionalGeneration extends WhisperPreTrainedModel {
       );
       weights = weights.transpose(1, 0, 2, 3);
 
-      let [std, calculatedMean] = std_mean(weights, -2, 0, true);
+      const [std, calculatedMean] = std_mean(weights, -2, 0, true);
 
       // Normalize and smoothen the weights.
-      let smoothedWeights = weights.clone(); // [1, 8, seqLength, 1500]
+      const smoothedWeights = weights.clone(); // [1, 8, seqLength, 1500]
 
       for (let a = 0; a < smoothedWeights.dims[0]; ++a) {
-        let aTensor = smoothedWeights[a]; // [8, seqLength, 1500]
+        const aTensor = smoothedWeights[a]; // [8, seqLength, 1500]
 
         for (let b = 0; b < aTensor.dims[0]; ++b) {
-          let bTensor = aTensor[b]; // [seqLength, 1500]
+          const bTensor = aTensor[b]; // [seqLength, 1500]
 
           const stdTensor = std[a][b][0]; // [1500]
           const meanTensor = calculatedMean[a][b][0]; // [1500]
 
           for (let c = 0; c < bTensor.dims[0]; ++c) {
-            let cTensor = bTensor[c]; // [1500]
+            const cTensor = bTensor[c]; // [1500]
             for (let d = 0; d < cTensor.data.length; ++d) {
               cTensor.data[d] =
                 (cTensor.data[d] - meanTensor.data[d]) / stdTensor.data[d];
@@ -3177,15 +3184,15 @@ export class WhisperForConditionalGeneration extends WhisperPreTrainedModel {
       // NOTE: Since we run only one batch at a time, we can squeeze to get the same dimensions
       // as the python implementation
       const matrix = batchedMatrices[batch_idx].neg().squeeze_(0);
-      let [text_indices, time_indices] = dynamicTimeWarping(matrix);
+      const [text_indices, time_indices] = dynamicTimeWarping(matrix);
 
-      let diffs = Array.from(
+      const diffs = Array.from(
         { length: text_indices.length - 1 },
-        (v, i) => text_indices[i + 1] - text_indices[i],
+        (_v, i) => text_indices[i + 1] - text_indices[i],
       );
-      let jumps = mergeArrays([1], diffs).map((x) => !!x); // convert to boolean
+      const jumps = mergeArrays([1], diffs).map((x) => !!x); // convert to boolean
 
-      let jump_times = [];
+      const jump_times = [];
       for (let i = 0; i < jumps.length; ++i) {
         if (jumps[i]) {
           jump_times.push(time_indices[i] * time_precision);
@@ -3244,9 +3251,9 @@ export class VisionEncoderDecoderModel extends PreTrainedModel {
       );
     }
 
-    // @ts-ignore
+    // @ts-expect-error
     const decoderModelClass = decoderModel[1];
-    // @ts-ignore
+    // @ts-expect-error
     const decoder = new decoderModelClass(
       decoderConfig,
       decoder_merged_session,
@@ -3353,7 +3360,7 @@ export class CLIPTextModelWithProjection extends CLIPPreTrainedModel {
   static async from_pretrained(pretrained_model_name_or_path, options = {}) {
     // Update default model file name if not provided
     options.model_file_name ??= "text_model";
-    return super.from_pretrained(pretrained_model_name_or_path, options);
+    return CLIPPreTrainedModel.from_pretrained(pretrained_model_name_or_path, options);
   }
 }
 
@@ -3388,7 +3395,7 @@ export class CLIPVisionModelWithProjection extends CLIPPreTrainedModel {
   static async from_pretrained(pretrained_model_name_or_path, options = {}) {
     // Update default model file name if not provided
     options.model_file_name ??= "vision_model";
-    return super.from_pretrained(pretrained_model_name_or_path, options);
+    return CLIPPreTrainedModel.from_pretrained(pretrained_model_name_or_path, options);
   }
 }
 //////////////////////////////////////////////////
@@ -3473,7 +3480,7 @@ export class SiglipTextModel extends SiglipPreTrainedModel {
   static async from_pretrained(pretrained_model_name_or_path, options = {}) {
     // Update default model file name if not provided
     options.model_file_name ??= "text_model";
-    return super.from_pretrained(pretrained_model_name_or_path, options);
+    return SiglipPreTrainedModel.from_pretrained(pretrained_model_name_or_path, options);
   }
 }
 
@@ -3508,7 +3515,7 @@ export class SiglipVisionModel extends CLIPPreTrainedModel {
   static async from_pretrained(pretrained_model_name_or_path, options = {}) {
     // Update default model file name if not provided
     options.model_file_name ??= "vision_model";
-    return super.from_pretrained(pretrained_model_name_or_path, options);
+    return CLIPPreTrainedModel.from_pretrained(pretrained_model_name_or_path, options);
   }
 }
 //////////////////////////////////////////////////
@@ -4979,7 +4986,7 @@ export class SpeechT5ForTextToSpeech extends SpeechT5PreTrainedModel {
 
     const num_mel_bins = this.config.num_mel_bins;
 
-    let spectrogramParts = [];
+    const spectrogramParts = [];
     let past_key_values = null;
     let decoder_outputs = null;
     let idx = 0;
@@ -4998,7 +5005,7 @@ export class SpeechT5ForTextToSpeech extends SpeechT5PreTrainedModel {
           [1, 1, num_mel_bins],
         );
       }
-      let decoderFeeds = {
+      const decoderFeeds = {
         use_cache_branch,
         output_sequence,
         encoder_attention_mask: encoder_attention_mask,
@@ -5176,7 +5183,7 @@ export class ClapTextModelWithProjection extends ClapPreTrainedModel {
   static async from_pretrained(pretrained_model_name_or_path, options = {}) {
     // Update default model file name if not provided
     options.model_file_name ??= "text_model";
-    return super.from_pretrained(pretrained_model_name_or_path, options);
+    return ClapPreTrainedModel.from_pretrained(pretrained_model_name_or_path, options);
   }
 }
 
@@ -5211,7 +5218,7 @@ export class ClapAudioModelWithProjection extends ClapPreTrainedModel {
   static async from_pretrained(pretrained_model_name_or_path, options = {}) {
     // Update default model file name if not provided
     options.model_file_name ??= "audio_model";
-    return super.from_pretrained(pretrained_model_name_or_path, options);
+    return ClapPreTrainedModel.from_pretrained(pretrained_model_name_or_path, options);
   }
 }
 //////////////////////////////////////////////////
@@ -5311,7 +5318,7 @@ export class PretrainedMixin {
       model_file_name = null,
     } = {},
   ) {
-    let options = {
+    const options = {
       quantized,
       progress_callback,
       config,
@@ -5336,7 +5343,7 @@ export class PretrainedMixin {
       );
     }
 
-    for (let MODEL_CLASS_MAPPING of this.MODEL_CLASS_MAPPINGS) {
+    for (const MODEL_CLASS_MAPPING of this.MODEL_CLASS_MAPPINGS) {
       const modelInfo = MODEL_CLASS_MAPPING.get(config.model_type);
       if (!modelInfo) {
         continue; // Item not found in this mapping
@@ -5792,7 +5799,7 @@ const MODEL_CLASS_TYPE_MAPPING = [
 ];
 
 for (const [mappings, type] of MODEL_CLASS_TYPE_MAPPING) {
-  // @ts-ignore
+  // @ts-expect-error
   for (const [name, model] of mappings.values()) {
     MODEL_TYPE_MAPPING.set(name, type);
     MODEL_CLASS_TO_NAME_MAPPING.set(model, name);
@@ -5839,7 +5846,7 @@ for (const [name, model, type] of CUSTOM_MAPPING) {
  */
 export class AutoModel extends PretrainedMixin {
   /** @type {Map<string, Object>[]} */
-  // @ts-ignore
+  // @ts-expect-error
   static MODEL_CLASS_MAPPINGS = MODEL_CLASS_TYPE_MAPPING.map((x) => x[0]);
   static BASE_IF_FAIL = true;
 }

@@ -1,4 +1,5 @@
 import { Anthropic } from "@anthropic-ai/sdk"
+import { isBase64ImageSource } from "@/shared/messages/message-interchange"
 import {
 	type ContentBlock as BedrockContentBlock,
 	ConversationRole as BedrockConversationRole,
@@ -17,6 +18,7 @@ import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
+import { StreamAborter } from "../utils/abort-support"
 
 interface SapAiCoreHandlerOptions extends CommonApiHandlerOptions {
 	sapAiCoreClientId?: string
@@ -301,12 +303,16 @@ namespace Gemini {
 				if (block.type === "text") {
 					parts.push({ text: block.text })
 				} else if (block.type === "image") {
-					parts.push({
-						inlineData: {
-							mimeType: block.source.media_type,
-							data: block.source.data,
-						},
-					})
+					if (isBase64ImageSource(block.source)) {
+						parts.push({
+							inlineData: {
+								mimeType: block.source.media_type,
+								data: block.source.data,
+							},
+						})
+					} else {
+						parts.push({ text: `[image url: ${block.source.url}]` })
+					}
 				}
 			}
 		}
@@ -359,9 +365,14 @@ export class SapAiCoreHandler implements ApiHandler {
 	private deployments?: Deployment[]
 	private aiCoreDestination?: HttpDestination
 	private destinationExpiresAt?: number
+	private aborter = new StreamAborter()
 
 	constructor(options: SapAiCoreHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	/**
@@ -864,6 +875,7 @@ export class SapAiCoreHandler implements ApiHandler {
 		const usage = { input_tokens: 0, output_tokens: 0 }
 
 		try {
+			try {
 			for await (const chunk of stream) {
 				const chunkStr = this.chunkToString(chunk)
 				const lines = chunkStr.split("\n").filter(Boolean)
@@ -903,6 +915,9 @@ export class SapAiCoreHandler implements ApiHandler {
 						}
 					}
 				}
+			}
+			} finally {
+				this.aborter.clear()
 			}
 		} catch (error) {
 			Logger.error("Error streaming completion:", error)

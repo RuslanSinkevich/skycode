@@ -18,6 +18,8 @@ export interface AutoApprovalSettings {
 		editFilesExternally?: boolean // Edit files outside of the working directory
 		executeSafeCommands?: boolean // Execute safe commands
 		executeAllCommands?: boolean // Execute all commands
+		allowedCommandPatterns?: string[] // Command patterns the user added by hand
+		disabledDefaultCommandPatterns?: string[] // Built-in safe patterns the user switched off
 		deleteFiles?: boolean // Auto-approve file deletion
 		editNotebooks?: boolean // Auto-approve notebook editing
 		useBrowser: boolean // Use browser

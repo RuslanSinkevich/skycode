@@ -4,6 +4,7 @@ import { Logger } from "@/shared/services/Logger"
 import { ModelInfo } from "../../../shared/api"
 import { ApiHandler } from "../index"
 import { ApiStream } from "../transform/stream"
+import { StreamAborter } from "../utils/abort-support"
 
 interface DifyHandlerOptions {
 	difyApiKey?: string
@@ -74,11 +75,11 @@ interface DifyConversationResponse {
 
 export class DifyHandler implements ApiHandler {
 	private options: DifyHandlerOptions
+	private aborter = new StreamAborter()
 	private baseUrl: string
 	private apiKey: string
 	private conversationId: string | null = null
 	private currentTaskId: string | null = null
-	private abortController: AbortController | null = null
 
 	constructor(options: DifyHandlerOptions) {
 		this.options = options
@@ -96,6 +97,10 @@ export class DifyHandler implements ApiHandler {
 		if (!this.baseUrl) {
 			throw new Error("Dify base URL is required")
 		}
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	async *createMessage(systemPrompt: string, messages: SkycodeStorageMessage[]): ApiStream {
@@ -343,7 +348,7 @@ export class DifyHandler implements ApiHandler {
 								}
 								hasYieldedContent = true
 							}
-						} catch (e) {
+						} catch (_e) {
 							// Not JSON, continue
 							Logger.log("[DIFY DEBUG] Line is not direct JSON, continuing")
 						}

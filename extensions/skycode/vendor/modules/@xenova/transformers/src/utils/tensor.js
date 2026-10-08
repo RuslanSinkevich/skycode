@@ -51,39 +51,60 @@ export class Tensor {
    * @param {[DataType, DataArray, number[]]|[import('onnxruntime-common').Tensor]} args
    */
   constructor(...args) {
+    // [SKYCODE] onnxruntime-common 1.25+ exposes `location` as a prototype getter,
+    // so Object.assign drops it. Native binding then throws "Tensor.location must be a string".
+    // Copy `location` explicitly from the source ONNXTensor.
+    let onnxTensor;
     if (args[0] instanceof ONNXTensor) {
-      // Create shallow copy
-      Object.assign(this, args[0]);
+      onnxTensor = args[0];
+      Object.assign(this, onnxTensor);
     } else {
-      // Create new tensor
-      Object.assign(
-        this,
-        new ONNXTensor(
-          /** @type {DataType} */ (args[0]),
-          /** @type {Exclude<import('./maths.js').AnyTypedArray, Uint8ClampedArray>} */ (
-            args[1]
-          ),
-          args[2],
+      onnxTensor = new ONNXTensor(
+        /** @type {DataType} */ (args[0]),
+        /** @type {Exclude<import('./maths.js').AnyTypedArray, Uint8ClampedArray>} */ (
+          args[1]
         ),
+        args[2],
       );
+      Object.assign(this, onnxTensor);
+    }
+    if (typeof this.location !== "string") {
+      this.location = onnxTensor.location ?? "cpu";
+    }
+
+    // [SKYCODE] onnxruntime-common 1.25+ exposes `data` as a prototype getter
+    // backed by `cpuData`. The `data;` class field above creates an OWN property
+    // = undefined on every instance, which shadows the prototype getter. After
+    // `Object.assign(this, onnxTensor)` we still have `this.data === undefined`
+    // (because `data` is not enumerable own on onnxTensor either, only `cpuData`
+    // is). The native onnxruntime binding then throws "Tensor.data must be a
+    // typed array for numeric tensor.". Copy it explicitly via the prototype
+    // getter so own `data` becomes the typed array.
+    if (this.data === undefined) {
+      try {
+        this.data = onnxTensor.data;
+      } catch {
+        // GPU-only tensors throw from the getter — leave `data` undefined for
+        // those. We never feed GPU tensors into the embedding pipeline.
+      }
     }
 
     return new Proxy(this, {
       get: (obj, key) => {
         if (typeof key === "string") {
-          let index = Number(key);
+          const index = Number(key);
           if (Number.isInteger(index)) {
             // key is an integer (i.e., index)
             return obj._getitem(index);
           }
         }
-        // @ts-ignore
+        // @ts-expect-error
         return obj[key];
       },
       set: (obj, key, value) => {
         // TODO allow setting of data
 
-        // @ts-ignore
+        // @ts-expect-error
         return (obj[key] = value);
       },
     });
@@ -132,7 +153,7 @@ export class Tensor {
   indexOf(item) {
     for (let index = 0; index < this.data.length; ++index) {
       // Note: == instead of === so we can match Ints with BigInts
-      if (this.data[index] == item) {
+      if (this.data[index] === item) {
         return index;
       }
     }
@@ -246,8 +267,8 @@ export class Tensor {
 
   slice(...slices) {
     // This allows for slicing with ranges and numbers
-    let newTensorDims = [];
-    let newOffsets = [];
+    const newTensorDims = [];
+    const newOffsets = [];
 
     // slices is an array of numbers or arrays of numbers
     // e.g., slices = [0, [1, 3], null, [0, 3]]
@@ -270,7 +291,7 @@ export class Tensor {
           throw new Error(`Invalid slice: ${slice}`);
         }
 
-        let offsets = [
+        const offsets = [
           Math.max(slice[0], 0),
           Math.min(slice[1], this.dims[sliceIndex]),
         ];
@@ -282,12 +303,12 @@ export class Tensor {
       }
     }
 
-    let newDims = newOffsets.map(([start, end]) => end - start);
-    let newBufferSize = newDims.reduce((a, b) => a * b);
+    const newDims = newOffsets.map(([start, end]) => end - start);
+    const newBufferSize = newDims.reduce((a, b) => a * b);
 
     // Allocate memory
-    // @ts-ignore
-    let data = new this.data.constructor(newBufferSize);
+    // @ts-expect-error
+    const data = new this.data.constructor(newBufferSize);
 
     // Precompute strides
     const stride = this.stride();
@@ -346,8 +367,8 @@ export class Tensor {
     }
 
     if (dim === null) {
-      // @ts-ignore
-      let val = this.data.reduce((a, b) => a + b ** p, 0) ** (1 / p);
+      // @ts-expect-error
+      const val = this.data.reduce((a, b) => a + b ** p, 0) ** (1 / p);
       return new Tensor(this.type, [val], []);
     }
 
@@ -359,7 +380,7 @@ export class Tensor {
     resultDims[dim] = 1; // Remove the specified axis
 
     // Create a new array to store the accumulated values
-    // @ts-ignore
+    // @ts-expect-error
     const result = new this.data.constructor(this.data.length / this.dims[dim]);
 
     // Iterate over the data array
@@ -505,9 +526,9 @@ export class Tensor {
     // TODO validate inputs
     end_dim = (end_dim + this.dims.length) % this.dims.length;
 
-    let dimsToKeepBefore = this.dims.slice(0, start_dim);
-    let dimsToFlatten = this.dims.slice(start_dim, end_dim + 1);
-    let dimsToKeepAfter = this.dims.slice(end_dim + 1);
+    const dimsToKeepBefore = this.dims.slice(0, start_dim);
+    const dimsToFlatten = this.dims.slice(start_dim, end_dim + 1);
+    const dimsToKeepAfter = this.dims.slice(end_dim + 1);
 
     this.dims = [
       ...dimsToKeepBefore,
@@ -612,13 +633,13 @@ export class Tensor {
    */
   to(type) {
     // If the self Tensor already has the correct dtype, then self is returned.
-    if (this.type === type) return this;
+    if (this.type === type) { return this; }
 
     // Otherwise, the returned tensor is a copy of self with the desired dtype.
-    if (!DataTypeMap.hasOwnProperty(type)) {
+    if (!Object.hasOwn(DataTypeMap, type)) {
       throw new Error(`Unsupported type: ${type}`);
     }
-    // @ts-ignore
+    // @ts-expect-error
     return new Tensor(type, DataTypeMap[type].from(this.data), this.dims);
   }
 }
@@ -668,7 +689,7 @@ function reshape(data, dimensions) {
   for (let i = dimensions.length - 1; i >= 0; i--) {
     reshapedArray = reshapedArray.reduce(
       (acc, val) => {
-        let lastArray = acc[acc.length - 1];
+        const lastArray = acc[acc.length - 1];
 
         if (lastArray.length < dimensions[i]) {
           lastArray.push(val);
@@ -719,7 +740,7 @@ export function interpolate(
   const in_height = input.dims.at(-2);
   const in_width = input.dims.at(-1);
 
-  let output = interpolate_data(
+  const output = interpolate_data(
     /** @type {import('./maths.js').TypedArray}*/ (input.data),
     [in_channels, in_height, in_width],
     [out_height, out_width],
@@ -739,33 +760,33 @@ export function mean_pooling(last_hidden_state, attention_mask) {
   // last_hidden_state: [batchSize, seqLength, embedDim]
   // attention_mask:    [batchSize, seqLength]
 
-  let shape = [last_hidden_state.dims[0], last_hidden_state.dims[2]];
-  // @ts-ignore
-  let returnedData = new last_hidden_state.data.constructor(
+  const shape = [last_hidden_state.dims[0], last_hidden_state.dims[2]];
+  // @ts-expect-error
+  const returnedData = new last_hidden_state.data.constructor(
     shape[0] * shape[1],
   );
-  let [batchSize, seqLength, embedDim] = last_hidden_state.dims;
+  const [batchSize, seqLength, embedDim] = last_hidden_state.dims;
 
   let outIndex = 0;
   for (let i = 0; i < batchSize; ++i) {
-    let offset = i * embedDim * seqLength;
+    const offset = i * embedDim * seqLength;
 
     for (let k = 0; k < embedDim; ++k) {
       let sum = 0;
       let count = 0;
 
-      let attnMaskOffset = i * seqLength;
-      let offset2 = offset + k;
+      const attnMaskOffset = i * seqLength;
+      const offset2 = offset + k;
       // Pool over all words in sequence
       for (let j = 0; j < seqLength; ++j) {
         // index into attention mask
-        let attn = Number(attention_mask.data[attnMaskOffset + j]);
+        const attn = Number(attention_mask.data[attnMaskOffset + j]);
 
         count += attn;
         sum += last_hidden_state.data[offset2 + j * embedDim] * attn;
       }
 
-      let avg = sum / count;
+      const avg = sum / count;
       returnedData[outIndex++] = avg;
     }
   }
@@ -853,7 +874,7 @@ export function cat(tensors, dim = 0) {
 
   // Create a new array to store the accumulated values
   const resultSize = resultDims.reduce((a, b) => a * b, 1);
-  // @ts-ignore
+  // @ts-expect-error
   const result = new tensors[0].data.constructor(resultSize);
 
   // Create output tensor of same type as first
@@ -863,7 +884,7 @@ export function cat(tensors, dim = 0) {
     // Handle special case for performance reasons
 
     let offset = 0;
-    for (let t of tensors) {
+    for (const t of tensors) {
       result.set(t.data, offset);
       offset += t.data.length;
     }
@@ -871,7 +892,7 @@ export function cat(tensors, dim = 0) {
     let currentDim = 0;
 
     for (let t = 0; t < tensors.length; ++t) {
-      let tensor = tensors[t];
+      const tensor = tensors[t];
 
       // Iterate over the data array
       for (let i = 0; i < tensor.data.length; ++i) {
@@ -928,10 +949,10 @@ export function stack(tensors, dim = 0) {
 export function std_mean(input, dim = null, correction = 1, keepdim = false) {
   if (dim === null) {
     // None to reduce over all dimensions.
-    // @ts-ignore
+    // @ts-expect-error
     const sum = input.data.reduce((a, b) => a + b, 0);
     const mean = sum / input.data.length;
-    // @ts-ignore
+    // @ts-expect-error
     const std = Math.sqrt(
       input.data.reduce((a, b) => a + (b - mean) ** 2, 0) /
         (input.data.length - correction),
@@ -965,7 +986,7 @@ export function std_mean(input, dim = null, correction = 1, keepdim = false) {
   resultDims[dim] = 1; // Remove the specified axis
 
   // Create a new array to store the accumulated values
-  // @ts-ignore
+  // @ts-expect-error
   const result = new input.data.constructor(
     input.data.length / input.dims[dim],
   );
@@ -1016,8 +1037,8 @@ export function std_mean(input, dim = null, correction = 1, keepdim = false) {
 export function mean(input, dim = null, keepdim = false) {
   if (dim === null) {
     // None to reduce over all dimensions.
-    // @ts-ignore
-    let val = input.data.reduce((a, b) => a + b, 0);
+    // @ts-expect-error
+    const val = input.data.reduce((a, b) => a + b, 0);
     return new Tensor(
       input.type,
       [val / input.data.length],
@@ -1035,7 +1056,7 @@ export function mean(input, dim = null, keepdim = false) {
   resultDims[dim] = 1; // Remove the specified axis
 
   // Create a new array to store the accumulated values
-  // @ts-ignore
+  // @ts-expect-error
   const result = new input.data.constructor(
     input.data.length / input.dims[dim],
   );
@@ -1130,15 +1151,15 @@ export function dynamicTimeWarping(matrix) {
   let i = output_length;
   let j = input_length;
 
-  // @ts-ignore
+  // @ts-expect-error
   trace.data.fill(2, 0, outputShape[1]); // trace[0, :] = 2
   for (let i = 0; i < outputShape[0]; ++i) {
     // trace[:, 0] = 1
     trace[i].data[0] = 1;
   }
 
-  let text_indices = [];
-  let time_indices = [];
+  const text_indices = [];
+  const time_indices = [];
 
   while (i > 0 || j > 0) {
     text_indices.push(i - 1);

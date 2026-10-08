@@ -3,7 +3,7 @@ import { BrowserAction, BrowserActionResult, SkycodeMessage, SkycodeSayBrowserAc
 import { StringRequest } from "@shared/proto/skycode/common"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import deepEqual from "fast-deep-equal"
-import React, { CSSProperties, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import React, { CSSProperties, memo, useCallback, useEffect, useMemo, useState } from "react"
 import { useSize } from "react-use"
 import styled from "styled-components"
 import { BrowserSettingsMenu } from "@/components/browser/BrowserSettingsMenu"
@@ -20,7 +20,6 @@ interface BrowserSessionRowProps {
 	onToggleExpand: (messageTs: number) => void
 	lastModifiedMessage?: SkycodeMessage
 	isLast: boolean
-	onHeightChange?: (isTaller: boolean) => void
 	onSetQuote: (text: string) => void
 }
 
@@ -106,9 +105,8 @@ const headerStyle: CSSProperties = {
 
 const BrowserSessionRow = memo((props: BrowserSessionRowProps) => {
 	const { t } = useI18n()
-	const { messages, isLast, onHeightChange, lastModifiedMessage, onSetQuote } = props
+	const { messages, isLast, lastModifiedMessage, onSetQuote } = props
 	const { browserSettings } = useExtensionState()
-	const prevHeightRef = useRef(0)
 	const [maxActionHeight, setMaxActionHeight] = useState(0)
 	const [consoleLogsExpanded, setConsoleLogsExpanded] = useState(false)
 
@@ -350,7 +348,7 @@ const BrowserSessionRow = memo((props: BrowserSessionRowProps) => {
 	// Calculate maxWidth
 	const maxWidth = browserSettings.viewport.width < BROWSER_VIEWPORT_PRESETS["Small Desktop (900x600)"].width ? 200 : undefined
 
-	const [browserSessionRow, { height }] = useSize(
+	const [browserSessionRow] = useSize(
 		// We don't declare a constant for the inline style here because `useSize` will try to modify the style object
 		// Which will cause `Uncaught TypeError: Cannot assign to read only property 'position' of object '#<Object>'`
 		<BrowserSessionRowContainer style={{ marginBottom: -10 }}>
@@ -477,21 +475,10 @@ const BrowserSessionRow = memo((props: BrowserSessionRowProps) => {
 		</BrowserSessionRowContainer>,
 	)
 
-	// Height change effect
-	useEffect(() => {
-		const isInitialRender = prevHeightRef.current === 0
-		if (isLast && height !== 0 && height !== Infinity && height !== prevHeightRef.current) {
-			if (!isInitialRender) {
-				onHeightChange?.(height > prevHeightRef.current)
-			}
-			prevHeightRef.current = height
-		}
-	}, [height, isLast, onHeightChange])
-
 	return browserSessionRow
 }, deepEqual)
 
-interface BrowserSessionRowContentProps extends Omit<BrowserSessionRowProps, "messages" | "onHeightChange"> {
+interface BrowserSessionRowContentProps extends Omit<BrowserSessionRowProps, "messages"> {
 	message: SkycodeMessage
 	setMaxActionHeight: (height: number) => void
 	onSetQuote: (text: string) => void

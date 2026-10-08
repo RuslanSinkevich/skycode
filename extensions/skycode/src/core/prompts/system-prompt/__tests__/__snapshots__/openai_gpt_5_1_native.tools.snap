@@ -12,15 +12,33 @@
             "type": "string",
             "description": "The CLI command to execute. This should be valid for the current operating system. Ensure the command is properly formatted and does not contain any harmful instructions."
           },
-          "requires_approval": {
-            "type": "boolean",
-            "description": "A boolean indicating whether this command requires explicit user approval before execution in case the user has auto-approve mode enabled. Set to 'true' for potentially impactful operations like installing/uninstalling packages, deleting/overwriting files, system configuration changes, network operations, or any commands that could have unintended side effects. Set to 'false' for safe operations like reading files/directories, running development servers, building projects, and other non-destructive operations."
+          "timeout": {
+            "type": "integer",
+            "description": "Optional timeout in seconds. While the command runs the task is not blocked: after the timeout the command keeps running (in the background for standalone terminals, in the terminal for VSCode) and you get its background id — check it later with check_background_command. Default is 20s for the VSCode terminal and 120s for background execution. Increase for long builds/installs/tests (e.g. 300 for npm install, 600 for heavy builds)."
           }
         },
         "required": [
-          "command",
-          "requires_approval"
+          "command"
         ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "check_background_command",
+      "description": "Check the status and output of a background command. Use this to check on commands that were moved to the background after a timeout. If no id is provided, lists all tracked background commands. If an id is provided, returns the status, elapsed time, and last 50 lines of output for that specific command.",
+      "strict": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The background command ID to check (e.g. 'background-1712345678-abc123def'). If omitted, returns a list of all tracked background commands with their status."
+          }
+        },
+        "required": [],
         "additionalProperties": false
       }
     }

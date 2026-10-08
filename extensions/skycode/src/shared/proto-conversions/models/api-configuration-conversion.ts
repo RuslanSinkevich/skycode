@@ -269,6 +269,8 @@ function convertApiProviderToProto(provider: string | undefined): ProtoApiProvid
 			return ProtoApiProvider.QWEN
 		case "qwen-code":
 			return ProtoApiProvider.QWEN_CODE
+		case "qwen-web":
+			return ProtoApiProvider.QWEN_WEB
 		case "doubao":
 			return ProtoApiProvider.DOUBAO
 		case "mistral":
@@ -363,6 +365,8 @@ export function convertProtoToApiProvider(provider: ProtoApiProvider): ApiProvid
 			return "qwen"
 		case ProtoApiProvider.QWEN_CODE:
 			return "qwen-code"
+		case ProtoApiProvider.QWEN_WEB:
+			return "qwen-web"
 		case ProtoApiProvider.DOUBAO:
 			return "doubao"
 		case ProtoApiProvider.MISTRAL:
@@ -478,6 +482,7 @@ export function convertApiConfigurationToProto(config: ApiConfiguration): ProtoA
 		fireworksModelMaxTokens: config.fireworksModelMaxTokens,
 		qwenApiKey: config.qwenApiKey,
 		qwenCodeOauthPath: config.qwenCodeOauthPath,
+		qwenWebToken: config.qwenWebToken,
 		doubaoApiKey: config.doubaoApiKey,
 		mistralApiKey: config.mistralApiKey,
 		azureApiVersion: config.azureApiVersion,
@@ -656,6 +661,7 @@ export function convertProtoToApiConfiguration(protoConfig: ProtoApiConfiguratio
 		fireworksModelMaxTokens: protoConfig.fireworksModelMaxTokens,
 		qwenApiKey: protoConfig.qwenApiKey,
 		qwenCodeOauthPath: protoConfig.qwenCodeOauthPath,
+		qwenWebToken: protoConfig.qwenWebToken,
 		doubaoApiKey: protoConfig.doubaoApiKey,
 		mistralApiKey: protoConfig.mistralApiKey,
 		azureApiVersion: protoConfig.azureApiVersion,

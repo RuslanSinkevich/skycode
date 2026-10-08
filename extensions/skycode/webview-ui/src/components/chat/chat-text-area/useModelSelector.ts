@@ -55,7 +55,7 @@ export function useModelSelector({
 
 	const switchToMode = useCallback(
 		(targetMode: Mode) => {
-			if (targetMode === mode) return
+			if (targetMode === mode) { return }
 			let changeModeDelay = 0
 			if (showModelSelector) {
 				submitApiConfig()
@@ -110,7 +110,7 @@ export function useModelSelector({
 		} = getModeSpecificFields(apiConfiguration, mode)
 		const unknownModel = "unknown"
 
-		if (!apiConfiguration) return unknownModel
+		if (!apiConfiguration) { return unknownModel }
 		switch (selectedProvider) {
 			case "skycode":
 				return `${selectedProvider}:${selectedModelId}`

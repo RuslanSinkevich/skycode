@@ -4,10 +4,11 @@
 
 ## Требования
 
-- Node.js 20+
+- Node.js — ровно та версия, что указана в `vscode/.nvmrc` (24.18.0 на upstream 1.136.1).
+  `build/npm/preinstall.ts` проверяет её и отказывается ставить зависимости на более старой.
 - Python 3.x (для сборки нативных модулей VS Code)
 - C++ build tools (Visual Studio Build Tools на Windows)
-- Git
+- Git с установленным Git LFS
 
 ## Быстрый старт
 
@@ -16,15 +17,78 @@
 git clone https://github.com/RuslanSinkevich/skycode.git
 cd skycode/vscode
 
-# Установка зависимостей
+# Установка зависимостей (на Windows сначала прочитай раздел про тулсет ниже)
 npm install
 
 # Запуск в режиме разработки
 # Windows:
-.\scripts\code.bat
+.scriptscode.bat
 # macOS/Linux:
 ./scripts/code.sh
 ```
+
+## Windows: пин тулсета MSVC
+
+Любая команда, собирающая нативные модули, должна запускаться с пином `VCToolsVersion`:
+
+```bash
+VCToolsVersion=14.41.34120 npm ci
+```
+
+Electron 42 (upstream 1.123.2 и новее) требует Spectre-mitigated библиотек MSVC. Это
+необязательный компонент Visual Studio, и обычно он установлен только для **одного**
+тулсета, тогда как MSBuild по умолчанию берёт самый новый из найденных — сборка падает с
+`MSB8040: для этого проекта требуются библиотеки с устранением рисков Spectre`.
+
+Посмотреть, у каких тулсетов они реально есть:
+
+```bash
+ls "/c/Program Files/Microsoft Visual Studio/"*/*/VC/Tools/MSVC/*/lib/spectre
+```
+
+Пини `VCToolsVersion` на версию из этого списка. Доустановить Spectre-библиотеки для
+нового тулсета через Visual Studio Installer тоже можно, но это закачка на несколько
+гигабайт. Пин не сохраняется между запусками терминала — указывай его в той же команде
+каждый раз.
+
+## Переустановка зависимостей после мержа upstream
+
+`npm ci` чистит только **корневой** `node_modules`. У каждой папки внутри `extensions/`
+своё дерево, поэтому после смены версии upstream там остаются старые пакеты — обычно
+устаревший `@types/node`, из-за которого `npm run compile` падает в файлах, которых мерж
+вообще не касался.
+
+Обновить их:
+
+```bash
+VSCODE_FORCE_INSTALL=1 npm_command=install VCToolsVersion=14.41.34120 node build/npm/postinstall.ts
+```
+
+Обе переменные здесь обязательны:
+
+- `npm_command=install` — `build/npm/postinstall.ts` берёт подкоманду из
+  `process.env['npm_command']`. При запуске через `npm run postinstall` туда попадает
+  `run-script`, и скрипт выполняет в каждой папке `npm run-script`, который просто
+  печатает список доступных скриптов. Он завершается с кодом 0, не установив ничего.
+  Запуск файла напрямую через `node` — то, что позволяет явному значению уцелеть.
+- `VSCODE_FORCE_INSTALL=1` — обходит кеш актуальности в
+  `node_modules/.postinstall-state`. Прерванный запуск может оставить в этом кеше отметку,
+  что всё уже свежее.
+
+После этого проверь, что какое-нибудь расширение соответствует своему лок-файлу:
+
+```bash
+node -e "console.log(require('./extensions/git/node_modules/@types/node/package.json').version)"
+```
+
+## Полная сборка дистрибутива
+
+```bash
+VCToolsVersion=14.41.34120 npm run gulp vscode-win32-x64
+```
+
+Результат — в `../VSCode-win32-x64` (`Skycode.exe`, а не `code.exe`). Задача начинается с
+удаления этой папки, поэтому переименуй предыдущую сборку, если она ещё нужна.
 
 ## Сборка расширения
 

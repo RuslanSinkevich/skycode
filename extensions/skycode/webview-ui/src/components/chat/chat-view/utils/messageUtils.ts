@@ -785,7 +785,25 @@ export function groupLowStakesTools(groupedMessages: (SkycodeMessage | SkycodeMe
 		if (isLowStakesTool(message) && isEditTool(message)) {
 			// Commit current thinking block, show edit card, then continue accumulating
 			commitProcessBlock()
-			result.push(message) // Rendered as standalone edit card
+
+			// Collapse ONLY an immediately-preceding PARTIAL card of the same file —
+			// i.e. the still-streaming version of the very same edit that is now being
+			// finalized. Completed cards are never replaced, so every distinct edit
+			// (including repeated edits of the same file) stays as its own card in
+			// chronological order instead of jumping back into an earlier card.
+			const last = result[result.length - 1]
+			if (!Array.isArray(last) && last && last.partial === true && isEditTool(last)) {
+				try {
+					const newTool = JSON.parse(message.text || "{}") as SkycodeSayTool
+					const prevTool = JSON.parse(last.text || "{}") as SkycodeSayTool
+					if (newTool.path && prevTool.path === newTool.path && prevTool.tool === newTool.tool) {
+						result[result.length - 1] = message
+						continue
+					}
+				} catch { /* parse error — fall through to normal push */ }
+			}
+
+			result.push(message)
 			continue
 		}
 
@@ -871,7 +889,7 @@ export function groupByTurns(
 
 		if (msg?.say === "user_feedback") {
 			// Commit the previous turn (task-turn or earlier user_feedback turn)
-			if (currentTurn) turns.push(currentTurn)
+			if (currentTurn) { turns.push(currentTurn) }
 			// Start a new turn from this user message
 			currentTurn = { userMessage: msg, items: [], isTaskTurn: false }
 		} else if (currentTurn) {
@@ -880,7 +898,7 @@ export function groupByTurns(
 	}
 
 	// Commit the last turn
-	if (currentTurn) turns.push(currentTurn)
+	if (currentTurn) { turns.push(currentTurn) }
 
 	return turns
 }

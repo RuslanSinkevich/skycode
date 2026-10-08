@@ -193,12 +193,12 @@ describe("ThinkTagStreamParser", () => {
 
 		it("should not confuse <th with other tags like <thead>", () => {
 			const parser = new ThinkTagStreamParser()
-			let r = "", t = ""
+			let r = "", _t = ""
 
 			let out = parser.process("<th")
-			r += out.reasoning; t += out.text
+			r += out.reasoning; _t += out.text
 			out = parser.process("ead>")
-			r += out.reasoning; t += out.text
+			r += out.reasoning; _t += out.text
 
 			expect(r).to.equal("")
 			// Parser might buffer <th waiting for ink/inking — acceptable

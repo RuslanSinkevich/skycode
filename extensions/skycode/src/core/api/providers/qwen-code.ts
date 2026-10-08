@@ -12,6 +12,7 @@ import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
 import { getOpenAIToolParams, ToolCallProcessor } from "../transform/tool-call-processor"
+import { StreamAborter } from "../utils/abort-support"
 
 // --- Constants for Qwen OAuth2 ---
 const QWEN_OAUTH_BASE_URL = "https://chat.qwen.ai"
@@ -54,9 +55,14 @@ export class QwenCodeHandler implements ApiHandler {
 	private options: QwenCodeHandlerOptions
 	private credentials: QwenOAuthCredentials | null = null
 	private client: OpenAI | undefined
+	private aborter = new StreamAborter()
 
 	constructor(options: QwenCodeHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	private ensureClient(): OpenAI {
@@ -200,11 +206,14 @@ export class QwenCodeHandler implements ApiHandler {
 			...getOpenAIToolParams(tools),
 		}
 
-		const stream = await this.callApiWithRetry(() => client.chat.completions.create(requestOptions))
+		const signal = this.aborter.reset()
+		const stream = await this.callApiWithRetry(() => client.chat.completions.create(requestOptions, { signal }))
+		this.aborter.track(stream)
 
 		const toolCallProcessor = new ToolCallProcessor()
 		let fullContent = ""
 
+		try {
 		for await (const apiChunk of stream) {
 			const delta = apiChunk.choices[0]?.delta ?? {}
 
@@ -265,6 +274,9 @@ export class QwenCodeHandler implements ApiHandler {
 					outputTokens: apiChunk.usage.completion_tokens || 0,
 				}
 			}
+		}
+		} finally {
+			this.aborter.clear()
 		}
 	}
 

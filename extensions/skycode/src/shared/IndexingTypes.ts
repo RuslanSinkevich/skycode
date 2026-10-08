@@ -22,7 +22,7 @@ export interface IndexingConfig {
 
 /** Default indexing configuration */
 export const DEFAULT_INDEXING_CONFIG: IndexingConfig = {
-	mode: "local",
+	mode: "off",
 	localModel: "mini",
 	remoteApiUrl: "",
 	remoteApiKey: "",

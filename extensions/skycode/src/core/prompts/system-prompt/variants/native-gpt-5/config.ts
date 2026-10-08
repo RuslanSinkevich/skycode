@@ -60,6 +60,7 @@ export const config = createVariant(ModelFamily.NATIVE_GPT_5)
 	)
 	.tools(
 		SkycodeDefaultTool.BASH,
+		SkycodeDefaultTool.CHECK_BACKGROUND,
 		SkycodeDefaultTool.FILE_READ,
 		SkycodeDefaultTool.APPLY_PATCH,
 		SkycodeDefaultTool.EDIT_NOTEBOOK,

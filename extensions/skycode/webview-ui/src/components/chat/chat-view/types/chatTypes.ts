@@ -72,16 +72,29 @@ export interface MessageHandlers {
 }
 
 /**
+ * Why a row is being expanded or collapsed.
+ *
+ * Expanding by hand means the user wants to read something, so auto-scroll
+ * steps aside. When the app expands a row on its own (a command that runs
+ * long enough to be worth showing), auto-scroll must stay on — otherwise the
+ * chat silently stops following mid-answer.
+ */
+export interface RowExpansionOptions {
+	userInitiated?: boolean
+}
+
+export type ToggleRowExpansion = (ts: number, options?: RowExpansionOptions) => void
+
+/**
  * Scroll behavior interface
  */
 export interface ScrollBehavior {
 	scrollContainerRef: React.RefObject<HTMLDivElement>
 	disableAutoScrollRef: React.MutableRefObject<boolean>
 	scrollToBottomSmooth: () => void
-	scrollToBottomAuto: () => void
+	keepAtBottom: () => void
 	scrollToMessage: (messageIndex: number) => void
-	toggleRowExpansion: (ts: number) => void
-	handleRowHeightChange: (isTaller: boolean) => void
+	toggleRowExpansion: ToggleRowExpansion
 	showScrollToBottom: boolean
 	setShowScrollToBottom: React.Dispatch<React.SetStateAction<boolean>>
 	isAtBottom: boolean
@@ -89,6 +102,7 @@ export interface ScrollBehavior {
 	pendingScrollToMessage: number | null
 	setPendingScrollToMessage: React.Dispatch<React.SetStateAction<number | null>>
 	onScrollerRef: (ref: HTMLElement | null) => void
+	onFooterRef: (ref: HTMLElement | null) => void
 }
 
 /**

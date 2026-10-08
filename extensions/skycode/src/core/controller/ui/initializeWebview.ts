@@ -27,8 +27,20 @@ export async function initializeWebview(controller: Controller, _request: EmptyR
 			sendOpenRouterModelsEvent(OpenRouterCompatibleModelInfo.create({ models: lastCachedModels }))
 		}
 
+		// [SKYCODE] Списки моделей тянулись при каждом открытии панели у всех провайдеров сразу,
+		// даже если пользователь ими не пользуется — в логах это десятки ошибок сети подряд.
+		// Обновляем только то, что реально настроено; вебвью сам дозапросит список, когда
+		// пользователь откроет соответствующего провайдера в настройках.
+		// Пропуск оформлен как пустой промис, чтобы не переписывать тела обработчиков: они и так
+		// ничего не делают, когда моделей нет.
+		const apiConfig = controller.stateManager.getApiConfiguration()
+		const usesProvider = (...providers: string[]): boolean =>
+			providers.includes(apiConfig.planModeApiProvider as string) ||
+			providers.includes(apiConfig.actModeApiProvider as string)
+		const skipRefresh = Promise.resolve(undefined)
+
 		// Refresh OpenRouter models from API
-		refreshOpenRouterModels(controller).then(async (models) => {
+		;(usesProvider("openrouter", "skycode") ? refreshOpenRouterModels(controller) : skipRefresh).then(async (models) => {
 			if (models && Object.keys(models).length > 0) {
 				// Update model info in state (this needs to be done here since we don't want to update state while settings is open, and we may refresh models there)
 				const apiConfiguration = controller.stateManager.getApiConfiguration()
@@ -112,7 +124,7 @@ export async function initializeWebview(controller: Controller, _request: EmptyR
 			}
 		})
 
-		refreshBasetenModels(controller).then(async (models) => {
+		;(usesProvider("baseten") ? refreshBasetenModels(controller) : skipRefresh).then(async (models) => {
 			if (models && Object.keys(models).length > 0) {
 				// Update model info in state for Baseten (this needs to be done here since we don't want to update state while settings is open, and we may refresh models there)
 				const apiConfiguration = controller.stateManager.getApiConfiguration()
@@ -154,7 +166,7 @@ export async function initializeWebview(controller: Controller, _request: EmptyR
 		})
 
 		// Refresh Hicap models from API
-		refreshHicapModels(controller, EmptyRequest.create()).then(async (response) => {
+		;(usesProvider("hicap") ? refreshHicapModels(controller, EmptyRequest.create()) : skipRefresh).then(async (response) => {
 			if (response && response.models) {
 				// Update model info in state (this needs to be done here since we don't want to update state while settings is open, and we may refresh models there)
 				const apiConfiguration = controller.stateManager.getApiConfiguration()

@@ -20,7 +20,7 @@ function postIndexingConfigKey(key: string, value: any) {
 }
 
 /** Send indexing command to extension backend */
-function postIndexingCommand(command: "reindex" | "clear" | "pause" | "resume") {
+function postIndexingCommand(command: "reindex" | "clear" | "clearEmbeddingCache" | "pause" | "resume") {
 	PLATFORM_CONFIG.postMessage({
 		type: "indexingCommand",
 		indexingCommandAction: command,
@@ -174,6 +174,15 @@ const IndexingSettingsSection = ({ renderSectionHeader }: IndexingSettingsSectio
 								{t("indexing.localModel.reindexWarning")}
 							</p>
 						)}
+						<div className="mt-2">
+							<VSCodeButton
+								appearance="secondary"
+								disabled={isIndexing}
+								onClick={() => postIndexingCommand("clearEmbeddingCache")}>
+								{t("indexing.clearEmbeddingCache")}
+							</VSCodeButton>
+							<p className="text-xs text-description mt-1">{t("indexing.clearEmbeddingCacheHint")}</p>
+						</div>
 					</div>
 				)}
 

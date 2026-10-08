@@ -4,7 +4,7 @@ import BrowserSessionRow from "@/components/chat/BrowserSessionRow"
 import ChatRow from "@/components/chat/ChatRow"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { cn } from "@/lib/utils"
-import { MessageHandlers } from "../../types/chatTypes"
+import { MessageHandlers, ToggleRowExpansion } from "../../types/chatTypes"
 import { findReasoningForApiReq, isEditTool, isProcessBlock, isTextMessagePendingToolCall } from "../../utils/messageUtils"
 import { EditCard } from "./EditCard"
 import { ProcessBlock } from "./ProcessBlock"
@@ -16,8 +16,7 @@ interface MessageRendererProps {
 	isLastMessage: boolean
 	modifiedMessages: SkycodeMessage[]
 	expandedRows: Record<number, boolean>
-	onToggleExpand: (ts: number) => void
-	onHeightChange?: (isTaller: boolean) => void
+	onToggleExpand: ToggleRowExpansion
 	onSetQuote: (quote: string | null) => void
 	inputValue: string
 	messageHandlers: MessageHandlers
@@ -33,12 +32,11 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
 	modifiedMessages,
 	expandedRows,
 	onToggleExpand,
-	onHeightChange,
 	onSetQuote,
 	inputValue,
 	messageHandlers,
 }) => {
-	const { mode } = useExtensionState()
+	const { mode: currentMode } = useExtensionState()
 
 	// Get reasoning content and response status for api_req_started messages
 	const reasoningData = useMemo(() => {
@@ -65,7 +63,6 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
 				isLast={isLastMessage}
 				lastModifiedMessage={modifiedMessages.at(-1)}
 				messages={messageOrGroup}
-				onHeightChange={onHeightChange}
 			/>
 		)
 	}
@@ -84,14 +81,15 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
 				key={messageOrGroup[0]?.ts}
 				lastModifiedMessage={modifiedMessages.at(-1)}
 				messages={messageOrGroup}
-				onHeightChange={onHeightChange}
 				onSetQuote={onSetQuote}
 				onToggleExpand={onToggleExpand}
 			/>
 		)
 	}
 
-	// Regular message
+	// Regular message — use mode captured on the message (same as model/provider at send time), not the global toggle
+	const rowMode = messageOrGroup.modelInfo?.mode ?? currentMode
+
 	return (
 		<div
 			className={cn({
@@ -106,9 +104,8 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
 				key={messageOrGroup.ts}
 				lastModifiedMessage={modifiedMessages.at(-1)}
 				message={messageOrGroup}
-				mode={mode}
+				mode={rowMode}
 				onCancelCommand={() => messageHandlers.executeButtonAction("cancel")}
-				onHeightChange={onHeightChange}
 				onSetQuote={onSetQuote}
 				onToggleExpand={onToggleExpand}
 				reasoningContent={reasoningData.reasoning}

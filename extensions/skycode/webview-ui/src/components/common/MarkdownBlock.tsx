@@ -6,6 +6,7 @@ import React, { memo, useEffect, useRef, useState } from "react"
 import { useRemark } from "react-remark"
 import rehypeHighlight, { Options } from "rehype-highlight"
 import rehypeRaw from "rehype-raw"
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize"
 import type { Node } from "unist"
 import { visit } from "unist-util-visit"
 import MermaidBlock from "@/components/common/MermaidBlock"
@@ -341,8 +342,8 @@ function convertMarkdownTablesToHtml(md: string): string {
 				const alignCells = parsePipeLine(tableLines[1])
 				const aligns = alignCells.map((cell) => {
 					const trimmed = cell.trim()
-					if (trimmed.startsWith(":") && trimmed.endsWith(":")) return "center"
-					if (trimmed.endsWith(":")) return "right"
+					if (trimmed.startsWith(":") && trimmed.endsWith(":")) { return "center" }
+					if (trimmed.endsWith(":")) { return "right" }
 					return "left"
 				})
 
@@ -381,8 +382,8 @@ function convertMarkdownTablesToHtml(md: string): string {
 
 function parsePipeLine(line: string): string[] {
 	let trimmed = line.trim()
-	if (trimmed.startsWith("|")) trimmed = trimmed.slice(1)
-	if (trimmed.endsWith("|")) trimmed = trimmed.slice(0, -1)
+	if (trimmed.startsWith("|")) { trimmed = trimmed.slice(1) }
+	if (trimmed.endsWith("|")) { trimmed = trimmed.slice(0, -1) }
 	return trimmed.split("|")
 }
 
@@ -423,6 +424,21 @@ const MarkdownBlock = memo(({ markdown, compact, showCursor }: MarkdownBlockProp
 		],
 		rehypePlugins: [
 			rehypeRaw as any,
+			// Sanitize the raw HTML that rehype-raw parsed.
+			// Model output can contain arbitrary HTML — this strips scripts, event handlers,
+			// javascript: URLs, dangerous tags, etc., while keeping useful formatting.
+			[
+				rehypeSanitize,
+				{
+					...defaultSchema,
+					attributes: {
+						...defaultSchema.attributes,
+						// Preserve syntax-highlight classes added by rehype-highlight below.
+						code: [...(defaultSchema.attributes?.code || []), ["className", /^language-/, /^hljs(-.*)?$/]],
+						span: [...(defaultSchema.attributes?.span || []), ["className", /^hljs(-.*)?$/]],
+					},
+				},
+			] as any,
 			rehypeHighlight as any,
 			{
 				// languages: {},

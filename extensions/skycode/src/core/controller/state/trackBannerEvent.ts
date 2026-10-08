@@ -1,4 +1,3 @@
-import { BannerService } from "@/services/banner/BannerService"
 import { Empty } from "@/shared/proto/skycode/common"
 import type { TrackBannerEventRequest } from "@/shared/proto/skycode/state"
 import { Logger } from "@/shared/services/Logger"
@@ -18,11 +17,6 @@ export async function trackBannerEvent(_controller: Controller, request: TrackBa
 	if (eventType !== "dismiss") {
 		Logger.error("Unsupported event type ", eventType)
 		return {}
-	}
-	try {
-		await BannerService.get().sendBannerEvent(bannerId, eventType)
-	} catch (error) {
-		Logger.error("Failed to track banner event:", error)
 	}
 	return {}
 }

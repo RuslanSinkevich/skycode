@@ -24,7 +24,10 @@
 		"rootDir": "."
 	},
 	"include": [
-		"src/**/*.test.ts"
+		"src/**/*.test.ts",
+		// [SKYCODE] Без объявлений proposed-API сборка тестов падала на diff-v2:
+		// InlineDiffRenderer использует WebviewEditorInset, а тут его типов не было.
+		"src/vscode.proposed.editorInsets.d.ts"
 	],
 	"exclude": [
 		"src/test/**/*.js",

@@ -7,6 +7,7 @@
  */
 
 import React, { useCallback, useState } from "react"
+import { useI18n } from "@/i18n"
 import type { PendingApproval } from "../../hooks/useSession"
 
 interface ApprovalBarProps {
@@ -20,11 +21,12 @@ interface ApprovalBarProps {
  * Each approval card shows tool info and approve/reject buttons.
  */
 export const ApprovalBar: React.FC<ApprovalBarProps> = ({ approvals, onApprove, onReject }) => {
+	const { t } = useI18n()
 	const [processingId, setProcessingId] = useState<string | null>(null)
 
 	const handleApprove = useCallback(
 		(id: string) => {
-			if (processingId) return
+			if (processingId) { return }
 			setProcessingId(id)
 			onApprove(id)
 			// Reset after a short delay (backend will remove from approvals via event)
@@ -35,7 +37,7 @@ export const ApprovalBar: React.FC<ApprovalBarProps> = ({ approvals, onApprove, 
 
 	const handleReject = useCallback(
 		(id: string) => {
-			if (processingId) return
+			if (processingId) { return }
 			setProcessingId(id)
 			onReject(id)
 			setTimeout(() => setProcessingId(null), 500)
@@ -43,7 +45,7 @@ export const ApprovalBar: React.FC<ApprovalBarProps> = ({ approvals, onApprove, 
 		[onReject, processingId],
 	)
 
-	if (approvals.length === 0) return null
+	if (approvals.length === 0) { return null }
 
 	return (
 		<div className="flex flex-col gap-1 px-4 py-2">
@@ -63,14 +65,14 @@ export const ApprovalBar: React.FC<ApprovalBarProps> = ({ approvals, onApprove, 
 							disabled={processingId === approval.id}
 							onClick={() => handleApprove(approval.id)}
 						>
-							{approval.primaryText ?? "Approve"}
+							{approval.primaryText ?? t("button.approve")}
 						</button>
 						<button
 							className="px-3 py-1 text-xs rounded bg-(--vscode-button-secondaryBackground) text-(--vscode-button-secondaryForeground) hover:bg-(--vscode-button-secondaryHoverBackground) disabled:opacity-50"
 							disabled={processingId === approval.id}
 							onClick={() => handleReject(approval.id)}
 						>
-							{approval.secondaryText ?? "Reject"}
+							{approval.secondaryText ?? t("button.reject")}
 						</button>
 					</div>
 				</div>

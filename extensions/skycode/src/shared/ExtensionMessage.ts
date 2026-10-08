@@ -138,6 +138,8 @@ export interface ExtensionState {
 	// Skycode AI: Codebase indexing
 	indexingConfig?: IndexingConfig
 	indexingProgress?: IndexingProgress
+	/** User dismissed the first-run indexing opt-in banner */
+	indexingPromptDismissed?: boolean
 	// Skycode AI: Pending changes for inline diffs
 	pendingChanges?: PendingChangeInfo[]
 	optOutOfRemoteConfig?: boolean
@@ -148,6 +150,11 @@ export interface ExtensionState {
 	freeRequestLimit?: number
 	// Multi-step workflow
 	activeWorkflowName?: string
+	// Session Budget
+	sessionBudgetMode?: "auto" | "strong" | "medium" | "weak" | "custom"
+	customMaxToolCallsPerTurn?: number
+	customMaxConsecutiveReadOnlyTools?: number
+	customForceCompactAfterSteps?: number
 }
 
 export interface SkycodeMessage {
@@ -243,11 +250,14 @@ export interface SkycodeSayTool {
 		| "summarizeTask"
 		| "useSkill"
 		| "command"
+		| "check_background_command"
 	path?: string
 	diff?: string
 	content?: string
 	regex?: string
 	filePattern?: string
+	/** Background command id shown by the check_background_command row */
+	id?: string
 	operationIsLocatedInWorkspace?: boolean
 	/** Starting line numbers in the original file where each SEARCH block matched */
 	startLineNumbers?: number[]

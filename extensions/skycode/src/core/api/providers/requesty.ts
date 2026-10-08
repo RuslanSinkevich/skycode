@@ -8,6 +8,7 @@ import { ApiHandler, CommonApiHandlerOptions } from "../index"
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
+import { StreamAborter } from "../utils/abort-support"
 
 interface RequestyHandlerOptions extends CommonApiHandlerOptions {
 	requestyBaseUrl?: string
@@ -31,9 +32,14 @@ interface RequestyUsage extends OpenAI.CompletionUsage {
 export class RequestyHandler implements ApiHandler {
 	private options: RequestyHandlerOptions
 	private client: OpenAI | undefined
+	private aborter = new StreamAborter()
 
 	constructor(options: RequestyHandlerOptions) {
 		this.options = options
+	}
+
+	abort(): void {
+		this.aborter.abort()
 	}
 
 	private ensureClient(): OpenAI {
@@ -85,6 +91,7 @@ export class RequestyHandler implements ApiHandler {
 				? thinking
 				: {}
 
+		const signal = this.aborter.reset()
 		const stream = await client.chat.completions.create({
 			model: model.id,
 			max_tokens: model.info.maxTokens || undefined,
@@ -94,10 +101,14 @@ export class RequestyHandler implements ApiHandler {
 			stream_options: { include_usage: true },
 			...reasoningArgs,
 			...thinkingArgs,
-		})
+		},
+			{ signal },
+		)
+		this.aborter.track(stream)
 
 		let lastUsage: any
 
+		try {
 		for await (const chunk of stream) {
 			const delta = chunk.choices?.[0]?.delta
 			if (delta?.content) {
@@ -117,6 +128,9 @@ export class RequestyHandler implements ApiHandler {
 			if (chunk.usage) {
 				lastUsage = chunk.usage
 			}
+		}
+		} finally {
+			this.aborter.clear()
 		}
 
 		if (lastUsage) {

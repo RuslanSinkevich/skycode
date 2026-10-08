@@ -73,8 +73,8 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 
 	const modalBanner = useMemo(() => {
 		const modal = (banners ?? []).find((b) => b.placement === "modal")
-		if (!modal) return null
-		if (modal.id === dismissedModalId) return null
+		if (!modal) { return null }
+		if (modal.id === dismissedModalId) { return null }
 		return modal
 	}, [banners, dismissedModalId])
 
@@ -143,10 +143,13 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		textAreaRef,
 	} = chatState
 
-	// AI is "working" - heuristic based on message state
+	// AI is "working" - heuristic based on message state.
+	// Conservative: only return true when we KNOW the stream is alive.
+	// Returning true while AI is actually idle (no partial, no api_req, no ask)
+	// causes messages to be silently queued for an event that never arrives —
+	// users perceive it as "extension reloaded, my message vanished".
 	// NOTE: session.isWorking disabled — session infra is Step 1 (adapter),
 	// frontend subscribes AFTER backend emits "running", so it always misses the event.
-	// Will be re-enabled when session pipeline is fully wired (Step 6+).
 	const isAiWorking = useMemo(() => {
 		if (messages.length <= 1) {
 			return false
@@ -155,16 +158,20 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		if (!lastMessage) {
 			return false
 		}
+		// Streaming partial message → definitely working
 		if (lastMessage.partial === true) {
 			return true
 		}
+		// Inflight API request (latest api_req_started without finished marker)
 		if (lastMessage.type === "say" && lastMessage.say === "api_req_started") {
 			return true
 		}
-		// No skycodeAsk = AI processing between states
-		if (!chatState.skycodeAsk && messages.length > 1) {
-			return true
+		// AI is asking for input → it's NOT working, it's waiting for user
+		if (chatState.skycodeAsk) {
+			return false
 		}
+		// Tool/text/etc. finalized and no ask → AI finished the turn.
+		// Treat as idle so the input box can send directly instead of silently queuing.
 		return false
 	}, [messages, chatState.skycodeAsk])
 
@@ -368,7 +375,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 	})
 
 	useEffect(() => {
-		let id = requestAnimationFrame(() => {
+		const id = requestAnimationFrame(() => {
 			if (!isHidden && !sendingDisabled && !enableButtons) {
 				textAreaRef.current?.focus()
 			}
@@ -411,8 +418,22 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 	}, [task, isHidden])
 
 	const visibleMessages = useMemo(() => {
-		return filterVisibleMessages(modifiedMessages)
-	}, [modifiedMessages])
+		const filtered = filterVisibleMessages(modifiedMessages)
+		if (messageQueue.queue.length === 0) {
+			return filtered
+		}
+		const phantoms: SkycodeMessage[] = messageQueue.queue.map((qm) => ({
+			ts: Number(qm.id.split("-")[0]) || Date.now(),
+			type: "say",
+			say: "user_feedback" as const,
+			text: qm.text,
+			images: qm.images,
+			files: qm.files,
+			partial: false,
+			pending: true,
+		}))
+		return [...filtered, ...phantoms]
+	}, [modifiedMessages, messageQueue.queue])
 
 	const lastProgressMessageText = useMemo(() => {
 		// First check if we have a current focus chain list from the extension state

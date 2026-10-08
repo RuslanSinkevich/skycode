@@ -6,7 +6,7 @@ Thanks for your interest in contributing! This document explains how to get star
 
 ### Prerequisites
 
-- **Node.js** 20+
+- **Node.js** — the exact version in `vscode/.nvmrc`
 - **Python** 3.x (for native module builds)
 - **C++ Build Tools** (Visual Studio Build Tools on Windows, Xcode on macOS)
 - **Git**

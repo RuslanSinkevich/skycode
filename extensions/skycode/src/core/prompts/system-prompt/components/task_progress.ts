@@ -18,7 +18,6 @@ You can track and communicate your progress on the overall task using the task_p
 Example:
 <execute_command>
 <command>npm install react</command>
-<requires_approval>false</requires_approval>
 <task_progress>
 - [x] Set up project structure
 - [x] Install dependencies

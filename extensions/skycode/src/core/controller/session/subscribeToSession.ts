@@ -78,10 +78,14 @@ export async function subscribeToSession(
  */
 export function sendSessionEvent(sessionId: string, event: SessionEvent): void {
 	const subscribers = activeSessionSubscriptions.get(sessionId)
-	if (!subscribers || subscribers.size === 0) return
+	if (!subscribers || subscribers.size === 0) {
+		return
+	}
 
 	const protoEvent = convertSessionEventToProto(sessionId, event)
-	if (!protoEvent) return
+	if (!protoEvent) {
+		return
+	}
 
 	for (const handler of subscribers) {
 		handler(protoEvent, false).catch((error) => {
