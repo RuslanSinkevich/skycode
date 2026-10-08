@@ -38,6 +38,13 @@ export interface EnvironmentDetailsContext {
 	messageStateHandler: MessageStateHandler
 	api: ApiHandler
 	backgroundCommandSummary?: string
+	/**
+	 * [SKYCODE] Правила пользователя с `priority: critical`, уже усечённые.
+	 * Печатаются рядом с `# Current Mode`: напоминание о режиме стоит возле последней реплики
+	 * пользователя, а правила — один раз в конце системного промпта, и при конфликте модель
+	 * выбирала то, что ближе. Теперь критичные правила так же близко.
+	 */
+	criticalRulesReminder?: string
 }
 
 function formatWorkspaceRootsSection(ctx: EnvironmentDetailsContext): string {
@@ -332,6 +339,12 @@ export async function buildEnvironmentDetails(
 		default:
 			details += "\nACT MODE"
 			break
+	}
+
+	// [SKYCODE] Сразу после режима — критичные правила пользователя. Порядок важен: правило
+	// должно стоять ПОСЛЕ названия режима, чтобы при конфликте последним прочитанным было оно.
+	if (ctx.criticalRulesReminder) {
+		details += `\n\n# User's Critical Rules (always apply, including in the mode above)\n${ctx.criticalRulesReminder}`
 	}
 
 	return `<environment_details>\n${details.trim()}\n</environment_details>`

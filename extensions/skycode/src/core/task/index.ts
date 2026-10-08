@@ -150,6 +150,11 @@ export class Task {
 	private taskIsFavorited?: boolean
 	private cwd: string
 	private taskInitializationStartTime: number
+	/**
+	 * [SKYCODE] Правила, помеченные `priority: critical`, в усечённом виде.
+	 * Повторяются в environment_details каждое сообщение — см. место их чтения ниже.
+	 */
+	private criticalRulesReminder?: string
 
 	taskState: TaskState
 
@@ -1925,6 +1930,10 @@ export class Task {
 		const globalSkycodeRulesFilePath = await ensureRulesDirectoryExists()
 		const globalRules = await getGlobalSkycodeRules(globalSkycodeRulesFilePath, globalToggles, { evaluationContext })
 		const globalSkycodeRulesFileInstructions = globalRules.instructions
+		// [SKYCODE] Правила с `priority: critical` дублируем в environment_details рядом с
+		// `# Current Mode`, иначе они проигрывают напоминанию о режиме: то стоит возле последней
+		// реплики пользователя, а правила — один раз в конце системного промпта.
+		this.criticalRulesReminder = truncateCriticalRules(globalRules.criticalContent)
 
 		const localRules = await getLocalSkycodeRules(this.cwd, localToggles, { evaluationContext })
 		const localSkycodeRulesFileInstructions = localRules.instructions
@@ -3499,8 +3508,30 @@ export class Task {
 				messageStateHandler: this.messageStateHandler,
 				api: this.api,
 				backgroundCommandSummary,
+				criticalRulesReminder: this.criticalRulesReminder,
 			},
 			includeFileDetails,
 		)
 	}
+}
+
+/**
+ * [SKYCODE] Обрезает повтор критичных правил. Повтор уходит в КАЖДОЕ сообщение, поэтому размер
+ * ограничен: у пользователя может быть десяток файлов правил на десятки килобайт, и если пометить
+ * критичными много, каждый запрос раздуется. Режем по границе строки, чтобы не обрывать на полуслове.
+ */
+const CRITICAL_RULES_MAX_CHARS = 1500
+
+function truncateCriticalRules(content?: string): string | undefined {
+	const trimmed = content?.trim()
+	if (!trimmed) {
+		return undefined
+	}
+	if (trimmed.length <= CRITICAL_RULES_MAX_CHARS) {
+		return trimmed
+	}
+	const head = trimmed.slice(0, CRITICAL_RULES_MAX_CHARS)
+	const lastBreak = head.lastIndexOf("\n")
+	const cut = lastBreak > CRITICAL_RULES_MAX_CHARS / 2 ? head.slice(0, lastBreak) : head
+	return `${cut.trimEnd()}\n…`
 }

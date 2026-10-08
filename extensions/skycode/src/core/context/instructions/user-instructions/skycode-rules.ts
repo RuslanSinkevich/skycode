@@ -24,6 +24,8 @@ export const getGlobalSkycodeRules = async (
 	opts?: { evaluationContext?: RuleEvaluationContext },
 ): Promise<RuleLoadResultWithInstructions> => {
 	let combinedContent = ""
+	/** [SKYCODE] Правила с `priority: critical` — повторяются в environment_details каждое сообщение. */
+	let criticalContent: string | undefined
 	const activatedConditionalRules: ActivatedConditionalRule[] = []
 
 	// 1. Get file-based rules
@@ -45,6 +47,7 @@ export const getGlobalSkycodeRules = async (
 					combinedContent = rulesFilesTotal.content
 					activatedConditionalRules.push(...rulesFilesTotal.activatedConditionalRules)
 				}
+				criticalContent = rulesFilesTotal.criticalContent
 			} catch {
 				Logger.error(`Failed to read .skycoderules directory at ${globalSkycodeRulesFilePath}`)
 			}
@@ -69,12 +72,13 @@ export const getGlobalSkycodeRules = async (
 
 	// 3. Return formatted instructions
 	if (!combinedContent) {
-		return { instructions: undefined, activatedConditionalRules: [] }
+		return { instructions: undefined, activatedConditionalRules: [], criticalContent }
 	}
 
 	return {
 		instructions: formatResponse.skycodeRulesGlobalDirectoryInstructions(globalSkycodeRulesFilePath, combinedContent),
 		activatedConditionalRules,
+		criticalContent,
 	}
 }
 
