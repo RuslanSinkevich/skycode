@@ -1,14 +1,14 @@
-> **Русская версия:** [adding-tools.md](../ru/development/adding-tools.md)
+> **English version:** [adding-tools.md](../en/development/adding-tools.md)
 
-# Adding Agent Tools
+# Добавление инструментов агента
 
-Guide to adding new tools to the Skycode AI agent.
+Руководство по добавлению новых инструментов в AI-агент Skycode.
 
-## Overview
+## Обзор
 
-Tools are actions the AI agent can perform: reading files, executing commands, editing code, searching the codebase, etc.
+Инструменты — это действия, которые AI-агент может выполнять: чтение файлов, выполнение команд, редактирование кода, поиск по кодовой базе и т.д.
 
-## Tool Structure
+## Структура инструмента
 
 ```typescript
 // src/core/prompts/system-prompt/tools/my_tool.ts
@@ -22,24 +22,24 @@ const generic: SkycodeToolSpec = {
   variant: ModelFamily.GENERIC,
   id,
   name: "my_tool",
-  description: "Does X when Y is needed",
+  description: "Делает X, когда нужно Y",
   parameters: [
     {
       name: "required_param",
       required: true,
-      instruction: "What this parameter is for",
+      instruction: "Для чего нужен этот параметр",
       usage: "example_value"
     }
   ],
-  contextRequirements: (ctx) => ctx.someCondition // optional
+  contextRequirements: (ctx) => ctx.someCondition // необязательно
 }
 
 export const my_tool_variants = [generic]
 ```
 
-## Step-by-Step
+## Пошаговая инструкция
 
-### Step 1: Add ID to the enum
+### Шаг 1: Добавить ID в enum
 
 ```typescript
 // src/shared/tools.ts
@@ -48,18 +48,18 @@ export enum SkycodeDefaultTool {
 }
 ```
 
-### Step 2: Create the tool spec file
+### Шаг 2: Создать файл спецификации
 
-Create `src/core/prompts/system-prompt/tools/my_tool.ts` with the structure above.
+Создайте `src/core/prompts/system-prompt/tools/my_tool.ts` со структурой выше.
 
-### Step 3: Export
+### Шаг 3: Экспортировать
 
 ```typescript
 // src/core/prompts/system-prompt/tools/index.ts
 export * from "./my_tool"
 ```
 
-### Step 4: Register variants
+### Шаг 4: Зарегистрировать варианты
 
 ```typescript
 // src/core/prompts/system-prompt/tools/init.ts
@@ -73,7 +73,7 @@ export function registerSkycodeToolSets(): void {
 }
 ```
 
-### Step 5: Add to model variant configs
+### Шаг 5: Добавить в конфиги вариантов моделей
 
 ```typescript
 // src/core/prompts/system-prompt/variants/generic/config.ts
@@ -82,7 +82,7 @@ export const config = createVariant(ModelFamily.GENERIC)
   .build()
 ```
 
-### Step 6: Create the handler
+### Шаг 6: Создать обработчик
 
 ```typescript
 // src/core/task/tools/handlers/MyToolHandler.ts
@@ -101,29 +101,30 @@ export class MyToolHandler implements IFullyManagedTool {
 }
 ```
 
-Two handler types:
-- **`IFullyManagedTool`** — handler manages its own UI (ask/say). Most tools use this.
-- **`IToolHandler` + `IPartialBlockHandler`** — for tools that process partial blocks during streaming.
+Два типа обработчиков:
 
-### Step 7: Register the handler
+- **`IFullyManagedTool`** — обработчик сам управляет UI (ask/say). Большинство инструментов.
+- **`IToolHandler` + `IPartialBlockHandler`** — для инструментов, обрабатывающих частичные блоки при стриминге.
+
+### Шаг 7: Зарегистрировать обработчик
 
 ```typescript
 // src/core/task/ToolExecutor.ts
 this.coordinator.register(new MyToolHandler())
 ```
 
-### Step 8: Add parameters to the parser
+### Шаг 8: Добавить параметры в парсер
 
 ```typescript
 // src/core/assistant-message/index.ts
 export const toolParamNames = [
-  "input",  // your new parameter
+  "input",  // ваш новый параметр
 ] as const
 ```
 
-## Approval Flow
+## Поток подтверждения (Approval Flow)
 
-For tools that perform dangerous actions (delete, write, execute):
+Для инструментов, выполняющих опасные действия (удаление, запись, выполнение команд):
 
 ```typescript
 const autoApproveResult = config.autoApprover
@@ -138,31 +139,31 @@ if (!didAutoApprove) {
 }
 ```
 
-## Model-Specific Variants
+## Варианты для разных моделей
 
 ```typescript
 const generic: SkycodeToolSpec = {
   variant: ModelFamily.GENERIC,
-  // base version
+  // базовая версия
 }
 
 const nextGen: SkycodeToolSpec = {
   ...generic,
   variant: ModelFamily.NEXT_GEN,
-  description: "Extended description for capable models..."
+  description: "Расширенное описание для более способных моделей..."
 }
 
 export const my_tool_variants = [generic, nextGen]
 ```
 
-## Existing Tools
+## Существующие инструменты
 
-| Tool | File | Purpose |
-|------|------|---------|
-| `read_file` | `read_file.ts` | Read files |
-| `write_to_file` | `write_to_file.ts` | Create files |
-| `replace_in_file` | `replace_in_file.ts` | Edit files |
-| `execute_command` | `execute_command.ts` | Run commands |
-| `delete_block` | `delete_block.ts` | Delete code blocks |
-| `codebase_search` | `codebase_search.ts` | Semantic search |
-| `edit_notebook` | `edit_notebook.ts` | Jupyter notebook editing |
+| Инструмент | Файл | Назначение |
+|------------|------|------------|
+| `read_file` | `read_file.ts` | Чтение файлов |
+| `write_to_file` | `write_to_file.ts` | Создание файлов |
+| `replace_in_file` | `replace_in_file.ts` | Редактирование файлов |
+| `execute_command` | `execute_command.ts` | Запуск команд |
+| `delete_block` | `delete_block.ts` | Удаление блоков кода |
+| `codebase_search` | `codebase_search.ts` | Семантический поиск |
+| `edit_notebook` | `edit_notebook.ts` | Редактирование Jupyter-ноутбуков |

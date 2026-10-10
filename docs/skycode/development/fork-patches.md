@@ -1,54 +1,65 @@
-> **Русская версия:** [fork-patches.md](../ru/development/fork-patches.md)
+> **English version:** [fork-patches.md](../en/development/fork-patches.md)
 
-# VS Code Fork Patches
+# Патчи форка VS Code
 
-All modifications to the VS Code core are marked with `SKYCODE_FORK_BEGIN` / `SKYCODE_FORK_END` or `[SKYCODE]` comments.
+Все изменения в ядре VS Code помечены комментариями `SKYCODE_FORK_BEGIN` / `SKYCODE_FORK_END` или `[SKYCODE]`.
 
-To find all patches: `git grep "SKYCODE_FORK\|[SKYCODE]" -- src/ build/`
+Найти все патчи: `git grep "SKYCODE_FORK\|[SKYCODE]" -- src/ build/`
 
-## Modified Core Files
+## Изменённые файлы ядра
 
-### 1. `product.json` — Branding & Configuration
+### 1. `product.json` — брендинг и конфигурация
+
 - `nameShort` / `nameLong` → "Skycode"
 - `applicationName` → "skycode", `dataFolderName` → ".skycode"
-- `extensionAllowedProposedApi` → `["skycode.skycode"]` (for editorInsets)
-- `defaultChatAgent` → points to disabled placeholder (disables Copilot)
+- `extensionAllowedProposedApi` → `["skycode.skycode"]` (для editorInsets)
+- `defaultChatAgent` → указывает на отключённый заглушечный агент (отключает Copilot)
 
 ### 2. `src/vs/workbench/contrib/chat/browser/chatParticipant.contribution.ts`
-Disabled the built-in Copilot Chat view. Container renamed to "Skycode", Copilot view descriptor commented out. The container remains in the AuxiliaryBar for the Skycode webview.
 
-**Merge risk: HIGH** — Microsoft actively develops the chat feature.
+Отключено встроенное представление Copilot Chat. Контейнер переименован в "Skycode", дескриптор представления Copilot закомментирован. Контейнер остаётся в AuxiliaryBar для webview Skycode.
 
-### 3. `src/main.ts` — Default Locale
-Default locale set to `ru` with auto-patching of `argv.json`.
+**Риск при мерже: высокий** — Microsoft активно развивает чат.
 
-### 4. `src/vs/base/node/nls.ts` — Language Pack Bootstrap
-Auto-generates `languagepacks.json` from the built-in language pack on first launch. Eliminates the "first launch in English, needs restart" problem.
+### 3. `src/main.ts` — локаль по умолчанию
+
+Локаль по умолчанию — `ru`, с автопатчем `argv.json`.
+
+### 4. `src/vs/base/node/nls.ts` — загрузка language pack
+
+Автоматически генерирует `languagepacks.json` из встроенного language pack при первом запуске. Убирает проблему «первый запуск на английском, нужен перезапуск».
 
 ### 5. `src/vs/workbench/api/browser/viewsExtensionPoint.ts`
-Added fallback in `getViewContainer()` to resolve core containers by direct ID. Without this, extensions can't register views in core containers like `workbench.panel.chat`.
+
+В `getViewContainer()` добавлен fallback: разрешение core-контейнеров по прямому ID. Без этого расширения не могут регистрировать представления в core-контейнерах вроде `workbench.panel.chat`.
 
 ### 6. `src/vs/workbench/api/common/extHostCodeInsets.ts`
-Fixed View Zone inset positioning (removed `+1` to `line` parameter). Without this fix, diff Accept/Reject buttons render one line below the correct position.
+
+Исправлено позиционирование View Zone inset (убран `+1` у параметра `line`). Без этого кнопки Accept/Reject в diff рисуются на строку ниже нужной.
 
 ### 7. `src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupContributions.ts`
-Disabled the Copilot Code Actions Provider (Fix, Explain, Generate from error hovers).
+
+Отключён Copilot Code Actions Provider (Fix, Explain, Generate из ховеров ошибок).
 
 ### 8. `src/vs/editor/contrib/hover/browser/markerHoverParticipant.ts`
-Removed the "✨ Fix (Ctrl+I)" button from error hovers. Skycode uses Quick Fix menu instead.
+
+Убрана кнопка "✨ Fix (Ctrl+I)" из ховеров ошибок. Skycode использует меню Quick Fix.
 
 ### 9. `build/filters.ts`
-Excluded `extensions/skycode/**` from upstream copyright header checks.
+
+Исключён `extensions/skycode/**` из проверок upstream copyright header.
 
 ### 10. `build/hygiene.ts`
-Allowed Unicode in comments (Cyrillic) by stripping comments before the Unicode check.
 
-## Added Extensions
+Разрешён Unicode в комментариях (кириллица): комментарии вырезаются перед проверкой Unicode.
+
+## Добавленные расширения
 
 ### `extensions/vscode-language-pack-ru/`
-Built-in Russian language pack. Activated automatically via `bootstrapBuiltInLanguagePack()` in `nls.ts`. Works from first launch without restart.
 
-## Updating Upstream
+Встроенный русский language pack. Активируется автоматически через `bootstrapBuiltInLanguagePack()` в `nls.ts`. Работает с первого запуска без перезапуска.
+
+## Обновление upstream
 
 ```bash
 git remote add upstream https://github.com/microsoft/vscode.git
@@ -56,16 +67,16 @@ git fetch upstream --tags
 git checkout -b merge/1.110.0
 git merge 1.110.0
 
-# Resolve conflicts — look for our markers:
+# Разрешить конфликты — искать наши маркеры:
 git grep "SKYCODE_FORK" -- src/ build/
 ```
 
-### Post-Merge Checklist
+### Чеклист после мержа
 
-- [ ] `product.json` — name is "Skycode", `extensionAllowedProposedApi` includes `skycode.skycode`
-- [ ] Copilot Chat view is NOT registered
-- [ ] `main.ts` — locale defaults and argv.json patch intact
-- [ ] `nls.ts` — `bootstrapBuiltInLanguagePack()` present
-- [ ] `viewsExtensionPoint.ts` — `getViewContainer` fallback present
-- [ ] `extHostCodeInsets.ts` — no `+1` to line
-- [ ] Build succeeds, Skycode panel opens, UI is in Russian on first launch
+- [ ] `product.json` — имя "Skycode", в `extensionAllowedProposedApi` есть `skycode.skycode`
+- [ ] Представление Copilot Chat не регистрируется
+- [ ] `main.ts` — дефолтная локаль и патч argv.json на месте
+- [ ] `nls.ts` — присутствует `bootstrapBuiltInLanguagePack()`
+- [ ] `viewsExtensionPoint.ts` — fallback в `getViewContainer` на месте
+- [ ] `extHostCodeInsets.ts` — нет `+1` к `line`
+- [ ] Сборка проходит, панель Skycode открывается, UI на русском с первого запуска

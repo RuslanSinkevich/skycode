@@ -1,135 +1,135 @@
-> **Русская версия:** [diff-system.md](../ru/systems/diff-system.md)
+> **English version:** [diff-system.md](../en/systems/diff-system.md)
 
 # Inline Diff System v4
 
-Cursor-like inline diff system. The AI agent writes changes directly to files, and the user controls them via Accept/Reject buttons rendered in the editor. Per-message snapshots enable precise rollback.
+Cursor-подобная inline diff система. AI-агент записывает изменения напрямую в файлы, а пользователь управляет ими через кнопки Accept/Reject, отрисованные в редакторе. Per-message снапшоты обеспечивают точный откат.
 
-## Architecture
+## Архитектура
 
 ```
-DiffSystem (facade) — src/core/diff-v2/DiffSystem.ts
+DiffSystem (фасад) — src/core/diff-v2/DiffSystem.ts
 ├── Storage
-│   ├── DiffStore (unified store: ResponseGroups, FileChanges, Hunks)
-│   ├── FileSnapshotStorage (per-message snapshots for rollback)
-│   └── PendingChangesStorage (bridge → webview PendingChangesBar)
+│   ├── DiffStore (единое хранилище: ResponseGroups, FileChanges, Hunks)
+│   ├── FileSnapshotStorage (per-message снапшоты для отката)
+│   └── PendingChangesStorage (мост → webview PendingChangesBar)
 ├── Engine
-│   ├── HunkApplier (applies changes, creates Hunk records)
-│   ├── HunkReverter (accept/reject, file rollback)
-│   ├── PositionTracker (recalculates positions after edits/reject)
-│   └── SystemEditGuard (distinguishes system writes from manual edits)
+│   ├── HunkApplier (применение изменений, создание записей Hunk)
+│   ├── HunkReverter (accept/reject, откат файлов)
+│   ├── PositionTracker (пересчёт позиций после правок/reject)
+│   └── SystemEditGuard (отличает системные записи от ручных правок)
 └── UI
-    ├── InlineDiffRenderer (reactive View Zones + green decorations)
-    └── KeyboardNavigation (cross-file hunk navigation)
+    ├── InlineDiffRenderer (реактивные View Zones + зелёные декорации)
+    └── KeyboardNavigation (кросс-файловая навигация по хункам)
 ```
 
-## What's New in v4
+## Что нового в v4
 
-| Feature | v3 | v4 |
+| Функция | v3 | v4 |
 |---------|----|----|
-| Snapshots | None | Per-message: each message = its own snapshot |
-| Rollback | Hunk-by-hunk | Snapshot-based + per-group hunk filtering |
-| Per-message rollback | No | Yes: deleting msg2 doesn't touch msg1 |
-| Overlap detection | Strict (`<`/`>`) | Inclusive (`<=`/`>=`), adjacent hunks too |
-| removedLines | From diff computation | From actual file content (MISMATCH protection) |
-| EOL handling | `\r\n` on Windows | Always `\n` (VS Code normalizes) |
-| No-op detection | No | Yes: model gets error if file unchanged |
-| Navigation | Within file only | Cross-file (arrows navigate between files) |
-| Chat preview | write_to_file only | All tool types (fallback from hunk data) |
-| ApprovalGate | pWaitFor polling | Promise-based + early response queue |
+| Снапшоты | Нет | Per-message: каждое сообщение = свой снапшот |
+| Откат | По хункам | На основе снапшотов + фильтрация хунков по группе |
+| Per-message откат | Нет | Да: удаление msg2 не затрагивает msg1 |
+| Детекция перекрытий | Строгая (`<`/`>`) | Включительная (`<=`/`>=`), смежные хунки тоже |
+| removedLines | Из вычисления diff | Из реального содержимого файла (защита от MISMATCH) |
+| Обработка EOL | `\r\n` на Windows | Всегда `\n` (VS Code нормализует) |
+| Детекция no-op | Нет | Да: модель получает ошибку если файл не изменился |
+| Навигация | Только внутри файла | Кросс-файловая (стрелки навигируют между файлами) |
+| Превью в чате | Только write_to_file | Все типы инструментов (fallback из данных хунка) |
+| ApprovalGate | pWaitFor polling | Promise-based + очередь ранних ответов |
 
-## Data Flow
+## Поток данных
 
 ```
-User message → say("text") → startCheckpoint(messageTs)
-                                    ↓
-                            ResponseGroup created
-                            (snapshot saved before first edit)
-                                    ↓
+Сообщение пользователя → say("text") → startCheckpoint(messageTs)
+                                              ↓
+                                      ResponseGroup создана
+                                      (снапшот сохранён перед первой правкой)
+                                              ↓
 AI Tool (write_to_file / replace_text / delete_block)
   → DiffSystem.replaceLines() / deleteLines() / addLines()
-    → preSaveAndSnapshot() — idempotent per RG
-    → applyWithOverlapCheck() — auto-reject adjacent/overlapping hunks
-    → HunkApplier.applyReplacement() — writes file + creates Hunk
-      → removedLines = actual file content (not diff computation)
-      → DiffStore.createHunk() — fires hunkAdded event
-        → InlineDiffRenderer (reactively creates View Zones)
-        → PendingChangesStorage (syncs → webview)
+    → preSaveAndSnapshot() — идемпотентно для RG
+    → applyWithOverlapCheck() — авто-reject смежных/перекрывающихся хунков
+    → HunkApplier.applyReplacement() — запись файла + создание Hunk
+      → removedLines = реальное содержимое файла (не вычисление diff)
+      → DiffStore.createHunk() — вызывает событие hunkAdded
+        → InlineDiffRenderer (реактивно создаёт View Zones)
+        → PendingChangesStorage (синхронизация → webview)
 ```
 
-## Per-Message Rollback
+## Per-Message откат
 
 ```
-Message 1 → RG1 (snapshot A) → hunks 1, 2, 3
-Message 2 → RG2 (snapshot B) → hunks 4, 5
-Message 3 → RG3 (snapshot C) → hunk 6
+Message 1 → RG1 (снапшот A) → хунки 1, 2, 3
+Message 2 → RG2 (снапшот B) → хунки 4, 5
+Message 3 → RG3 (снапшот C) → хунк 6
 
-Delete message 2:
+Удаление message 2:
   → rollbackFromMessage(ts2)
-  → finds RG2, RG3 (chatMessageTs >= ts2)
-  → restores file from snapshot B
-  → marks only RG2+RG3 hunks as rejected
-  → RG1 hunks remain pending ✓
+  → находит RG2, RG3 (chatMessageTs >= ts2)
+  → восстанавливает файл из снапшота B
+  → отмечает только хунки RG2+RG3 как rejected
+  → хунки RG1 остаются pending ✓
 ```
 
-## Diff Block Types
+## Типы diff-блоков
 
-### Deletion
+### Удаление
 ```
 ┌──────────────────────────────┐
-│ deleted line (red)           │  ← View Zone
+│ удалённая строка (красная)   │  ← View Zone
 └──────────────────────────────┘
 ┌──────────────────────────────┐
-│ [✓ Accept] [✗ Reject]       │  ← View Zone (buttons)
-└──────────────────────────────┘
-```
-
-### Addition
-```
-│ 24 │ new line (green)        │  ← TextEditorDecoration
-┌──────────────────────────────┐
-│ [✓ Accept] [✗ Reject]       │  ← View Zone (buttons)
+│ [✓ Принять] [✗ Отклонить]   │  ← View Zone (кнопки)
 └──────────────────────────────┘
 ```
 
-### Replacement
+### Добавление
+```
+│ 24 │ новая строка (зелёная)  │  ← TextEditorDecoration
+┌──────────────────────────────┐
+│ [✓ Принять] [✗ Отклонить]   │  ← View Zone (кнопки)
+└──────────────────────────────┘
+```
+
+### Замена
 ```
 ┌──────────────────────────────┐
-│ old line (red)               │  ← View Zone (deletion)
+│ старая строка (красная)      │  ← View Zone (удаление)
 ├──────────────────────────────┤
-│ 24 │ new line (green)        │  ← TextEditorDecoration
+│ 24 │ новая строка (зелёная)  │  ← TextEditorDecoration
 ┌──────────────────────────────┐
-│ [✓ Accept] [✗ Reject]       │  ← View Zone (buttons)
+│ [✓ Принять] [✗ Отклонить]   │  ← View Zone (кнопки)
 └──────────────────────────────┘
 ```
 
 ## Accept / Reject
 
 **Accept:**
-1. File is not modified (new code is already in place)
-2. `store.updateHunkStatus('accepted')` → fires `hunkRemoved`
-3. `InlineDiffRenderer` removes View Zones + green decorations
-4. Snapshot cleanup when 0 pending hunks remain
+1. Файл не модифицируется (новый код уже на месте)
+2. `store.updateHunkStatus('accepted')` → вызывает `hunkRemoved`
+3. `InlineDiffRenderer` удаляет View Zones + зелёные декорации
+4. Очистка снапшота когда 0 pending хунков осталось
 
 **Reject:**
-1. `HunkReverter.reject()` — restores original lines from `removedLines`
-2. `PositionTracker.recalculate()` shifts remaining hunks
-3. `store.updateHunkStatus('rejected')` → fires `hunkRemoved`
-4. Parent status cascade: all rejected → RG='rejected', mixed → RG='partial'
+1. `HunkReverter.reject()` — восстанавливает оригинальные строки из `removedLines`
+2. `PositionTracker.recalculate()` сдвигает оставшиеся хунки
+3. `store.updateHunkStatus('rejected')` → вызывает `hunkRemoved`
+4. Каскад статуса родителя: все rejected → RG='rejected', смешанные → RG='partial'
 
-## Safety Mechanisms
+## Механизмы безопасности
 
-**removedLines from actual file:** `HunkApplier` reads `actualRemovedLines` from the file, not from the caller. Guarantees the red zone shows the real original.
+**removedLines из реального файла:** `HunkApplier` читает `actualRemovedLines` из файла, а не от вызывающего кода. Гарантирует что красная зона показывает реальный оригинал.
 
-**SystemEditGuard:** Distinguishes DiffSystem writes from manual user edits. Set-based tokens, thread-safe, supports nested calls.
+**SystemEditGuard:** Отличает записи DiffSystem от ручных правок пользователя. Set-based токены, потокобезопасность, поддержка вложенных вызовов.
 
-**ApprovalGate — early response queue:** Solves race conditions when the webview sends a response before the Task reaches `ask()`.
+**ApprovalGate — очередь ранних ответов:** Решает race condition когда webview отправляет ответ до того, как Task достигнет `ask()`.
 
-## Tests
+## Тесты
 
-**217 tests** cover the entire DiffSystem:
+**217 тестов** покрывают всю DiffSystem:
 
-| Component | Tests |
-|-----------|-------|
+| Компонент | Тестов |
+|-----------|--------|
 | SystemEditGuard | 10 |
 | ApprovalGate | 18 |
 | PositionTracker | 13 |
@@ -137,20 +137,20 @@ Delete message 2:
 | FileSnapshotStorage | 27 |
 | HunkApplier | 26 |
 | HunkReverter | 22 |
-| DiffSystem (integration) | 37 |
+| DiffSystem (интеграция) | 37 |
 | WriteToFileToolHandler | 17 |
 | KeyboardNavigation | 11 |
 
-## Commands
+## Команды
 
-| Command | Description |
-|---------|-------------|
-| `skycode.diff.accept` | Accept one change |
-| `skycode.diff.reject` | Reject one change |
-| `skycode.diff.acceptAllInFile` | Accept all in current file |
-| `skycode.diff.rejectAllInFile` | Reject all in current file |
-| `skycode.diff.nextHunk` | Next hunk (cross-file) |
-| `skycode.diff.prevHunk` | Previous hunk (cross-file) |
-| `skycode.diff.clearAll` | Clear all pending changes |
+| Команда | Описание |
+|---------|----------|
+| `skycode.diff.accept` | Принять одно изменение |
+| `skycode.diff.reject` | Отклонить одно изменение |
+| `skycode.diff.acceptAllInFile` | Принять все в текущем файле |
+| `skycode.diff.rejectAllInFile` | Отклонить все в текущем файле |
+| `skycode.diff.nextHunk` | Следующий хунк (кросс-файлово) |
+| `skycode.diff.prevHunk` | Предыдущий хунк (кросс-файлово) |
+| `skycode.diff.clearAll` | Очистить все ожидающие изменения |
 
-Uses `vscode.window.createWebviewTextEditorInset` (Proposed API `editorInsets`).
+Использует `vscode.window.createWebviewTextEditorInset` (Proposed API `editorInsets`).

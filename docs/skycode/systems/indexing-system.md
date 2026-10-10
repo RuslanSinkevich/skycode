@@ -1,118 +1,118 @@
-> **Русская версия:** [indexing-system.md](../ru/systems/indexing-system.md)
+> **English version:** [indexing-system.md](../en/systems/indexing-system.md)
 
-# Codebase Indexing System
+# Система индексации кодовой базы
 
-Semantic indexing for intelligent code search. Enables the AI agent to retrieve relevant context from the entire project before responding.
+Семантическая индексация для интеллектуального поиска по коду. Позволяет AI-агенту извлекать релевантный контекст из всего проекта перед ответом.
 
-Runs fully locally by default (transformers.js, WASM), with an option to connect a remote API.
+По умолчанию работает полностью локально (transformers.js, WASM), с возможностью подключения удалённого API.
 
-## Architecture
+## Архитектура
 
 ```
-IndexingService (orchestrator) — src/core/indexing/IndexingService.ts
-├── FileWalker (file traversal)
-│   └── Respects .gitignore, ignoredPatterns, maxFileSize, binary files
-├── CodeChunker (splitting into chunks)
-│   └── Tree-sitter chunking (with fallback to simple chunker)
-├── EmbeddingRouter → provider selection
+IndexingService (оркестратор) — src/core/indexing/IndexingService.ts
+├── FileWalker (обход файлов)
+│   └── Учитывает .gitignore, ignoredPatterns, maxFileSize, бинарные файлы
+├── CodeChunker (разбиение на чанки)
+│   └── Tree-sitter чанкинг (с fallback на простой чанкер)
+├── EmbeddingRouter → выбор провайдера
 │   ├── LocalEmbeddingProvider (transformers.js WASM + multilingual MiniLM)
-│   └── RemoteEmbeddingProvider (OpenAI-compatible /v1/embeddings API)
+│   └── RemoteEmbeddingProvider (OpenAI-совместимый /v1/embeddings API)
 ├── Storage
-│   ├── IndexStorage (SQLite by default, JSON fallback when native unavailable)
-│   └── VectorSearch (brute-force cosine similarity on in-memory vectors)
-└── SearchEngine (hybrid: semantic + keyword + rerank + prompt formatting)
+│   ├── IndexStorage (SQLite по умолчанию, JSON fallback при недоступности нативного)
+│   └── VectorSearch (brute-force cosine similarity на векторах в памяти)
+└── SearchEngine (гибридный: semantic + keyword + rerank + форматирование промпта)
 ```
 
-## Configuration
+## Настройки
 
-| Setting | Type | Default | Description |
-|---------|------|---------|-------------|
-| `skycode.indexing.mode` | `"off" \| "local" \| "remote"` | `"local"` | Indexing mode |
-| `skycode.indexing.remoteApiUrl` | string | `""` | Remote API URL |
-| `skycode.indexing.remoteApiKey` | string | `""` | API key |
-| `skycode.indexing.remoteModel` | string | `"text-embedding-3-small"` | Model name |
-| `skycode.indexing.maxFileSize` | number | `102400` | Max file size (bytes) |
-| `skycode.indexing.ignoredPatterns` | string[] | `[node_modules, .git, ...]` | Ignored patterns |
+| Настройка | Тип | По умолчанию | Описание |
+|-----------|-----|-------------|----------|
+| `skycode.indexing.mode` | `"off" \| "local" \| "remote"` | `"local"` | Режим индексации |
+| `skycode.indexing.remoteApiUrl` | string | `""` | URL удалённого API |
+| `skycode.indexing.remoteApiKey` | string | `""` | API-ключ |
+| `skycode.indexing.remoteModel` | string | `"text-embedding-3-small"` | Имя модели |
+| `skycode.indexing.maxFileSize` | number | `102400` | Макс. размер файла (байт) |
+| `skycode.indexing.ignoredPatterns` | string[] | `[node_modules, .git, ...]` | Игнорируемые паттерны |
 
-## Index Storage
+## Хранилище индекса
 
-Stored locally in `~/.skycode/indexing/{workspace-hash}/`.
+Хранится локально в `~/.skycode/indexing/{workspace-hash}/`.
 
-Primary backend:
-- `index.db` (SQLite) — metadata, chunks, and vectors (BLOB)
+Основной бэкенд:
+- `index.db` (SQLite) — метаданные, чанки и векторы (BLOB)
 
-Fallback backend (when native SQLite is unavailable):
-- `index.json` — metadata
-- `chunks.json` — chunk metadata array
-- `vectors.bin` — Float32Array vectors
+Резервный бэкенд (при недоступности нативного SQLite):
+- `index.json` — метаданные
+- `chunks.json` — массив метаданных чанков
+- `vectors.bin` — Float32Array векторов
 
-## Embedding Providers
+## Провайдеры эмбеддингов
 
-### Local (default)
+### Локальный (по умолчанию)
 
-- **Library:** `@xenova/transformers` (transformers.js)
-- **Backend:** WASM (no native modules, works in any environment)
-- **Model:** `paraphrase-multilingual-MiniLM-L12-v2` (multilingual, Russian support)
-- **Dimensions:** 384
-- **Speed:** ~50–100 chunks/sec
+- **Библиотека:** `@xenova/transformers` (transformers.js)
+- **Бэкенд:** WASM (без нативных модулей, работает в любой среде)
+- **Модель:** `paraphrase-multilingual-MiniLM-L12-v2` (мультиязычная, поддержка русского)
+- **Размерность:** 384
+- **Скорость:** ~50–100 чанков/сек
 
-### Remote
+### Удалённый
 
-- **Protocol:** OpenAI Embeddings API (`POST /v1/embeddings`)
-- **Compatible with:** OpenAI, Voyage AI, HuggingFace TEI, vLLM, any OpenAI-compatible endpoint
-- **Batching:** up to 100 texts per request
+- **Протокол:** OpenAI Embeddings API (`POST /v1/embeddings`)
+- **Совместим с:** OpenAI, Voyage AI, HuggingFace TEI, vLLM, любой OpenAI-совместимый эндпоинт
+- **Батчинг:** до 100 текстов за запрос
 
-## Indexing Pipeline
+## Пайплайн индексации
 
-1. **File traversal** — `FileWalker` recursively walks the workspace, skipping ignored/binary/oversized files
-2. **Chunking** — `CodeChunker` uses Tree-sitter for AST-aware chunking, falls back to simple chunker on error
-3. **Embedding** — batches of 32 chunks through the selected provider
-4. **Storage** — into SQLite (`index.db`) or JSON fallback
-5. **FileWatcher** — tracks changes and updates incrementally
+1. **Обход файлов** — `FileWalker` рекурсивно обходит workspace, пропуская игнорируемые/бинарные/слишком большие файлы
+2. **Чанкинг** — `CodeChunker` использует Tree-sitter для AST-aware чанкинга, с fallback на простой чанкер при ошибках
+3. **Эмбеддинг** — батчи по 32 чанка через выбранный провайдер
+4. **Сохранение** — в SQLite (`index.db`) или JSON fallback
+5. **FileWatcher** — отслеживает изменения и обновляет инкрементально
 
-## Incremental Updates
+## Инкрементальные обновления
 
-- `FileSystemWatcher` monitors create/change/delete events
-- Change/create events are debounced (burst-safe)
-- On file change: old chunks removed, file re-chunked and re-embedded
-- On file delete: chunks removed from index
-- Comparison by MD5 hash of file contents
+- `FileSystemWatcher` отслеживает события create/change/delete
+- События change/create дебаунсятся (защита от burst)
+- При изменении файла: старые чанки удаляются, файл заново чанкуется и эмбеддится
+- При удалении файла: чанки удаляются из индекса
+- Сравнение по MD5-хешу содержимого файла
 
-## Search
+## Поиск
 
-- **Hybrid retrieval:** semantic (`VectorSearch`) + keyword (`KeywordSearch`)
-- **Rerank:** post-retrieval reranking rules for improved precision
-- Reduces noise on multilingual queries
+- **Гибридное извлечение:** semantic (`VectorSearch`) + keyword (`KeywordSearch`)
+- **Rerank:** пост-извлечение reranking для повышения точности
+- Снижает шум на мультиязычных запросах
 
-## Performance
+## Производительность
 
-| Project | Files | Chunks | Indexing (local) | Search |
-|---------|-------|--------|-----------------|--------|
-| Small (~100 files) | ~100 | ~500 | ~30 sec | <10ms |
-| Medium (~2000 files) | ~2000 | ~10K | ~5 min | ~30ms |
-| Large (~10000 files) | ~10K | ~50K | ~20 min | ~80ms |
+| Проект | Файлов | Чанков | Индексация (локально) | Поиск |
+|--------|--------|--------|----------------------|-------|
+| Малый (~100 файлов) | ~100 | ~500 | ~30 сек | <10мс |
+| Средний (~2000 файлов) | ~2000 | ~10K | ~5 мин | ~30мс |
+| Большой (~10000 файлов) | ~10K | ~50K | ~20 мин | ~80мс |
 
-## Agent Integration
+## Интеграция с агентом
 
-The search is exposed as a `codebase_search` tool:
+Поиск доступен как инструмент `codebase_search`:
 - **Tool ID:** `SkycodeDefaultTool.CODEBASE_SEARCH`
-- **Handler:** `src/core/task/tools/handlers/CodebaseSearchToolHandler.ts`
-- Calls `SearchEngine.getContextForPrompt(query)` and returns `<codebase_context>` with relevant chunks
+- **Обработчик:** `src/core/task/tools/handlers/CodebaseSearchToolHandler.ts`
+- Вызывает `SearchEngine.getContextForPrompt(query)` и возвращает `<codebase_context>` с релевантными чанками
 
-## Commands
+## Команды
 
-| Command | Description |
-|---------|-------------|
-| `skycode.indexing.reindex` | Full re-indexing |
-| `skycode.indexing.clear` | Clear entire index |
-| `skycode.indexing.pause` | Pause indexing |
-| `skycode.indexing.resume` | Resume after pause |
+| Команда | Описание |
+|---------|----------|
+| `skycode.indexing.reindex` | Полная переиндексация |
+| `skycode.indexing.clear` | Очистка всего индекса |
+| `skycode.indexing.pause` | Пауза индексации |
+| `skycode.indexing.resume` | Возобновление после паузы |
 
-## Extending
+## Расширение
 
-### Adding a new embedding provider
+### Добавление нового провайдера эмбеддингов
 
-1. Create a class implementing `EmbeddingProvider` from `src/core/indexing/types.ts`
-2. Add a variant in `EmbeddingRouter.ts`
-3. Add an option to `skycode.indexing.mode` enum in `package.json`
-4. Add UI in `IndexingSettingsSection.tsx`
+1. Создать класс, реализующий `EmbeddingProvider` из `src/core/indexing/types.ts`
+2. Добавить вариант в `EmbeddingRouter.ts`
+3. Добавить опцию в enum `skycode.indexing.mode` в `package.json`
+4. Добавить UI в `IndexingSettingsSection.tsx`

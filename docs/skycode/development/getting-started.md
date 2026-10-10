@@ -1,58 +1,58 @@
-> **Русская версия:** [getting-started.md](../ru/development/getting-started.md)
+> **English version:** [getting-started.md](../en/development/getting-started.md)
 
-# Development Guide
+# Руководство по разработке
 
-## Prerequisites
+## Требования
 
 - Node.js 20+
-- Python 3.x (for VS Code native module builds)
-- C++ build tools (Visual Studio Build Tools on Windows)
+- Python 3.x (для сборки нативных модулей VS Code)
+- C++ build tools (Visual Studio Build Tools на Windows)
 - Git
 
-## Quick Start
+## Быстрый старт
 
 ```bash
-# Clone
+# Клонирование
 git clone https://github.com/RuslanSinkevich/skycode.git
 cd skycode/vscode
 
-# Install dependencies
+# Установка зависимостей
 npm install
 
-# Launch in development mode
+# Запуск в режиме разработки
 # Windows:
 .\scripts\code.bat
 # macOS/Linux:
 ./scripts/code.sh
 ```
 
-## Building the Extension
+## Сборка расширения
 
 ```bash
-# Build the webview UI
+# Сборка webview UI
 cd vscode/extensions/skycode/webview-ui
 npm run build
 
-# Build the extension backend
+# Сборка бэкенда расширения
 cd ..
 node esbuild.mjs
 ```
 
-## Type Checking
+## Проверка типов
 
 ```bash
 npm run compile
-# or
+# или
 npx tsc --noEmit
 ```
 
-## gRPC / Protobuf Communication
+## gRPC / Protobuf коммуникация
 
-The extension and webview communicate via a gRPC-like protocol.
+Расширение и webview общаются через gRPC-подобный протокол.
 
-### Proto Files
+### Proto-файлы
 
-Location: `proto/skycode/*.proto`
+Расположение: `proto/skycode/*.proto`
 
 ```protobuf
 service MyService { }      // PascalCase
@@ -60,81 +60,86 @@ rpc myMethod() { }         // camelCase
 message MyMessage { }      // PascalCase
 ```
 
-### After Changing Proto Files
+### После изменения Proto-файлов
 
 ```bash
 npm run protos
 ```
 
-Generates types in:
+Генерирует типы в:
+
 - `src/shared/proto/`
 - `src/generated/grpc-js/`
 - `src/generated/nice-grpc/`
 - `src/generated/hosts/`
 
-### Adding a New RPC Method
+### Добавление нового RPC-метода
 
-1. Add to the `.proto` file
-2. Create a handler in `src/core/controller/<domain>/`
-3. Call from webview: `UiServiceClient.myMethod(request)`
+1. Добавить в `.proto` файл
+2. Создать обработчик в `src/core/controller/<domain>/`
+3. Вызвать из webview: `UiServiceClient.myMethod(request)`
 
 ## GlobalState
 
-### Adding a New Key
+### Добавление нового ключа
 
-1. Add a field to `GLOBAL_STATE_FIELDS` in `src/shared/storage/state-keys.ts`:
+1. Добавить поле в `GLOBAL_STATE_FIELDS` в `src/shared/storage/state-keys.ts`:
+
    ```typescript
    const GLOBAL_STATE_FIELDS = {
      myKey: { default: undefined as string | undefined },
    } satisfies FieldDefinitions
    ```
 
-2. Read in `getStateToPostToWebview`:
+2. Считать в `getStateToPostToWebview`:
+
    ```typescript
    myKey: stateManager.getGlobalStateKey("myKey"),
    ```
 
-3. Use:
+3. Использовать:
+
    ```typescript
    controller.stateManager.setGlobalState("myKey", value)
    controller.stateManager.getGlobalStateKey("myKey")
    ```
 
-## Adding an API Provider
+## Добавление API-провайдера
 
-Three places for proto conversion (otherwise it resets to Anthropic):
+Три места для proto-конвертации (иначе сбросится на Anthropic):
 
-1. `proto/skycode/models.proto` — add to `ApiProvider` enum
-2. `convertApiProviderToProto()` in `src/shared/proto-conversions/models/api-configuration-conversion.ts`
-3. `convertProtoToApiProvider()` in the same file
+1. `proto/skycode/models.proto` — добавить в enum `ApiProvider`
+2. `convertApiProviderToProto()` в `src/shared/proto-conversions/models/api-configuration-conversion.ts`
+3. `convertProtoToApiProvider()` в том же файле
 
-Additionally:
-- `src/shared/api.ts` — union type and models
-- `src/shared/providers/providers.json` — for the dropdown
-- `src/core/api/index.ts` — handler in `createHandlerForProvider()`
-- Webview components
+Дополнительно:
+
+- `src/shared/api.ts` — union type и модели
+- `src/shared/providers/providers.json` — для выпадающего списка
+- `src/core/api/index.ts` — обработчик в `createHandlerForProvider()`
+- Webview-компоненты
 
 ## Changesets
 
-For significant user-facing changes:
+Для значимых пользовательских изменений:
 
 ```bash
 npm run changeset
 ```
 
-Create **patch** versions only. Skip for minor fixes, internal refactors, and invisible UI changes.
+Создавать только **patch** версии. Пропускать для мелких фиксов, внутренних рефакторингов и невидимых UI-изменений.
 
-## Regenerating Snapshots
+## Регенерация снапшотов
 
-After changing prompts:
+После изменения промптов:
 
 ```bash
 UPDATE_SNAPSHOTS=true npm run test:unit
 ```
 
-## See Also
+## См. также
 
-- [Adding Tools](./adding-tools.md)
-- [Network Requests](./network.md)
-- [Adding Settings](./adding-settings.md)
-- [Fork Patches](./fork-patches.md)
+- [Добавление инструментов](./adding-tools.md)
+- [Сетевые запросы](./network.md)
+- [Добавление настроек](./adding-settings.md)
+- [Патчи форка](./fork-patches.md)

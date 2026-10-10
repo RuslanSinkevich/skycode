@@ -1,32 +1,32 @@
-> **Русская версия:** [network.md](../ru/development/network.md)
+> **English version:** [network.md](../en/development/network.md)
 
-# Network Requests & Proxy
+# Сетевые запросы и прокси
 
-## Important
+## Важно
 
-**Do NOT** use the global `fetch` or default `axios` in extension code. They don't pick up proxy settings in some environments.
+**Не использовать** глобальный `fetch` и axios «из коробки» в коде расширения: в части окружений они не подхватывают настройки прокси.
 
-## Rules
+## Правила
 
-### Using fetch
+### Использование fetch
 
 ```typescript
-// ❌ Wrong
+// ❌ Неверно
 const response = await fetch('https://api.example.com/data')
 
-// ✅ Correct
+// ✅ Верно
 import { fetch } from '@/shared/net'
 const response = await fetch('https://api.example.com/data')
 ```
 
-### Using axios
+### Использование axios
 
 ```typescript
-// ❌ Wrong
+// ❌ Неверно
 import axios from 'axios'
 const response = await axios.get('https://api.example.com')
 
-// ✅ Correct
+// ✅ Верно
 import axios from 'axios'
 import { getAxiosSettings } from '@/shared/net'
 const response = await axios.get('https://api.example.com', {
@@ -35,9 +35,9 @@ const response = await axios.get('https://api.example.com', {
 })
 ```
 
-### Third-party clients (OpenAI, Anthropic, etc.)
+### Сторонние клиенты (OpenAI, Anthropic и т.д.)
 
-Most API clients accept a custom `fetch`:
+Большинство API-клиентов принимают свой экземпляр `fetch`:
 
 ```typescript
 import OpenAI from "openai"
@@ -46,13 +46,13 @@ import { fetch } from "@/shared/net"
 const client = new OpenAI({ apiKey: '...', fetch })
 ```
 
-### In Webview
+### В Webview
 
-In `webview-ui/`, the global `fetch` is fine — the browser handles proxy natively.
+В `webview-ui/` глобальный `fetch` допустим — прокси обрабатывает браузер.
 
-## Testing
+## Тестирование
 
-Use `mockFetchForTesting` for mocking:
+Для моков используйте `mockFetchForTesting`:
 
 ```typescript
 import { mockFetchForTesting } from "@/shared/net"
@@ -65,9 +65,9 @@ test('my test', async () => {
 })
 ```
 
-## Checklist for New Network Calls
+## Чеклист для новых сетевых вызовов
 
-1. Imported `@/shared/net`
-2. Using `fetch` from `@/shared/net` (not global)
-3. For axios: using `getAxiosSettings()`
-4. Third-party clients receive custom `fetch`
+1. Импортирован `@/shared/net`
+2. Используется `fetch` из `@/shared/net` (не глобальный)
+3. Для axios: используется `getAxiosSettings()`
+4. Сторонние клиенты получают кастомный `fetch`

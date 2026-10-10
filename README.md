@@ -1,119 +1,120 @@
 # Skycode AI
 
-**AI-powered code editor built on VS Code — open-source alternative to Cursor**
+> English version: [README.en.md](README.en.md)
 
-Skycode is a fork of VS Code with a deeply integrated AI agent. Unlike extensions (Copilot, Continue, etc.), the AI is part of the editor itself — giving full control over UX, performance, and security.
+**AI-редактор кода на основе VS Code — открытая альтернатива Cursor**
+
+Skycode — форк VS Code с глубоко встроенным AI-агентом. В отличие от расширений (Copilot, Continue и др.), AI здесь часть самого редактора — это даёт полный контроль над UX, производительностью и безопасностью.
 
 <p align="center">
-  <img src="./docs/skycode/hero-demo.gif" alt="Skycode AI in action" width="900">
+  <img src="./docs/skycode/hero-demo.gif" alt="Skycode AI в работе" width="900">
 </p>
 
 <p align="center">
-  <a href="https://skycode-ai.ru/en">Website</a> ·
-  <a href="https://skycode-ai.ru/ru">Сайт (RU)</a> ·
-  <a href="#documentation">Docs (EN)</a> ·
-  <a href="./docs/skycode/ru/architecture/overview.md">Docs (RU)</a> ·
+  <a href="https://ruslansinkevich.ru/#skycode">Сайт</a> ·
+  <a href="#документация">Документация</a> ·
+  <a href="./README.en.md">English</a> ·
   <a href="https://github.com/RuslanSinkevich/skycode">GitHub</a>
 </p>
 
 ---
 
-## Features
+## Возможности
 
-### AI Agent with 30+ Tools
+### AI-агент с 30+ инструментами
 
-| Capability | Description |
+| Возможность | Описание |
 |-----------|-------------|
-| **Read & edit files** | Full file creation, block replacement, patches |
-| **Execute commands** | Terminal: build, test, git, npm, Docker |
-| **Semantic search** | Search by meaning across the entire codebase (local embeddings) |
-| **Regex search** | Fast pattern matching via ripgrep |
-| **Web search** | Search the internet for information |
-| **Browser automation** | Puppeteer: screenshots, clicks, form filling |
-| **MCP integrations** | Connect external services (Context7, databases, APIs) |
-| **Diagnostics** | Read ESLint, TypeScript, and other linter errors |
-| **Jupyter Notebooks** | Create and edit notebook cells |
+| **Чтение и правка файлов** | Создание файлов, замена блоков, патчи |
+| **Выполнение команд** | Терминал: сборка, тесты, git, npm, Docker |
+| **Семантический поиск** | Поиск по смыслу по всей кодовой базе (локальные embeddings) |
+| **Поиск по regex** | Быстрый поиск по шаблону через ripgrep |
+| **Веб-поиск** | Поиск информации в интернете |
+| **Автоматизация браузера** | Puppeteer: скриншоты, клики, заполнение форм |
+| **MCP-интеграции** | Подключение внешних сервисов (Context7, базы данных, API) |
+| **Диагностика** | Чтение ошибок ESLint, TypeScript и других линтеров |
+| **Jupyter Notebooks** | Создание и редактирование ячеек |
 
-### 5 Operating Modes
+### 5 режимов работы
 
-| Mode | Purpose | Tools |
+| Режим | Назначение | Инструменты |
 |------|---------|-------|
-| **Act** | Default. Execute tasks, edit files, run commands | All |
-| **Ask** | Explore code, answer questions | Read-only |
-| **Plan** | Gather info, design approach | Read-only + `plan_mode_respond` |
-| **Debug** | Systematic debugging with runtime evidence | Read-only + `execute_command` |
-| **Chat** | General conversation, any topic | Read-only (on explicit request) |
+| **Act** | По умолчанию. Выполнение задач, правка файлов, запуск команд | Все |
+| **Ask** | Изучение кода, ответы на вопросы | Только чтение |
+| **Plan** | Сбор информации, проектирование решения | Только чтение + `plan_mode_respond` |
+| **Debug** | Систематическая отладка на реальных данных выполнения | Только чтение + `execute_command` |
+| **Chat** | Обычный разговор на любую тему | Только чтение (по явной просьбе) |
 
-The agent can dynamically switch between modes during a conversation.
+Агент может сам переключаться между режимами по ходу разговора.
 
 ### Inline Diff System v4
 
-- Changes from AI displayed **directly in the editor** (green = added, red = removed)
-- **Accept / Reject** buttons per change block
-- Per-message snapshots for precise rollback
-- Cross-file navigation between pending changes
-- 217 unit tests covering the entire diff engine
+- Изменения от AI показываются **прямо в редакторе** (зелёное — добавлено, красное — удалено)
+- Кнопки **Принять / Отклонить** для каждого блока изменений
+- Снимки состояния на каждое сообщение для точного отката
+- Навигация между ожидающими изменениями в разных файлах
+- 217 unit-тестов покрывают весь diff-движок
 
-### Semantic Code Search
+### Семантический поиск по коду
 
-- **Local embedding index** of the entire project (transformers.js, WASM, offline)
-- Hybrid retrieval: semantic + keyword + rerank
-- Incremental updates via FileWatcher
-- Optional remote API (OpenAI-compatible)
+- **Локальный индекс embeddings** по всему проекту (transformers.js, WASM, без интернета)
+- Гибридный поиск: семантический + по ключевым словам + переранжирование
+- Инкрементальное обновление через FileWatcher
+- Опционально — удалённый API (OpenAI-совместимый)
 
-### 40+ API Providers
+### 40+ API-провайдеров
 
 - **OpenAI** — GPT-4o, o1, o3
 - **Anthropic** — Claude Sonnet, Opus, Haiku
 - **Google** — Gemini 2.5 Pro/Flash
-- **GigaChat** — native function calls (Sber)
+- **GigaChat** — нативные function calls (Сбер)
 - **YandexGPT** — YandexGPT 5 Pro/Lite
 - **Open-source** — Qwen, DeepSeek, Llama, Mistral
-- **OpenRouter** — 200+ models aggregator
-- Any **OpenAI-compatible** API (Ollama, LM Studio, vLLM)
+- **OpenRouter** — агрегатор 200+ моделей
+- Любой **OpenAI-совместимый** API (Ollama, LM Studio, vLLM)
 
-### Voice Input
+### Голосовой ввод
 
-Offline speech recognition (Whisper, 50+ languages). No internet required.
+Офлайн-распознавание речи (Whisper, 50+ языков). Интернет не нужен.
 
-### Lightweight Mode
+### Облегчённый режим
 
-Simplified prompts and tools for weaker/free models. 11 prompt variants optimized for specific model families.
+Упрощённые промпты и инструменты для слабых и бесплатных моделей. 11 вариантов промптов, оптимизированных под конкретные семейства моделей.
 
 ---
 
-## Quick Start
+## Быстрый старт
 
 ```bash
-# Clone
+# Клонировать
 git clone https://github.com/RuslanSinkevich/skycode.git
 cd skycode
 
-# Install
+# Установить зависимости
 npm install
 
-# Launch (development mode)
+# Запуск (режим разработки)
 # Windows:
 .\scripts\code.bat
 # macOS/Linux:
 ./scripts/code.sh
 ```
 
-### Building the Extension
+### Сборка расширения
 
 ```bash
 cd extensions/skycode/webview-ui
 npm run build          # UI
 
 cd ..
-node esbuild.mjs      # Backend
+node esbuild.mjs      # Бэкенд
 ```
 
-Open the Skycode panel in the sidebar → configure your API provider → start coding.
+Откройте панель Skycode на боковой панели → настройте API-провайдера → начинайте работать.
 
 ---
 
-## Architecture
+## Архитектура
 
 ```
 ┌──────────────────────────────────────────────┐
@@ -137,57 +138,57 @@ Open the Skycode panel in the sidebar → configure your API provider → start 
 └──────────────────────────────────────────────┘
 ```
 
-| Component | Technology |
+| Компонент | Технология |
 |-----------|-----------|
-| Editor | VS Code fork |
-| Communication | gRPC + Protobuf |
-| Chat UI | React (230+ components) |
-| Code parsing | Tree-sitter (16 languages) |
-| Search | Embedding index + ripgrep |
-| Analytics | PostHog + OpenTelemetry (opt-in) |
+| Редактор | Форк VS Code |
+| Связь | gRPC + Protobuf |
+| UI чата | React (230+ компонентов) |
+| Разбор кода | Tree-sitter (16 языков) |
+| Поиск | Индекс embeddings + ripgrep |
+| Аналитика | PostHog + OpenTelemetry (только с согласия) |
 
 ---
 
-## Documentation
+## Документация
 
-> **Документация на русском:** [docs/skycode/ru/](./docs/skycode/ru/architecture/overview.md)
+> **English documentation:** [docs/skycode/en/](./docs/skycode/en/architecture/overview.md)
 
-### Architecture
-- [Overview](./docs/skycode/architecture/overview.md)
-- [Core Module](./docs/skycode/architecture/core.md)
-- [Context Management](./docs/skycode/architecture/context-management.md)
+### Архитектура
+- [Обзор архитектуры](./docs/skycode/architecture/overview.md)
+- [Модуль Core](./docs/skycode/architecture/core.md)
+- [Управление контекстом](./docs/skycode/architecture/context-management.md)
 
-### Systems
+### Системы
 - [Inline Diff System v4](./docs/skycode/systems/diff-system.md)
-- [Codebase Indexing](./docs/skycode/systems/indexing-system.md)
-- [MCP Integration](./docs/skycode/systems/mcp.md)
+- [Индексация кодовой базы](./docs/skycode/systems/indexing-system.md)
+- [Интеграция MCP](./docs/skycode/systems/mcp.md)
 
-### Development
-- [Getting Started](./docs/skycode/development/getting-started.md)
-- [Adding Agent Tools](./docs/skycode/development/adding-tools.md)
-- [Network Requests](./docs/skycode/development/network.md)
-- [Adding Settings](./docs/skycode/development/adding-settings.md)
-- [VS Code Fork Patches](./docs/skycode/development/fork-patches.md)
-
----
-
-## Contributing
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup, code style, and PR guidelines.
+### Разработка
+- [Руководство по разработке](./docs/skycode/development/getting-started.md)
+- [Добавление инструментов агента](./docs/skycode/development/adding-tools.md)
+- [Сетевые запросы и прокси](./docs/skycode/development/network.md)
+- [Добавление настроек](./docs/skycode/development/adding-settings.md)
+- [Патчи форка VS Code](./docs/skycode/development/fork-patches.md)
 
 ---
 
-## Acknowledgments
+## Участие в разработке
 
-Skycode is built upon several open-source projects:
+Настройка окружения, стиль кода и правила PR — в [CONTRIBUTING.md](./CONTRIBUTING.md).
 
-- [VS Code](https://github.com/microsoft/vscode) (MIT) — the editor foundation
-- [Cline](https://github.com/cline/cline) (Apache 2.0) — initial extension architecture
-- [Continue](https://github.com/continuedev/continue) (Apache 2.0) — local embedding pipeline
-- [Kilocode](https://github.com/Kilo-Org/kilocode) (Apache 2.0 / MIT) — tool handling patterns
+---
 
-See [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) for full attribution.
+## Благодарности
 
-## License
+Skycode построен на нескольких open-source проектах:
+
+- [VS Code](https://github.com/microsoft/vscode) (MIT) — основа редактора
+- [Cline](https://github.com/cline/cline) (Apache 2.0) — исходная архитектура расширения
+- [Continue](https://github.com/continuedev/continue) (Apache 2.0) — локальный pipeline embeddings
+- [Kilocode](https://github.com/Kilo-Org/kilocode) (Apache 2.0 / MIT) — паттерны работы с инструментами
+
+Полный список — в [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).
+
+## Лицензия
 
 [Apache License 2.0](./LICENSE)
