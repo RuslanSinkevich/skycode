@@ -313,7 +313,8 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 		let version = packageJson.version;
 		const quality = (product as { quality?: string }).quality;
 
-		if (quality && quality !== 'stable') {
+		// [SKYCODE] Канал skycode — релизный: версия из тега без суффикса «-skycode».
+		if (quality && quality !== 'stable' && quality !== 'skycode') {
 			version += '-' + quality;
 		}
 
