@@ -59,7 +59,7 @@ assets/voice/
 vendor/whisper/
 
 # ONNX embedding models (downloaded automatically on first run)
-models/
+/models/
 
 # Native sqlite prebuilds (regenerated via `npm run rebuild:native`)
 native/sqlite/
