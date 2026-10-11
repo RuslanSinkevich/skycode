@@ -28,7 +28,9 @@ concurrency:
 jobs:
   windows:
     name: Windows x64
-    runs-on: windows-latest
+    # windows-2022, а не windows-latest: build/npm/preinstall.ts принимает только
+    # Visual Studio 2019/2022 («Invalid C/C++ Compiler Toolchain» на новых образах).
+    runs-on: windows-2022
     timeout-minutes: 300
     defaults:
       run:
