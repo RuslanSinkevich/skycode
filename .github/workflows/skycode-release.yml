@@ -68,6 +68,13 @@ jobs:
       - name: Install VS Code dependencies
         run: npm ci
 
+      # Номер версии — из тега: VS Code берёт его из package.json (окно «О программе»,
+      # имя установщика). Без этого все сборки показывали версию базы VS Code (1.136.1).
+      - name: Set product version
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: npm pkg set "version=${VERSION}"
+
       # Расширение Skycode не входит в build/npm/dirs.ts — ставим его зависимости отдельно.
       - name: Install Skycode extension dependencies
         working-directory: extensions/skycode
