@@ -34,7 +34,7 @@ import { asJson, IRequestService } from '../../request/common/request.js';
 import { IApplicationStorageMainService } from '../../storage/electron-main/storageMainService.js';
 import { ITelemetryService } from '../../telemetry/common/telemetry.js';
 import { AvailableForDownload, DisablementReason, IUpdate, State, StateType, UpdateType } from '../common/update.js';
-import { AbstractUpdateService, createUpdateURL, getUpdateRequestHeaders, IUpdateURLOptions, UpdateErrorClassification } from './abstractUpdateService.js';
+import { AbstractUpdateService, createUpdateURL, getUpdateRequestHeaders, isSameBuildUpdate, IUpdateURLOptions, UpdateErrorClassification } from './abstractUpdateService.js';
 import { getRelaunchArguments } from './updateRelaunchArguments.js';
 import { getWin32UpdateType } from './win32UpdateType.js';
 
@@ -253,6 +253,12 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
 
 				if (token.isCancellationRequested) {
 					return Promise.resolve(null);
+				}
+
+				// [SKYCODE] Статический feed (GitHub Releases) всегда отдаёт последний релиз —
+				// если это та же сборка, считаем, что обновлений нет (как ответ 204).
+				if (isSameBuildUpdate(update, pendingCommit ?? this.productService.commit)) {
+					update = null;
 				}
 
 				if (!update || !update.url || !update.version || !update.productVersion) {

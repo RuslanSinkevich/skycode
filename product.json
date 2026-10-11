@@ -1,6 +1,8 @@
 {
 	"nameShort": "Skycode",
 	"nameLong": "Skycode",
+	"quality": "skycode",
+	"updateUrl": "https://github.com/RuslanSinkevich/skycode/releases/latest/download",
 	"applicationName": "skycode",
 	"dataFolderName": ".skycode",
 	"sharedDataFolderName": ".skycode-shared",

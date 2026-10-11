@@ -1,0 +1,142 @@
+name: Skycode Release
+
+# [SKYCODE] Сборка Skycode для Windows на GitHub Actions (публичный репозиторий — бесплатно).
+#  - push тега skycode-vX.Y.Z → собирает и прикладывает к GitHub Release:
+#      Skycode-UserSetup-x64-X.Y.Z.exe  — установщик (Inno Setup, без прав админа)
+#      Skycode-win32-x64-X.Y.Z.zip      — портативный архив
+#      update-win32-x64-user.json       — описание релиза для автообновления
+#        (формат ответа VS Code update API: url / name / version / productVersion /
+#         timestamp / sha256hash; читается по постоянному адресу
+#         releases/latest/download/update-win32-x64-user.json)
+#  - ручной запуск (Actions → Skycode Release → Run workflow) → только артефакты, без релиза.
+# Префикс тега skycode-v — чтобы не пересекаться с тегами upstream VS Code (1.136.1 и т.п.).
+# Шаги повторяют локальную сборку из docs_ru/BUILD_AND_DEPLOY.md.
+# Сборка не подписана: Windows покажет SmartScreen.
+
+on:
+  push:
+    tags: ['skycode-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: skycode-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    name: Windows x64
+    runs-on: windows-latest
+    timeout-minutes: 300
+    defaults:
+      run:
+        shell: bash
+    env:
+      VSCODE_ARCH: x64
+      npm_config_arch: x64
+      # Скачивание ripgrep / electron с GitHub без лимита анонимных запросов.
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Version
+        id: ver
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/skycode-v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/skycode-v}"
+          else
+            VERSION="$(node -p "require('./package.json').version")-dev.${GITHUB_RUN_NUMBER}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Skycode $VERSION ($GITHUB_SHA)"
+
+      - name: Install VS Code dependencies
+        run: npm ci
+
+      # Расширение Skycode не входит в build/npm/dirs.ts — ставим его зависимости отдельно.
+      - name: Install Skycode extension dependencies
+        working-directory: extensions/skycode
+        run: npm ci
+
+      # src/shared/proto и src/generated не хранятся в git — генерируем (protoc из grpc-tools).
+      - name: Generate protos
+        working-directory: extensions/skycode
+        run: npm run protos
+
+      - name: Build webview
+        working-directory: extensions/skycode/webview-ui
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build extension
+        working-directory: extensions/skycode
+        run: node esbuild.mjs --production
+
+      - name: Build Skycode (win32-x64)
+        run: npm run gulp -- vscode-win32-x64-min
+
+      - name: Build installer
+        run: |
+          npm run gulp -- vscode-win32-x64-inno-updater
+          npm run gulp -- vscode-win32-x64-user-setup
+
+      - name: Collect artifacts
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          mkdir -p out
+          SETUP="Skycode-UserSetup-x64-${VERSION}.exe"
+          ZIP="Skycode-win32-x64-${VERSION}.zip"
+          cp .build/win32-x64/user-setup/VSCodeSetup.exe "out/${SETUP}"
+          (cd .. && 7z a -tzip -mx=7 "${GITHUB_WORKSPACE}/out/${ZIP}" VSCode-win32-x64 > /dev/null)
+          SHA256="$(sha256sum "out/${SETUP}" | cut -d' ' -f1)"
+          # Ответ update API: version — commit сборки; клиент считает «обновлений
+          # нет», если он совпадает с его собственным commit.
+          node -e '
+            const [setup, version, commit, sha] = process.argv.slice(1);
+            const repo = process.env.GITHUB_REPOSITORY;
+            const tag = process.env.GITHUB_REF_NAME;
+            const out = {
+              url: `https://github.com/${repo}/releases/download/${tag}/${setup}`,
+              name: version,
+              version: commit,
+              productVersion: version,
+              timestamp: Date.now(),
+              sha256hash: sha,
+            };
+            require("fs").writeFileSync("out/update-win32-x64-user.json", JSON.stringify(out, null, 2));
+          ' "$SETUP" "$VERSION" "$GITHUB_SHA" "$SHA256"
+          ls -la out
+          cat out/update-win32-x64-user.json
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: skycode-win32-x64-${{ steps.ver.outputs.version }}
+          path: out/*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/skycode-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*
+          fail_on_unmatched_files: true
+          name: Skycode ${{ steps.ver.outputs.version }}
+          # Текст релиза — из build/skycode/release-notes.md (переписывать перед каждым тегом).
+          body_path: build/skycode/release-notes.md

@@ -30,7 +30,31 @@ export interface IUpdateURLOptions {
 	readonly internalOrg?: string;
 }
 
+/**
+ * [SKYCODE] Обновления без своего сервера: `updateUrl` вида
+ * `https://github.com/<owner>/<repo>/releases/latest/download` — GitHub всегда
+ * отдаёт по нему файлы последнего релиза. Вместо `/api/update/...` читаем
+ * статический `update-<platform>.json`, который кладёт в релиз CI
+ * (.github/workflows/skycode-release.yml). «Обновлений нет» определяет клиент:
+ * см. `isSameBuildUpdate`.
+ */
+export function isStaticUpdateFeed(baseUpdateUrl: string): boolean {
+	return /\/releases\/latest\/download\/?$/.test(baseUpdateUrl);
+}
+
+/**
+ * [SKYCODE] Статический feed не знает commit клиента и всегда возвращает
+ * последний релиз. Если его commit совпадает с commit этой сборки — это не
+ * обновление (сервер VS Code в этом случае отвечает 204).
+ */
+export function isSameBuildUpdate(update: { version?: string } | null | undefined, commit: string | undefined): boolean {
+	return !!update?.version && !!commit && update.version === commit;
+}
+
 export function createUpdateURL(baseUpdateUrl: string, platform: string, quality: string, commit: string, options?: IUpdateURLOptions): string {
+	if (isStaticUpdateFeed(baseUpdateUrl)) {
+		return `${baseUpdateUrl.replace(/\/$/, '')}/update-${platform}.json`;
+	}
 	const url = new URL(`${baseUpdateUrl}/api/update/${platform}/${quality}/${commit}`);
 
 	if (options?.background) {
