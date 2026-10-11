@@ -3,14 +3,12 @@
 
 ### Что нового
 
-- Сборки Skycode для Windows теперь выходят на GitHub Releases
-- Автообновление: установленный Skycode сам находит новую версию и предлагает перезапуститься
-- Правила пользователя выше поведения режима: «сначала план» соблюдается и в ACT
-- Правила с `priority: critical` повторяются рядом с режимом в каждом сообщении
+- Индекс кода работает на встроенном SQLite — больше не уходит в медленное JSON-хранилище
+- Убран нативный модуль better-sqlite3: обновления Electron больше не ломают индекс
+- Исправлен поиск инстанса по порту в блокировках
 
 ### What's new
 
-- Skycode builds for Windows are now published on GitHub Releases
-- Auto-update: an installed Skycode finds the new version itself and offers to restart
-- User rules outrank mode behaviour: "plan first" is honoured in ACT too
-- Rules with `priority: critical` are repeated next to the mode in every message
+- Code index runs on the built-in SQLite — no more falling back to the slow JSON storage
+- Removed the native better-sqlite3 module: Electron updates no longer break the index
+- Fixed instance lookup by port in locks
