@@ -12,6 +12,7 @@ import type { SkycodeIgnoreController } from "@core/ignore/SkycodeIgnoreControll
 import type { FileContextTracker } from "@core/context/context-tracking/FileContextTracker"
 import type { ITerminalManager } from "@integrations/terminal/types"
 import { listFiles } from "@services/glob/list-files"
+import { RepoMap } from "@services/repo-map/RepoMap"
 import { findLast } from "@shared/array"
 import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
@@ -267,6 +268,21 @@ export async function buildEnvironmentDetails(
 			const [files, didHitLimit] = await listFiles(ctx.cwd, true, 200)
 			const result = formatResponse.formatFilesList(ctx.cwd, files, didHitLimit, ctx.skycodeIgnoreController)
 			details += result
+
+			// [SKYCODE] Карта репозитория: самые важные файлы и их объявления (tree-sitter,
+			// без векторного индекса). Не задерживает задачу — если карта ещё строится, её
+			// просто нет в этом сообщении, а codebase_search всё равно работает.
+			try {
+				const overview = await RepoMap.for(ctx.cwd).overviewForPrompt()
+				if (overview) {
+					details +=
+						"\n\n# Repository Map (most-referenced files and their declarations; line: declaration)\n" +
+						"Use codebase_search to find more symbols, then read_file the exact lines.\n" +
+						overview
+				}
+			} catch {
+				// карта — подсказка, без неё задача работает как раньше
+			}
 		}
 
 		if (ctx.workspaceManager) {

@@ -122,6 +122,18 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	const webview = (await initialize(context)) as VscodeWebviewProvider
 
+	// [SKYCODE] Прогрев карты репозитория (tree-sitter, без эмбеддингов) в фоне: к первой
+	// задаче обзор проекта уже готов, а повторные запуски берут его из кэша за секунды.
+	const repoMapRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+	if (repoMapRoot) {
+		const warmUp = setTimeout(() => {
+			void import("./services/repo-map/RepoMap")
+				.then(({ RepoMap }) => RepoMap.for(repoMapRoot).ensureFresh())
+				.catch((error) => Logger.warn("[RepoMap] warm-up failed:", error))
+		}, 5000)
+		context.subscriptions.push({ dispose: () => clearTimeout(warmUp) })
+	}
+
 	// [SKYCODE-SKYCODE] Initialize Codebase Indexing System
 	let indexingService: import("./core/indexing").IndexingService | null = null
 	let searchEngine: import("./core/indexing").SearchEngine | null = null
