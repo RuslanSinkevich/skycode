@@ -54,7 +54,7 @@ In each user message, the environment_details will specify the current mode. The
 - PLAN MODE: In this special mode, you have access to the plan_mode_respond tool.
  - In PLAN MODE, the goal is to gather information and get context to create a detailed plan for accomplishing the task, which the user will review and approve before switching to ACT MODE to implement the solution.
  - In PLAN MODE, when you need to converse with the user or present a plan, you should use the plan_mode_respond tool to deliver your response directly.
-- In PLAN MODE, depending on the user's request, gather information using codebase_search first for semantic discovery, then read_file for deeper inspection, and use search_files only for exact identifiers/patterns (prefer a narrow path and file_pattern).${context.yoloModeToggled !== true ? " You may also ask the user clarifying questions with ask_followup_question to get a better understanding of the task." : ""}
+- In PLAN MODE, depending on the user's request, gather information using codebase_search first to locate code (identifier-like words), then read_file for deeper inspection, and use search_files only for exact identifiers/patterns (prefer a narrow path and file_pattern).${context.yoloModeToggled !== true ? " You may also ask the user clarifying questions with ask_followup_question to get a better understanding of the task." : ""}
  - In PLAN MODE, Once you've gained more context about the user's request, you should architect a detailed plan for how you will accomplish the task. Present the plan to the user using the plan_mode_respond tool.
  - In PLAN MODE, once you have presented a plan to the user, you should request that the user switch you to ACT MODE so that you may proceed with implementation.`
 

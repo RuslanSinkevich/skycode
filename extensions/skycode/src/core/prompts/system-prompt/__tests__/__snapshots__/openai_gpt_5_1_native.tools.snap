@@ -146,14 +146,14 @@
     "type": "function",
     "function": {
       "name": "codebase_search",
-      "description": "Request to perform a semantic search across the codebase. This tool finds code by meaning and context rather than exact string matches. Use it as the first-choice tool for questions like where logic is implemented, how a feature works, or where related orchestration/flow is located.",
+      "description": "Fast code discovery without any index: matches the query words against the repository map (classes, methods, functions, SQL procedures/tables with file and line) and ranks text matches by how many query words each file contains (comments and strings too, including Russian). Use it first to locate where something lives; write the query as likely identifiers and domain words (e.g. \"invoice payment schedule\", \"договор поиск\"), not as a question. Then read_file the exact lines it points to.",
       "strict": false,
       "parameters": {
         "type": "object",
         "properties": {
           "query": {
             "type": "string",
-            "description": "The natural language description of what you are looking for."
+            "description": "Words to look for: likely identifier parts and domain terms (English or the project's language)."
           },
           "max_results": {
             "type": "string",
@@ -175,7 +175,7 @@
     "type": "function",
     "function": {
       "name": "search_files",
-      "description": "Request to perform a regex search across files in a specified directory, providing context-rich results. Use this for exact patterns, identifiers, and literals; for semantic questions about where logic is implemented, prefer codebase_search first and use this as a fallback.",
+      "description": "Request to perform a regex search across files in a specified directory, providing context-rich results. Use this for exact patterns, identifiers, and literals; to locate where logic is implemented, prefer codebase_search first and use this as a fallback.",
       "strict": false,
       "parameters": {
         "type": "object",

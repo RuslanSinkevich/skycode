@@ -81,9 +81,9 @@ const GENERIC_RULES = (context: SystemPromptContext) => {
 - When you need to perform multiple independent actions (e.g., reading 3 files, or searching + reading), batch them as parallel tool calls when possible. Do NOT call tools one by one if they don't depend on each other.
 - If tool calls depend on results of previous calls, execute them sequentially - do NOT guess missing parameters.
 - Tool routing policy for code discovery:
-- For understanding code, finding logic, or exploring: call codebase_search FIRST. It finds code by meaning and context, and is faster than grep because heavy computation happens at indexing time, not at search time.
+- For locating code (where logic lives, which files to change): call codebase_search FIRST with identifier-like words — it searches declarations and text in well under a second. Then read_file the exact lines it returns; read whole files only when needed.
 - For exact text patterns, identifiers, and regex: use search_files with a narrow path and file_pattern.
-- If codebase_search returns weak results, fall back to search_files with concrete keywords from semantic results.
+- If codebase_search returns weak results, try other words (synonyms, English/Russian names, likely class or table names) or search_files with a regex and file_pattern.
 - NEVER start with a broad search_files on the workspace root without file_pattern - use codebase_search or list_files first to narrow the scope.
 - When executing commands, prefer non-interactive flags: --yes, --no-pager, -y. Redirect stderr to stdout (2>&1) when error output might be useful.
 - Check actively running terminals/processes before starting new servers or long-running tasks.

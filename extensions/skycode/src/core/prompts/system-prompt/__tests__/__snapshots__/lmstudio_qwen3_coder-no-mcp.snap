@@ -138,18 +138,18 @@ Usage:
 </plan_mode_respond>
 
 ## codebase_search
-Description: Request to perform a semantic search across the codebase. This tool finds code by meaning and context rather than exact string matches. Use it as the first-choice tool for questions like where logic is implemented, how a feature works, or where related orchestration/flow is located.
+Description: Fast code discovery without any index: matches the query words against the repository map (classes, methods, functions, SQL procedures/tables with file and line) and ranks text matches by how many query words each file contains (comments and strings too, including Russian). Use it first to locate where something lives; write the query as likely identifiers and domain words (e.g. "invoice payment schedule", "договор поиск"), not as a question. Then read_file the exact lines it points to.
 Parameters:
-- query: (required) The natural language description of what you are looking for.
+- query: (required) Words to look for: likely identifier parts and domain terms (English or the project's language).
 - max_results: (optional) The maximum number of results to return (default is 10).
 Usage:
 <codebase_search>
-<query>Search query here</query>
+<query>invoice payment schedule</query>
 <max_results>10</max_results>
 </codebase_search>
 
 ## search_files
-Description: Request to perform a regex search across files in a specified directory, providing context-rich results. Use this for exact patterns, identifiers, and literals; for semantic questions about where logic is implemented, prefer codebase_search first and use this as a fallback.
+Description: Request to perform a regex search across files in a specified directory, providing context-rich results. Use this for exact patterns, identifiers, and literals; to locate where logic is implemented, prefer codebase_search first and use this as a fallback.
 Parameters:
 - path: (required) The path of the directory to search in (relative to the current working directory /test/project). This directory will be recursively searched.
 - regex: (required) The regular expression pattern to search for. Uses Rust regex syntax.

@@ -231,7 +231,7 @@ RULES
 
 - The current working directory is `/test/project` - this is the directory where all the tools will be executed from.
 - When executing terminal commands, new terminals always open in the workspace directory. Use relative paths or chain commands with proper shell operators (e.g., `cd path && command` to change directory and run a command together).
-- For semantic questions about where logic is implemented or how features work, prefer codebase_search first. For exact text patterns and identifiers, use search_files. Both are preferred over using grep in the terminal. If you are directly instructed to use grep, ensure your search patterns are targeted and not too vague to prevent extremely large outputs.
+- To locate where logic is implemented or how features work, prefer codebase_search first (identifier-like words; it searches declarations and text). For exact text patterns and identifiers, use search_files. Both are preferred over using grep in the terminal. If you are directly instructed to use grep, ensure your search patterns are targeted and not too vague to prevent extremely large outputs.
 - When using replace_in_file, pay careful attention to the EDITING FILES section above. The most common errors are:
   - Not matching content exactly (every character, space, and newline must match)
   - Using incomplete lines in SEARCH blocks (always include complete lines from start to end)

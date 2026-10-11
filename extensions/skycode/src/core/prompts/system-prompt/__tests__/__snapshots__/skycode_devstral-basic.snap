@@ -133,20 +133,20 @@ Usage:
 </edit_notebook>
 
 ## codebase_search
-Description: Request to perform a semantic search across the codebase. This tool finds code by meaning and context rather than exact string matches. Use it as the first-choice tool for questions like where logic is implemented, how a feature works, or where related orchestration/flow is located.
+Description: Fast code discovery without any index: matches the query words against the repository map (classes, methods, functions, SQL procedures/tables with file and line) and ranks text matches by how many query words each file contains (comments and strings too, including Russian). Use it first to locate where something lives; write the query as likely identifiers and domain words (e.g. "invoice payment schedule", "договор поиск"), not as a question. Then read_file the exact lines it points to.
 Parameters:
-- query: (required) The natural language description of what you are looking for.
+- query: (required) Words to look for: likely identifier parts and domain terms (English or the project's language).
 - max_results: (optional) The maximum number of results to return (default is 10).
 - task_progress: (optional) A checklist showing task progress after this tool use is completed. The task_progress parameter must be included as a separate parameter inside of the parent tool call, it must be separate from other parameters such as content, arguments, etc. (See 'UPDATING TASK PROGRESS' section for more details)
 Usage:
 <codebase_search>
-<query>Search query here</query>
+<query>invoice payment schedule</query>
 <max_results>10</max_results>
 <task_progress>Checklist here (optional)</task_progress>
 </codebase_search>
 
 ## search_files
-Description: Request to perform a regex search across files in a specified directory, providing context-rich results. Use this for exact patterns, identifiers, and literals; for semantic questions about where logic is implemented, prefer codebase_search first and use this as a fallback.
+Description: Request to perform a regex search across files in a specified directory, providing context-rich results. Use this for exact patterns, identifiers, and literals; to locate where logic is implemented, prefer codebase_search first and use this as a fallback.
 Parameters:
 - path: (required) The path of the directory to search in (relative to the current working directory /test/project). This directory will be recursively searched.
 - regex: (required) The regular expression pattern to search for. Uses Rust regex syntax.
@@ -745,7 +745,7 @@ RULES
 - NEVER use the execute_command tool to edit, create, or delete files. Do not use shell commands like sed, awk, echo, cat, tee, printf with redirects (>, >>), or heredocs to modify file contents. Always use the dedicated file editing tools (write_to_file, replace_in_file, apply_patch, delete_file) so that all changes are tracked by the diff system and the user can review, accept, or reject them.
 - Before using the execute_command tool, you must first think about the SYSTEM INFORMATION context provided to understand the user's environment and tailor your commands to ensure they are compatible with their system. You must also consider if the command you need to run should be executed in a specific directory outside of the current working directory '/test/project', and if so prepend with `cd`'ing into that directory && then executing the command (as one command since you are stuck operating from '/test/project'). For example, if you needed to run `npm install` in a project outside of '/test/project', you would need to prepend with a `cd` i.e. pseudocode for this would be `cd (path to project) && (command, in this case npm install)`.
 - When using the search_files tool, craft your regex patterns carefully to balance specificity and flexibility. Based on the user's task you may use it to find code patterns, TODO comments, function definitions, or any text-based information across the project. The results include context, so analyze the surrounding code to better understand the matches. Leverage the search_files tool in combination with other tools for more comprehensive analysis. For example, use it to find specific code patterns, then use read_file to examine the full context of interesting matches before using replace_in_file to make informed changes.
-- Tool routing policy for code discovery: For semantic requests ("where is logic implemented", "how does X work", "find orchestrator/auth flow/handler"), call `codebase_search` first. Use `search_files` first only for exact text/pattern lookups (identifiers, regex, literals, TODO tags, known file snippets). If `codebase_search` returns weak/noisy results, then run `search_files` as fallback and refine with concrete keywords from semantic results.
+- Tool routing policy for code discovery: To locate code ("where is logic implemented", "how does X work", "find orchestrator/auth flow/handler"), call `codebase_search` first with identifier-like words (it searches declarations and ranks text matches; no index needed). Use `search_files` first only for exact text/pattern lookups (identifiers, regex, literals, TODO tags, known file snippets). If `codebase_search` returns weak/noisy results, retry with other words or run `search_files` as fallback with concrete keywords from its results. Then read_file the exact lines instead of whole large files.
 - When creating a new project (such as an app, website, or any software project), organize all new files within a dedicated project directory unless the user specifies otherwise. Use appropriate file paths when creating files, as the write_to_file tool will automatically create any necessary directories. Structure the project logically, adhering to best practices for the specific type of project being created. Unless otherwise specified, new projects should be easily run without additional setup, for example most projects can be built in HTML, CSS, and JavaScript - which you can open in a browser.
 - Be sure to consider the type of project (e.g. Python, JavaScript, web application) when determining the appropriate structure and files to include. Also consider what files may be most relevant to accomplishing the task, for example looking at a project's manifest file would help you understand the project's dependencies, which you could incorporate into any code you write.
 - When making changes to code, always consider the context in which the code is being used. Ensure that your changes are compatible with the existing codebase and that they follow the project's coding standards and best practices.

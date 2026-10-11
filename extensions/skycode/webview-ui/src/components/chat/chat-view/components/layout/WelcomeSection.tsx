@@ -5,7 +5,6 @@ import { BANNER_DATA, BannerAction, BannerActionType, BannerCardData } from "@sh
 import { GitBranch } from "lucide-react"
 import React, { useCallback, useEffect, useMemo, useState } from "react"
 import BannerCarousel from "@/components/common/BannerCarousel"
-import IndexingPromptBanner from "@/components/common/IndexingPromptBanner"
 import HistoryPreview from "@/components/history/HistoryPreview"
 import { useApiConfigurationHandlers } from "@/components/settings/utils/useApiConfigurationHandlers"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -228,7 +227,6 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 		<div className="flex flex-col flex-1 w-full h-full p-0 m-0">
 			<div className="overflow-y-auto flex flex-col pb-2.5">
 				<HomeHeader shouldShowQuickWins={shouldShowQuickWins} />
-				<IndexingPromptBanner />
 				<BannerCarousel banners={activeBanners} />
 				{!shouldShowQuickWins && taskHistory.length > 0 && <HistoryPreview showHistoryView={showHistoryView} />}
 				{/* Quick launch worktree button */}

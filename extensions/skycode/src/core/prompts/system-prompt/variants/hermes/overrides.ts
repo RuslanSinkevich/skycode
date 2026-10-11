@@ -16,7 +16,7 @@ const HERMES_AGENT_ROLE_TEMPLATE = (context: SystemPromptContext) => {
 	].join("")
 }
 
-const HERMES_TOOL_USE_TEMPLATE = `Begin every task by exploring the codebase, using codebase_search first for semantic queries, list_files/read_file for scope and deep inspection, and search_files only for exact patterns in narrow paths. Do not implement until exploration yields enough context to state objectives, approach, affected files, and risks. Briefly summarize the plan, then proceed with implementation.
+const HERMES_TOOL_USE_TEMPLATE = `Begin every task by exploring the codebase, using codebase_search first to locate code (identifier-like words), list_files/read_file for scope and deep inspection, and search_files only for exact patterns in narrow paths. Do not implement until exploration yields enough context to state objectives, approach, affected files, and risks. Briefly summarize the plan, then proceed with implementation.
 
 Tool invocation policy: Invoke tools only in assistant messages; they will not execute if placed inside reasoning blocks. Use reasoning blocks solely for analysis/option-weighing; place all tool XML blocks in assistant messages to execute them.
 

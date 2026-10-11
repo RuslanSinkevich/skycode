@@ -25,7 +25,7 @@ const generic: SkycodeToolSpec = {
 	id,
 	name: "search_files",
 	description:
-		"Request to perform a regex search across files in a specified directory, providing context-rich results. Use this for exact patterns, identifiers, and literals; for semantic questions about where logic is implemented, prefer codebase_search first and use this as a fallback.",
+		"Request to perform a regex search across files in a specified directory, providing context-rich results. Use this for exact patterns, identifiers, and literals; to locate where logic is implemented, prefer codebase_search first and use this as a fallback.",
 	parameters: [
 		{
 			name: "path",
@@ -55,7 +55,7 @@ const NATIVE_NEXT_GEN: SkycodeToolSpec = {
 	id,
 	name: "search_files",
 	description:
-		"Request to perform a regex search across files in a specified directory, providing context-rich results. Use this for exact patterns, identifiers, and literals; for semantic questions about where logic is implemented, prefer codebase_search first and use this as a fallback.",
+		"Request to perform a regex search across files in a specified directory, providing context-rich results. Use this for exact patterns, identifiers, and literals; to locate where logic is implemented, prefer codebase_search first and use this as a fallback.",
 	parameters: [
 		{
 			name: "path",

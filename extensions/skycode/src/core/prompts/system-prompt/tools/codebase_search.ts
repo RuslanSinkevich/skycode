@@ -5,13 +5,13 @@ import { TASK_PROGRESS_PARAMETER } from "../types"
 
 /**
  * ## codebase_search
- * Description: Request to perform a semantic search across the codebase. This tool finds code by meaning and context rather than exact string matches. Use it to understand how features are implemented, find related logic, or explore unfamiliar parts of the codebase.
+ * Description: Fast code discovery without any index: matches the query words against the repository map (classes, methods, functions, SQL procedures/tables with file and line) and ranks text matches by how many query words each file contains (comments and strings too, including Russian). Use it first to locate where something lives; write the query as likely identifiers and domain words (e.g. "invoice payment schedule", "договор поиск"), not as a question. Then read_file the exact lines it points to.
  * Parameters:
- * - query: (required) The natural language description of what you are looking for.
+ * - query: (required) Words to look for: likely identifier parts and domain terms (English or the project's language).
  * - max_results: (optional) The maximum number of results to return (default is 10).
  * Usage:
  * <codebase_search>
- * <query>How is user authentication implemented?</query>
+ * <query>user login authentication token</query>
  * <max_results>15</max_results>
  * </codebase_search>
  */
@@ -23,13 +23,13 @@ const generic: SkycodeToolSpec = {
 	id,
 	name: "codebase_search",
 	description:
-		"Request to perform a semantic search across the codebase. This tool finds code by meaning and context rather than exact string matches. Use it as the first-choice tool for questions like where logic is implemented, how a feature works, or where related orchestration/flow is located.",
+		"Fast code discovery without any index: matches the query words against the repository map (classes, methods, functions, SQL procedures/tables with file and line) and ranks text matches by how many query words each file contains (comments and strings too, including Russian). Use it first to locate where something lives; write the query as likely identifiers and domain words (e.g. \"invoice payment schedule\", \"договор поиск\"), not as a question. Then read_file the exact lines it points to.",
 	parameters: [
 		{
 			name: "query",
 			required: true,
-			instruction: "The natural language description of what you are looking for.",
-			usage: "Search query here",
+			instruction: "Words to look for: likely identifier parts and domain terms (English or the project's language).",
+			usage: "invoice payment schedule",
 		},
 		{
 			name: "max_results",
@@ -46,13 +46,13 @@ const NATIVE_NEXT_GEN: SkycodeToolSpec = {
 	id,
 	name: "codebase_search",
 	description:
-		"Request to perform a semantic search across the codebase. This tool finds code by meaning and context rather than exact string matches and should be preferred first for semantic code discovery.",
+		"Fast code discovery without any index: matches query words against the repository map (declarations with file and line) and ranks text matches by how many query words each file contains. Use it first to locate code; write the query as likely identifiers and domain words, not as a question, then read_file the lines it points to.",
 	parameters: [
 		{
 			name: "query",
 			required: true,
-			instruction: "The natural language description of what you are looking for.",
-			usage: "Search query here",
+			instruction: "Words to look for: likely identifier parts and domain terms (English or the project's language).",
+			usage: "invoice payment schedule",
 		},
 		{
 			name: "max_results",
