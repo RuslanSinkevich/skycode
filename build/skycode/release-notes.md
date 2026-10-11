@@ -3,12 +3,16 @@
 
 ### Что нового
 
-- Индекс кода работает на встроенном SQLite — больше не уходит в медленное JSON-хранилище
-- Убран нативный модуль better-sqlite3: обновления Electron больше не ломают индекс
-- Исправлен поиск инстанса по порту в блокировках
+- Поиск по коду без индексации: карта репозитория (классы, методы, процедуры SQL) и ранжированный текстовый поиск — за доли секунды, без скачивания моделей
+- Агент сразу видит обзор самых важных файлов проекта
+- Русские слова в комментариях и строках находятся, в том числе в файлах windows-1251
+- Векторная индексация стала необязательной и по умолчанию выключена
+- Номер версии в «О программе» берётся из релиза
 
 ### What's new
 
-- Code index runs on the built-in SQLite — no more falling back to the slow JSON storage
-- Removed the native better-sqlite3 module: Electron updates no longer break the index
-- Fixed instance lookup by port in locks
+- Code search without indexing: a repository map (classes, methods, SQL procedures) plus ranked text search — sub-second, no model downloads
+- The agent sees an overview of the project's most important files up front
+- Russian words in comments and strings are found, including windows-1251 files
+- Vector indexing is now optional and off by default
+- The version in About now comes from the release
