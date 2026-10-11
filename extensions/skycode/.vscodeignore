@@ -63,10 +63,6 @@ old_docs/**
 # Include native ONNX runtime used by @xenova/transformers for local embeddings
 !node_modules/onnxruntime-node/**
 
-# SQLite index storage (native binding; must match extension host Electron ABI)
-!node_modules/better-sqlite3/**
-!native/sqlite/**
-
 # Include default themes JSON files used in getTheme
 !src/integrations/theme/default-themes/**
 

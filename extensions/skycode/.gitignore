@@ -61,8 +61,6 @@ vendor/whisper/
 # ONNX embedding models (downloaded automatically on first run)
 /models/
 
-# Native sqlite prebuilds (regenerated via `npm run rebuild:native`)
-native/sqlite/
 
 # Build/lint scratch logs
 lint.txt

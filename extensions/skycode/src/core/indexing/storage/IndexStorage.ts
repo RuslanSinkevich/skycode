@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as crypto from "node:crypto"
 /**
  * IndexStorage — SQLite storage for index metadata and chunks.
  *
@@ -13,19 +14,19 @@
  * At runtime, vectors are loaded into a flat Float32Array cache for fast cosine search.
  */
 import * as fs from "node:fs"
-import * as path from "node:path"
-import * as crypto from "node:crypto"
 import * as os from "node:os"
+import * as path from "node:path"
 import * as vscode from "vscode"
-import type { ChunkRow, IndexMetadata } from "../types"
+import { openSqlite, type SqliteDb } from "@/core/storage/openSqlite"
 import { Logger } from "@/shared/services/Logger"
+import type { ChunkRow, IndexMetadata } from "../types"
 
-type SqliteDbLike = {
-	pragma(sql: string): void
-	exec(sql: string): void
-	prepare(sql: string): { get(): any; all(): any[]; run(...args: any[]): void }
-	transaction<T extends any[]>(fn: (...args: T) => void): (...args: T) => void
-	close(): void
+/** BLOB из SQLite → Float32Array. Копируем, если смещение не кратно 4 (иначе RangeError). */
+function blobToFloat32(blob: Uint8Array): Float32Array {
+	if (blob.byteOffset % Float32Array.BYTES_PER_ELEMENT === 0) {
+		return new Float32Array(blob.buffer, blob.byteOffset, blob.byteLength / Float32Array.BYTES_PER_ELEMENT)
+	}
+	return new Float32Array(blob.slice().buffer)
 }
 
 /** Directory where all indexing data is stored */
@@ -44,7 +45,7 @@ export class IndexStorage {
 	private readonly jsonMetaPath: string
 	private readonly jsonChunksPath: string
 	private readonly jsonVectorsPath: string
-	private db: SqliteDbLike | null = null
+	private db: SqliteDb | null = null
 	private backend: "sqlite" | "json" = "sqlite"
 	private backendWarningLogged = false
 	private backendInfoLogged = false
@@ -61,10 +62,9 @@ export class IndexStorage {
 	private fileHashIndex = new Map<string, string>()
 	/** Fast lookup: filePath → all chunk indices in `chunks` array (for O(1) removal). */
 	private fileChunkIndex = new Map<string, Set<number>>()
-	private readonly extensionPath: string
 
-	constructor(workspacePath: string, extensionPath = "") {
-		this.extensionPath = extensionPath
+	// _extensionPath раньше нужен был для поиска нативного better-sqlite3; с node:sqlite не используется.
+	constructor(workspacePath: string, _extensionPath = "") {
 		const hash = workspaceHash(workspacePath)
 		this.indexDir = path.join(getIndexBaseDir(), hash)
 		this.dbPath = path.join(this.indexDir, "index.db")
@@ -77,40 +77,15 @@ export class IndexStorage {
 		await fs.promises.mkdir(this.indexDir, { recursive: true })
 	}
 
-	private resolveSqliteNativeBinding(): string {
-		const electron = process.versions.electron
-		if (this.extensionPath && electron) {
-			const versioned = path.join(
-				this.extensionPath,
-				"native",
-				"sqlite",
-				`electron-${electron}-${process.platform}-${process.arch}`,
-				"better_sqlite3.node",
-			)
-			if (fs.existsSync(versioned)) {
-				return versioned
-			}
-		}
-		const betterSqlite3Dir = path.dirname(require.resolve("better-sqlite3/package.json"))
-		const fallback = path.join(betterSqlite3Dir, "build", "Release", "better_sqlite3.node")
-		if (fs.existsSync(fallback)) {
-			return fallback
-		}
-		throw new Error(
-			`better_sqlite3.node not found (electron=${electron ?? "unknown"}, ext=${this.extensionPath || "n/a"})`,
-		)
-	}
-
 	private openDb(): boolean {
 		if (this.db) {
 			return true
 		}
 		try {
-			const Database = require("better-sqlite3")
-			const nativeBindingPath = this.resolveSqliteNativeBinding()
-			this.db = new Database(this.dbPath, { nativeBinding: nativeBindingPath })
-			;(this.db as any).pragma("journal_mode = WAL")
-			;(this.db as any).pragma("synchronous = NORMAL")
+			// [SKYCODE] node:sqlite вместо better-sqlite3 — см. core/storage/openSqlite.ts
+			this.db = openSqlite(this.dbPath)
+			this.db.pragma("journal_mode = WAL")
+			this.db.pragma("synchronous = NORMAL")
 			this.createTables()
 			this.backend = "sqlite"
 			if (!this.backendInfoLogged) {
@@ -129,7 +104,7 @@ export class IndexStorage {
 				// user can fix the install (usually a missing native binding).
 				void vscode.window.showWarningMessage(
 					// allow-any-unicode-next-line
-					"Skycode: SQLite недоступен, используется медленный JSON backend. Переустановите расширение или сообщите в поддержку.",
+					"Skycode: SQLite недоступен, используется медленный JSON backend. Сообщите в поддержку.",
 				)
 			}
 			if (!this.backendInfoLogged) {
@@ -141,7 +116,7 @@ export class IndexStorage {
 	}
 
 	private createTables(): void {
-		;(this.db as any).exec(`
+		this.db!.exec(`
 			CREATE TABLE IF NOT EXISTS metadata (
 				id INTEGER PRIMARY KEY CHECK (id = 1),
 				embedding_provider_id TEXT NOT NULL,
@@ -181,7 +156,9 @@ export class IndexStorage {
 
 	/** Grow `this.vectors` to at least `minCapacity` floats, doubling when needed. */
 	private ensureVectorCapacity(minCapacity: number): void {
-		if (this.vectors.length >= minCapacity) { return }
+		if (this.vectors.length >= minCapacity) {
+			return
+		}
 		let newCapacity = this.vectors.length > 0 ? this.vectors.length : 1024 * this.dimensions
 		while (newCapacity < minCapacity) {
 			newCapacity *= 2
@@ -216,16 +193,12 @@ export class IndexStorage {
 			await this.ensureDir()
 			const hasSqlite = fs.existsSync(this.dbPath)
 			const hasJson =
-				fs.existsSync(this.jsonMetaPath) &&
-				fs.existsSync(this.jsonChunksPath) &&
-				fs.existsSync(this.jsonVectorsPath)
+				fs.existsSync(this.jsonMetaPath) && fs.existsSync(this.jsonChunksPath) && fs.existsSync(this.jsonVectorsPath)
 
 			if (hasSqlite && this.openDb()) {
-				const metaRow = (this.db as any)
-					.prepare(
-						"SELECT embedding_provider_id, dimensions, last_indexed_at, total_chunks FROM metadata WHERE id = 1",
-					)
-					.get()
+				const metaRow = this.db!.prepare(
+					"SELECT embedding_provider_id, dimensions, last_indexed_at, total_chunks FROM metadata WHERE id = 1",
+				).get()
 				if (!metaRow) {
 					this.resetInMemory()
 					return false
@@ -239,17 +212,15 @@ export class IndexStorage {
 				}
 				this.dimensions = metaRow.dimensions
 
-				const metadataRows = (this.db as any).prepare("SELECT key, value FROM metadata_store").all()
+				const metadataRows = this.db!.prepare("SELECT key, value FROM metadata_store").all()
 				this.metadataStore.clear()
 				for (const row of metadataRows) {
 					this.metadataStore.set(row.key, row.value)
 				}
 
-				const rows = (this.db as any)
-					.prepare(
-						"SELECT id, file_path, content, start_line, end_line, language, file_hash, vector FROM chunks ORDER BY rowid ASC",
-					)
-					.all()
+				const rows = this.db!.prepare(
+					"SELECT id, file_path, content, start_line, end_line, language, file_hash, vector FROM chunks ORDER BY rowid ASC",
+				).all()
 
 				this.chunks = []
 				// Pre-allocate once; no per-chunk reallocation.
@@ -258,11 +229,7 @@ export class IndexStorage {
 				this.vectorsLength = totalFloats
 				let vectorOffset = 0
 				for (const row of rows) {
-					const vec = new Float32Array(
-						row.vector.buffer,
-						row.vector.byteOffset,
-						row.vector.byteLength / Float32Array.BYTES_PER_ELEMENT,
-					)
+					const vec = blobToFloat32(row.vector)
 					this.vectors.set(vec, vectorOffset)
 					this.chunks.push({
 						id: row.id,
@@ -296,10 +263,7 @@ export class IndexStorage {
 				this.chunks = parsedChunks
 				this.metadataStore = new Map<string, string>(Object.entries((parsedMeta as any).metadataStore ?? {}))
 				this.vectors = new Float32Array(
-					vectorsBuffer.buffer.slice(
-						vectorsBuffer.byteOffset,
-						vectorsBuffer.byteOffset + vectorsBuffer.byteLength,
-					),
+					vectorsBuffer.buffer.slice(vectorsBuffer.byteOffset, vectorsBuffer.byteOffset + vectorsBuffer.byteLength),
 				)
 				this.vectorsLength = this.vectors.length
 				this.rebuildFileIndex()
@@ -320,29 +284,27 @@ export class IndexStorage {
 			return
 		}
 		if (this.backend === "sqlite" && this.db) {
-			;(this.db as any)
-				.prepare(
-					`INSERT INTO metadata (id, embedding_provider_id, dimensions, last_indexed_at, total_chunks)
+			this.db!.prepare(
+				`INSERT INTO metadata (id, embedding_provider_id, dimensions, last_indexed_at, total_chunks)
 					VALUES (1, ?, ?, ?, ?)
 					ON CONFLICT(id) DO UPDATE SET
 					embedding_provider_id=excluded.embedding_provider_id,
 					dimensions=excluded.dimensions,
 					last_indexed_at=excluded.last_indexed_at,
 					total_chunks=excluded.total_chunks`,
-				)
-				.run(
-					this.metadata.embeddingProviderId,
-					this.metadata.dimensions,
-					this.metadata.lastIndexedAt,
-					this.metadata.totalChunks,
-				)
+			).run(
+				this.metadata.embeddingProviderId,
+				this.metadata.dimensions,
+				this.metadata.lastIndexedAt,
+				this.metadata.totalChunks,
+			)
 
-			const upsertMetadata = (this.db as any).prepare(
+			const upsertMetadata = this.db!.prepare(
 				`INSERT INTO metadata_store (key, value)
 					VALUES (?, ?)
 					ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
 			)
-			const writeMetadataStore = (this.db as any).transaction((entries: Array<[string, string]>) => {
+			const writeMetadataStore = this.db!.transaction((entries: Array<[string, string]>) => {
 				for (const [key, value] of entries) {
 					upsertMetadata.run(key, value)
 				}
@@ -362,11 +324,7 @@ export class IndexStorage {
 		await fs.promises.writeFile(this.jsonChunksPath, JSON.stringify(this.chunks), "utf-8")
 		// Write only the used portion of the growable buffer, not any over-allocated tail.
 		const used = this.vectors.subarray(0, this.vectorsLength)
-		const vectorBuffer = Buffer.from(
-			used.buffer,
-			used.byteOffset,
-			used.byteLength,
-		)
+		const vectorBuffer = Buffer.from(used.buffer, used.byteOffset, used.byteLength)
 		await fs.promises.writeFile(this.jsonVectorsPath, vectorBuffer)
 	}
 
@@ -374,7 +332,7 @@ export class IndexStorage {
 		this.resetInMemory()
 		if (this.backend === "sqlite" && this.db) {
 			try {
-				;(this.db as any).close()
+				this.db!.close()
 			} catch {
 				// ignore
 			}
@@ -391,8 +349,8 @@ export class IndexStorage {
 	beginIndexing(embeddingProviderId: string, dimensions: number): void {
 		fs.mkdirSync(this.indexDir, { recursive: true })
 		if (this.openDb()) {
-			;(this.db as any).prepare("DELETE FROM chunks").run()
-			;(this.db as any).prepare("DELETE FROM metadata").run()
+			this.db!.prepare("DELETE FROM chunks").run()
+			this.db!.prepare("DELETE FROM metadata").run()
 		}
 
 		this.chunks = []
@@ -414,34 +372,23 @@ export class IndexStorage {
 		if (newChunks.length !== newVectors.length) {
 			throw new Error("Chunks and vectors arrays must have the same length")
 		}
-		if (newChunks.length === 0) { return }
+		if (newChunks.length === 0) {
+			return
+		}
 
 		const startOffset = this.vectorsLength
 		if (this.backend === "sqlite" && this.db) {
-			const insert = (this.db as any).prepare(
+			const insert = this.db!.prepare(
 				`INSERT OR REPLACE INTO chunks
 					(id, file_path, content, start_line, end_line, language, file_hash, vector)
 					VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 			)
-			const insertMany = (this.db as any).transaction((chunks: ChunkRow[], vectors: number[][]) => {
+			const insertMany = this.db!.transaction((chunks: ChunkRow[], vectors: number[][]) => {
 				for (let i = 0; i < chunks.length; i++) {
 					const c = chunks[i]
 					const vecArray = new Float32Array(vectors[i])
-					const vecBuffer = Buffer.from(
-						vecArray.buffer,
-						vecArray.byteOffset,
-						vecArray.byteLength,
-					)
-					insert.run(
-						c.id,
-						c.filePath,
-						c.content,
-						c.startLine,
-						c.endLine,
-						c.language,
-						c.fileHash,
-						vecBuffer,
-					)
+					const vecBuffer = Buffer.from(vecArray.buffer, vecArray.byteOffset, vecArray.byteLength)
+					insert.run(c.id, c.filePath, c.content, c.startLine, c.endLine, c.language, c.fileHash, vecBuffer)
 				}
 			})
 			insertMany(newChunks, newVectors)
@@ -482,7 +429,7 @@ export class IndexStorage {
 
 	removeFile(filePath: string): number {
 		if (this.backend === "sqlite" && this.db) {
-			;(this.db as any).prepare("DELETE FROM chunks WHERE file_path = ?").run(filePath)
+			this.db!.prepare("DELETE FROM chunks WHERE file_path = ?").run(filePath)
 		}
 
 		const indices = this.fileChunkIndex.get(filePath)
@@ -526,7 +473,9 @@ export class IndexStorage {
 
 	isFileChanged(filePath: string, currentHash: string): boolean {
 		const existingHash = this.fileHashIndex.get(filePath)
-		if (existingHash === undefined) { return true }
+		if (existingHash === undefined) {
+			return true
+		}
 		return existingHash !== currentHash
 	}
 

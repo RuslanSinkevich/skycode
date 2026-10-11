@@ -213,7 +213,7 @@ const extensionConfig = {
 	...baseConfig,
 	entryPoints: ["src/extension.ts"],
 	outfile: `${destDir}/extension.js`,
-	external: ["vscode", "onnxruntime-node", "better-sqlite3"],
+	external: ["vscode", "onnxruntime-node"],
 }
 
 // Standalone-specific configuration
@@ -223,7 +223,7 @@ const standaloneConfig = {
 	outfile: `${destDir}/skycode-core.js`,
 	// These modules need to load files from the module directory at runtime,
 	// so they cannot be bundled.
-	external: ["vscode", "@grpc/reflection", "grpc-health-check", "better-sqlite3"],
+	external: ["vscode", "@grpc/reflection", "grpc-health-check"],
 }
 
 // E2E build script configuration

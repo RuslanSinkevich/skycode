@@ -1,11 +1,12 @@
-import Database from "better-sqlite3"
 import * as fs from "fs"
 import { existsSync, mkdirSync, unlinkSync } from "fs"
 import * as path from "path"
+// [SKYCODE] node:sqlite вместо better-sqlite3 — см. core/storage/openSqlite.ts
+import { openSqlite, type SqliteDb } from "@/core/storage/openSqlite"
 import { Logger } from "@/shared/services/Logger"
 import type { LockRow, SqliteLockManagerOptions } from "./types"
 export class SqliteLockManager {
-	private db!: Database.Database
+	private db!: SqliteDb
 	private instanceAddress: string
 	private dbPath: string
 	private readonly STALE_LOCK_TIMEOUT = 1 * 60 * 1000 // 1 minute in milliseconds
@@ -52,11 +53,11 @@ export class SqliteLockManager {
 
 				if (!dbExists) {
 					// Database doesn't exist, create it
-					this.db = new Database(this.dbPath)
+					this.db = openSqlite(this.dbPath)
 					this.initializeDatabase()
 				} else {
 					// Database exists, just open it
-					this.db = new Database(this.dbPath)
+					this.db = openSqlite(this.dbPath)
 				}
 			} finally {
 				// Always clean up the lock file
