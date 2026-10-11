@@ -113,7 +113,7 @@ export interface TaskCallbacks {
 
 	updateFCListFromToolResponse: (taskProgress: string | undefined) => Promise<void>
 
-	shouldAutoApproveTool: (toolName: SkycodeDefaultTool) => boolean | [boolean, boolean]
+	shouldAutoApproveTool: (toolName: SkycodeDefaultTool) => boolean | [boolean, boolean] | [boolean, boolean, boolean]
 	shouldAutoApproveToolWithPath: (toolName: SkycodeDefaultTool, path?: string) => Promise<boolean>
 
 	// Additional callbacks for task management

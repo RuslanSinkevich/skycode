@@ -38,8 +38,9 @@ export class AutoApprove {
 	}
 
 	// Check if the tool should be auto-approved based on the settings
-	// Returns bool for most tools, and tuple for tools with nested settings
-	shouldAutoApproveTool(toolName: SkycodeDefaultTool): boolean | [boolean, boolean] {
+	// Returns bool for most tools, and tuple for tools with nested settings.
+	// [SKYCODE] У BASH кортеж из трёх: [безопасные, все, всё кроме опасных].
+	shouldAutoApproveTool(toolName: SkycodeDefaultTool): boolean | [boolean, boolean] | [boolean, boolean, boolean] {
 		if (this.stateManager.getGlobalSettingsKey("yoloModeToggled")) {
 			switch (toolName) {
 			case SkycodeDefaultTool.FILE_READ:
@@ -82,9 +83,12 @@ export class AutoApprove {
 		case SkycodeDefaultTool.FILE_DELETE:
 			return autoApprovalSettings.actions.deleteFiles ?? false
 		case SkycodeDefaultTool.BASH:
+			// [SKYCODE] Третий элемент — режим «всё, кроме опасного». Порядок менять нельзя:
+			// ExecuteCommandToolHandler разбирает кортеж по позициям.
 			return [
 				autoApprovalSettings.actions.executeSafeCommands ?? false,
 				autoApprovalSettings.actions.executeAllCommands ?? false,
+				autoApprovalSettings.actions.executeNonDestructiveCommands ?? false,
 			]
 		case SkycodeDefaultTool.BROWSER:
 		case SkycodeDefaultTool.WEB_FETCH:

@@ -189,7 +189,7 @@ describe("AutoApprove.shouldAutoApproveTool", () => {
 				settings: { executeSafeCommands: false, executeAllCommands: false },
 			})
 			const result = aa.shouldAutoApproveTool(SkycodeDefaultTool.BASH)
-			result.should.deepEqual([false, false])
+			result.should.deepEqual([false, false, false])
 		})
 
 		it("should return [true, false] when only executeSafeCommands on", () => {
@@ -197,7 +197,7 @@ describe("AutoApprove.shouldAutoApproveTool", () => {
 				settings: { executeSafeCommands: true, executeAllCommands: false },
 			})
 			const result = aa.shouldAutoApproveTool(SkycodeDefaultTool.BASH)
-			result.should.deepEqual([true, false])
+			result.should.deepEqual([true, false, false])
 		})
 
 		it("should return [true, true] when both settings on", () => {
@@ -205,7 +205,16 @@ describe("AutoApprove.shouldAutoApproveTool", () => {
 				settings: { executeSafeCommands: true, executeAllCommands: true },
 			})
 			const result = aa.shouldAutoApproveTool(SkycodeDefaultTool.BASH)
-			result.should.deepEqual([true, true])
+			result.should.deepEqual([true, true, false])
+		})
+
+		// [SKYCODE] Третий режим: «всё, кроме опасного».
+		it("should return [false, false, true] when only executeNonDestructiveCommands on", () => {
+			const aa = createAutoApprove({
+				settings: { executeSafeCommands: false, executeAllCommands: false, executeNonDestructiveCommands: true },
+			})
+			const result = aa.shouldAutoApproveTool(SkycodeDefaultTool.BASH)
+			result.should.deepEqual([false, false, true])
 		})
 
 		it("should always return tuple", () => {

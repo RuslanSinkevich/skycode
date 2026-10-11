@@ -1110,6 +1110,8 @@
 	"permissions.editAllFilesShort": "Edit (all)",
 	"permissions.executeSafeCommands": "Execute safe commands",
 	"permissions.executeSafeCommandsShort": "Safe Commands",
+	"permissions.executeNonDestructiveCommands": "Execute all commands except dangerous ones",
+	"permissions.executeNonDestructiveCommandsShort": "Except Dangerous",
 	"permissions.executeAllCommands": "Execute all commands",
 	"permissions.executeAllCommandsShort": "All Commands",
 	"permissions.deleteFiles": "Auto-approve file deletion",

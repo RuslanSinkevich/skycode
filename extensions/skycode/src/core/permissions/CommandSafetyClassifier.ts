@@ -16,7 +16,19 @@
  * [SKYCODE] This module is part of the security layer for auto-approve permissions.
  */
 
-export type CommandSafety = "safe" | "unsafe"
+/**
+ * [SKYCODE] Три состояния, а не два.
+ *
+ * - `safe`    — команда в белом списке и читает, не меняя ничего.
+ * - `unsafe`  — команда в чёрном списке, с опасным флагом или с перенаправлением вывода.
+ * - `unknown` — не опознана: ни в одном из списков. Ничего плохого про неё не известно, но и
+ *               ничего хорошего тоже. Раньше такие попадали в `unsafe`, из-за чего режим
+ *               «безопасные команды» спрашивал про каждую незнакомую мелочь, и пользователю
+ *               приходилось включать «все команды», отключая проверки совсем.
+ *
+ * Режим «всё, кроме опасного» одобряет `safe` и `unknown`, но не `unsafe`.
+ */
+export type CommandSafety = "safe" | "unsafe" | "unknown"
 
 export interface ClassificationResult {
 	safety: CommandSafety
@@ -347,6 +359,10 @@ export class CommandSafetyClassifier {
 		// Split by shell operators: &&, ||, |, ;
 		const segments = this.splitCommand(trimmed)
 
+		// [SKYCODE] Итог по цепочке берётся по худшему сегменту: один `unsafe` делает опасной всю
+		// команду, один `unknown` — неопознанной. Иначе `ls && мой-скрипт` сошло бы за безопасное.
+		let unknownResult: ClassificationResult | undefined
+
 		for (const segment of segments) {
 			const segmentTrimmed = segment.trim()
 			if (!segmentTrimmed) { continue }
@@ -355,9 +371,12 @@ export class CommandSafetyClassifier {
 			if (result.safety === "unsafe") {
 				return result
 			}
+			if (result.safety === "unknown" && !unknownResult) {
+				unknownResult = result
+			}
 		}
 
-		return { safety: "safe", reason: "all_segments_safe" }
+		return unknownResult ?? { safety: "safe", reason: "all_segments_safe" }
 	}
 
 	/**
@@ -391,9 +410,11 @@ export class CommandSafetyClassifier {
 			}
 		}
 
-		// Not in whitelist — unsafe by default
+		// [SKYCODE] Не опознана: не в белом списке, но и не в чёрном. Для режима «безопасные
+		// команды» это по-прежнему отказ (он пропускает только `safe`), а режим «всё, кроме
+		// опасного» такую команду пропустит.
 		return {
-			safety: "unsafe",
+			safety: "unknown",
 			reason: "unknown_command",
 			unsafeSegment: segment,
 		}

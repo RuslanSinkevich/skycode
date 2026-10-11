@@ -30,7 +30,7 @@ export interface StronglyTypedUIHelpers {
 	removeLastPartialMessageIfExistsWithType: (type: "ask" | "say", askOrSay: SkycodeAsk | SkycodeSay) => Promise<void>
 
 	// Approval methods
-	shouldAutoApproveTool: (toolName: SkycodeDefaultTool) => boolean | [boolean, boolean]
+	shouldAutoApproveTool: (toolName: SkycodeDefaultTool) => boolean | [boolean, boolean] | [boolean, boolean, boolean]
 	shouldAutoApproveToolWithPath: (toolName: SkycodeDefaultTool, path?: string) => Promise<boolean>
 	askApproval: (messageType: SkycodeAsk, message: string) => Promise<boolean>
 

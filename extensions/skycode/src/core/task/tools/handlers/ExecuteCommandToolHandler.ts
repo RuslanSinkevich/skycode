@@ -137,14 +137,19 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 			? config.autoApprover.shouldAutoApproveTool(SkycodeDefaultTool.BASH)
 			: false
 
-		// autoApproveResult for BASH is [executeSafeCommands, executeAllCommands]
-		const [executeSafeCommands, executeAllCommands] = Array.isArray(autoApproveResult)
+		// autoApproveResult for BASH is [executeSafeCommands, executeAllCommands, executeNonDestructiveCommands]
+		const [executeSafeCommands, executeAllCommands, executeNonDestructiveCommands] = Array.isArray(autoApproveResult)
 			? autoApproveResult
-			: [false, false]
+			: [false, false, false]
 
 		if (executeAllCommands) {
 			// User opted in to auto-approve ALL commands
 			didAutoApprove = true
+		} else if (executeNonDestructiveCommands) {
+			// [SKYCODE] «Всё, кроме опасного»: пропускаем и незнакомые команды, спрашиваем только
+			// про те, что в чёрном списке, с опасным флагом или с перенаправлением вывода.
+			const safety = new CommandSafetyClassifier().classify(actualCommand)
+			didAutoApprove = safety.safety !== "unsafe"
 		} else if (executeSafeCommands) {
 			// Check if the command is safe (read-only)
 			const classifier = new CommandSafetyClassifier()

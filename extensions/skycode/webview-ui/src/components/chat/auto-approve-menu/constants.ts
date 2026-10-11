@@ -25,6 +25,19 @@ export const ACTION_METADATA: ActionMetadata[] = [
 			parentActionId: "executeSafeCommands",
 		},
 	},
+	// [SKYCODE] Середина между белым списком и «вообще без проверок»: одобряет всё, кроме
+	// команд из чёрного списка, опасных флагов и перенаправления вывода.
+	//
+	// Намеренно отдельным пунктом, а не третьим уровнем вложенности: каскад в updateAction
+	// снимает только непосредственный subAction, поэтому на трёх уровнях «все команды»
+	// остались бы включёнными, но скрытыми от глаз. Приоритет режимов задан в
+	// ExecuteCommandToolHandler: все > кроме опасных > безопасные.
+	{
+		id: "executeNonDestructiveCommands",
+		labelKey: "permissions.executeNonDestructiveCommands",
+		shortNameKey: "permissions.executeNonDestructiveCommandsShort",
+		icon: "codicon-shield",
+	},
 	{
 		id: "deleteFiles",
 		labelKey: "permissions.deleteFiles",

@@ -69,7 +69,7 @@ export class ToolExecutor {
 	private diffSystem: DiffSystem | null
 
 	// Auto-approval methods using the AutoApprove class
-	private shouldAutoApproveTool(toolName: SkycodeDefaultTool): boolean | [boolean, boolean] {
+	private shouldAutoApproveTool(toolName: SkycodeDefaultTool): boolean | [boolean, boolean] | [boolean, boolean, boolean] {
 		return this.autoApprover.shouldAutoApproveTool(toolName)
 	}
 

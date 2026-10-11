@@ -17,6 +17,12 @@ export interface AutoApprovalSettings {
 		editFiles: boolean // Edit files in the working directory
 		editFilesExternally?: boolean // Edit files outside of the working directory
 		executeSafeCommands?: boolean // Execute safe commands
+		/**
+		 * [SKYCODE] Выполнять всё, кроме заведомо опасного: команда одобряется, если она не из
+		 * чёрного списка (rm, sudo, ssh, npm install…), без опасных флагов и без перенаправления
+		 * вывода. Середина между «только белый список» и «вообще без проверок».
+		 */
+		executeNonDestructiveCommands?: boolean
 		executeAllCommands?: boolean // Execute all commands
 		allowedCommandPatterns?: string[] // Command patterns the user added by hand
 		disabledDefaultCommandPatterns?: string[] // Built-in safe patterns the user switched off
@@ -40,6 +46,7 @@ export const DEFAULT_AUTO_APPROVAL_SETTINGS: AutoApprovalSettings = {
 		editFiles: true,
 		editFilesExternally: false,
 		executeSafeCommands: true,
+		executeNonDestructiveCommands: false,
 		executeAllCommands: false,
 		deleteFiles: false,
 		editNotebooks: false,

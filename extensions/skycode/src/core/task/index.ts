@@ -155,6 +155,11 @@ export class Task {
 	 * Повторяются в environment_details каждое сообщение — см. место их чтения ниже.
 	 */
 	private criticalRulesReminder?: string
+	/**
+	 * [SKYCODE] Набор условных правил, о котором уже сообщили в чат (имена через `|`).
+	 * Нужен, чтобы «Применены условные правила» не повторялось на каждый запрос.
+	 */
+	private lastReportedConditionalRules?: string
 
 	taskState: TaskState
 
@@ -2041,11 +2046,19 @@ export class Task {
 			mode: this.stateManager.getGlobalSettingsKey("mode") as "plan" | "act" | "ask" | "debug",
 		}
 
-		// Notify user if any conditional rules were applied for this request
+		// [SKYCODE] Сработавшие условные правила больше не печатаются в чат.
+		// Системный промпт пересобирается на каждый запрос, поэтому строка «Применены условные
+		// правила» выпускалась перед каждым шагом агента и забивала ленту одинаковыми баннерами.
+		// Информация осталась в логе — там она нужна для разбора, а в чате только мешала.
 		const activatedConditionalRules = [...globalRules.activatedConditionalRules, ...localRules.activatedConditionalRules]
-		if (activatedConditionalRules.length > 0) {
-			await this.say("conditional_rules_applied", JSON.stringify({ rules: activatedConditionalRules }))
+		const conditionalRulesKey = activatedConditionalRules
+			.map((rule) => rule.name)
+			.sort()
+			.join("|")
+		if (conditionalRulesKey && conditionalRulesKey !== this.lastReportedConditionalRules) {
+			Logger.log(`[Task] Conditional rules applied: ${conditionalRulesKey}`)
 		}
+		this.lastReportedConditionalRules = conditionalRulesKey
 
 		const { systemPrompt, tools } = await getSystemPrompt(promptContext)
 		this.useNativeToolCalls = !!tools?.length

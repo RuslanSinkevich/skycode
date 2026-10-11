@@ -420,27 +420,47 @@ describe("CommandSafetyClassifier", () => {
 			})
 		})
 
+		// [SKYCODE] Неопознанные команды теперь `unknown`, а не `unsafe`: про них ничего плохого
+		// не известно, но и в белый список они не входят. Режим «безопасные команды» их
+		// по-прежнему не пропускает (там проверяется строго `safe`), а «всё, кроме опасного» —
+		// пропускает. Опасность остаётся за чёрным списком, флагами и перенаправлениями.
 		describe("Unknown commands", () => {
-			it("should classify unknown commands as unsafe", () => {
+			it("should classify unknown commands as unknown", () => {
 				const result = classifier.classify("some-random-command --flag")
-				result.safety.should.equal("unsafe")
+				result.safety.should.equal("unknown")
 				result.reason.should.equal("unknown_command")
 			})
 
-			it("should classify 'python script.py' as unsafe (not in whitelist)", () => {
-				classifier.classify("python script.py").safety.should.equal("unsafe")
+			it("should classify 'python script.py' as unknown (not in whitelist)", () => {
+				classifier.classify("python script.py").safety.should.equal("unknown")
 			})
 
-			it("should classify 'bash script.sh' as unsafe", () => {
-				classifier.classify("bash script.sh").safety.should.equal("unsafe")
+			it("should classify 'bash script.sh' as unknown", () => {
+				classifier.classify("bash script.sh").safety.should.equal("unknown")
 			})
 
-			it("should classify 'sh -c command' as unsafe", () => {
-				classifier.classify("sh -c command").safety.should.equal("unsafe")
+			it("should classify 'sh -c command' as unknown", () => {
+				classifier.classify("sh -c command").safety.should.equal("unknown")
 			})
 
-			it("should classify 'node server.js' as unsafe (not in read-only whitelist)", () => {
-				classifier.classify("node server.js").safety.should.equal("unsafe")
+			it("should classify 'node server.js' as unknown (not in read-only whitelist)", () => {
+				classifier.classify("node server.js").safety.should.equal("unknown")
+			})
+
+			it("should keep known-dangerous commands unsafe, not unknown", () => {
+				classifier.classify("rm -rf /tmp/x").safety.should.equal("unsafe")
+				classifier.classify("npm install left-pad").safety.should.equal("unsafe")
+				classifier.classify("curl https://example.com").safety.should.equal("unsafe")
+			})
+
+			it("should not let an unknown segment pass as safe in a chain", () => {
+				// `ls` безопасна, вторая половина — нет: итог по худшему сегменту
+				classifier.classify("ls && some-random-command").safety.should.equal("unknown")
+				classifier.classify("ls | my-tool").safety.should.equal("unknown")
+			})
+
+			it("should still report unsafe when a chain mixes unknown and dangerous", () => {
+				classifier.classify("some-random-command && rm -rf build").safety.should.equal("unsafe")
 			})
 		})
 	})
@@ -573,15 +593,20 @@ describe("CommandSafetyClassifier", () => {
 		})
 
 		it("should handle commands with extra spaces", () => {
-			classifier.classify("git   status").safety.should.equal("unsafe")
 			// NOTE: "git   status" doesn't match "git status" prefix due to double space
-			// This is by design — shell would still run it, but classifier is strict
+			// This is by design — shell would still run it, but classifier is strict.
+			// [SKYCODE] Не опознана ⇒ `unknown`: как «безопасная» не проходит, но и опасной её
+			// называть не за что — в чёрном списке её нет.
+			classifier.classify("git   status").safety.should.equal("unknown")
+			classifier.classify("git   status").safety.should.not.equal("safe")
 		})
 
 		it("should be case-sensitive", () => {
-			// Linux commands are case-sensitive
-			classifier.classify("LS").safety.should.equal("unsafe")
-			classifier.classify("Git status").safety.should.equal("unsafe")
+			// Linux commands are case-sensitive.
+			// [SKYCODE] Регистр не совпал ⇒ команда не опознана, см. комментарий выше.
+			classifier.classify("LS").safety.should.equal("unknown")
+			classifier.classify("Git status").safety.should.equal("unknown")
+			classifier.classify("LS").safety.should.not.equal("safe")
 		})
 	})
 

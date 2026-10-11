@@ -1110,6 +1110,8 @@
 	"permissions.editAllFilesShort": "Ред. (все)",
 	"permissions.executeSafeCommands": "Выполнение безопасных команд",
 	"permissions.executeSafeCommandsShort": "Безоп. команды",
+	"permissions.executeNonDestructiveCommands": "Выполнение всех команд, кроме опасных",
+	"permissions.executeNonDestructiveCommandsShort": "Кроме опасных",
 	"permissions.executeAllCommands": "Выполнение всех команд",
 	"permissions.executeAllCommandsShort": "Все команды",
 	"permissions.deleteFiles": "Автоодобрение удаления файлов",
