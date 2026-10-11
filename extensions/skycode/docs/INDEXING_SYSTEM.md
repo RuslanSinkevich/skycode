@@ -2,9 +2,13 @@
 
 ## Обзор
 
-Семантическая индексация кодовой базы для интеллектуального поиска по коду. Позволяет AI-модели получать релевантный контекст из проекта перед ответом.
+Векторный индекс для поиска по смыслу. **Необязателен и по умолчанию выключен**
+(`skycode.indexing.mode = "off"`): основной поиск — карта репозитория и ripgrep, см.
+[CODE_SEARCH.md](CODE_SEARCH.md). Когда индекс включён и готов, `codebase_search` ищет по нему;
+иначе — по карте репозитория.
 
-Работает полностью локально по умолчанию (`transformers.js`, WASM), с опцией подключения удалённого API.
+Режимы: локально (`transformers.js`, WASM) или через удалённый OpenAI-совместимый API.
+Локальная индексация большого проекта занимает от минут до часов и нагружает CPU.
 
 ---
 
@@ -22,7 +26,7 @@ IndexingService (оркестратор) — src/core/indexing/IndexingService.t
 ├── models/
 │   └── EmbeddingModelRegistry (mini / base / large + резолв meta по id)
 ├── Storage
-│   ├── IndexStorage (SQLite по умолчанию, JSON fallback при недоступном native)
+│   ├── IndexStorage (встроенный node:sqlite, JSON fallback при ошибке SQLite)
 │   └── VectorSearch (brute-force cosine similarity на in-memory векторах)
 └── SearchEngine (hybrid search: semantic + keyword + rerank + форматирование для промптов)
 ```
@@ -40,7 +44,6 @@ src/core/indexing/
   CodeChunker.ts               — разбивка файлов на чанки
   EmbeddingRouter.ts           — фабрика провайдеров по конфигу
   progressCache.ts             — кэш прогресса индексации
-  RepoMapGenerator.ts          — генерация карты репозитория
   models/
     EmbeddingModelRegistry.ts  — реестр локальных моделей (mini / base / large)
   providers/
@@ -84,14 +87,17 @@ models/all-MiniLM-L6-v2/                     — legacy модель (не ис�
 Основной backend:
 - `index.db` (SQLite) — метаданные, чанки, и векторы (BLOB)
 
-Fallback backend (если native SQLite недоступен в runtime):
+SQLite — встроенный в Electron модуль `node:sqlite` (обёртка `src/core/storage/openSqlite.ts`),
+нативных модулей нет, обновления Electron индекс не ломают.
+
+Fallback backend (если открыть SQLite не удалось):
 - `index.json` — метаданные
 - `chunks.json` — массив метаданных чанков
 - `vectors.bin` — Float32Array векторы
 
 ## Embedding провайдеры
 
-### Локальный (по умолчанию)
+### Локальный
 
 - **Библиотека**: `@xenova/transformers` (transformers.js)
 - **Backend**: WASM (без native-модулей, работает в любом окружении)
@@ -152,7 +158,7 @@ Fallback backend (если native SQLite недоступен в runtime):
 - Доступ к `SearchEngine`: `src/core/indexing/searchEngineInstance.ts`
 - Подключение в variant tools: `src/core/prompts/system-prompt/variants/*/config.ts`
 
-Во время выполнения handler вызывает `SearchEngine.getContextForPrompt(query)` и возвращает `<codebase_context>` с релевантными чанками.
+Во время выполнения handler вызывает `SearchEngine.getContextForPrompt(query)` и возвращает `<codebase_context>` с релевантными чанками. Если индекс выключен или ещё не готов — `searchWithoutIndex` (карта репозитория + ripgrep, см. [CODE_SEARCH.md](CODE_SEARCH.md)).
 
 Пример вывода:
 ```
@@ -209,7 +215,6 @@ import jwt from 'jsonwebtoken'
 
 - **Модель**: даже `large` (E5) — general-purpose, не code-specific. Для лучшего качества можно подключить удалённый API с code-specific embedding-моделью.
 - **Поиск**: brute-force vector scan. На очень больших индексах (>100K чанков) нужен ANN backend.
-- **SQLite native**: зависит от совместимости Electron/Node ABI. При недоступности используется JSON fallback.
 - **Tree-sitter coverage**: качество зависит от доступности WASM парсеров для конкретного языка.
 
 ## Как расширить

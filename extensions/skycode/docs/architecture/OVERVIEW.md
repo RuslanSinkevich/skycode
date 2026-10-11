@@ -5,7 +5,7 @@
 Skycode AI — это расширение VS Code, состоящее из трёх основных частей:
 - **Core Extension** (бэкенд на Node.js)
 - **Webview UI** (фронтенд на React)
-- **Indexing Subsystem** (семантический поиск и локальные эмбеддинги)
+- **Code Search** (карта репозитория + ripgrep) и необязательный **Indexing Subsystem** (векторный индекс)
 
 ## Диаграмма архитектуры
 

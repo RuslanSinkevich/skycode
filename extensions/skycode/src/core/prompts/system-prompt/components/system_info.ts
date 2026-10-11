@@ -2,13 +2,9 @@ import osModule from "node:os"
 import { getShell } from "@utils/shell"
 import osName from "os-name"
 import { getWorkspacePaths } from "@/hosts/vscode/hostbridge/workspace/getWorkspacePaths"
-import { RepoMapGenerator } from "@/core/indexing/RepoMapGenerator"
 import { SystemPromptSection } from "../templates/placeholders"
 import { TemplateEngine } from "../templates/TemplateEngine"
 import type { PromptVariant, SystemPromptContext } from "../types"
-
-/** Lazy singleton per workspace root */
-const repoMapGenerators = new Map<string, RepoMapGenerator>()
 
 const SYSTEM_INFO_TEMPLATE_TEXT = `SYSTEM INFORMATION
 
@@ -87,7 +83,9 @@ export async function getSystemInfo(variant: PromptVariant, context: SystemPromp
 
 	const template = variant.componentOverrides?.[SystemPromptSection.SYSTEM_INFO]?.template || SYSTEM_INFO_TEMPLATE_TEXT
 
-	let result = new TemplateEngine().resolve(template, context, {
+	// [SKYCODE] Карта проекта — в первом сообщении задачи (services/repo-map, tree-sitter),
+	// а не здесь: системный промпт остаётся стабильным и кэшируется провайдером.
+	return new TemplateEngine().resolve(template, context, {
 		os: info.os,
 		ide: info.ide,
 		shell: info.shell,
@@ -95,16 +93,4 @@ export async function getSystemInfo(variant: PromptVariant, context: SystemPromp
 		WORKSPACE_TITLE,
 		workingDir: workingDirInfo,
 	})
-
-	// Append repo map (project structure with exported symbols)
-	const cwd = context.cwd || process.cwd()
-	if (!repoMapGenerators.has(cwd)) {
-		repoMapGenerators.set(cwd, new RepoMapGenerator(cwd))
-	}
-	const repoMap = await repoMapGenerators.get(cwd)!.generate()
-	if (repoMap) {
-		result += `\n\nProject Structure (exported symbols):\n${repoMap}`
-	}
-
-	return result
 }

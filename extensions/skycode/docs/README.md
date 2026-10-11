@@ -5,7 +5,7 @@ AI-ассистент для разработки, интегрированны�
 ## Возможности
 
 - **Автономное выполнение задач**: Агент анализирует код, выполняет команды и редактирует файлы
-- **Семантическая индексация**: Умный поиск по всей кодовой базе (SQLite + Local Embeddings)
+- **Поиск по коду**: карта репозитория (tree-sitter) + ранжированный ripgrep — без индексации; векторный индекс — по желанию
 - **Inline Diff система v4**: Визуализация изменений прямо в редакторе (Cursor-style, per-message snapshots)
 - **Поддержка MCP серверов**: Расширение функциональности через Model Context Protocol
 - **Мультипровайдерная архитектура**: Anthropic, OpenRouter, OpenAI, LiteLLM и 40+ других
@@ -36,7 +36,8 @@ AI-ассистент для разработки, интегрированны�
 
 ### Подсистемы
 - [DIFF_SYSTEM.md](./DIFF_SYSTEM.md) — Inline Diff система v4
-- [INDEXING_SYSTEM.md](./INDEXING_SYSTEM.md) — Семантическая индексация
+- [CODE_SEARCH.md](./CODE_SEARCH.md) — Поиск по коду (карта репозитория)
+- [INDEXING_SYSTEM.md](./INDEXING_SYSTEM.md) — Векторный индекс (необязательно)
 - [TERMINAL_SYSTEM.md](./TERMINAL_SYSTEM.md) — Терминал, тайминги команд, фоновые команды
 - [BANNER_SYSTEM.md](./BANNER_SYSTEM.md) — Система баннеров (клиент)
 - [architecture/CONTEXT_MANAGEMENT.md](./architecture/CONTEXT_MANAGEMENT.md) — Управление контекстом (сжатие, суммаризация)
@@ -89,7 +90,8 @@ skycode/
 - **gRPC/Protobuf** — коммуникация extension ↔ webview
 - **esbuild** — сборка
 - **Tree-sitter** — парсинг и валидация кода
-- **SQLite + transformers.js** — семантическая индексация
+- **tree-sitter + ripgrep** — карта репозитория и поиск по коду
+- **node:sqlite + transformers.js** — необязательный векторный индекс
 
 ## Лицензия
 

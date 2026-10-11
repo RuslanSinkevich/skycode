@@ -10,7 +10,7 @@ src/core/
 ├── task/          # AI задачи: API запросы + выполнение инструментов
 ├── diff-v2/       # Inline Diff System V4 (snapshot-based)
 ├── session/       # ApprovalGate, Pipeline, SessionManager
-├── indexing/      # Семантическая индексация (Tree-sitter + embeddings)
+├── indexing/      # Векторный индекс (необязателен; основной поиск — services/repo-map)
 ├── prompts/       # Система промптов (TemplateEngine + PromptBuilder)
 ├── api/           # API провайдеры (OpenAI, Anthropic, Gemini, ...)
 ├── workspace/     # Multi-root workspace resolver

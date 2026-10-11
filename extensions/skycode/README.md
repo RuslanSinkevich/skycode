@@ -18,7 +18,8 @@ AI-ассистент для разработки, интегрированны�
 
 ### Подсистемы
 - [docs/DIFF_SYSTEM.md](./docs/DIFF_SYSTEM.md) — Inline Diff система v4
-- [docs/INDEXING_SYSTEM.md](./docs/INDEXING_SYSTEM.md) — Семантическая индексация
+- [docs/CODE_SEARCH.md](./docs/CODE_SEARCH.md) — Поиск по коду (карта репозитория)
+- [docs/INDEXING_SYSTEM.md](./docs/INDEXING_SYSTEM.md) — Векторный индекс (необязательно)
 - [docs/mcp/how-mcp-works.md](./docs/mcp/how-mcp-works.md) — Как работает MCP
 
 ### Разработка

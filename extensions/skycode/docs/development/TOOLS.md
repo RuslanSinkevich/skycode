@@ -311,7 +311,7 @@ if (didAutoApprove) {
 | `execute_command` | `execute_command.ts` | Выполнение команд |
 | `delete_block` | `delete_block.ts` | Удаление блоков кода |
 | `replace_text` | `replace_text.ts` | Замена текста |
-| `codebase_search` | `codebase_search.ts` | Семантический поиск |
+| `codebase_search` | `codebase_search.ts` | Поиск по объявлениям (карта репозитория) и тексту; по векторному индексу, если он включён |
 | `edit_notebook` | `edit_notebook.ts` | Jupyter notebook editing |
 | `check_background_command` | `check_background_command.ts` | Статус фоновой команды |
 
