@@ -7,7 +7,8 @@
 - Агент сразу видит обзор самых важных файлов проекта
 - Русские слова в комментариях и строках находятся, в том числе в файлах windows-1251
 - Векторная индексация стала необязательной и по умолчанию выключена
-- Номер версии в «О программе» берётся из релиза
+- Номер версии в «О программе» берётся из релиза, без суффикса «-skycode»
+- Одна карта проекта в контексте агента вместо двух — меньше лишних токенов
 
 ### What's new
 
@@ -15,4 +16,5 @@
 - The agent sees an overview of the project's most important files up front
 - Russian words in comments and strings are found, including windows-1251 files
 - Vector indexing is now optional and off by default
-- The version in About now comes from the release
+- The version in About now comes from the release, without the "-skycode" suffix
+- One project map in the agent's context instead of two — fewer wasted tokens

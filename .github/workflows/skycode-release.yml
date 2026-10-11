@@ -95,6 +95,19 @@ jobs:
         working-directory: extensions/skycode
         run: node esbuild.mjs --production
 
+      # Сборка VS Code требует SDK встроенного Copilot (prepareBuiltInCopilotRipgrepShim);
+      # 1.136.3 упала с «Copilot SDK directory not found». Проверяем заранее и печатаем,
+      # что видит `npm ls` (по нему gulp решает, какие node_modules копировать).
+      - name: Check Copilot SDK
+        working-directory: extensions/copilot
+        run: |
+          ls node_modules/@github/copilot/sdk | head -5
+          set +e
+          NODE_ENV=production npm ls --all --omit=dev --parseable > /tmp/npm-ls.txt 2> /tmp/npm-ls.err
+          echo "npm ls exit=$? lines=$(wc -l < /tmp/npm-ls.txt)"
+          grep -E '@github[\\/]copilot$' /tmp/npm-ls.txt || echo "::warning::@github/copilot missing from npm ls"
+          grep -v '^npm warn' /tmp/npm-ls.err | head -20
+
       - name: Build Skycode (win32-x64)
         run: npm run gulp -- vscode-win32-x64-min
 
