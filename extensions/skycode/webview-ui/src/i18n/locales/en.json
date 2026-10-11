@@ -1233,5 +1233,14 @@
 	"sessionBudget.colTier": "Tier",
 	"sessionBudget.colTools": "Tools/turn",
 	"sessionBudget.colReadOnly": "Read-only streak",
-	"sessionBudget.colCompact": "Compact every"
+	"sessionBudget.colCompact": "Compact every",
+	"agentGit.title": "Task steps — branch {{branch}}",
+	"agentGit.baseInfo": "from {{base}} · {{count}} step(s)",
+	"agentGit.showChanges": "Show changes",
+	"agentGit.merge": "Merge into {{base}}",
+	"agentGit.deleteBranch": "Delete branch",
+	"agentGit.revertStep": "Revert step",
+	"agentGit.reverted": "reverted",
+	"agentGit.merged": "Merged into {{base}}",
+	"agentGit.deleted": "Branch deleted"
 }

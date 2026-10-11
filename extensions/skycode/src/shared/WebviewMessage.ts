@@ -6,6 +6,7 @@ export interface WebviewMessage {
 		| "updateIndexingConfig"
 		| "indexingCommand"
 		| "dismissIndexingPrompt"
+		| "agentGitAction"
 	grpc_request?: GrpcRequest
 	grpc_request_cancel?: GrpcCancel
 	// Dev tools: execute VS Code command directly
@@ -20,6 +21,12 @@ export interface WebviewMessage {
 	}
 	// Indexing: execute command
 	indexingCommandAction?: "reindex" | "clear" | "pause" | "resume" | "clearEmbeddingCache"
+	// [SKYCODE] Кнопки карточки шагов задачи (services/agent-git)
+	agentGitAction?: {
+		action: "showChanges" | "revertStep" | "merge" | "deleteBranch"
+		taskId: string
+		sha?: string
+	}
 }
 
 export type GrpcRequest = {

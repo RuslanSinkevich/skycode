@@ -17,4 +17,7 @@ export type HistoryItem = {
 	checkpointManagerErrorMessage?: string
 
 	modelId?: string
+
+	/** [SKYCODE] Ветка задачи, в которую агент коммитит шаги. */
+	agentGit?: { branch: string; baseBranch: string; baseSha: string }
 }

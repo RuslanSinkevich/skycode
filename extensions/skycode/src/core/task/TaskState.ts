@@ -1,5 +1,6 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import { AssistantMessageContent } from "@core/assistant-message"
+import type { AgentGitState } from "@services/agent-git/AgentGit"
 import type { HookExecution } from "./types/HookExecution"
 
 export class TaskState {
@@ -42,6 +43,10 @@ export class TaskState {
 	consecutiveMistakeCount: number = 0
 	didAutomaticallyRetryFailedApiRequest = false
 	checkpointManagerErrorMessage?: string
+
+	// [SKYCODE] Ветка задачи (сохраняется в истории) и пояснение агента в текущем ходе
+	agentGitState?: AgentGitState
+	agentGitTurnText = ""
 
 	// Retry tracking for auto-retry feature
 	autoRetryAttempts: number = 0

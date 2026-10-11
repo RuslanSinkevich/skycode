@@ -33,13 +33,19 @@ describe("AgentGit helpers", () => {
 	})
 
 	it("builds subject and body from the agent's explanation", () => {
-		const msg = buildCommitMessage("Добавлю проверку на пустую дату. Иначе **CalculatePenalty** падает.\nПроверил на трёх договорах.", ["a.cs"], 1)
+		const msg = buildCommitMessage(
+			"Добавлю проверку на пустую дату. Иначе **CalculatePenalty** падает.\nПроверил на трёх договорах.",
+			["a.cs"],
+			1,
+		)
 		msg.subject.should.equal("Добавлю проверку на пустую дату")
 		msg.body.should.equal("Иначе CalculatePenalty падает.\nПроверил на трёх договорах.")
 	})
 
 	it("falls back to file names and trims long subjects", () => {
-		buildCommitMessage("", ["src/a.cs", "src/b.cs", "c.cs", "d.cs"], 3).subject.should.equal("Шаг 3: a.cs, b.cs, c.cs и ещё 1")
+		buildCommitMessage("", ["src/a.cs", "src/b.cs", "c.cs", "d.cs"], 3).subject.should.equal(
+			"Шаг 3: a.cs, b.cs, c.cs и ещё 1",
+		)
 		buildCommitMessage("x".repeat(100), ["a"], 1).subject.length.should.equal(72)
 	})
 
@@ -91,7 +97,9 @@ describe("AgentGit", function () {
 		write(dir, "src/new.cs", "class A {}\n")
 		const first = await git.commitStep("Добавил вторую строку. Нужна для теста.")
 		first.status.should.equal("committed")
-		if (first.status !== "committed") throw new Error()
+		if (first.status !== "committed") {
+			throw new Error()
+		}
 		first.branchCreated.should.be.true()
 		first.commit.files.should.equal(2)
 		;(await branchOf(dir)).should.equal("skycode/penya-000001")
@@ -106,7 +114,10 @@ describe("AgentGit", function () {
 		const body = await runGit(dir, ["log", "-1", "--format=%B", report.steps[0].sha])
 		body.should.containEql("Нужна для теста.")
 		body.should.containEql("Skycode-Task: 1700000000001")
-		;(await git.changedFiles()).map((f) => `${f.status} ${f.path}`).sort().should.deepEqual(["A src/new.cs", "D b.txt", "M a.txt"])
+		;(await git.changedFiles())
+			.map((f) => `${f.status} ${f.path}`)
+			.sort()
+			.should.deepEqual(["A src/new.cs", "D b.txt", "M a.txt"])
 	})
 
 	it("leaves the user's uncommitted edits out of step commits", async () => {
@@ -115,7 +126,9 @@ describe("AgentGit", function () {
 		await git.beginTurn()
 		write(dir, "a.txt", "agent edit\n")
 		const result = await git.commitStep("Правка агента")
-		if (result.status !== "committed") throw new Error(result.status)
+		if (result.status !== "committed") {
+			throw new Error(result.status)
+		}
 		result.commit.files.should.equal(1)
 		result.carriedUserFiles.should.equal(1)
 		;(await runGit(dir, ["status", "--porcelain"])).trim().should.equal("M b.txt")

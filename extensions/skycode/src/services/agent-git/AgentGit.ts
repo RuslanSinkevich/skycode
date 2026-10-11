@@ -77,9 +77,39 @@ export function runGit(root: string, args: string[]): Promise<string> {
 }
 
 const CYRILLIC: Record<string, string> = {
-	а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "e", ж: "zh", з: "z", и: "i", й: "y", к: "k", л: "l", м: "m",
-	н: "n", о: "o", п: "p", р: "r", с: "s", т: "t", у: "u", ф: "f", х: "h", ц: "c", ч: "ch", ш: "sh", щ: "sch", ъ: "",
-	ы: "y", ь: "", э: "e", ю: "yu", я: "ya",
+	а: "a",
+	б: "b",
+	в: "v",
+	г: "g",
+	д: "d",
+	е: "e",
+	ё: "e",
+	ж: "zh",
+	з: "z",
+	и: "i",
+	й: "y",
+	к: "k",
+	л: "l",
+	м: "m",
+	н: "n",
+	о: "o",
+	п: "p",
+	р: "r",
+	с: "s",
+	т: "t",
+	у: "u",
+	ф: "f",
+	х: "h",
+	ц: "c",
+	ч: "ch",
+	ш: "sh",
+	щ: "sch",
+	ъ: "",
+	ы: "y",
+	ь: "",
+	э: "e",
+	ю: "yu",
+	я: "ya",
 }
 
 /** `Пеня считается неправильно` → `penya-schitaetsya-nepravilno` (для имени ветки). */
@@ -108,7 +138,10 @@ export function buildCommitMessage(reason: string, files: string[], stepNumber: 
 		.replace(/^#+\s*/gm, "")
 		.replace(/\*\*|__|`/g, "")
 		.trim()
-	const fallback = `Шаг ${stepNumber}: ${files.slice(0, 3).map((f) => path.posix.basename(f)).join(", ")}${files.length > 3 ? ` и ещё ${files.length - 3}` : ""}`
+	const fallback = `Шаг ${stepNumber}: ${files
+		.slice(0, 3)
+		.map((f) => path.posix.basename(f))
+		.join(", ")}${files.length > 3 ? ` и ещё ${files.length - 3}` : ""}`
 	if (!text) {
 		return { subject: fallback, body: "" }
 	}
@@ -121,8 +154,7 @@ export function buildCommitMessage(reason: string, files: string[], stepNumber: 
 	}
 	const rest = text.slice(text.indexOf(firstLine) + (sentenceEnd > 0 ? sentenceEnd + 1 : firstLine.length)).trim()
 	const bodyLines = rest.split(/\r?\n/).filter((l, i, all) => l.trim() || (i > 0 && all[i - 1].trim()))
-	const body =
-		bodyLines.length > MAX_BODY_LINES ? `${bodyLines.slice(0, MAX_BODY_LINES).join("\n")}\n…` : bodyLines.join("\n")
+	const body = bodyLines.length > MAX_BODY_LINES ? `${bodyLines.slice(0, MAX_BODY_LINES).join("\n")}\n…` : bodyLines.join("\n")
 	return { subject: subject || fallback, body: body.trim() }
 }
 
@@ -325,7 +357,9 @@ export class AgentGit {
 				await runGit(this.root, ["merge", "--no-ff", "-m", message, state.branch])
 			}
 		} catch (error) {
-			await runGit(this.root, ["merge", "--abort"]).catch(() => runGit(this.root, ["reset", "--merge"]).catch(() => undefined))
+			await runGit(this.root, ["merge", "--abort"]).catch(() =>
+				runGit(this.root, ["reset", "--merge"]).catch(() => undefined),
+			)
 			await runGit(this.root, ["checkout", state.branch]).catch(() => undefined)
 			throw new AgentGitError(`Слить не получилось: ${(error as Error).message}`)
 		}
@@ -432,7 +466,11 @@ export class AgentGit {
  * папка без своего git оказалась бы внутри него, и агент начал бы ветки там.
  */
 export function isTooBroadRepoRoot(root: string): boolean {
-	const normalize = (p: string) => path.resolve(p).replace(/[\\/]+$/, "").toLowerCase()
+	const normalize = (p: string) =>
+		path
+			.resolve(p)
+			.replace(/[\\/]+$/, "")
+			.toLowerCase()
 	const resolved = normalize(root)
 	return resolved === normalize(os.homedir()) || resolved === normalize(path.parse(path.resolve(root)).root)
 }

@@ -123,6 +123,7 @@ export class MessageStateHandler {
 				isFavorited: this.taskIsFavorited,
 				checkpointManagerErrorMessage: this.taskState.checkpointManagerErrorMessage,
 				modelId: lastModelInfo?.modelInfo?.modelId,
+				agentGit: this.taskState.agentGitState,
 			})
 		} catch (error) {
 			Logger.error("Failed to save skycode messages:", error)
