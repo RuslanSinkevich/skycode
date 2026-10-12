@@ -944,11 +944,15 @@ async function getBinaryLocation(name: string): Promise<string> {
 		return (await fileExistsAtPath(fullPath)) ? fullPath : undefined
 	}
 
+	// [SKYCODE] Новые VS Code (1.14x) кладут ripgrep в @vscode/ripgrep-universal/bin/<платформа>-<архитектура>
+	const universal = `@vscode/ripgrep-universal/bin/${process.platform}-${process.arch}/`
 	const binPath =
 		(await checkPath("node_modules/@vscode/ripgrep/bin/")) ||
 		(await checkPath("node_modules/vscode-ripgrep/bin")) ||
 		(await checkPath("node_modules.asar.unpacked/vscode-ripgrep/bin/")) ||
-		(await checkPath("node_modules.asar.unpacked/@vscode/ripgrep/bin/"))
+		(await checkPath("node_modules.asar.unpacked/@vscode/ripgrep/bin/")) ||
+		(await checkPath(`node_modules.asar.unpacked/${universal}`)) ||
+		(await checkPath(`node_modules/${universal}`))
 	if (!binPath) {
 		throw new Error("Could not find ripgrep binary")
 	}
