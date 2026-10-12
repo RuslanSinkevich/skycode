@@ -27,7 +27,6 @@ import {
 	TriangleAlertIcon,
 } from "lucide-react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { AgentGitReportCard } from "@/components/chat/chat-view/components/messages/AgentGitReportCard"
 import type { ToggleRowExpansion } from "@/components/chat/chat-view/types/chatTypes"
 import { OptionsButtons } from "@/components/chat/OptionsButtons"
 import { WithCopyButton } from "@/components/common/CopyButton"
@@ -734,15 +733,6 @@ export const ChatRowContent = memo(
 						)
 					case "task_progress":
 						return <InvisibleSpacer />
-					case "agent_git_report":
-						return <AgentGitReportCard text={message.text} />
-					case "info":
-						return (
-							<div className="flex items-start gap-2 py-1 text-xs text-description">
-								<span className="codicon codicon-info mt-px" style={{ fontSize: 12 }} />
-								<span>{message.text}</span>
-							</div>
-						)
 					case "workflow_step_start": {
 						try {
 							const stepData = JSON.parse(message.text || "{}")

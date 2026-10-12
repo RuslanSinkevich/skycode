@@ -4,7 +4,6 @@ import * as vscode from "vscode"
 import { handleGrpcRequest, handleGrpcRequestCancel } from "@/core/controller/grpc-handler"
 import { HostProvider } from "@/hosts/host-provider"
 import { ExtensionRegistryInfo } from "@/registry"
-import { runAgentGitAction } from "./agentGitActions"
 import type { ExtensionMessage } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import { WebviewMessage } from "@/shared/WebviewMessage"
@@ -247,17 +246,6 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 			case "dismissIndexingPrompt": {
 				await this.controller.context.globalState.update("skycode.indexingPromptDismissed", true)
 				await this.controller.postStateToWebview()
-				break
-			}
-			case "agentGitAction": {
-				// [SKYCODE] Кнопки карточки шагов задачи: дифф, откат шага, слияние, удаление ветки.
-				const request = message.agentGitAction
-				if (request && typeof request.taskId === "string") {
-					const result = await runAgentGitAction(this.controller, request)
-					if (result) {
-						this.postDirectMessage({ type: "agentGitActionResult", data: { ...request, result } })
-					}
-				}
 				break
 			}
 			default: {

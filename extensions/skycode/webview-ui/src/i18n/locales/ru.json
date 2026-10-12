@@ -1233,14 +1233,5 @@
 	"sessionBudget.colTier": "Тир",
 	"sessionBudget.colTools": "Tools/turn",
 	"sessionBudget.colReadOnly": "Read-only подряд",
-	"sessionBudget.colCompact": "Compact каждые",
-	"agentGit.title": "Шаги задачи — ветка {{branch}}",
-	"agentGit.baseInfo": "от {{base}} · {{count}} шаг(ов)",
-	"agentGit.showChanges": "Показать изменения",
-	"agentGit.merge": "Слить в {{base}}",
-	"agentGit.deleteBranch": "Удалить ветку",
-	"agentGit.revertStep": "Откатить шаг",
-	"agentGit.reverted": "откачен",
-	"agentGit.merged": "Слито в {{base}}",
-	"agentGit.deleted": "Ветка удалена"
+	"sessionBudget.colCompact": "Compact каждые"
 }

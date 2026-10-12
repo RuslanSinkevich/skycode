@@ -566,29 +566,6 @@
 					"maximum": 1,
 					"description": "Порог (0.1–1.0) для blockLargeFileRewrites. Например 0.6 = блокировка при изменении >60% строк файла."
 				},
-				"skycode.agentGit.enabled": {
-					"type": "boolean",
-					"default": false,
-					"description": "Экспериментально: при первой правке задачи создавать ветку skycode/<задача> и коммитить каждый шаг агента с его пояснением. Изменения смотрятся и откатываются в любом git-клиенте."
-				},
-				"skycode.agentGit.runHooksOnSteps": {
-					"type": "boolean",
-					"default": false,
-					"description": "Запускать git-хуки (pre-commit и т.п.) на коммитах шагов. По умолчанию нет: это черновики в ветке агента; при слиянии хуки работают как обычно."
-				},
-				"skycode.agentGit.mergeMode": {
-					"type": "string",
-					"enum": [
-						"squash",
-						"merge"
-					],
-					"default": "squash",
-					"enumDescriptions": [
-						"Одним коммитом — история базовой ветки остаётся чистой, шаги остаются в ветке задачи",
-						"Со всеми шагами (merge --no-ff)"
-					],
-					"description": "Как сливать ветку задачи в базовую по кнопке в отчёте."
-				},
 				"skycode.indexing.mode": {
 					"type": "string",
 					"enum": [

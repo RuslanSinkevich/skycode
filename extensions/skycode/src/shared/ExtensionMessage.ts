@@ -232,7 +232,6 @@ export type SkycodeSay =
 	| "hook_output_stream"
 	| "conditional_rules_applied"
 	| "workflow_step_start"
-	| "agent_git_report" // [SKYCODE] ветка задачи и шаги-коммиты (JSON AgentGitReport)
 
 export interface SkycodeSayTool {
 	tool:

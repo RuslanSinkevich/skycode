@@ -99,7 +99,6 @@ import {
 } from "@/shared/messages"
 import { ApiFormat } from "@/shared/proto/skycode/models"
 import { Logger } from "@/shared/services/Logger"
-import { AgentGit } from "@/services/agent-git/AgentGit"
 import { isCliSubagentContext, isSkycodeCliInstalled } from "@/utils/cli-detector"
 import { getGitStatusCompact } from "@/utils/git"
 import { RuleContextBuilder } from "../context/instructions/user-instructions/RuleContextBuilder"
@@ -368,7 +367,6 @@ export class Task {
 			this.ulid = historyItem.ulid ?? ulid()
 			this.taskIsFavorited = historyItem.isFavorited
 			this.taskState.conversationHistoryDeletedRange = historyItem.conversationHistoryDeletedRange
-			this.taskState.agentGitState = historyItem.agentGit
 			if (historyItem.checkpointManagerErrorMessage) {
 				this.taskState.checkpointManagerErrorMessage = historyItem.checkpointManagerErrorMessage
 			}
@@ -801,91 +799,11 @@ export class Task {
 		}
 	}
 
-	// [SKYCODE] Вместо теневых чекпоинтов Cline: при завершении задачи — коммит последнего
-	// шага в ветку задачи и карточка-отчёт со всеми шагами.
-	private async saveCheckpointCallback(isAttemptCompletionMessage?: boolean, _completionMessageTs?: number): Promise<void> {
-		if (!isAttemptCompletionMessage) {
-			return
-		}
-		await this.agentGitCommitStep()
-		const agentGit = await this.getAgentGit()
-		const report = await agentGit?.report().catch(() => null)
-		if (report && report.steps.length > 0) {
-			await this.say("agent_git_report", JSON.stringify({ taskId: this.taskId, ...report }))
-		}
-	}
-
-	// --- [SKYCODE] Ветка задачи и коммиты шагов (services/agent-git) ---
-
-	/** undefined — ещё не открывали; null — выключено (настройка, нет git, слишком широкий репозиторий). */
-	private agentGit: AgentGit | null | undefined
-	private agentGitWarned = false
-
-	private async getAgentGit(): Promise<AgentGit | null> {
-		if (this.agentGit !== undefined) {
-			return this.agentGit
-		}
-		let enabled = false
-		let runHooksOnSteps = false
-		try {
-			const vscode = await import("vscode")
-			const cfg = vscode.workspace.getConfiguration("skycode.agentGit")
-			enabled = cfg.get<boolean>("enabled", false)
-			runHooksOnSteps = cfg.get<boolean>("runHooksOnSteps", false)
-		} catch {
-			// вне VS Code настроек нет — функция выключена
-		}
-		const title = this.messageStateHandler.getSkycodeMessages()[0]?.text ?? "task"
-		this.agentGit = enabled
-			? await AgentGit.open(this.cwd, this.taskId, title, this.taskState.agentGitState, { runHooksOnSteps })
-			: null
-		return this.agentGit
-	}
-
-	private async agentGitBeginTurn(): Promise<void> {
-		this.taskState.agentGitTurnText = ""
-		try {
-			await (await this.getAgentGit())?.beginTurn()
-		} catch (error) {
-			Logger.warn("[AgentGit] beginTurn failed:", error)
-		}
-	}
-
-	/** Закоммитить изменения текущего хода; повторный вызов в том же ходе — no-op. */
-	private async agentGitCommitStep(): Promise<void> {
-		const agentGit = await this.getAgentGit()
-		if (!agentGit) {
-			return
-		}
-		try {
-			const result = await agentGit.commitStep(this.taskState.agentGitTurnText)
-			if (result.status === "committed") {
-				if (result.branchCreated) {
-					this.taskState.agentGitState = agentGit.getState() ?? undefined
-					await this.messageStateHandler.saveSkycodeMessagesAndUpdateHistory()
-					const carried =
-						result.carriedUserFiles > 0
-							? ` Ваши незакоммиченные правки (${result.carriedUserFiles} файл.) переехали в неё и в коммиты агента не входят.`
-							: ""
-					await this.say(
-						"info",
-						`Изменения задачи идут в ветку ${this.taskState.agentGitState?.branch}, по коммиту на шаг.${carried}`,
-					)
-				}
-			} else if (result.status === "branch-not-current" && !this.agentGitWarned) {
-				this.agentGitWarned = true
-				await this.say(
-					"info",
-					`Сейчас открыта ветка ${result.current}, а не ветка задачи ${result.branch} — коммиты шагов приостановлены.`,
-				)
-			}
-		} catch (error) {
-			Logger.warn("[AgentGit] commitStep failed:", error)
-			if (!this.agentGitWarned) {
-				this.agentGitWarned = true
-				await this.say("info", `Коммиты шагов приостановлены: ${(error as Error).message}`)
-			}
-		}
+	// [SKYCODE] TEMPORARILY DISABLED — legacy Cline shadow-git checkpoint system.
+	// saveCheckpoint now no-ops since checkpointManager is never initialized.
+	private async saveCheckpointCallback(_isAttemptCompletionMessage?: boolean, _completionMessageTs?: number): Promise<void> {
+		// Legacy: return this.checkpointManager?.saveCheckpoint(isAttemptCompletionMessage, completionMessageTs) ?? Promise.resolve()
+		return Promise.resolve()
 	}
 
 	/**
@@ -2941,8 +2859,6 @@ export class Task {
 			this.streamHandler.reset()
 			this.taskState.toolUseIdMap.clear()
 			this.taskState.errorPushedForCallIds.clear()
-			// [SKYCODE] Снимок рабочей папки: в коммит шага попадёт только изменённое за этот ход.
-			await this.agentGitBeginTurn()
 
 			const { toolUseHandler, reasonsHandler } = this.streamHandler.getHandlers()
 
@@ -3031,7 +2947,6 @@ export class Task {
 							}
 							assistantMessage += chunk.text
 							assistantTextOnly += chunk.text // Accumulate text separately
-							this.taskState.agentGitTurnText = assistantTextOnly // [SKYCODE] пояснение → сообщение коммита шага
 							// parse raw assistant message into content blocks
 							const prevLength = this.taskState.assistantMessageContent.length
 
@@ -3299,8 +3214,8 @@ export class Task {
 
 				await pWaitFor(() => this.taskState.userMessageContentReady)
 
-				// [SKYCODE] Коммит шага в ветку задачи (вместо теневых чекпоинтов Cline)
-				await this.agentGitCommitStep()
+				// [SKYCODE] TEMPORARILY DISABLED — legacy Cline shadow-git checkpoint
+				// await this.checkpointManager?.saveCheckpoint()
 
 				// if the model did not tool use, then we need to tell it to either use a tool or attempt_completion
 				const didToolUse = this.taskState.assistantMessageContent.some((block) => block.type === "tool_use")
