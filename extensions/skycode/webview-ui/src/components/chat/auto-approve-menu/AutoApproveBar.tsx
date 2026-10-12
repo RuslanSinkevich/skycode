@@ -3,6 +3,7 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
 import { getAsVar, VSC_TITLEBAR_INACTIVE_FOREGROUND } from "@/utils/vscStyles"
 import AutoApproveModal from "./AutoApproveModal"
+import { COMMAND_APPROVAL_MODES, getCommandApprovalMode } from "./commandApprovalMode"
 import { ACTION_METADATA } from "./constants"
 
 interface AutoApproveBarProps {
@@ -47,20 +48,21 @@ const AutoApproveBar = ({ style }: AutoApproveBarProps) => {
 			return true
 		})
 
-		if (actionsToShow.length === 0) {
+		// [SKYCODE] Режим команд больше не галочка в ACTION_METADATA, а один уровень из четырёх —
+		// берём его подпись отдельно и ставим первой. У «всегда спрашивать» подписи нет.
+		const commandModeShortKey = COMMAND_APPROVAL_MODES.find(
+			(option) => option.mode === getCommandApprovalMode(autoApprovalSettings.actions),
+		)?.shortNameKey
+		const labels = [
+			...(commandModeShortKey ? [t(commandModeShortKey)] : []),
+			...actionsToShow.map((action) => (action?.shortNameKey ? t(action.shortNameKey) : (action?.id ?? ""))),
+		]
+
+		if (labels.length === 0) {
 			return <span className={baseClasses}>{t("chat.none")}</span>
 		}
 
-		return (
-			<span className={baseClasses}>
-				{actionsToShow.map((action, index) => (
-					<span key={action?.id}>
-						{action?.shortNameKey ? t(action.shortNameKey) : action?.id}
-						{index < actionsToShow.length - 1 && ", "}
-					</span>
-				))}
-			</span>
-		)
+		return <span className={baseClasses}>{labels.join(", ")}</span>
 	}
 
 	const borderColor = `color-mix(in srgb, ${getAsVar(VSC_TITLEBAR_INACTIVE_FOREGROUND)} 20%, transparent)`

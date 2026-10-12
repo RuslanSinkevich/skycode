@@ -7,6 +7,7 @@ import { useI18n } from "@/i18n"
 import { getAsVar, VSC_DESCRIPTION_FOREGROUND, VSC_TITLEBAR_INACTIVE_FOREGROUND } from "@/utils/vscStyles"
 import AutoApproveMenuItem from "./AutoApproveMenuItem"
 import { updateAutoApproveSettings } from "./AutoApproveSettingsAPI"
+import CommandApprovalModeSelector from "./CommandApprovalModeSelector"
 import { ActionMetadata } from "./types"
 
 const breakpoint = 500
@@ -84,6 +85,20 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({ isVisible, setIsVis
 					{t("chat.docs")}
 				</a>
 				</div>
+
+				{/* [SKYCODE] Команды — один уровень из четырёх, над остальными галочками.
+				    Пояснения прячем: в этом меню мало места, полные подписи — в настройках. */}
+				<div className="mb-1">
+					<CommandApprovalModeSelector showHints={false} />
+				</div>
+				<div
+					style={{
+						height: "0.5px",
+						background: getAsVar(VSC_DESCRIPTION_FOREGROUND),
+						opacity: 0.1,
+						margin: "6px 0",
+					}}
+				/>
 
 				<div
 					className="relative mb-2 w-full"

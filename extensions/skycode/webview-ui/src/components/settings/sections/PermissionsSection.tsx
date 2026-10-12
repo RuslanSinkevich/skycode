@@ -1,8 +1,10 @@
 import { VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
 import { memo } from "react"
 import AutoApproveMenuItem from "@/components/chat/auto-approve-menu/AutoApproveMenuItem"
-import { ACTION_METADATA } from "@/components/chat/auto-approve-menu/constants"
 import { updateAutoApproveSettings } from "@/components/chat/auto-approve-menu/AutoApproveSettingsAPI"
+import CommandApprovalModeSelector from "@/components/chat/auto-approve-menu/CommandApprovalModeSelector"
+import { FILE_ACTIONS, TOOL_ACTIONS } from "@/components/chat/auto-approve-menu/constants"
+import type { ActionMetadata } from "@/components/chat/auto-approve-menu/types"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useAutoApproveActions } from "@/hooks/useAutoApproveActions"
@@ -14,10 +16,35 @@ interface PermissionsSectionProps {
 	renderSectionHeader: (tabId: string) => JSX.Element | null
 }
 
+/** [SKYCODE] Тонкая линия между группами — та же, что уже отделяла уведомления. */
+const GroupSeparator = () => (
+	<div
+		className="my-2"
+		style={{
+			height: "0.5px",
+			background: "var(--vscode-descriptionForeground)",
+			opacity: 0.15,
+		}}
+	/>
+)
+
+/** [SKYCODE] Подпись группы: мелко и приглушённо, чтобы не спорить с самими пунктами. */
+const GroupTitle = ({ children }: { children: string }) => (
+	<div className="text-[11px] uppercase tracking-wide text-(--vscode-descriptionForeground) mb-1">{children}</div>
+)
+
 const PermissionsSection = ({ renderSectionHeader }: PermissionsSectionProps) => {
 	const { t } = useI18n()
 	const { autoApprovalSettings, yoloModeToggled, remoteConfigSettings } = useExtensionState()
 	const { isChecked, updateAction } = useAutoApproveActions()
+
+	const renderActions = (actions: ActionMetadata[]) => (
+		<div className="flex flex-col gap-0.5">
+			{actions.map((action) => (
+				<AutoApproveMenuItem action={action} isChecked={isChecked} key={action.id} onToggle={updateAction} />
+			))}
+		</div>
+	)
 
 	return (
 		<div>
@@ -35,26 +62,19 @@ const PermissionsSection = ({ renderSectionHeader }: PermissionsSectionProps) =>
 							{t("permissions.description")}
 						</p>
 
-						<div className="flex flex-col gap-0.5">
-							{ACTION_METADATA.map((action) => (
-								<AutoApproveMenuItem
-									action={action}
-									isChecked={isChecked}
-									key={action.id}
-									onToggle={updateAction}
-								/>
-							))}
-						</div>
+						{/* [SKYCODE] Команды — выбор одного уровня, а не набор галочек */}
+						<GroupTitle>{t("permissions.commandsGroup")}</GroupTitle>
+						<CommandApprovalModeSelector />
 
-						{/* Separator */}
-						<div
-							className="my-2"
-							style={{
-								height: "0.5px",
-								background: "var(--vscode-descriptionForeground)",
-								opacity: 0.15,
-							}}
-						/>
+						<GroupSeparator />
+						<GroupTitle>{t("permissions.filesGroup")}</GroupTitle>
+						{renderActions(FILE_ACTIONS)}
+
+						<GroupSeparator />
+						<GroupTitle>{t("permissions.toolsGroup")}</GroupTitle>
+						{renderActions(TOOL_ACTIONS)}
+
+						<GroupSeparator />
 
 						{/* Notifications */}
 						<VSCodeCheckbox
