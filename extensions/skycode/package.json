@@ -106,8 +106,17 @@
 				]
 			}
 		],
+		"viewsContainers": {
+			"activitybar": [
+				{
+					"id": "skycode",
+					"title": "Skycode",
+					"icon": "assets/icons/svg-src/skycode-bot.svg"
+				}
+			]
+		},
 		"views": {
-			"workbench.panel.chat": [
+			"skycode": [
 				{
 					"type": "webview",
 					"id": "skycode.SidebarProvider",
