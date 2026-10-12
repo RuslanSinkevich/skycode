@@ -5,7 +5,7 @@ import { memo, useCallback, useMemo } from "react"
 import { cleanPathPrefix } from "@/components/common/CodeAccordian"
 import { useI18n } from "@/i18n"
 import { cn } from "@/lib/utils"
-import { FileServiceClient } from "@/services/grpc-client"
+import { FileServiceClient, UiServiceClient } from "@/services/grpc-client"
 
 interface EditCardProps {
 	message: SkycodeMessage
@@ -13,7 +13,7 @@ interface EditCardProps {
 
 /**
  * EditCard — compact card showing a file edit/create/delete in the main chat.
- * Clickable — opens the file at the edit location.
+ * Clickable — opens the standard diff view "before agent <-> now".
  */
 export const EditCard = memo(({ message }: EditCardProps) => {
 	const { t } = useI18n()
@@ -48,23 +48,24 @@ export const EditCard = memo(({ message }: EditCardProps) => {
 
 	const hunkId = tool.hunkId
 
+	// [SKYCODE] Клик — стандартное окно сравнения «до агента ↔ сейчас»; если правка уже
+	// принята (сравнивать не с чем) — сам файл на месте правки.
 	const handleClick = useCallback(() => {
 		if (!filePath) {
 			return
 		}
-		// If hunkId present — use live position from DiffStore (survives subsequent edits)
-		// Otherwise fall back to static startLine
-		let target: string
-		if (hunkId) {
-			target = `${filePath}?hunk=${hunkId}`
-		} else if (startLine) {
-			target = `${filePath}:${startLine}`
-		} else {
-			target = filePath
+		const openFile = () => {
+			let target = filePath
+			if (hunkId) {
+				target = `${filePath}?hunk=${hunkId}`
+			} else if (startLine) {
+				target = `${filePath}:${startLine}`
+			}
+			FileServiceClient.openFileRelativePath(StringRequest.create({ value: target })).catch((err) =>
+				console.error("Failed to open file:", err),
+			)
 		}
-		FileServiceClient.openFileRelativePath(StringRequest.create({ value: target })).catch((err) =>
-			console.error("Failed to open file:", err),
-		)
+		UiServiceClient.openPendingChangesDiff(StringRequest.create({ value: filePath })).catch(openFile)
 	}, [filePath, startLine, hunkId])
 
 	// [SKYCODE] Вместо развёрнутого превью диффа — его объём одной парой чисел.
@@ -92,7 +93,7 @@ export const EditCard = memo(({ message }: EditCardProps) => {
 	}, [tool.content])
 
 	return (
-		<div className="px-4 py-0.5">
+		<div className="px-4 py-1.5">
 			<button
 				className="flex items-center gap-1.5 w-full text-left text-[12px] cursor-pointer hover:underline decoration-description/40"
 				onClick={handleClick}

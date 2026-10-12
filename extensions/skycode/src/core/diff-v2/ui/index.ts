@@ -1,2 +1,2 @@
-export * from './InlineDiffRenderer';
+export * from './HunkDecorations';
 export * from './KeyboardNavigation';

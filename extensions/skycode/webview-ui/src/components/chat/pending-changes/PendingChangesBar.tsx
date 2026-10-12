@@ -29,11 +29,12 @@ const PendingChangesBar = ({ style }: PendingChangesBarProps) => {
 	const borderGradient = `linear-gradient(to bottom, ${borderColor} 0%, transparent 50%)`
 	const bgGradient = `linear-gradient(to bottom, color-mix(in srgb, var(--vscode-sideBar-background) 96%, white) 0%, transparent 80%)`
 
+	// [SKYCODE] Клик по файлу — стандартное окно сравнения «до агента ↔ сейчас»
 	const handleOpenFile = async (fsPath: string) => {
 		try {
-			await FileServiceClient.openFile({ value: fsPath })
-		} catch (error) {
-			console.error("Failed to open file:", error)
+			await UiServiceClient.openPendingChangesDiff(StringRequest.create({ value: fsPath }))
+		} catch {
+			await FileServiceClient.openFile({ value: fsPath }).catch((error) => console.error("Failed to open file:", error))
 		}
 	}
 

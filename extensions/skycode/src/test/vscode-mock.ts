@@ -39,6 +39,17 @@ export enum OverviewRulerLane {
 	Full = 7,
 }
 
+export class ThemeColor {
+	constructor(public readonly id: string) {}
+}
+
+export class TabInputTextDiff {
+	constructor(
+		public readonly original: any,
+		public readonly modified: any,
+	) {}
+}
+
 export enum TextEditorRevealType {
 	Default = 0,
 	InCenter = 1,
@@ -151,6 +162,7 @@ export function _clearConfigOverrides() {
 }
 
 export const workspace = {
+	registerTextDocumentContentProvider: (_scheme: string, _provider: any) => ({ dispose: () => {} }),
 	getConfiguration: (section?: string) => ({
 		get: (key: string, defaultValue?: any) => {
 			const fullKey = `${section}.${key}`
@@ -226,6 +238,10 @@ export const window = {
 	}),
 	visibleTextEditors: [] as any[],
 	activeTextEditor: undefined as any,
+	tabGroups: {
+		all: [] as any[],
+		onDidChangeTabs: (_listener: any) => ({ dispose: () => {} }),
+	},
 	showTextDocument: async (doc: any) => ({
 		document: doc,
 		selection: new Selection(new Position(0, 0), new Position(0, 0)),

@@ -4,9 +4,6 @@
 	"description": "Enterprise AI Code Assistant for STP.",
 	"version": "0.6.0",
 	"icon": "assets/icons/icon.png",
-	"enabledApiProposals": [
-		"editorInsets"
-	],
 	"engines": {
 		"vscode": "^1.124.0"
 	},

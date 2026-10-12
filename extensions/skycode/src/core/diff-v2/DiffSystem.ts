@@ -4,7 +4,7 @@
  * Single entry point for all diff operations.
  * Public API is backward-compatible with v2 callers (tool handlers, retry/delete).
  *
- * Internal architecture: DiffStore → Engine (HunkApplier/Reverter/PositionTracker) → UI (InlineDiffRenderer)
+ * Internal architecture: DiffStore → Engine (HunkApplier/Reverter/PositionTracker) → UI (HunkDecorations — стандартные декорации)
  */
 
 import * as vscode from 'vscode';
@@ -25,7 +25,7 @@ import { HunkApplier } from './engine/HunkApplier';
 import { HunkReverter } from './engine/HunkReverter';
 
 // v3 UI
-import { InlineDiffRenderer } from './ui/InlineDiffRenderer';
+import { HunkDecorations } from './ui/HunkDecorations';
 import { KeyboardNavigation } from './ui/KeyboardNavigation';
 
 // Bridge to webview (PendingChangesBar)
@@ -46,7 +46,7 @@ export class DiffSystem implements vscode.Disposable {
   private readonly hunkReverter: HunkReverter;
 
   // UI
-  private readonly renderer: InlineDiffRenderer;
+  private readonly renderer: HunkDecorations;
   private readonly keyboardNav: KeyboardNavigation;
 
   // State
@@ -108,7 +108,7 @@ export class DiffSystem implements vscode.Disposable {
     );
 
     // UI
-    this.renderer = new InlineDiffRenderer();
+    this.renderer = new HunkDecorations();
     this.keyboardNav = new KeyboardNavigation(this.store);
   }
 
@@ -298,7 +298,45 @@ export class DiffSystem implements vscode.Disposable {
         await this.clearAll();
         vscode.window.showInformationMessage(t('diff.allCleared'));
       }),
+      // [SKYCODE] «Как было до агента» для стандартного окна сравнения VS Code.
+      vscode.workspace.registerTextDocumentContentProvider(DiffSystem.BASELINE_SCHEME, {
+        provideTextDocumentContent: (uri) => this.snapshotStorage.getBaselineSnapshot(uri.query)?.content ?? '',
+      }),
+      vscode.commands.registerCommand('skycode.diff.openBaselineDiff', async (fsPath?: string) => {
+        const target = fsPath ?? vscode.window.activeTextEditor?.document.uri.fsPath;
+        if (target && !(await this.openBaselineDiff(target))) {
+          vscode.window.showInformationMessage(t('diff.noPendingForFile'));
+        }
+      }),
     );
+  }
+
+  /** URI-схема снимка файла до правок агента (путь — в query, чтобы не зависеть от экранирования). */
+  static readonly BASELINE_SCHEME = 'skycode-base';
+
+  /**
+   * [SKYCODE] Открыть стандартное окно сравнения «до агента ↔ сейчас»: добавленное зелёным,
+   * удалённое красным, стрелки отката по кускам — всё средствами VS Code, без вставок в код.
+   * Удалённый агентом файл — только левая сторона (как было).
+   * false — непринятых правок у файла нет, сравнивать не с чем (ничего не открыто).
+   */
+  async openBaselineDiff(fsPath: string): Promise<boolean> {
+    const name = path.basename(fsPath);
+    const baseUri = vscode.Uri.from({ scheme: DiffSystem.BASELINE_SCHEME, path: `/${name}`, query: fsPath });
+    const fileUri = vscode.Uri.file(fsPath);
+    const exists = await vscode.workspace.fs.stat(fileUri).then(() => true, () => false);
+    const hasBaseline = !!this.snapshotStorage.getBaselineSnapshot(fsPath);
+    if (!hasBaseline || (exists && !this.store.hasPendingChangesForFile(fsPath))) {
+      return false;
+    }
+    if (!exists) {
+      await vscode.window.showTextDocument(baseUri, { preview: true });
+      return true;
+    }
+    await vscode.commands.executeCommand('vscode.diff', baseUri, fileUri, t('diff.baselineDiffTitle', { file: name }), {
+      preview: true,
+    });
+    return true;
   }
 
   private ensureInitialized(): void {

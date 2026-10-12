@@ -294,6 +294,9 @@ service UiService {
   // Reject all pending changes for a single file (path as value)
   rpc rejectPendingChangesForFile(StringRequest) returns (Empty);
 
+  // [SKYCODE] Open the standard diff view "before agent <-> now" for a file (path as value)
+  rpc openPendingChangesDiff(StringRequest) returns (Empty);
+
   // Navigate to previous pending diff hunk (cross-file)
   rpc navigatePrevHunk(EmptyRequest) returns (Empty);
 
