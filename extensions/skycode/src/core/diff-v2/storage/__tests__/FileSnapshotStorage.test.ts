@@ -270,4 +270,17 @@ describe('FileSnapshotStorage', () => {
       storage.getSnapshotForRollback('/test/mixed.ts', 1000)!.content.should.equal(content)
     })
   })
+
+  // [SKYCODE] Файл с диска (с BOM, CRLF) и текст документа (без BOM, LF) — одно содержимое
+  describe('contentHash', () => {
+    it('ignores a UTF-8 BOM and CRLF line endings', () => {
+      const doc = 'namespace A\n{\n}\n'
+      const onDisk = '﻿namespace A\r\n{\r\n}\r\n'
+      FileSnapshotStorage.contentHash(onDisk).should.equal(FileSnapshotStorage.contentHash(doc))
+    })
+
+    it('still distinguishes real content changes', () => {
+      FileSnapshotStorage.contentHash('a\n').should.not.equal(FileSnapshotStorage.contentHash('b\n'))
+    })
+  })
 })

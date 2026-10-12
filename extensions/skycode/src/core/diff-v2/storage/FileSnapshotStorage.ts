@@ -391,9 +391,15 @@ export class FileSnapshotStorage {
     return 'snap-' + crypto.randomBytes(8).toString('hex');
   }
 
-  /** SHA-256 hex hash of file content */
+  /**
+   * SHA-256 hex hash of file content.
+   * [SKYCODE] BOM и переводы строк не считаются различием: текст документа VS Code приходит
+   * без BOM, а файл с диска — с ним (UTF-8 with BOM — обычное дело в C#-проектах). Без
+   * нормализации каждая правка такого файла сразу закрывалась как «изменённая снаружи».
+   */
   static contentHash(content: string): string {
-    return crypto.createHash('sha256').update(content).digest('hex');
+    const normalized = content.replace(/^﻿/, '').replace(/\r\n/g, '\n');
+    return crypto.createHash('sha256').update(normalized).digest('hex');
   }
 
   private fsPathHash(fsPath: string): string {
