@@ -1,32 +1,20 @@
 {
 	"list": [
 		{
-			"value": "openrouter",
-			"label": "OpenRouter"
-		},
-		{
-			"value": "gemini",
-			"label": "Google Gemini"
-		},
-		{
 			"value": "openai",
 			"label": "OpenAI Compatible"
 		},
 		{
-			"value": "anthropic",
-			"label": "Anthropic"
+			"value": "ollama",
+			"label": "Ollama"
 		},
 		{
-			"value": "bedrock",
-			"label": "Amazon Bedrock"
+			"value": "lmstudio",
+			"label": "LM Studio"
 		},
 		{
-			"value": "vscode-lm",
-			"label": "GitHub Copilot"
-		},
-		{
-			"value": "deepseek",
-			"label": "DeepSeek"
+			"value": "litellm",
+			"label": "LiteLLM"
 		},
 		{
 			"value": "gigachat",
@@ -37,68 +25,8 @@
 			"label": "YandexGPT"
 		},
 		{
-			"value": "openai-native",
-			"label": "OpenAI"
-		},
-		{
-			"value": "openai-codex",
-			"label": "OpenAI Codex (ChatGPT Plus/Pro)"
-		},
-		{
-			"value": "ollama",
-			"label": "Ollama"
-		},
-		{
-			"value": "vertex",
-			"label": "GCP Vertex AI"
-		},
-		{
-			"value": "litellm",
-			"label": "LiteLLM"
-		},
-		{
-			"value": "claude-code",
-			"label": "Claude Code"
-		},
-		{
-			"value": "sapaicore",
-			"label": "SAP AI Core"
-		},
-		{
-			"value": "mistral",
-			"label": "Mistral"
-		},
-		{
-			"value": "zai",
-			"label": "Z AI"
-		},
-		{
-			"value": "groq",
-			"label": "Groq"
-		},
-		{
-			"value": "cerebras",
-			"label": "Cerebras"
-		},
-		{
-			"value": "vercel-ai-gateway",
-			"label": "Vercel AI Gateway"
-		},
-		{
-			"value": "baseten",
-			"label": "Baseten"
-		},
-		{
-			"value": "requesty",
-			"label": "Requesty"
-		},
-		{
-			"value": "fireworks",
-			"label": "Fireworks AI"
-		},
-		{
-			"value": "together",
-			"label": "Together"
+			"value": "deepseek",
+			"label": "DeepSeek"
 		},
 		{
 			"value": "qwen",
@@ -113,64 +41,162 @@
 			"label": "Qwen Web (chat.qwen.ai)"
 		},
 		{
-			"value": "doubao",
-			"label": "Bytedance Doubao"
+			"value": "openrouter",
+			"label": "OpenRouter"
 		},
 		{
-			"value": "lmstudio",
-			"label": "LM Studio"
+			"value": "anthropic",
+			"label": "Anthropic"
+		},
+		{
+			"value": "openai-native",
+			"label": "OpenAI"
+		},
+		{
+			"value": "gemini",
+			"label": "Google Gemini"
+		},
+		{
+			"value": "vscode-lm",
+			"label": "GitHub Copilot"
+		},
+		{
+			"value": "claude-code",
+			"label": "Claude Code"
+		},
+		{
+			"value": "openai-codex",
+			"label": "OpenAI Codex (ChatGPT Plus/Pro)"
+		},
+		{
+			"value": "bedrock",
+			"label": "Amazon Bedrock",
+			"hidden": true
+		},
+		{
+			"value": "vertex",
+			"label": "GCP Vertex AI",
+			"hidden": true
+		},
+		{
+			"value": "sapaicore",
+			"label": "SAP AI Core",
+			"hidden": true
+		},
+		{
+			"value": "mistral",
+			"label": "Mistral",
+			"hidden": true
+		},
+		{
+			"value": "zai",
+			"label": "Z AI",
+			"hidden": true
+		},
+		{
+			"value": "groq",
+			"label": "Groq",
+			"hidden": true
+		},
+		{
+			"value": "cerebras",
+			"label": "Cerebras",
+			"hidden": true
+		},
+		{
+			"value": "vercel-ai-gateway",
+			"label": "Vercel AI Gateway",
+			"hidden": true
+		},
+		{
+			"value": "baseten",
+			"label": "Baseten",
+			"hidden": true
+		},
+		{
+			"value": "requesty",
+			"label": "Requesty",
+			"hidden": true
+		},
+		{
+			"value": "fireworks",
+			"label": "Fireworks AI",
+			"hidden": true
+		},
+		{
+			"value": "together",
+			"label": "Together",
+			"hidden": true
+		},
+		{
+			"value": "doubao",
+			"label": "Bytedance Doubao",
+			"hidden": true
 		},
 		{
 			"value": "moonshot",
-			"label": "Moonshot"
+			"label": "Moonshot",
+			"hidden": true
 		},
 		{
 			"value": "huggingface",
-			"label": "Hugging Face"
+			"label": "Hugging Face",
+			"hidden": true
 		},
 		{
 			"value": "nebius",
-			"label": "Nebius AI Studio"
+			"label": "Nebius AI Studio",
+			"hidden": true
 		},
 		{
 			"value": "asksage",
-			"label": "AskSage"
+			"label": "AskSage",
+			"hidden": true
 		},
 		{
 			"value": "xai",
-			"label": "xAI"
+			"label": "xAI",
+			"hidden": true
 		},
 		{
 			"value": "sambanova",
-			"label": "SambaNova"
+			"label": "SambaNova",
+			"hidden": true
 		},
 		{
 			"value": "huawei-cloud-maas",
-			"label": "Huawei Cloud MaaS"
+			"label": "Huawei Cloud MaaS",
+			"hidden": true
 		},
 		{
 			"value": "dify",
-			"label": "Dify.ai"
+			"label": "Dify.ai",
+			"hidden": true
 		},
 		{
 			"value": "oca",
-			"label": "Oracle Code Assist"
+			"label": "Oracle Code Assist",
+			"hidden": true
 		},
 		{
 			"value": "minimax",
-			"label": "MiniMax"
+			"label": "MiniMax",
+			"hidden": true
 		},
 		{
 			"value": "hicap",
-			"label": "Hicap"
+			"label": "Hicap",
+			"hidden": true
 		},
 		{
 			"value": "aihubmix",
-			"label": "AIhubmix"
+			"label": "AIhubmix",
+			"hidden": true
 		},
 		{
 			"value": "nousResearch",
-			"label": "NousResearch"
+			"label": "NousResearch",
+			"hidden": true
 		}
 	]
 }

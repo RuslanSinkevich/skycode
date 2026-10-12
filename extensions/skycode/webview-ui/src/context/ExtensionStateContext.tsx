@@ -235,7 +235,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		customForceCompactAfterSteps: 40,
 		promptProfile: undefined,
 		// Skycode AI: Edit tools settings
-		useSimplifiedEditTools: true,
 		validateSyntaxBeforeApply: false,
 		blockOnSyntaxErrors: false,
 	})

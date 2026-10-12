@@ -27,27 +27,6 @@ const DebugSection = ({ onResetState, renderSectionHeader }: DebugSectionProps) 
 		<div>
 			{renderSectionHeader("debug")}
 
-			{/* ===== Syntax Validation ===== */}
-			<Section>
-				<h4 className="text-sm font-medium mb-2">{t("debug.syntaxTitle")}</h4>
-				<p className="text-xs mb-3 text-(--vscode-descriptionForeground)">{t("debug.syntaxDescription")}</p>
-				<div className="flex flex-col gap-2">
-					<Button
-						className="justify-start"
-						onClick={() => executeVsCodeCommand("workbench.action.openSettings", ["skycode.validateSyntaxBeforeApply"])}
-						variant="secondary">
-						{t("debug.openSyntaxSettings")}
-					</Button>
-				</div>
-				<p className="text-xs mt-2 text-(--vscode-descriptionForeground)">
-					{/* allow-any-unicode-next-line */}
-					<strong>validateSyntaxBeforeApply</strong> — {t("debug.validateSyntaxSetting")}
-					<br />
-					{/* allow-any-unicode-next-line */}
-					<strong>blockOnSyntaxErrors</strong> — {t("debug.blockOnErrorsSetting")}
-				</p>
-			</Section>
-
 			{/* ===== DEV TOOLS: Diff System ===== */}
 			<Section>
 				{/* allow-any-unicode-next-line */}

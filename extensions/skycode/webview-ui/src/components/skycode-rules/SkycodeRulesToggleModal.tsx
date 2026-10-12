@@ -14,7 +14,7 @@ import {
 } from "@shared/proto/skycode/file"
 import { NewTaskRequest } from "@shared/proto/skycode/task"
 import { StringRequest } from "@shared/proto/skycode/common"
-import { VSCodeButton, VSCodeLink } from "@vscode/webview-ui-toolkit/react"
+import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import React, { useCallback, useEffect, useRef, useState } from "react"
 import { useClickAway, useWindowSize } from "react-use"
 import styled from "styled-components"
@@ -602,19 +602,12 @@ const SkycodeRulesToggleModal: React.FC = () => {
 						{/* Description text */}
 						<div className="text-xs text-description mb-4">
 							{currentView === "rules" ? (
-								<p>
-									{t("skycodeRules.rulesDescription")}{" "}
-									<VSCodeLink className="text-xs" href="https://skycode-ai.ru/ru/docs/skycode-rules" style={{ display: "inline", fontSize: "inherit" }}>
-										{t("skycodeRules.docs")}
-									</VSCodeLink>
-								</p>
+								<p>{t("skycodeRules.rulesDescription")}</p>
 							) : currentView === "workflows" ? (
 								<p>
 									{t("skycodeRules.workflowsDescription")}{" "}
-									<span className="text-foreground font-bold">/workflow-name</span> in the chat.{" "}
-									<VSCodeLink className="text-xs inline" href="https://skycode-ai.ru/ru/docs/skycode-rules">
-										{t("skycodeRules.docs")}
-									</VSCodeLink>
+									<span className="text-foreground font-bold">/workflow-name</span>{" "}
+									{t("skycodeRules.workflowsDescriptionSuffix")}
 								</p>
 							) : currentView === "scenarios" ? (
 								<p>
@@ -817,15 +810,7 @@ const SkycodeRulesToggleModal: React.FC = () => {
 						) : currentView === "hooks" ? (
 							<>
 								<div className="text-xs text-description mb-4">
-									<p>
-										{t("skycodeRules.hooksToggleHint")}{" "}
-										<VSCodeLink
-											className="text-xs"
-											href="https://skycode-ai.ru/ru/docs/skycode-rules"
-											style={{ display: "inline", fontSize: "inherit" }}>
-											{t("skycodeRules.docs")}
-										</VSCodeLink>
-									</p>
+									<p>{t("skycodeRules.hooksToggleHint")}</p>
 								</div>
 								{/* Hooks Tab */}
 								{/* Windows warning banner */}

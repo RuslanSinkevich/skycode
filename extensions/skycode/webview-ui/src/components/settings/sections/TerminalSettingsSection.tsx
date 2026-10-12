@@ -162,27 +162,6 @@ export const TerminalSettingsSection: React.FC<TerminalSettingsSectionProps> = (
 					<TerminalOutputLineLimitSlider />
 
 					<AllowedCommandsField className="mt-5" />
-					<div className="mt-5 p-3 bg-(--vscode-textBlockQuote-background) rounded border border-(--vscode-textBlockQuote-border)">
-						<p className="text-[13px] m-0">
-							<strong>{t("terminal.troubleshootingTitle")}</strong> {t("terminal.troubleshootingPre")}{" "}
-							<a
-								className="text-(--vscode-textLink-foreground) underline hover:no-underline"
-								href="https://skycode-ai.ru/ru/docs/terminal-troubleshooting"
-								rel="noopener noreferrer"
-								target="_blank">
-								{t("terminal.quickFixes")}
-							</a>{" "}
-							{t("terminal.or")}{" "}
-							<a
-								className="text-(--vscode-textLink-foreground) underline hover:no-underline"
-								href="https://skycode-ai.ru/ru/docs/terminal-troubleshooting"
-								rel="noopener noreferrer"
-								target="_blank">
-								{t("terminal.fullGuide")}
-							</a>
-							.
-						</p>
-					</div>
 				</div>
 			</Section>
 		</div>

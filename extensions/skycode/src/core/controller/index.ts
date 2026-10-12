@@ -693,26 +693,10 @@ export class Controller {
 
 	// MCP Marketplace
 	private async fetchMcpMarketplaceFromApi(): Promise<McpMarketplaceCatalog> {
-		let rawItems: McpMarketplaceItem[]
-
-		try {
-			// Try API first
-			const response = await axios.get(`${SkycodeEnv.config().mcpBaseUrl}/marketplace`, {
-				headers: {
-					"Content-Type": "application/json",
-					"User-Agent": "skycode-vscode-extension",
-				},
-				timeout: 5000,
-				...getAxiosSettings(),
-			})
-			rawItems = response.data || []
-		} catch {
-			// Fallback: static bundled catalog (TODO: remove when own API is ready)
-			Logger.log("[MCP Marketplace] API unavailable, loading static catalog")
-			const catalogPath = path.join(__dirname, "assets", "mcp-marketplace-catalog.json")
-			const catalogData = await fs.readFile(catalogPath, "utf-8")
-			rawItems = JSON.parse(catalogData)
-		}
+		// [SKYCODE] Только встроенный каталог. API маркетплейса на skycode-ai.ru не отвечает, а запрос
+		// к нему держал вкладку MCP по 5 секунд до перехода на этот же каталог.
+		const catalogPath = path.join(__dirname, "assets", "mcp-marketplace-catalog.json")
+		const rawItems: McpMarketplaceItem[] = JSON.parse(await fs.readFile(catalogPath, "utf-8"))
 
 		if (!Array.isArray(rawItems)) {
 			throw new Error("Invalid MCP marketplace catalog data")
@@ -1272,8 +1256,7 @@ export class Controller {
 					return undefined
 				}
 			})(),
-			// Skycode AI: Edit tools settings (driven by lightweightMode)
-			useSimplifiedEditTools: this.stateManager.getGlobalSettingsKey("lightweightMode") === true,
+			// Skycode AI: Edit tools settings
 			validateSyntaxBeforeApply: vscode.workspace
 				.getConfiguration("skycode")
 				.get<boolean>("validateSyntaxBeforeApply", false),

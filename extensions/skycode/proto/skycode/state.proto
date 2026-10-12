@@ -446,8 +446,9 @@ message UpdateSettingsRequest {
   optional bool opt_out_of_remote_config = 39;
   optional bool worktrees_enabled = 40;
   optional bool always_think_in_preferred_language = 41;
-  // Skycode AI: Simplified edit tools settings
-  optional bool use_simplified_edit_tools = 42;
+  // Skycode AI: syntax checks before applying edits (stored in VS Code configuration)
+  // 42 was use_simplified_edit_tools — simplified tools follow lightweight_mode now.
+  reserved 42;
   optional bool validate_syntax_before_apply = 43;
   optional bool block_on_syntax_errors = 44;
   // Lightweight mode: use simplified prompt for weak models

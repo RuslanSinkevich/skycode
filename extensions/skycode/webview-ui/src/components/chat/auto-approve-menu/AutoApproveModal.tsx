@@ -75,15 +75,7 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({ isVisible, setIsVis
 					maxHeight: "60vh",
 				}}>
 				<div className="mb-2.5 text-muted-foreground text-xs cursor-pointer" onClick={() => setIsVisible(false)}>
-					{t("chat.autoApproveDescription")}{" "}
-				<a
-					className="text-link hover:text-link-hover"
-					href="https://skycode-ai.ru/ru/docs/auto-approve"
-					rel="noopener"
-					style={{ fontSize: "inherit" }}
-					target="_blank">
-					{t("chat.docs")}
-				</a>
+					{t("chat.autoApproveDescription")}
 				</div>
 
 				{/* [SKYCODE] Команды — один уровень из четырёх, над остальными галочками.

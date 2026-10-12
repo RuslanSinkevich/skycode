@@ -22,22 +22,6 @@ const EditingSection = ({ renderSectionHeader }: EditingSectionProps) => {
 			{renderSectionHeader("editing")}
 			<Section>
 				<div style={{ marginBottom: 20 }}>
-					{/* [SKYCODE] Checkpoints checkbox removed from UI.
-					 * Backend code (CheckpointTracker, TaskCheckpointManager, factory.ts,
-					 * enableCheckpointsSetting in state-keys.ts, updateSettings.ts,
-					 * controller/index.ts) is intentionally kept as dead code.
-					 * The entire checkpoint system is disabled in task/index.ts:
-					 *   // [SKYCODE] TEMPORARILY DISABLED — legacy Cline shadow-git checkpoint system
-					 * The checkbox was a dummy — toggling it had no effect.
-					 * If checkpoints are re-enabled in the future, re-add this UI block.
-					 *
-					 * Removed UI:
-					 *   <VSCodeCheckbox checked={enableCheckpointsSetting} onChange={...}>
-					 *     {t("features.enableCheckpoints")}
-					 *   </VSCodeCheckbox>
-					 *   <p>{t("features.enableCheckpointsDescription")}</p>
-					 */}
-
 					{/* Background Edit */}
 					<div className="mt-2.5">
 						<VSCodeCheckbox

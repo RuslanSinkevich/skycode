@@ -535,15 +535,8 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			}
 		}
 
-		// Skycode AI: Simplified edit tools settings (stored in VS Code configuration)
+		// Skycode AI: syntax checks before applying edits (stored in VS Code configuration)
 		const skycodeConfig = vscode.workspace.getConfiguration("skycode")
-		if (request.useSimplifiedEditTools !== undefined) {
-			await skycodeConfig.update(
-				"useSimplifiedEditTools",
-				!!request.useSimplifiedEditTools,
-				vscode.ConfigurationTarget.Global,
-			)
-		}
 		if (request.validateSyntaxBeforeApply !== undefined) {
 			await skycodeConfig.update(
 				"validateSyntaxBeforeApply",

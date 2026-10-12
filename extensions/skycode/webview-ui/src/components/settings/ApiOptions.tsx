@@ -137,7 +137,10 @@ const ApiOptions = ({ showModelOptions, apiErrorMessage, modelIdErrorMessage, is
 	const dropdownListRef = useRef<HTMLDivElement>(null)
 
 	const providerOptions = useMemo(() => {
-		let providers = PROVIDERS.list
+		// [SKYCODE] Помеченные hidden в providers.json — то, что доступно и через OpenAI Compatible / OpenRouter,
+		// либо облака, которыми внутри компании не пользуются. Код провайдеров на месте; уже выбранный
+		// скрытый провайдер в списке остаётся, чтобы его можно было увидеть и сменить.
+		let providers = PROVIDERS.list.filter((option) => !option.hidden || option.value === selectedProvider)
 		// Filter by platform
 		if (PLATFORM_CONFIG.type !== PlatformType.VSCODE) {
 			// Don't include VS Code LM API for non-VSCode platforms
@@ -151,7 +154,7 @@ const ApiOptions = ({ showModelOptions, apiErrorMessage, modelIdErrorMessage, is
 		}
 
 		return providers
-	}, [remoteConfigSettings])
+	}, [remoteConfigSettings, selectedProvider])
 
 	const currentProviderLabel = useMemo(() => {
 		return providerOptions.find((option) => option.value === selectedProvider)?.label || selectedProvider

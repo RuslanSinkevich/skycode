@@ -13,7 +13,6 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
 import { McpServiceClient } from "@/services/grpc-client"
 import McpMarketplaceCard from "./McpMarketplaceCard"
-import McpSubmitCard from "./McpSubmitCard"
 
 const McpMarketplaceView = () => {
 	const { t } = useI18n()
@@ -289,7 +288,6 @@ const McpMarketplaceView = () => {
 						<McpMarketplaceCard installedServers={mcpServers} item={item} key={item.mcpId} setError={setError} />
 					))
 				)}
-				<McpSubmitCard />
 			</div>
 		</div>
 	)

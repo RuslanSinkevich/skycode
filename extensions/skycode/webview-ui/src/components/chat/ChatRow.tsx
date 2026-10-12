@@ -638,9 +638,6 @@ export const ChatRowContent = memo(
 									{/* allow-any-unicode-next-line */}
 									<code>CMD/CTRL + Shift + P</code> → "Terminal: Select Default Profile")
 									{t("chat.shellIntegrationWarningEnd")}
-								<a className="px-1" href="https://skycode-ai.ru/ru/docs/terminal-troubleshooting">
-									{t("chat.stillHavingIssues")}
-								</a>
 								</div>
 							</div>
 						)

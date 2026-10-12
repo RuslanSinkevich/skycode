@@ -73,13 +73,7 @@ const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStre
 
 							{/* Windows Powershell Issue */}
 							{errorMessage?.toLowerCase()?.includes("powershell") && (
-								<div>
-									{t("chat.windowsPowershellIssue")}{" "}
-								<a className="underline text-inherit" href="https://skycode-ai.ru/ru/docs/terminal-troubleshooting">
-									{t("chat.troubleshootingGuide")}
-								</a>
-									.
-								</div>
+								<div>{t("chat.windowsPowershellIssue")}</div>
 							)}
 
 							{/* Display raw API error if different from parsed error message */}

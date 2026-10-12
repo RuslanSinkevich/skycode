@@ -72,10 +72,6 @@ const en: Record<string, string> = {
 	"mcp.authFailed": "Failed to authenticate MCP server",
 	"mcp.installSuccess": "MCP server \"{{name}}\" installed successfully.",
 	"mcp.downloadFailed": "Failed to download MCP",
-	"mcp.errorTimeout": "Request timed out. Please try again.",
-	"mcp.errorNotFound": "MCP server not found in marketplace.",
-	"mcp.errorServer": "Internal server error. Please try again later.",
-	"mcp.errorNetwork": "Network error. Please check your internet connection.",
 
 	"diff.allCleared": "All pending diffs cleared.",
 	"diff.baselineDiffTitle": "{{file}} (before agent ↔ now)",
@@ -237,14 +233,6 @@ const ru: Record<string, string> = {
 	"mcp.installSuccess": "MCP-сервер «{{name}}» установлен.",
 	// allow-any-unicode-next-line
 	"mcp.downloadFailed": "Не удалось загрузить MCP",
-	// allow-any-unicode-next-line
-	"mcp.errorTimeout": "Превышено время ожидания. Попробуйте ещё раз.",
-	// allow-any-unicode-next-line
-	"mcp.errorNotFound": "MCP-сервер не найден в маркетплейсе.",
-	// allow-any-unicode-next-line
-	"mcp.errorServer": "Внутренняя ошибка сервера. Попробуйте позже.",
-	// allow-any-unicode-next-line
-	"mcp.errorNetwork": "Ошибка сети. Проверьте подключение к интернету.",
 
 	// allow-any-unicode-next-line
 	"diff.allCleared": "Все ожидающие изменения очищены.",

@@ -59,7 +59,6 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		skycodeMessages: messages,
 		taskHistory,
 		apiConfiguration,
-		telemetrySetting,
 		mode,
 		userInfo,
 		currentFocusChainChecklist,
@@ -491,7 +490,6 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 						showAnnouncement={showAnnouncement}
 						showHistoryView={showHistoryView}
 						taskHistory={taskHistory}
-						telemetrySetting={telemetrySetting}
 						version={version}
 					/>
 				)}

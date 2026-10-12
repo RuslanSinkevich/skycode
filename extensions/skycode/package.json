@@ -555,11 +555,6 @@
 					"default": false,
 					"description": "Блокировать применение изменений если они добавляют синтаксические ошибки (рекомендуется)"
 				},
-				"skycode.useSimplifiedEditTools": {
-					"type": "boolean",
-					"default": false,
-					"description": "Использовать упрощённые инструменты редактирования (deleteBlock, replaceText). Управляется через 'Облегчённый режим' в настройках провайдера."
-				},
 				"skycode.blockLargeFileRewrites": {
 					"type": "boolean",
 					"default": false,

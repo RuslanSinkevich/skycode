@@ -131,7 +131,6 @@ export interface ExtensionState {
 	// Skycode AI: Active prompt profile info (computed, read-only in UI)
 	promptProfile?: { variant: string; tier: string; maxToolCalls: number; maxReadOnly: number; compactEvery: number }
 	// Skycode AI: Edit tools settings
-	useSimplifiedEditTools?: boolean
 	validateSyntaxBeforeApply?: boolean
 	blockOnSyntaxErrors?: boolean
 	backgroundEditEnabled?: boolean

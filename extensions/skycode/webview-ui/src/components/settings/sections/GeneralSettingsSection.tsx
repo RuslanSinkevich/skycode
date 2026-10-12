@@ -1,7 +1,6 @@
 import { McpDisplayMode } from "@shared/McpDisplayMode"
-import { VSCodeCheckbox, VSCodeDropdown, VSCodeLink, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
+import { VSCodeCheckbox, VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import McpDisplayModeDropdown from "@/components/mcp/chat-display/McpDisplayModeDropdown"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { AVAILABLE_LOCALES, type Locale, useI18n } from "@/i18n"
 import Section from "../Section"
@@ -12,8 +11,7 @@ interface GeneralSettingsSectionProps {
 }
 
 const GeneralSettingsSection = ({ renderSectionHeader }: GeneralSettingsSectionProps) => {
-	const { telemetrySetting, remoteConfigSettings, mcpDisplayMode, version, alwaysThinkInPreferredLanguage } =
-		useExtensionState()
+	const { mcpDisplayMode, version, alwaysThinkInPreferredLanguage } = useExtensionState()
 	const { locale, setLocale, t } = useI18n()
 
 	return (
@@ -66,48 +64,8 @@ const GeneralSettingsSection = ({ renderSectionHeader }: GeneralSettingsSectionP
 					</p>
 				</div>
 
-				{/* Telemetry */}
-				<div className="mb-[5px] mt-[10px]">
-					<Tooltip>
-						<TooltipContent hidden={remoteConfigSettings?.telemetrySetting === undefined}>
-							{t("general.telemetry.lockedByOrg")}
-						</TooltipContent>
-						<TooltipTrigger asChild>
-							<div className="flex items-center gap-2 mb-[5px]">
-								<VSCodeCheckbox
-									checked={telemetrySetting === "enabled"}
-									disabled={remoteConfigSettings?.telemetrySetting === "disabled"}
-									onChange={(e: any) => {
-										const checked = e.target.checked === true
-										updateSetting("telemetrySetting", checked ? "enabled" : "disabled")
-									}}>
-									{t("general.telemetry.allow")}
-								</VSCodeCheckbox>
-								{!!remoteConfigSettings?.telemetrySetting && (
-									<i className="codicon codicon-lock text-description text-sm" />
-								)}
-							</div>
-						</TooltipTrigger>
-					</Tooltip>
-
-					<p className="text-sm mt-[5px] text-description">
-						{t("general.telemetry.description.pre")}{" "}
-					<VSCodeLink
-						className="text-inherit"
-						href="https://skycode-ai.ru/ru/privacy"
-						style={{ fontSize: "inherit", textDecoration: "underline" }}>
-						{t("general.telemetry.overview")}
-					</VSCodeLink>{" "}
-					{t("general.telemetry.description.mid")}{" "}
-					<VSCodeLink
-						className="text-inherit"
-						href="https://skycode-ai.ru/ru/privacy"
-						style={{ fontSize: "inherit", textDecoration: "underline" }}>
-						{t("general.telemetry.privacy")}
-					</VSCodeLink>{" "}
-						{t("general.telemetry.description.post")}
-					</p>
-				</div>
+				{/* [SKYCODE] Галочки телеметрии нет: сервер PostHog не задан (posthog-config.ts, host ""),
+				    поэтому телеметрия выключена в коде и переключатель ни на что не влиял. */}
 
 				{/* About */}
 				<div

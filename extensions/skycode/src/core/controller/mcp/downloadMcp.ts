@@ -1,13 +1,10 @@
 import { McpServer } from "@shared/mcp"
 import { StringRequest } from "@shared/proto/skycode/common"
 import { McpDownloadResponse } from "@shared/proto/skycode/mcp"
-import axios from "axios"
 import * as fs from "fs/promises"
 import * as path from "path"
 import { HostProvider } from "@/hosts/host-provider"
 import { ShowMessageType } from "@/shared/proto/host/window"
-import { SkycodeEnv } from "@/config"
-import { getAxiosSettings } from "@/shared/net"
 import { t } from "@/i18n/backend-i18n"
 import { Logger } from "@/shared/services/Logger"
 import { Controller } from ".."
@@ -376,23 +373,8 @@ export async function downloadMcp(controller: Controller, request: StringRequest
 			throw new Error("This MCP server is already installed")
 		}
 
-		// Get server details (API → static catalog)
-		let mcpDetails: McpDownloadResponse | undefined
-		try {
-			const response = await axios.post<McpDownloadResponse>(
-				`${SkycodeEnv.config().mcpBaseUrl}/download`,
-				{ mcpId },
-				{
-					headers: { "Content-Type": "application/json" },
-					timeout: 5000,
-					...getAxiosSettings(),
-				},
-			)
-			mcpDetails = response.data
-		} catch {
-			Logger.log("[downloadMcp] API unavailable, using static catalog")
-			mcpDetails = await findInStaticCatalog(mcpId)
-		}
+		// [SKYCODE] Сведения о сервере — из встроенного каталога: API на skycode-ai.ru не отвечает.
+		const mcpDetails = await findInStaticCatalog(mcpId)
 
 		if (!mcpDetails) {
 			throw new Error(`MCP server "${mcpId}" not found`)
@@ -461,21 +443,7 @@ export async function downloadMcp(controller: Controller, request: StringRequest
 		})
 	} catch (error) {
 		Logger.error("Failed to download MCP:", error)
-		let errorMessage = t("mcp.downloadFailed")
-
-		if (axios.isAxiosError(error)) {
-			if (error.code === "ECONNABORTED") {
-				errorMessage = t("mcp.errorTimeout")
-			} else if (error.response?.status === 404) {
-				errorMessage = t("mcp.errorNotFound")
-			} else if (error.response?.status === 500) {
-				errorMessage = t("mcp.errorServer")
-			} else if (!error.response && error.request) {
-				errorMessage = t("mcp.errorNetwork")
-			}
-		} else if (error instanceof Error) {
-			errorMessage = error.message
-		}
+		const errorMessage = error instanceof Error ? error.message : t("mcp.downloadFailed")
 
 		return McpDownloadResponse.create({
 			mcpId: "",

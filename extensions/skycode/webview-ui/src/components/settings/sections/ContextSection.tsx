@@ -34,16 +34,7 @@ const ContextSection = ({ renderSectionHeader }: ContextSectionProps) => {
 							}}>
 							{t("features.autoCondense")}
 						</VSCodeCheckbox>
-						<p className="text-xs text-(--vscode-descriptionForeground)">
-							{t("features.autoCondenseDescription")}{" "}
-							<a
-								className="text-(--vscode-textLink-foreground) hover:text-(--vscode-textLink-activeForeground)"
-								href="https://skycode-ai.ru/ru/docs/auto-condense"
-								rel="noopener noreferrer"
-								target="_blank">
-								{t("features.learnMore")}
-							</a>
-						</p>
+						<p className="text-xs text-(--vscode-descriptionForeground)">{t("features.autoCondenseDescription")}</p>
 					</div>
 
 					{/* Strict Plan Mode */}
