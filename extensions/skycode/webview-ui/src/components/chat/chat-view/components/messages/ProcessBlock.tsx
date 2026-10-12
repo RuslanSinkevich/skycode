@@ -49,10 +49,13 @@ export const ProcessBlock = memo(
 		const isLastBlock = isLast === true
 
 		// Разделяем сообщения на reasoning и инструменты
-		const { reasoningTexts, toolItems, thinkingStartTime } = useMemo(() => {
+		const { reasoningTexts, toolItems, thinkingStartTime, thinkingEndTime } = useMemo(() => {
 			const reasoning: string[] = []
 			const tools: ToolItemData[] = []
 			let firstTs: number | undefined
+			// [SKYCODE] Конец фазы рассуждений: время первого «настоящего» сообщения после них
+			let endTs: number | undefined
+			let reasoningSeen = false
 
 			for (const msg of messages) {
 				// Пропускаем служебные
@@ -65,8 +68,14 @@ export const ProcessBlock = memo(
 				// Reasoning — в блок думалки
 				if (msg.say === "reasoning" && msg.text) {
 					reasoning.push(msg.text)
+					reasoningSeen = true
 					if (!firstTs) { firstTs = msg.ts }
 					continue
+				}
+
+				// Первое сообщение после рассуждений (текст, инструмент, команда) закрывает фазу
+				if (reasoningSeen && endTs === undefined) {
+					endTs = msg.ts
 				}
 
 				// Текст AI для пользователя — пропускаем, он рендерится как отдельный ChatRow
@@ -103,6 +112,8 @@ export const ProcessBlock = memo(
 				reasoningTexts: reasoning,
 				toolItems: tools,
 				thinkingStartTime: firstTs,
+				// Если после рассуждений в блоке ничего не было — берём последнее известное событие
+				thinkingEndTime: endTs ?? messages[messages.length - 1]?.ts,
 			}
 			// eslint-disable-next-line react-hooks/exhaustive-deps
 		}, [messages, messages.length, messages[messages.length - 1]?.text?.length, messages[messages.length - 1]?.partial])
@@ -178,6 +189,7 @@ export const ProcessBlock = memo(
 						compact={hasBothSections}
 						content={reasoningTexts.join("\n\n")}
 						isReasoningLive={isReasoningLive}
+						endTime={thinkingEndTime}
 						onExpandChange={onExpandChange}
 						startTime={thinkingStartTime}
 						t={t}
@@ -223,6 +235,8 @@ interface ThinkingSectionProps {
 	/** Both sections visible - reduce height so both fit */
 	compact: boolean
 	startTime?: number
+	/** [SKYCODE] Конец фазы рассуждений — для итогового «Думал N с» у закрытого блока. */
+	endTime?: number
 	t: (key: string, params?: Record<string, string | number>) => string
 	onExpandChange?: (expanded: boolean) => void
 }
@@ -232,7 +246,7 @@ interface ThinkingSectionProps {
  * «Думает» только пока идёт стрим reasoning или ожидание первого токена; после этого — «Думал»,
  * даже если запрос к API ещё открыт (инструменты / cost).
  */
-const ThinkingSection = memo(({ content, isReasoningLive, compact, startTime, t, onExpandChange }: ThinkingSectionProps) => {
+const ThinkingSection = memo(({ content, isReasoningLive, compact, startTime, endTime, t, onExpandChange }: ThinkingSectionProps) => {
 	const scrollRef = useRef<HTMLDivElement>(null)
 	const [isExpanded, setIsExpanded] = useState(false)
 	const [elapsed, setElapsed] = useState(0)
@@ -243,12 +257,16 @@ const ThinkingSection = memo(({ content, isReasoningLive, compact, startTime, t,
 			return
 		}
 
-		const sync = () => setElapsed(Math.floor((Date.now() - startTime) / 1000))
-		sync()
-
 		if (!isReasoningLive) {
+			// [SKYCODE] Закрытый блок: длительность = конец − начало. Раньше здесь стояло
+			// «сейчас − начало», то есть сколько прошло С НАЧАЛА рассуждений: открыл старую
+			// задачу через девять часов — увидел «Думал 32483с».
+			const end = endTime ?? startTime
+			setElapsed(Math.max(0, Math.floor((end - startTime) / 1000)))
 			return
 		}
+
+		setElapsed(Math.floor((Date.now() - startTime) / 1000))
 
 		let rafId = 0
 		let lastSecond = -1
@@ -262,7 +280,7 @@ const ThinkingSection = memo(({ content, isReasoningLive, compact, startTime, t,
 		}
 		rafId = requestAnimationFrame(loop)
 		return () => cancelAnimationFrame(rafId)
-	}, [startTime, isReasoningLive])
+	}, [startTime, endTime, isReasoningLive])
 
 	// Автоскролл к низу
 	useEffect(() => {

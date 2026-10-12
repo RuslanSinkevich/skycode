@@ -22,18 +22,16 @@ export const ThinkingRow = memo(
 		const scrollRef = useRef<HTMLDivElement>(null)
 		const [elapsedSeconds, setElapsedSeconds] = useState(0)
 
-		// Elapsed seconds without setInterval: rAF while thinking; one sync when idle.
+		// Elapsed seconds without setInterval: rAF while thinking.
+		// [SKYCODE] Только пока думает. Для закрытого блока «сейчас − начало» давало не длительность,
+		// а время С НАЧАЛА рассуждений (в старой задаче — десятки тысяч секунд). Конца фазы этот
+		// компонент не знает, поэтому для закрытого блока цифру просто не показываем.
 		useEffect(() => {
-			if (!startTime) {
+			if (!startTime || !isThinking) {
 				return
 			}
 
-			const sync = () => setElapsedSeconds(Math.floor((Date.now() - startTime) / 1000))
-			sync()
-
-			if (!isThinking) {
-				return
-			}
+			setElapsedSeconds(Math.floor((Date.now() - startTime) / 1000))
 
 			let rafId = 0
 			let lastSecond = -1
@@ -64,7 +62,7 @@ export const ThinkingRow = memo(
 		// Format thinking title with timer
 		const thinkingTitle = isThinking
 			? `${t("thinking.thinking")}${elapsedSeconds > 0 ? ` ${elapsedSeconds}${t("thinking.secondsShort")}` : "..."}`
-			: `${t("thinking.thoughtFor")} ${elapsedSeconds}${t("thinking.secondsShort")}`
+			: t("thinking.thoughtFor")
 
 		return (
 			<div className="ml-1">
