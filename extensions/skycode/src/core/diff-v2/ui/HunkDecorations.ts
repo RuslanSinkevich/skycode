@@ -117,25 +117,26 @@ export class HunkDecorations implements vscode.Disposable {
 			if (editor.document.uri.scheme !== "file") {
 				continue
 			}
-			const key = `${editor.viewColumn ?? 0}|${editor.document.uri.fsPath.toLowerCase()}`
-			const hunks = insideOwnDiff.has(key) ? [] : (this.store?.getPendingHunksByFile(editor.document.uri.fsPath) ?? [])
+			const fsPath = editor.document.uri.fsPath
+			const hunks = insideOwnDiff.has(fsPath.toLowerCase()) ? [] : (this.store?.getPendingHunksByFile(fsPath) ?? [])
 			this.render(editor, hunks)
 		}
 	}
 
 	/**
-	 * Правая сторона нашего же окна сравнения уже раскрашена самим VS Code —
-	 * своя подсветка там была бы второй.
+	 * Файлы, для которых на экране наше окно сравнения: там удалённое и добавленное
+	 * уже раскрашивает сам VS Code — своя подсветка была бы второй (красная черта поверх
+	 * красных строк). viewColumn у сторон окна сравнения ненадёжен — сверяем по пути.
 	 */
 	private editorsInsideBaselineDiff(): Set<string> {
-		const keys = new Set<string>()
+		const paths = new Set<string>()
 		for (const group of vscode.window.tabGroups.all) {
 			const input = group.activeTab?.input
 			if (input instanceof vscode.TabInputTextDiff && input.original.scheme === BASELINE_SCHEME) {
-				keys.add(`${group.viewColumn}|${input.modified.fsPath.toLowerCase()}`)
+				paths.add(input.modified.fsPath.toLowerCase())
 			}
 		}
-		return keys
+		return paths
 	}
 
 	private render(editor: vscode.TextEditor, hunks: Hunk[]): void {

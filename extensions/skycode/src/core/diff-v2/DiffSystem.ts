@@ -1757,6 +1757,19 @@ export class DiffSystem implements vscode.Disposable {
 
       return true;
     } catch (e) {
+      // [SKYCODE] Файл удалён (например, агент сделал `rm` в терминале). Если до агента его
+      // не было — создан и удалён в одной сессии, итог нулевой: убираем из панели.
+      // Существовавший файл оставляем — в окне сравнения видно, каким он был.
+      if ((e as NodeJS.ErrnoException)?.code === 'ENOENT') {
+        const baseline = this.snapshotStorage.getBaselineSnapshot(fsPath);
+        if (!baseline || baseline.content.length === 0) {
+          Logger.log(`[DiffSystem] ${path.basename(fsPath)} was created and deleted by the agent — closing its pending changes`);
+          this.closePendingWithoutEdit(fsPath);
+          this.lastWrittenHash.delete(key);
+          this.scheduleWrittenHashPersist();
+          return true;
+        }
+      }
       Logger.debug(`[DiffSystem] checkFileStale read error: ${e}`);
       return false;
     }
