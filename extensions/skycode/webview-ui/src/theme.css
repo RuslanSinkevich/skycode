@@ -63,6 +63,10 @@
 	--color-toolbar-hover: var(--vscode-toolbar-hoverBackground);
 	--color-diff-added: var(--vscode-diffEditor-insertedTextBackground);
 	--color-diff-removed: var(--vscode-diffEditor-removedTextBackground);
+	/* [SKYCODE] Цвета новых / изменённых / удалённых файлов из проводника; запасные — штатные из расширения git */
+	--color-git-added: var(--vscode-gitDecoration-addedResourceForeground, #81b88b);
+	--color-git-modified: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d);
+	--color-git-deleted: var(--vscode-gitDecoration-deletedResourceForeground, #c74e39);
 	--color-error: var(--vscode-errorForeground);
 	--color-error-icon: var(--vscode-problemsErrorIcon-foreground);
 	--color-failed-icon: var(--vscode-testing-iconFailed);

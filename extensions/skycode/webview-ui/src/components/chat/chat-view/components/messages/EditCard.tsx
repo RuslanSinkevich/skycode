@@ -35,12 +35,13 @@ export const EditCard = memo(({ message }: EditCardProps) => {
 		accent,
 	} = useMemo(() => {
 		switch (tool.tool) {
+			// [SKYCODE] Цвета темы — те же, что у таких файлов в проводнике; светлая тема тоже читается
 			case "editedExistingFile":
-				return { icon: PencilIcon, label: t("tool.edited"), accent: "text-description" }
+				return { icon: PencilIcon, label: t("tool.edited"), accent: "text-git-modified" }
 			case "newFileCreated":
-				return { icon: FilePlus2Icon, label: t("tool.created"), accent: "text-green-400" }
+				return { icon: FilePlus2Icon, label: t("tool.created"), accent: "text-git-added" }
 			case "fileDeleted":
-				return { icon: FileMinus2Icon, label: t("tool.deleted"), accent: "text-red-400" }
+				return { icon: FileMinus2Icon, label: t("tool.deleted"), accent: "text-git-deleted" }
 			default:
 				return { icon: FileCode2Icon, label: t("tool.changed"), accent: "text-description" }
 		}
@@ -101,9 +102,16 @@ export const EditCard = memo(({ message }: EditCardProps) => {
 				type="button">
 				<Icon className={cn("size-3.5 shrink-0", accent)} />
 				<span className={cn("font-medium shrink-0", accent)}>{label}</span>
-				<span className="text-description opacity-70 truncate">{cleanPath}</span>
-				{added > 0 && <span className="text-green-400/80 shrink-0 text-[11px]">+{added}</span>}
-				{removed > 0 && <span className="text-red-400/80 shrink-0 text-[11px]">−{removed}</span>}
+				{/* [SKYCODE] Удалённый файл — красным и зачёркнутым целиком: его больше нет */}
+				<span
+					className={cn("truncate", {
+						"text-description opacity-70": tool.tool !== "fileDeleted",
+						"text-git-deleted/80 line-through": tool.tool === "fileDeleted",
+					})}>
+					{cleanPath}
+				</span>
+				{added > 0 && <span className="text-git-added/80 shrink-0 text-[11px]">+{added}</span>}
+				{removed > 0 && <span className="text-git-deleted/80 shrink-0 text-[11px]">−{removed}</span>}
 				{startLine && <span className="text-description opacity-40 text-[11px] shrink-0">:{startLine}</span>}
 			</button>
 		</div>
