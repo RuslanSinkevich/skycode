@@ -197,17 +197,17 @@ message RuleFile {
   bool already_exists = 3; // For createRuleFile, indicates if file already existed
 }
 
-// Enum for rule scope (local, global, or remote)
+// Enum for rule scope (local or global)
 enum RuleScope {
   LOCAL = 0;
   GLOBAL = 1;
-  REMOTE = 2;
+  reserved 2; // was REMOTE (remote config)
 }
 
 // Request to toggle a Skycode rule
 message ToggleSkycodeRuleRequest {
   Metadata metadata = 1;
-  RuleScope scope = 2; // Scope of the rule (local, global, or remote)
+  RuleScope scope = 2; // Scope of the rule (local or global)
   string rule_path = 3; // Path to the rule file
   bool enabled = 4; // Whether to enable or disable the rule
 }
@@ -221,7 +221,7 @@ message SkycodeRulesToggles {
 message ToggleSkycodeRules {
   SkycodeRulesToggles global_skycode_rules_toggles = 1;
   SkycodeRulesToggles local_skycode_rules_toggles = 2;
-  SkycodeRulesToggles remote_rules_toggles = 3;
+  reserved 3; // was remote_rules_toggles
 }
 
 // Request to toggle a Cursor rule
@@ -236,7 +236,7 @@ message ToggleWorkflowRequest {
   Metadata metadata = 1;
   string workflow_path = 2;
   bool enabled = 3;
-  RuleScope scope = 4; // Scope of the workflow (local, global, or remote)
+  RuleScope scope = 4; // Scope of the workflow (local or global)
 }
 
 // Maps from hook name to enabled/disabled status

@@ -105,7 +105,6 @@ const ModelPickerModal: React.FC<ModelPickerModalProps> = ({ isOpen, onOpenChang
 		showMcp,
 		showHistory,
 		showAccount,
-		remoteConfigSettings,
 		favoritedModelIds,
 		liteLlmModels,
 	} = useExtensionState()
@@ -168,13 +167,7 @@ const ModelPickerModal: React.FC<ModelPickerModalProps> = ({ isOpen, onOpenChang
 	)
 
 	// Get configured providers
-	const configuredProviders = useMemo(() => {
-		if (remoteConfigSettings?.remoteConfiguredProviders?.length) {
-			return remoteConfigSettings.remoteConfiguredProviders
-		}
-
-		return getConfiguredProviders(apiConfiguration)
-	}, [apiConfiguration, remoteConfigSettings?.remoteConfiguredProviders])
+	const configuredProviders = useMemo(() => getConfiguredProviders(apiConfiguration), [apiConfiguration])
 
 	// Get models for current provider
 	const allModels = useMemo((): ModelItem[] => {

@@ -12,7 +12,6 @@ import { convertProtoToApiProvider } from "@shared/proto-conversions/models/api-
 import { OpenaiReasoningEffort } from "@shared/storage/types"
 import { TelemetrySetting } from "@shared/TelemetrySetting"
 import { SkycodeEnv } from "@/config"
-import { clearRemoteConfig } from "@/core/storage/remote-config/utils"
 import { HostProvider } from "@/hosts/host-provider"
 import { McpDisplayMode } from "@/shared/McpDisplayMode"
 import { ShowMessageType } from "@/shared/proto/host/window"
@@ -459,15 +458,6 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 				"customForceCompactAfterSteps",
 				Math.max(1, Number(request.customForceCompactAfterSteps)),
 			)
-		}
-
-		if (request.optOutOfRemoteConfig !== undefined) {
-			// Remote config is no longer fetched (its server was skycode-ai.ru); opting out only clears a cached one.
-			const isOptingOut = !!request.optOutOfRemoteConfig
-			controller.stateManager.setGlobalState("optOutOfRemoteConfig", isOptingOut)
-			if (isOptingOut) {
-				clearRemoteConfig()
-			}
 		}
 
 		// Skycode AI: syntax checks before applying edits (stored in VS Code configuration)

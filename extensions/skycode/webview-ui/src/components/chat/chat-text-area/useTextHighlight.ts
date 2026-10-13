@@ -9,16 +9,12 @@ interface UseTextHighlightParams {
 	inputValue: string
 	localWorkflowToggles: Record<string, boolean> | undefined
 	globalWorkflowToggles: Record<string, boolean> | undefined
-	remoteWorkflowToggles: Record<string, boolean> | undefined
-	remoteGlobalWorkflows: any
 }
 
 export function useTextHighlight({
 	inputValue,
 	localWorkflowToggles,
 	globalWorkflowToggles,
-	remoteWorkflowToggles,
-	remoteGlobalWorkflows,
 }: UseTextHighlightParams) {
 	const highlightLayerRef = useRef<HTMLDivElement>(null)
 	const textAreaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -46,8 +42,6 @@ export function useTextHighlight({
 				commandName,
 				localWorkflowToggles,
 				globalWorkflowToggles,
-				remoteWorkflowToggles,
-				remoteGlobalWorkflows,
 			)
 			if (isValidCommand) {
 				hasHighlightedSlashCommand = true
@@ -59,7 +53,7 @@ export function useTextHighlight({
 		highlightLayerRef.current.innerHTML = processedText
 		highlightLayerRef.current.scrollTop = textAreaRef.current.scrollTop
 		highlightLayerRef.current.scrollLeft = textAreaRef.current.scrollLeft
-	}, [localWorkflowToggles, globalWorkflowToggles, remoteWorkflowToggles, remoteGlobalWorkflows])
+	}, [localWorkflowToggles, globalWorkflowToggles])
 
 	useLayoutEffect(() => {
 		updateHighlights()

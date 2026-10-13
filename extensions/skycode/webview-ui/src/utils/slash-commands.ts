@@ -7,8 +7,6 @@ export const DEFAULT_SLASH_COMMANDS: SlashCommand[] =
 export function getWorkflowCommands(
 	localWorkflowToggles: Record<string, boolean>,
 	globalWorkflowToggles: Record<string, boolean>,
-	remoteWorkflowToggles?: Record<string, boolean>,
-	remoteWorkflows?: any[],
 ): SlashCommand[] {
 	const { workflows: localWorkflows, nameSet: localWorkflowNames } = Object.entries(localWorkflowToggles)
 		.filter(([_, enabled]) => enabled)
@@ -48,22 +46,7 @@ export function getWorkflowCommands(
 			] as SlashCommand[]
 		})
 
-	// Add remote workflows that are enabled
-	const remoteWorkflowCommands: SlashCommand[] = []
-	if (remoteWorkflows && remoteWorkflowToggles) {
-		for (const workflow of remoteWorkflows) {
-			// Include if alwaysEnabled or if toggle is not explicitly false
-			const enabled = workflow.alwaysEnabled || remoteWorkflowToggles[workflow.name] !== false
-			if (enabled) {
-				remoteWorkflowCommands.push({
-					name: workflow.name,
-					section: "custom",
-				})
-			}
-		}
-	}
-
-	const workflows = [...localWorkflows, ...globalWorkflows, ...remoteWorkflowCommands]
+	const workflows = [...localWorkflows, ...globalWorkflows]
 	return workflows
 }
 
@@ -149,14 +132,10 @@ export function getMatchingSlashCommands(
 	query: string,
 	localWorkflowToggles: Record<string, boolean> = {},
 	globalWorkflowToggles: Record<string, boolean> = {},
-	remoteWorkflowToggles?: Record<string, boolean>,
-	remoteWorkflows?: any[],
 ): SlashCommand[] {
 	const workflowCommands = getWorkflowCommands(
 		localWorkflowToggles,
 		globalWorkflowToggles,
-		remoteWorkflowToggles,
-		remoteWorkflows,
 	)
 	const allCommands = [...DEFAULT_SLASH_COMMANDS, ...workflowCommands]
 
@@ -199,8 +178,6 @@ export function validateSlashCommand(
 	command: string,
 	localWorkflowToggles: Record<string, boolean> = {},
 	globalWorkflowToggles: Record<string, boolean> = {},
-	remoteWorkflowToggles?: Record<string, boolean>,
-	remoteWorkflows?: any[],
 ): "full" | "partial" | null {
 	if (!command) {
 		return null
@@ -209,8 +186,6 @@ export function validateSlashCommand(
 	const workflowCommands = getWorkflowCommands(
 		localWorkflowToggles,
 		globalWorkflowToggles,
-		remoteWorkflowToggles,
-		remoteWorkflows,
 	)
 	const allCommands = [...DEFAULT_SLASH_COMMANDS, ...workflowCommands]
 

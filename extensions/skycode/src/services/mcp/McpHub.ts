@@ -1,7 +1,6 @@
 import { setTimeout as setTimeoutPromise } from "node:timers/promises"
 import { sendMcpServersUpdate } from "@core/controller/mcp/subscribeToMcpServers"
 import { getMcpSettingsFilePath as getMcpSettingsFilePathHelper } from "@core/storage/disk"
-import { StateManager } from "@core/storage/StateManager"
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js"
@@ -266,51 +265,6 @@ export class McpHub {
 	): Promise<void> {
 		// Remove existing connection if it exists (should never happen, the connection should be deleted beforehand)
 		this.connections = this.connections.filter((conn) => conn.server.name !== name)
-
-		// Validate remote MCP server URL against remote config if blockPersonalRemoteMCPServers is enabled
-		if (config.type !== "stdio" && "url" in config && config.url) {
-			const stateManager = StateManager.get()
-			const remoteConfig = stateManager.getRemoteConfigSettings()
-
-			if (remoteConfig.blockPersonalRemoteMCPServers === true) {
-				const remoteMCPServers = remoteConfig.remoteMCPServers || []
-				const allowedUrls = remoteMCPServers.map((server) => server.url)
-
-				if (!allowedUrls.includes(config.url)) {
-					return
-				}
-			}
-		}
-
-		// Validate local MCP servers based on remote config (enterprise feature)
-		if (config.type === "stdio") {
-			const stateManager = StateManager.get()
-			const remoteConfig = stateManager.getRemoteConfigSettings()
-
-			// Early exit for non-enterprise users: if no remote config is set, allow all local servers
-			if (Object.keys(remoteConfig).length === 0) {
-				// No remote config restrictions - proceed with connection (default behavior for non-enterprise users)
-				// This ensures backwards compatibility and that regular users are not affected
-			} else {
-				// Enterprise restrictions apply
-
-				// If marketplace is explicitly disabled by enterprise config, block all local servers
-				if (remoteConfig.mcpMarketplaceEnabled === false) {
-					return
-				}
-
-				// If allowlist exists, only servers on the allowlist are allowed
-				const hasAllowlist = remoteConfig.allowedMCPServers && remoteConfig.allowedMCPServers.length > 0
-				if (hasAllowlist) {
-					const allowedIds = remoteConfig.allowedMCPServers!.map((server: { id: string }) => server.id)
-					if (!allowedIds.includes(name)) {
-						return
-					}
-				}
-
-				// If marketplace is enabled with no allowlist, all local servers are allowed
-			}
-		}
 
 		if (config.disabled) {
 			//Logger.log(`[MCP Debug] Creating disabled connection object for server "${name}"`)

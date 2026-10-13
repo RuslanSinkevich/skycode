@@ -7,10 +7,7 @@ import ServersToggleList from "./ServersToggleList"
 
 const ConfigureServersView = () => {
 	const { t } = useI18n()
-	const { mcpServers: servers, navigateToSettings, remoteConfigSettings } = useExtensionState()
-
-	// Check if there are remote MCP servers configured
-	const hasRemoteMCPServers = remoteConfigSettings?.remoteMCPServers && remoteConfigSettings.remoteMCPServers.length > 0
+	const { mcpServers: servers, navigateToSettings } = useExtensionState()
 
 	return (
 		<div style={{ padding: "16px 20px" }}>
@@ -31,14 +28,6 @@ const ConfigureServersView = () => {
 				</VSCodeLink>{" "}
 				{t("mcp.configureDescriptionSuffix")}
 			</div>
-
-			{/* Remote config banner */}
-			{hasRemoteMCPServers && (
-				<div className="flex items-center gap-2 px-5 py-3 mb-4 bg-vscode-textBlockQuote-background border-l-[3px] border-vscode-textLink-foreground">
-					<i className="codicon codicon-lock text-sm" />
-					<span className="text-base">{t("mcp.orgManagesSomeServers")}</span>
-				</div>
-			)}
 
 			<ServersToggleList hasTrashIcon={false} isExpandable={true} servers={servers} />
 

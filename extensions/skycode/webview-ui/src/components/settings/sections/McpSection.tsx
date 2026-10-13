@@ -17,24 +17,19 @@ interface McpSectionProps {
 
 const McpSection = ({ renderSectionHeader }: McpSectionProps) => {
 	const { t } = useI18n()
-	const { remoteConfigSettings, setMcpServers, setMcpMarketplaceCatalog } = useExtensionState()
+	const { setMcpServers, setMcpMarketplaceCatalog } = useExtensionState()
 
-	const showMarketplace = remoteConfigSettings?.mcpMarketplaceEnabled !== false
-	const showRemoteServers = remoteConfigSettings?.blockPersonalRemoteMCPServers !== true
-
-	const [activeTab, setActiveTab] = useState<McpViewTab>(showMarketplace ? "marketplace" : "configure")
+	const [activeTab, setActiveTab] = useState<McpViewTab>("marketplace")
 
 	// Refresh data when section mounts
 	useEffect(() => {
-		if (showMarketplace) {
-			McpServiceClient.refreshMcpMarketplace(EmptyRequest.create({}))
-				.then((response) => {
-					setMcpMarketplaceCatalog(response)
-				})
-				.catch((error) => {
-					console.error("Error refreshing MCP marketplace:", error)
-				})
-		}
+		McpServiceClient.refreshMcpMarketplace(EmptyRequest.create({}))
+			.then((response) => {
+				setMcpMarketplaceCatalog(response)
+			})
+			.catch((error) => {
+				console.error("Error refreshing MCP marketplace:", error)
+			})
 
 		McpServiceClient.getLatestMcpServers(EmptyRequest.create({}))
 			.then((response: McpServers) => {
@@ -46,16 +41,7 @@ const McpSection = ({ renderSectionHeader }: McpSectionProps) => {
 			.catch((error) => {
 				console.error("Failed to fetch MCP servers:", error)
 			})
-	}, [showMarketplace])
-
-	useEffect(() => {
-		if (!showMarketplace && activeTab === "marketplace") {
-			setActiveTab("configure")
-		}
-		if (!showRemoteServers && activeTab === "addRemote") {
-			setActiveTab("configure")
-		}
-	}, [showMarketplace, showRemoteServers, activeTab])
+	}, [])
 
 	return (
 		<div className="flex flex-col">
@@ -63,16 +49,12 @@ const McpSection = ({ renderSectionHeader }: McpSectionProps) => {
 
 			{/* Sub-tabs */}
 			<TabBar>
-				{showMarketplace && (
-					<SubTab $active={activeTab === "marketplace"} onClick={() => setActiveTab("marketplace")}>
-						{t("mcp.marketplace")}
-					</SubTab>
-				)}
-				{showRemoteServers && (
-					<SubTab $active={activeTab === "addRemote"} onClick={() => setActiveTab("addRemote")}>
-						{t("mcp.remoteServers")}
-					</SubTab>
-				)}
+				<SubTab $active={activeTab === "marketplace"} onClick={() => setActiveTab("marketplace")}>
+					{t("mcp.marketplace")}
+				</SubTab>
+				<SubTab $active={activeTab === "addRemote"} onClick={() => setActiveTab("addRemote")}>
+					{t("mcp.remoteServers")}
+				</SubTab>
 				<SubTab $active={activeTab === "configure"} onClick={() => setActiveTab("configure")}>
 					{t("mcp.configure")}
 				</SubTab>
@@ -80,10 +62,8 @@ const McpSection = ({ renderSectionHeader }: McpSectionProps) => {
 
 			{/* Content */}
 			<div>
-				{showMarketplace && activeTab === "marketplace" && <McpMarketplaceView />}
-				{showRemoteServers && activeTab === "addRemote" && (
-					<AddRemoteServerForm onServerAdded={() => setActiveTab("configure")} />
-				)}
+				{activeTab === "marketplace" && <McpMarketplaceView />}
+				{activeTab === "addRemote" && <AddRemoteServerForm onServerAdded={() => setActiveTab("configure")} />}
 				{activeTab === "configure" && <ConfigureServersView />}
 			</div>
 		</div>

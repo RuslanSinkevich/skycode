@@ -12,22 +12,11 @@ import {
 	reportBugToolResponse,
 	subagentToolResponse,
 } from "../prompts/commands"
-import { StateManager } from "../storage/StateManager"
 
-type FileBasedWorkflow = {
+type Workflow = {
 	fullPath: string
 	fileName: string
-	isRemote: false
 }
-
-type RemoteWorkflow = {
-	fullPath: string
-	fileName: string
-	isRemote: true
-	contents: string
-}
-
-type Workflow = FileBasedWorkflow | RemoteWorkflow
 
 /**
  * Processes text for slash commands and transforms them with appropriate instructions
@@ -147,7 +136,6 @@ export async function parseSlashCommands(
 				.map(([filePath, _]) => ({
 					fullPath: filePath,
 					fileName: filePath.replace(/^.*[/\\]/, ""),
-					isRemote: false,
 				}))
 
 			const localWorkflows: Workflow[] = Object.entries(localWorkflowToggles)
@@ -155,42 +143,17 @@ export async function parseSlashCommands(
 				.map(([filePath, _]) => ({
 					fullPath: filePath,
 					fileName: filePath.replace(/^.*[/\\]/, ""),
-					isRemote: false,
 				}))
 
-			// Get remote workflows from remote config
-			const stateManager = StateManager.get()
-			const remoteConfigSettings = stateManager.getRemoteConfigSettings()
-			const remoteWorkflows = remoteConfigSettings.remoteGlobalWorkflows || []
-			const remoteWorkflowToggles = stateManager.getGlobalStateKey("remoteWorkflowToggles") || {}
-
-			const enabledRemoteWorkflows: Workflow[] = remoteWorkflows
-				.filter((workflow) => {
-					// If alwaysEnabled, always include; otherwise check toggle
-					return workflow.alwaysEnabled || remoteWorkflowToggles[workflow.name] !== false
-				})
-				.map((workflow) => ({
-					fullPath: "",
-					fileName: workflow.name,
-					isRemote: true,
-					contents: workflow.contents,
-				}))
-
-			// local workflows have precedence over global workflows, which have precedence over remote workflows
-			const enabledWorkflows: Workflow[] = [...localWorkflows, ...globalWorkflows, ...enabledRemoteWorkflows]
+			// local workflows have precedence over global workflows
+			const enabledWorkflows: Workflow[] = [...localWorkflows, ...globalWorkflows]
 
 			// Then check if the command matches any enabled workflow filename
 			const matchingWorkflow = enabledWorkflows.find((workflow) => workflow.fileName === commandName)
 
 			if (matchingWorkflow) {
 				try {
-					// Get workflow content - either from file or from remote config
-					let workflowContent: string
-					if (matchingWorkflow.isRemote) {
-						workflowContent = matchingWorkflow.contents.trim()
-					} else {
-						workflowContent = (await fs.readFile(matchingWorkflow.fullPath, "utf8")).trim()
-					}
+					const workflowContent = (await fs.readFile(matchingWorkflow.fullPath, "utf8")).trim()
 
 					// remove the slash command and add custom instructions at the top of this message
 					const textWithoutSlashCommand = removeSlashCommand(text, tagContent, contentStartIndex, slashMatch)

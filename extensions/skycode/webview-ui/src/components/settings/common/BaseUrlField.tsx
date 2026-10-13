@@ -11,8 +11,6 @@ interface BaseUrlFieldProps {
 	defaultValue?: string
 	label?: string
 	placeholder?: string
-	disabled?: boolean
-	showLockIcon?: boolean
 }
 
 /**
@@ -23,8 +21,6 @@ export const BaseUrlField = ({
 	onChange,
 	label = "Use custom base URL",
 	placeholder = "Default: https://api.example.com",
-	disabled = false,
-	showLockIcon = false,
 }: BaseUrlFieldProps) => {
 	const [isEnabled, setIsEnabled] = useState(!!initialValue)
 	const [localValue, setLocalValue] = useDebouncedInput(initialValue || "", onChange)
@@ -39,16 +35,12 @@ export const BaseUrlField = ({
 
 	return (
 		<div>
-			<div className="flex items-center gap-2">
-				<VSCodeCheckbox checked={isEnabled} disabled={disabled} onChange={handleToggle}>
-					{label}
-				</VSCodeCheckbox>
-				{showLockIcon && <i className="codicon codicon-lock text-(--vscode-descriptionForeground) text-sm" />}
-			</div>
+			<VSCodeCheckbox checked={isEnabled} onChange={handleToggle}>
+				{label}
+			</VSCodeCheckbox>
 
 			{isEnabled && (
 				<VSCodeTextField
-					disabled={disabled}
 					onInput={(e: any) => setLocalValue(e.target.value.trim())}
 					placeholder={placeholder}
 					style={{ width: "100%", marginTop: 3 }}

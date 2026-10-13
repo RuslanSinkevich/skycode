@@ -8,7 +8,6 @@ import {
 	isSettingsKey,
 	LocalState,
 	LocalStateKey,
-	RemoteConfigFields,
 	SecretKey,
 	SecretKeys,
 	Secrets,
@@ -28,7 +27,6 @@ import {
 	writeTaskSettingsToStorage,
 } from "./disk"
 import { STATE_MANAGER_NOT_INITIALIZED } from "./error-messages"
-import { filterAllowedRemoteConfigFields } from "./remote-config/utils"
 import { readGlobalStateFromDisk, readSecretsFromDisk, readWorkspaceStateFromDisk } from "./utils/state-helpers"
 export interface PersistenceErrorEvent {
 	error: Error
@@ -57,7 +55,6 @@ export class StateManager {
 
 	private globalStateCache: GlobalStateAndSettings = {} as GlobalStateAndSettings
 	private taskStateCache: Partial<Settings> = {}
-	private remoteConfigCache: Partial<RemoteConfigFields> = {} as RemoteConfigFields
 	private secretsCache: Secrets = {} as Secrets
 	private workspaceStateCache: LocalState = {} as LocalState
 	private context: ExtensionContext
@@ -183,18 +180,6 @@ export class StateManager {
 
 		// Schedule debounced persistence
 		this.scheduleDebouncedPersistence()
-	}
-
-	private setRemoteConfigState(updates: Partial<GlobalStateAndSettings>): void {
-		if (!this.isInitialized) {
-			throw new Error(STATE_MANAGER_NOT_INITIALIZED)
-		}
-
-		// Update cache in one go
-		this.remoteConfigCache = {
-			...this.remoteConfigCache,
-			...filterAllowedRemoteConfigFields(updates),
-		}
 	}
 
 	/**
@@ -359,43 +344,6 @@ export class StateManager {
 	}
 
 	/**
-	 * Set method for remote config field - updates cache immediately (no persistence)
-	 * Remote config is read-only from the extension's perspective and only stored in memory
-	 */
-	setRemoteConfigField<K extends keyof RemoteConfigFields>(key: K, value: RemoteConfigFields[K]): void {
-		if (!this.isInitialized) {
-			throw new Error(STATE_MANAGER_NOT_INITIALIZED)
-		}
-
-		// Update cache immediately for instant access (no persistence needed)
-		this.remoteConfigCache[key] = value
-	}
-
-	/**
-	 * Get method for remote config settings - returns cache immediately (no persistence)
-	 * Remote config is read-only from the extension's perspective and only stored in memory
-	 */
-	getRemoteConfigSettings(): Partial<RemoteConfigFields> {
-		if (!this.isInitialized) {
-			throw new Error(STATE_MANAGER_NOT_INITIALIZED)
-		}
-
-		return this.remoteConfigCache
-	}
-
-	/**
-	 * Clear remote config cache
-	 * Used when switching organizations or when remote config is no longer applicable
-	 */
-	clearRemoteConfig(): void {
-		if (!this.isInitialized) {
-			throw new Error(STATE_MANAGER_NOT_INITIALIZED)
-		}
-
-		this.remoteConfigCache = {} as GlobalStateAndSettings
-	}
-
-	/**
 	 * Set models cache for a specific provider (in-memory only, not persisted)
 	 */
 	setModelsCache(
@@ -515,7 +463,6 @@ export class StateManager {
 
 		// Batch update settings (stored in global state)
 		if (Object.keys(settingsUpdates).length > 0) {
-			this.setRemoteConfigState(settingsUpdates)
 			this.setGlobalStateBatch(settingsUpdates)
 		}
 
@@ -527,16 +474,11 @@ export class StateManager {
 
 	/**
 	 * Get method for global settings keys - reads from in-memory cache
-	 * Precedence: remote config > task settings > global settings
+	 * Precedence: task settings > global settings
 	 */
 	getGlobalSettingsKey<K extends keyof Settings>(key: K): Settings[K] {
 		if (!this.isInitialized) {
 			throw new Error(STATE_MANAGER_NOT_INITIALIZED)
-		}
-		if (this.remoteConfigCache[key] !== undefined) {
-			// type casting here, TS cannot infer that the key will ONLY be one of Settings
-
-			return this.remoteConfigCache[key] as Settings[K]
 		}
 		if (this.taskStateCache[key] !== undefined) {
 			return this.taskStateCache[key]
@@ -550,10 +492,6 @@ export class StateManager {
 	getGlobalStateKey<K extends keyof GlobalState>(key: K): GlobalState[K] {
 		if (!this.isInitialized) {
 			throw new Error(STATE_MANAGER_NOT_INITIALIZED)
-		}
-		if (this.remoteConfigCache[key] !== undefined) {
-			// type casting here, TS cannot infer that the key will ONLY be one of GlobalState
-			return this.remoteConfigCache[key] as GlobalState[K]
 		}
 		return this.globalStateCache[key]
 	}
@@ -618,7 +556,6 @@ export class StateManager {
 		this.secretsCache = {} as Secrets
 		this.workspaceStateCache = {} as LocalState
 		this.taskStateCache = {}
-		this.remoteConfigCache = {} as GlobalStateAndSettings
 
 		this.isInitialized = false
 	}
@@ -792,13 +729,9 @@ export class StateManager {
 
 	/**
 	 * Helper to get a setting value with override support
-	 * Precedence: remote config > task settings > global settings
+	 * Precedence: task settings > global settings
 	 */
 	private getSettingWithOverride<K extends keyof Settings>(key: K): Settings[K] {
-		const remoteValue = this.remoteConfigCache[key]
-		if (remoteValue !== undefined) {
-			return remoteValue
-		}
 		const taskValue = this.taskStateCache[key]
 		if (taskValue !== undefined) {
 			return taskValue
@@ -819,14 +752,6 @@ export class StateManager {
 	private constructApiConfigurationFromCache(): ApiConfiguration {
 		// Build secrets object
 		const secrets = Object.fromEntries(SecretKeys.map((key) => [key, this.getSecret(key)])) as Secrets
-
-		// Preserve legacy fallback behavior for LiteLLM API key:
-		// if a remoteLiteLlmApiKey is set (via remote config), it should
-		// take precedence over the local liteLlmApiKey.
-		const remoteLiteLlmApiKey = this.secretsCache["remoteLiteLlmApiKey"]
-		if (remoteLiteLlmApiKey !== undefined && remoteLiteLlmApiKey !== null && remoteLiteLlmApiKey !== "") {
-			secrets.liteLlmApiKey = remoteLiteLlmApiKey
-		}
 
 		// Build API handler settings object with task override support
 		const settings = Object.fromEntries(ApiHandlerSettingsKeys.map((key) => [key, this.getSettingWithOverride(key)]))

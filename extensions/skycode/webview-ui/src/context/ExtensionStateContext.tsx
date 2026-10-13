@@ -59,8 +59,6 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setGlobalWorkflowToggles: (toggles: Record<string, boolean>) => void
 	setGlobalSkillsToggles: (toggles: Record<string, boolean>) => void
 	setLocalSkillsToggles: (toggles: Record<string, boolean>) => void
-	setRemoteRulesToggles: (toggles: Record<string, boolean>) => void
-	setRemoteWorkflowToggles: (toggles: Record<string, boolean>) => void
 	setMcpMarketplaceCatalog: (value: McpMarketplaceCatalog) => void
 	setTotalTasksSize: (value: number | null) => void
 	setExpandTaskHeader: (value: boolean) => void
@@ -170,8 +168,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		favoritedModelIds: [],
 		lastDismissedInfoBannerVersion: 0,
 		lastDismissedModelBannerVersion: 0,
-		optOutOfRemoteConfig: false,
-		remoteConfigSettings: {},
 		backgroundCommandRunning: false,
 		backgroundCommandTaskId: undefined,
 		lastDismissedCliBannerVersion: 0,
@@ -639,10 +635,6 @@ export const ExtensionStateContextProvider: React.FC<{
 			setState((prev) => ({ ...prev, globalSkillsToggles: toggles })),
 		setLocalSkillsToggles: (toggles: Record<string, boolean>) =>
 			setState((prev) => ({ ...prev, localSkillsToggles: toggles })),
-		setRemoteRulesToggles: (toggles: Record<string, boolean>) =>
-			setState((prev) => ({ ...prev, remoteRulesToggles: toggles })),
-		setRemoteWorkflowToggles: (toggles: Record<string, boolean>) =>
-			setState((prev) => ({ ...prev, remoteWorkflowToggles: toggles })),
 		setDictationSettings: (value: DictationSettings) =>
 			setState((prev) => ({ ...prev, dictationSettings: value })),
 	}).current
@@ -674,8 +666,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		localAgentsRulesToggles: state.localAgentsRulesToggles || {},
 		localWorkflowToggles: state.localWorkflowToggles || {},
 		globalWorkflowToggles: state.globalWorkflowToggles || {},
-		remoteRulesToggles: state.remoteRulesToggles || {},
-		remoteWorkflowToggles: state.remoteWorkflowToggles || {},
 		currentFocusChainChecklist: state.currentFocusChainChecklist,
 
 		// Navigation functions

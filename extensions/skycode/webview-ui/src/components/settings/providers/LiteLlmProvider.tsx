@@ -7,7 +7,6 @@ import { ModelsServiceClient } from "@/services/grpc-client"
 import { DebouncedTextField } from "../common/DebouncedTextField"
 import { ModelInfoView } from "../common/ModelInfoView"
 import { ModelSelector } from "../common/ModelSelector"
-import { LockIcon, RemotelyConfiguredInputWrapper } from "../common/RemotelyConfiguredInputWrapper"
 import ThinkingBudgetSlider from "../ThinkingBudgetSlider"
 import { normalizeApiConfiguration } from "../utils/providerUtils"
 import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
@@ -23,7 +22,7 @@ interface LiteLlmProviderProps {
 
 export const LiteLlmProvider = ({ showModelOptions, isPopup, currentMode }: LiteLlmProviderProps) => {
 	const { t } = useI18n()
-	const { apiConfiguration, remoteConfigSettings, liteLlmModels } = useExtensionState()
+	const { apiConfiguration, liteLlmModels } = useExtensionState()
 	const { handleModeFieldsChange } = useApiConfigurationHandlers()
 
 	// Get the normalized configuration with model info
@@ -49,31 +48,25 @@ export const LiteLlmProvider = ({ showModelOptions, isPopup, currentMode }: Lite
 
 	return (
 		<div>
-			<RemotelyConfiguredInputWrapper hidden={remoteConfigSettings?.liteLlmBaseUrl === undefined}>
-				<DebouncedTextField
-					disabled={remoteConfigSettings?.liteLlmBaseUrl !== undefined}
-					initialValue={apiConfiguration?.liteLlmBaseUrl || ""}
-					onChange={async (value) => {
-						await ModelsServiceClient.updateApiConfiguration(
-							UpdateApiConfigurationRequestNew.create({
-								updates: {
-									options: {
-										liteLlmBaseUrl: value,
-									},
+			<DebouncedTextField
+				initialValue={apiConfiguration?.liteLlmBaseUrl || ""}
+				onChange={async (value) => {
+					await ModelsServiceClient.updateApiConfiguration(
+						UpdateApiConfigurationRequestNew.create({
+							updates: {
+								options: {
+									liteLlmBaseUrl: value,
 								},
-								updateMask: ["options.liteLlmBaseUrl"],
-							}),
-						)
-					}}
-					placeholder={t("litellm.baseUrlPlaceholder")}
-					style={{ width: "100%" }}
-					type="text">
-					<div className="flex items-center gap-2 mb-1">
-						<span style={{ fontWeight: 500 }}>{t("litellm.baseUrlOptional")}</span>
-						{remoteConfigSettings?.liteLlmBaseUrl !== undefined && <LockIcon />}
-					</div>
-				</DebouncedTextField>
-			</RemotelyConfiguredInputWrapper>
+							},
+							updateMask: ["options.liteLlmBaseUrl"],
+						}),
+					)
+				}}
+				placeholder={t("litellm.baseUrlPlaceholder")}
+				style={{ width: "100%" }}
+				type="text">
+				<span style={{ fontWeight: 500 }}>{t("litellm.baseUrlOptional")}</span>
+			</DebouncedTextField>
 			<DebouncedTextField
 				initialValue={apiConfiguration?.liteLlmApiKey || ""}
 				onChange={async (value) => {

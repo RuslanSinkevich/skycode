@@ -16,9 +16,8 @@ import McpMarketplaceCard from "./McpMarketplaceCard"
 
 const McpMarketplaceView = () => {
 	const { t } = useI18n()
-	const { mcpServers, mcpMarketplaceCatalog, setMcpMarketplaceCatalog, remoteConfigSettings } = useExtensionState()
+	const { mcpServers, mcpMarketplaceCatalog, setMcpMarketplaceCatalog } = useExtensionState()
 
-	const showMarketplace = remoteConfigSettings?.mcpMarketplaceEnabled !== false
 	const [isLoading, setIsLoading] = useState(true)
 	const [error, setError] = useState<string | null>(null)
 	const [isRefreshing, setIsRefreshing] = useState(false)
@@ -82,18 +81,16 @@ const McpMarketplaceView = () => {
 		}
 		setError(null)
 
-		if (showMarketplace) {
-			McpServiceClient.refreshMcpMarketplace(EmptyRequest.create({}))
-				.then((response) => {
-					setMcpMarketplaceCatalog(response)
-				})
-				.catch((error) => {
-					console.error("Error refreshing MCP marketplace:", error)
-					setError(t("mcp.failedToLoadMarketplaceData"))
-					setIsLoading(false)
-					setIsRefreshing(false)
-				})
-		}
+		McpServiceClient.refreshMcpMarketplace(EmptyRequest.create({}))
+			.then((response) => {
+				setMcpMarketplaceCatalog(response)
+			})
+			.catch((error) => {
+				console.error("Error refreshing MCP marketplace:", error)
+				setError(t("mcp.failedToLoadMarketplaceData"))
+				setIsLoading(false)
+				setIsRefreshing(false)
+			})
 	}
 
 	if (isLoading || isRefreshing) {
@@ -261,14 +258,6 @@ const McpMarketplaceView = () => {
 				}
 			`}
 			</style>
-
-			{/* Remote config banner */}
-			{remoteConfigSettings?.allowedMCPServers && (
-				<div className="flex items-center gap-2 px-5 py-3 mx-5 mb-4 bg-vscode-textBlockQuote-background border-l-[3px] border-vscode-textLink-foreground">
-					<i className="codicon codicon-lock text-sm" />
-					<span className="text-[13px]">{t("mcp.orgPreconfiguredAvailableServers")}</span>
-				</div>
-			)}
 
 			<div style={{ display: "flex", flexDirection: "column" }}>
 				{filteredItems.length === 0 ? (

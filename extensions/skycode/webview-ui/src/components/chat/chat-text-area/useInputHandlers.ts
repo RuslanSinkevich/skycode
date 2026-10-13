@@ -43,8 +43,6 @@ interface UseInputHandlersParams {
 	textAreaRef: React.MutableRefObject<HTMLTextAreaElement | null>
 	localWorkflowToggles: Record<string, boolean> | undefined
 	globalWorkflowToggles: Record<string, boolean> | undefined
-	remoteWorkflowToggles: Record<string, boolean> | undefined
-	remoteConfigSettings: { remoteGlobalWorkflows?: any } | undefined
 	selectedType: ContextMenuOptionType | null
 	setSelectedType: React.Dispatch<React.SetStateAction<ContextMenuOptionType | null>>
 }
@@ -59,8 +57,6 @@ export function useInputHandlers({
 	textAreaRef,
 	localWorkflowToggles,
 	globalWorkflowToggles,
-	remoteWorkflowToggles,
-	remoteConfigSettings,
 	selectedType,
 	setSelectedType,
 }: UseInputHandlersParams) {
@@ -281,8 +277,6 @@ export function useInputHandlers({
 							slashCommandsQuery,
 							localWorkflowToggles,
 							globalWorkflowToggles,
-							remoteWorkflowToggles,
-							remoteConfigSettings?.remoteGlobalWorkflows,
 						)
 						if (allCommands.length === 0) {
 							return prevIndex
@@ -300,8 +294,6 @@ export function useInputHandlers({
 						slashCommandsQuery,
 						localWorkflowToggles,
 						globalWorkflowToggles,
-						remoteWorkflowToggles,
-						remoteConfigSettings?.remoteGlobalWorkflows,
 					)
 					if (commands.length > 0) {
 						handleSlashCommandsSelect(commands[selectedSlashCommandsIndex])

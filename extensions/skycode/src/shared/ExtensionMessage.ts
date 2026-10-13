@@ -1,7 +1,6 @@
 // type that represents json data that is sent from extension to webview, called ExtensionMessage and has 'type' enum which can be 'plusButtonClicked' or 'settingsButtonClicked' or 'hello'
 
 import { WorkspaceRoot } from "@shared/multi-root/types"
-import { RemoteConfigFields } from "@shared/storage/state-keys"
 import type { Environment } from "../config"
 import { AutoApprovalSettings } from "./AutoApprovalSettings"
 import { ApiConfiguration } from "./api"
@@ -67,7 +66,6 @@ export interface ExtensionState {
 	currentSessionId?: string
 	currentTaskItem?: HistoryItem
 	currentFocusChainChecklist?: string | null
-	mcpMarketplaceEnabled?: boolean
 	mcpDisplayMode: McpDisplayMode
 	planActSeparateModelsSetting: boolean
 	platform: Platform
@@ -94,8 +92,6 @@ export interface ExtensionState {
 	globalWorkflowToggles: SkycodeRulesToggles
 	localCursorRulesToggles: SkycodeRulesToggles
 	localWindsurfRulesToggles: SkycodeRulesToggles
-	remoteRulesToggles?: SkycodeRulesToggles
-	remoteWorkflowToggles?: SkycodeRulesToggles
 	localAgentsRulesToggles: SkycodeRulesToggles
 	mcpResponsesCollapsed?: boolean
 	strictPlanModeEnabled?: boolean
@@ -116,7 +112,6 @@ export interface ExtensionState {
 	lastDismissedModelBannerVersion: number
 	lastDismissedCliBannerVersion: number
 	hooksEnabled?: boolean
-	remoteConfigSettings?: Partial<RemoteConfigFields>
 	subagentsEnabled?: boolean
 	skillsEnabled?: boolean
 	globalSkillsToggles?: Record<string, boolean>
@@ -138,7 +133,6 @@ export interface ExtensionState {
 	indexingPromptDismissed?: boolean
 	// Skycode AI: Pending changes for inline diffs
 	pendingChanges?: PendingChangeInfo[]
-	optOutOfRemoteConfig?: boolean
 	banners?: BannerCardData[]
 	openAiCodexIsAuthenticated?: boolean
 	// Multi-step workflow

@@ -21,7 +21,7 @@ export async function toggleSkycodeRule(controller: Controller, request: ToggleS
 		throw new Error("Missing or invalid parameters for toggleSkycodeRule")
 	}
 
-	// Handle the three different scopes
+	// Handle the two scopes
 	switch (scope) {
 		case RuleScope.GLOBAL: {
 			const toggles = controller.stateManager.getGlobalSettingsKey("globalSkycodeRulesToggles")
@@ -35,26 +35,16 @@ export async function toggleSkycodeRule(controller: Controller, request: ToggleS
 			controller.stateManager.setWorkspaceState("localSkycodeRulesToggles", toggles)
 			break
 		}
-		case RuleScope.REMOTE: {
-			const toggles = controller.stateManager.getGlobalStateKey("remoteRulesToggles")
-			toggles[rulePath] = enabled
-			controller.stateManager.setGlobalState("remoteRulesToggles", toggles)
-			break
-		}
 		default:
 			throw new Error(`Invalid scope: ${scope}`)
 	}
 
-	// Track rule toggle telemetry with current task context
-
 	// Get the current state to return in the response
 	const globalToggles = controller.stateManager.getGlobalSettingsKey("globalSkycodeRulesToggles")
 	const localToggles = controller.stateManager.getWorkspaceStateKey("localSkycodeRulesToggles")
-	const remoteToggles = controller.stateManager.getGlobalStateKey("remoteRulesToggles")
 
 	return ToggleSkycodeRules.create({
 		globalSkycodeRulesToggles: { toggles: globalToggles },
 		localSkycodeRulesToggles: { toggles: localToggles },
-		remoteRulesToggles: { toggles: remoteToggles },
 	})
 }

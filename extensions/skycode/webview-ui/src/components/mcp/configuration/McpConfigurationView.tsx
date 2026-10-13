@@ -20,51 +20,33 @@ type McpViewProps = {
 
 const McpConfigurationView = ({ onDone, initialTab }: McpViewProps) => {
 	const { t } = useI18n()
-	const { remoteConfigSettings, setMcpServers, environment } = useExtensionState()
-	// Show marketplace by default unless remote config explicitly disables it
-	const showMarketplace = remoteConfigSettings?.mcpMarketplaceEnabled !== false
-	const showRemoteServers = remoteConfigSettings?.blockPersonalRemoteMCPServers !== true
-	const [activeTab, setActiveTab] = useState<McpViewTab>(initialTab || (showMarketplace ? "marketplace" : "configure"))
+	const { setMcpServers, setMcpMarketplaceCatalog, environment } = useExtensionState()
+	const [activeTab, setActiveTab] = useState<McpViewTab>(initialTab || "marketplace")
 
 	const handleTabChange = (tab: McpViewTab) => {
 		setActiveTab(tab)
 	}
 
 	useEffect(() => {
-		if (!showMarketplace && activeTab === "marketplace") {
-			// If marketplace is disabled by remote config and we're on marketplace tab, switch to configure
-			setActiveTab("configure")
-		}
-		if (!showRemoteServers && activeTab === "addRemote") {
-			setActiveTab("configure")
-		}
-	}, [showMarketplace, showRemoteServers, activeTab])
+		McpServiceClient.refreshMcpMarketplace(EmptyRequest.create({}))
+			.then((response) => {
+				setMcpMarketplaceCatalog(response)
+			})
+			.catch((error) => {
+				console.error("Error refreshing MCP marketplace:", error)
+			})
 
-	// Get setter for MCP marketplace catalog from context
-	const { setMcpMarketplaceCatalog } = useExtensionState()
-
-	useEffect(() => {
-		if (showMarketplace) {
-			McpServiceClient.refreshMcpMarketplace(EmptyRequest.create({}))
-				.then((response) => {
-					setMcpMarketplaceCatalog(response)
-				})
-				.catch((error) => {
-					console.error("Error refreshing MCP marketplace:", error)
-				})
-
-			McpServiceClient.getLatestMcpServers(EmptyRequest.create({}))
-				.then((response: McpServers) => {
-					if (response.mcpServers) {
-						const mcpServers = convertProtoMcpServersToMcpServers(response.mcpServers)
-						setMcpServers(mcpServers)
-					}
-				})
-				.catch((error) => {
-					console.error("Failed to fetch MCP servers:", error)
-				})
-		}
-	}, [showMarketplace])
+		McpServiceClient.getLatestMcpServers(EmptyRequest.create({}))
+			.then((response: McpServers) => {
+				if (response.mcpServers) {
+					const mcpServers = convertProtoMcpServersToMcpServers(response.mcpServers)
+					setMcpServers(mcpServers)
+				}
+			})
+			.catch((error) => {
+				console.error("Failed to fetch MCP servers:", error)
+			})
+	}, [])
 
 	return (
 		<div
@@ -103,16 +85,12 @@ const McpConfigurationView = ({ onDone, initialTab }: McpViewProps) => {
 						padding: "0 20px 0 20px",
 						borderBottom: "1px solid var(--vscode-panel-border)",
 					}}>
-					{showMarketplace && (
-						<TabButton isActive={activeTab === "marketplace"} onClick={() => handleTabChange("marketplace")}>
-							{t("mcp.marketplace")}
-						</TabButton>
-					)}
-					{showRemoteServers && (
-						<TabButton isActive={activeTab === "addRemote"} onClick={() => handleTabChange("addRemote")}>
-							{t("mcp.remoteServers")}
-						</TabButton>
-					)}
+					<TabButton isActive={activeTab === "marketplace"} onClick={() => handleTabChange("marketplace")}>
+						{t("mcp.marketplace")}
+					</TabButton>
+					<TabButton isActive={activeTab === "addRemote"} onClick={() => handleTabChange("addRemote")}>
+						{t("mcp.remoteServers")}
+					</TabButton>
 					<TabButton isActive={activeTab === "configure"} onClick={() => handleTabChange("configure")}>
 						{t("mcp.configure")}
 					</TabButton>
@@ -120,10 +98,8 @@ const McpConfigurationView = ({ onDone, initialTab }: McpViewProps) => {
 
 				{/* Content container */}
 				<div style={{ width: "100%" }}>
-					{showMarketplace && activeTab === "marketplace" && <McpMarketplaceView />}
-					{showRemoteServers && activeTab === "addRemote" && (
-						<AddRemoteServerForm onServerAdded={() => handleTabChange("configure")} />
-					)}
+					{activeTab === "marketplace" && <McpMarketplaceView />}
+					{activeTab === "addRemote" && <AddRemoteServerForm onServerAdded={() => handleTabChange("configure")} />}
 					{activeTab === "configure" && <ConfigureServersView />}
 				</div>
 			</div>

@@ -13,8 +13,6 @@ interface SlashCommandMenuProps {
 	query: string
 	localWorkflowToggles?: Record<string, boolean>
 	globalWorkflowToggles?: Record<string, boolean>
-	remoteWorkflowToggles?: Record<string, boolean>
-	remoteWorkflows?: any[]
 }
 
 const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
@@ -25,8 +23,6 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
 	query,
 	localWorkflowToggles = {},
 	globalWorkflowToggles = {},
-	remoteWorkflowToggles,
-	remoteWorkflows,
 }) => {
 	const { t } = useI18n()
 	const menuRef = useRef<HTMLDivElement>(null)
@@ -36,8 +32,6 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
 		query,
 		localWorkflowToggles,
 		globalWorkflowToggles,
-		remoteWorkflowToggles,
-		remoteWorkflows,
 	)
 	const defaultCommands = filteredCommands.filter((cmd) => cmd.section === "default" || !cmd.section)
 	const workflowCommands = filteredCommands.filter((cmd) => cmd.section === "custom")

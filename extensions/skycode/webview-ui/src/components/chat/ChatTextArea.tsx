@@ -85,8 +85,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			platform,
 			localWorkflowToggles,
 			globalWorkflowToggles,
-			remoteWorkflowToggles,
-			remoteConfigSettings,
 			showChatModelSelector: showModelSelector,
 			setShowChatModelSelector: setShowModelSelector,
 			dictationSettings,
@@ -105,8 +103,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			inputValue,
 			localWorkflowToggles,
 			globalWorkflowToggles,
-			remoteWorkflowToggles,
-			remoteGlobalWorkflows: remoteConfigSettings?.remoteGlobalWorkflows,
 		})
 
 		const {
@@ -147,8 +143,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			textAreaRef,
 			localWorkflowToggles,
 			globalWorkflowToggles,
-			remoteWorkflowToggles,
-			remoteConfigSettings,
 			selectedType,
 			setSelectedType,
 		})
@@ -309,8 +303,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								onMouseDown={handleMenuMouseDown}
 								onSelect={handleSlashCommandsSelect}
 								query={slashCommandsQuery}
-								remoteWorkflows={remoteConfigSettings?.remoteGlobalWorkflows}
-								remoteWorkflowToggles={remoteWorkflowToggles}
 								selectedIndex={selectedSlashCommandsIndex}
 								setSelectedIndex={setSelectedSlashCommandsIndex}
 							/>

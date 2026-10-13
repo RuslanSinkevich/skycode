@@ -76,7 +76,7 @@ message Secrets {
   optional string auth_nonce = 20;
   optional string giga_chat_api_key = 44;
   optional string yandex_gpt_api_key = 45;
-  optional string remote_lite_llm_api_key = 40;
+  reserved 40; // was remote_lite_llm_api_key (remote config)
   optional string mcp_o_auth_secrets = 43;
   optional string qwen_web_token = 46;
   // Removed providers (Bedrock, Vertex, SAP AI Core, Requesty, OCA and others) — numbers stay reserved.
@@ -162,21 +162,7 @@ message Settings {
   optional bool enable_parallel_tool_calling = 154;
   optional bool background_edit_enabled = 155;
   optional bool skills_enabled = 156;
-  optional bool opt_out_of_remote_config = 157;
-  optional bool open_telemetry_enabled = 158;
-  optional string open_telemetry_metrics_exporter = 159;
-  optional string open_telemetry_logs_exporter = 160;
-  optional string open_telemetry_otlp_protocol = 161;
-  optional string open_telemetry_otlp_endpoint = 162;
-  optional string open_telemetry_otlp_metrics_protocol = 163;
-  optional string open_telemetry_otlp_metrics_endpoint = 164;
-  optional string open_telemetry_otlp_logs_protocol = 165;
-  optional string open_telemetry_otlp_logs_endpoint = 166;
-  optional int32 open_telemetry_metric_export_interval = 167;
-  optional bool open_telemetry_otlp_insecure = 168;
-  optional int32 open_telemetry_log_batch_size = 169;
-  optional int32 open_telemetry_log_batch_timeout = 170;
-  optional int32 open_telemetry_log_max_queue_size = 171;
+  reserved 157 to 171; // were opt_out_of_remote_config and open_telemetry_* (remote config, telemetry)
   reserved 172; // was worktrees_enabled
   map<string, string> open_ai_headers = 173;
   optional bool always_think_in_preferred_language = 174;
@@ -306,7 +292,7 @@ message UpdateSettingsRequest {
   optional string telemetry_setting = 3;
   optional bool plan_act_separate_models_setting = 4;
   reserved 5; // was enable_checkpoints_setting
-  optional bool mcp_marketplace_enabled = 6;
+  reserved 6; // was mcp_marketplace_enabled (remote config)
   optional int32 shell_integration_timeout = 8;
   optional bool terminal_reuse_enabled = 9;
   optional bool mcp_responses_collapsed = 10;
@@ -336,7 +322,7 @@ message UpdateSettingsRequest {
   optional bool enable_parallel_tool_calling = 35;
   optional bool background_edit_enabled = 36;
   optional bool skills_enabled = 38;
-  optional bool opt_out_of_remote_config = 39;
+  reserved 39; // was opt_out_of_remote_config
   reserved 40; // was worktrees_enabled
   optional bool always_think_in_preferred_language = 41;
   // Skycode AI: syntax checks before applying edits (stored in VS Code configuration)

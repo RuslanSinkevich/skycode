@@ -5,7 +5,6 @@ import { updateAutoApproveSettings } from "@/components/chat/auto-approve-menu/A
 import CommandApprovalModeSelector from "@/components/chat/auto-approve-menu/CommandApprovalModeSelector"
 import { FILE_ACTIONS, TOOL_ACTIONS } from "@/components/chat/auto-approve-menu/constants"
 import type { ActionMetadata } from "@/components/chat/auto-approve-menu/types"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useAutoApproveActions } from "@/hooks/useAutoApproveActions"
 import { useI18n } from "@/i18n"
@@ -35,7 +34,7 @@ const GroupTitle = ({ children }: { children: string }) => (
 
 const PermissionsSection = ({ renderSectionHeader }: PermissionsSectionProps) => {
 	const { t } = useI18n()
-	const { autoApprovalSettings, yoloModeToggled, remoteConfigSettings } = useExtensionState()
+	const { autoApprovalSettings, yoloModeToggled } = useExtensionState()
 	const { isChecked, updateAction } = useAutoApproveActions()
 
 	const renderActions = (actions: ActionMetadata[]) => (
@@ -98,30 +97,14 @@ const PermissionsSection = ({ renderSectionHeader }: PermissionsSectionProps) =>
 							border: "1px solid var(--vscode-inputValidation-warningBorder, var(--vscode-widget-border))",
 						}}>
 						<div className="font-semibold mb-2">{t("permissions.yoloSection")}</div>
-						<Tooltip>
-							<TooltipTrigger asChild>
-								<div className="flex items-center gap-2">
-									<VSCodeCheckbox
-										checked={yoloModeToggled}
-										disabled={remoteConfigSettings?.yoloModeToggled !== undefined}
-										onChange={(e: any) => {
-											const checked = e.target.checked === true
-											updateSetting("yoloModeToggled", checked)
-										}}>
-										{t("features.yoloMode")}
-									</VSCodeCheckbox>
-									{remoteConfigSettings?.yoloModeToggled !== undefined && (
-										<i className="codicon codicon-lock text-description text-sm" />
-									)}
-								</div>
-							</TooltipTrigger>
-							<TooltipContent
-								className="max-w-xs"
-								hidden={remoteConfigSettings?.yoloModeToggled === undefined}
-								side="top">
-								{t("features.lockedByOrg")}
-							</TooltipContent>
-						</Tooltip>
+						<VSCodeCheckbox
+							checked={yoloModeToggled}
+							onChange={(e: any) => {
+								const checked = e.target.checked === true
+								updateSetting("yoloModeToggled", checked)
+							}}>
+							{t("features.yoloMode")}
+						</VSCodeCheckbox>
 						<p className="text-xs text-(--vscode-errorForeground) mt-1">{t("features.yoloDanger")}</p>
 					</div>
 				</div>

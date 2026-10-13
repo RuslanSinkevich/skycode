@@ -13,8 +13,6 @@ const RulesToggleList = ({
 	ruleType,
 	showNewRule,
 	showNoRules,
-	isRemote = false,
-	alwaysEnabledMap = {},
 	onEditWorkflow,
 	onRunWorkflow,
 }: {
@@ -25,8 +23,6 @@ const RulesToggleList = ({
 	ruleType: string
 	showNewRule: boolean
 	showNoRules: boolean
-	isRemote?: boolean
-	alwaysEnabledMap?: Record<string, boolean>
 	onEditWorkflow?: (rulePath: string) => void
 	onRunWorkflow?: (rulePath: string) => void
 }) => {
@@ -46,11 +42,9 @@ const RulesToggleList = ({
 					const multiStep = ruleType === "workflow" && isMultiStepPath(rulePath)
 					return (
 						<RuleRow
-							alwaysEnabled={alwaysEnabledMap[rulePath]}
 							enabled={enabled}
 							isGlobal={isGlobal}
 							isMultiStep={multiStep}
-							isRemote={isRemote}
 							key={rulePath}
 							onEditWorkflow={multiStep ? onEditWorkflow : undefined}
 							onRunWorkflow={multiStep ? onRunWorkflow : undefined}

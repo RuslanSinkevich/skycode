@@ -7,7 +7,6 @@ import { KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from
 import { useInterval } from "react-use"
 import styled from "styled-components"
 import { normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { PLATFORM_CONFIG, PlatformType } from "@/config/platform.config"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
@@ -68,7 +67,7 @@ declare module "vscode" {
 const ApiOptions = ({ showModelOptions, apiErrorMessage, modelIdErrorMessage, isPopup, currentMode }: ApiOptionsProps) => {
 	const { t } = useI18n()
 	// Use full context state for immediate save payload
-	const { apiConfiguration, remoteConfigSettings, lightweightMode, promptProfile } = useExtensionState()
+	const { apiConfiguration, lightweightMode, promptProfile } = useExtensionState()
 
 	const { selectedProvider } = normalizeApiConfiguration(apiConfiguration, currentMode)
 
@@ -117,14 +116,8 @@ const ApiOptions = ({ showModelOptions, apiErrorMessage, modelIdErrorMessage, is
 			providers = providers.filter((option) => option.value !== "vscode-lm")
 		}
 
-		// Filter by remote config if remoteConfiguredProviders is set
-		const remoteProviders: string[] = remoteConfigSettings?.remoteConfiguredProviders || []
-		if (remoteProviders.length > 0) {
-			providers = providers.filter((option) => remoteProviders.includes(option.value))
-		}
-
 		return providers
-	}, [remoteConfigSettings])
+	}, [])
 
 	const currentProviderLabel = useMemo(() => {
 		return providerOptions.find((option) => option.value === selectedProvider)?.label || selectedProvider
@@ -247,23 +240,9 @@ const ApiOptions = ({ showModelOptions, apiErrorMessage, modelIdErrorMessage, is
 				`}
 			</style>
 			<DropdownContainer className="dropdown-container">
-				{remoteConfigSettings?.remoteConfiguredProviders && remoteConfigSettings.remoteConfiguredProviders.length > 0 ? (
-					<Tooltip>
-						<TooltipTrigger>
-							<div className="flex items-center gap-2 mb-1">
-								<label htmlFor="api-provider">
-									<span style={{ fontWeight: 500 }}>{t("apiOptions.provider")}</span>
-								</label>
-								<i className="codicon codicon-lock text-description text-sm" />
-							</div>
-						</TooltipTrigger>
-						<TooltipContent>{t("apiOptions.providerLockedByOrg")}</TooltipContent>
-					</Tooltip>
-				) : (
-					<label htmlFor="api-provider">
-						<span style={{ fontWeight: 500 }}>{t("apiOptions.provider")}</span>
-					</label>
-				)}
+				<label htmlFor="api-provider">
+					<span style={{ fontWeight: 500 }}>{t("apiOptions.provider")}</span>
+				</label>
 				<ProviderDropdownWrapper ref={dropdownRef}>
 					<VSCodeTextField
 						data-testid="provider-selector-input"

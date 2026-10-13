@@ -15,10 +15,8 @@ import { StateManager } from "./core/storage/StateManager"
 import { openAiCodexOAuthManager } from "./integrations/openai-codex/oauth"
 import { ExtensionRegistryInfo } from "./registry"
 import { audioRecordingService } from "./services/dictation/AudioRecordingService"
-import { getDistinctId, initializeDistinctId } from "./services/logging/distinctId"
+import { initializeDistinctId } from "./services/logging/distinctId"
 import { ShowMessageType } from "./shared/proto/host/window"
-import { syncWorker } from "./shared/services/worker/sync"
-import { getBlobStoreSettingsFromEnv } from "./shared/services/worker/worker"
 import { getLatestAnnouncementId } from "./utils/announcements"
 /**
  * Performs intialization for Skycode that is common to all platforms.
@@ -64,10 +62,6 @@ export async function initialize(context: vscode.ExtensionContext): Promise<Webv
 	runInBackground("FileContextTracker.cleanupOrphanedWarnings", () => FileContextTracker.cleanupOrphanedWarnings(context))
 	runInBackground("showVersionUpdateAnnouncement", () => showVersionUpdateAnnouncement(context))
 
-	// Use remote config blobStoreConfig if available, otherwise fall back to env vars
-	const blobStoreSettings = StateManager.get().getRemoteConfigSettings()?.blobStoreConfig ?? getBlobStoreSettingsFromEnv()
-	syncWorker().init({ ...blobStoreSettings, userDistinctId: getDistinctId() })
-
 	return webview
 }
 
@@ -112,5 +106,4 @@ export async function tearDown(): Promise<void> {
 
 	// Dispose all webview instances
 	await WebviewProvider.disposeAllInstances()
-	syncWorker().dispose()
 }

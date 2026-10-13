@@ -42,9 +42,6 @@ const SkycodeRulesToggleModal: React.FC = () => {
 		globalWorkflowToggles = {},
 		globalSkillsToggles: _globalSkillsToggles = {},
 		localSkillsToggles: _localSkillsToggles = {},
-		remoteRulesToggles = {},
-		remoteWorkflowToggles = {},
-		remoteConfigSettings = {},
 		hooksEnabled,
 		skillsEnabled,
 		setGlobalSkycodeRulesToggles,
@@ -56,8 +53,6 @@ const SkycodeRulesToggleModal: React.FC = () => {
 		setGlobalWorkflowToggles,
 		setGlobalSkillsToggles,
 		setLocalSkillsToggles,
-		setRemoteRulesToggles,
-		setRemoteWorkflowToggles,
 	} = useExtensionState()
 	const [globalHooks, setGlobalHooks] = useState<Array<{ name: string; enabled: boolean; absolutePath: string }>>([])
 	const [workspaceHooks, setWorkspaceHooks] = useState<
@@ -254,14 +249,6 @@ const SkycodeRulesToggleModal: React.FC = () => {
 		.filter(([p]) => isYamlPath(p))
 		.sort(([a], [b]) => a.localeCompare(b))
 
-	// Get remote rules and workflows from remote config
-	const remoteGlobalRules = remoteConfigSettings.remoteGlobalRules || []
-	const remoteGlobalWorkflows = remoteConfigSettings.remoteGlobalWorkflows || []
-
-	// Check if we have any remote rules or workflows
-	const hasRemoteRules = remoteGlobalRules.length > 0
-	const hasRemoteWorkflows = remoteGlobalWorkflows.length > 0
-
 	// Handle toggle rule using gRPC
 	const toggleRule = (isGlobal: boolean, rulePath: string, enabled: boolean) => {
 		FileServiceClient.toggleSkycodeRule(
@@ -278,9 +265,6 @@ const SkycodeRulesToggleModal: React.FC = () => {
 				}
 				if (response.localSkycodeRulesToggles?.toggles) {
 					setLocalSkycodeRulesToggles(response.localSkycodeRulesToggles.toggles)
-				}
-				if (response.remoteRulesToggles?.toggles) {
-					setRemoteRulesToggles(response.remoteRulesToggles.toggles)
 				}
 			})
 			.catch((error) => {
@@ -377,45 +361,6 @@ const SkycodeRulesToggleModal: React.FC = () => {
 			})
 			.catch((err: Error) => {
 				console.error("Failed to toggle workflow:", err)
-			})
-	}
-
-	// Handle toggle for remote rules
-	const toggleRemoteRule = (ruleName: string, enabled: boolean) => {
-		FileServiceClient.toggleSkycodeRule(
-			ToggleSkycodeRuleRequest.create({
-				scope: RuleScope.REMOTE,
-				rulePath: ruleName,
-				enabled,
-			}),
-		)
-			.then((response) => {
-				// Update the local state with the response
-				if (response.remoteRulesToggles?.toggles) {
-					setRemoteRulesToggles(response.remoteRulesToggles.toggles)
-				}
-			})
-			.catch((error) => {
-				console.error("Error toggling remote rule:", error)
-			})
-	}
-
-	// Handle toggle for remote workflows
-	const toggleRemoteWorkflow = (workflowName: string, enabled: boolean) => {
-		FileServiceClient.toggleWorkflow(
-			ToggleWorkflowRequest.create({
-				workflowPath: workflowName,
-				enabled,
-				scope: RuleScope.REMOTE,
-			}),
-		)
-			.then((response) => {
-				if (response.toggles) {
-					setRemoteWorkflowToggles(response.toggles)
-				}
-			})
-			.catch((error) => {
-				console.error("Error toggling remote workflow:", error)
 			})
 	}
 
@@ -587,18 +532,6 @@ const SkycodeRulesToggleModal: React.FC = () => {
 							</div>
 						</div>
 
-						{/* Remote config banner */}
-						{(currentView === "rules" && hasRemoteRules) || (currentView === "workflows" && hasRemoteWorkflows) ? (
-							<div className="flex items-center gap-2 px-5 py-3 mb-4 bg-vscode-textBlockQuote-background border-l-[3px] border-vscode-textLink-foreground">
-								<i className="codicon codicon-lock text-sm" />
-								<span className="text-base">
-									{currentView === "rules"
-										? t("skycodeRules.orgManagesRules")
-										: t("skycodeRules.orgManagesWorkflows")}
-								</span>
-							</div>
-						) : null}
-
 						{/* Description text */}
 						<div className="text-xs text-description mb-4">
 							{currentView === "rules" ? (
@@ -629,30 +562,6 @@ const SkycodeRulesToggleModal: React.FC = () => {
 					<div className="flex-1 overflow-y-auto px-2 pb-3" style={{ minHeight: 0 }}>
 						{currentView === "rules" ? (
 							<>
-								{/* Remote Rules Section */}
-								{hasRemoteRules && (
-									<div className="mb-3">
-										<div className="text-sm font-normal mb-2">{t("skycodeRules.enterpriseRules")}</div>
-										<div className="flex flex-col gap-0">
-											{remoteGlobalRules.map((rule) => {
-												const enabled = rule.alwaysEnabled || remoteRulesToggles[rule.name] === true
-												return (
-													<RuleRow
-														alwaysEnabled={rule.alwaysEnabled}
-														enabled={enabled}
-														isGlobal={false}
-														isRemote={true}
-														key={rule.name}
-														rulePath={rule.name}
-														ruleType="skycode"
-														toggleRule={toggleRemoteRule}
-													/>
-												)
-											})}
-										</div>
-									</div>
-								)}
-
 								{/* Global Rules Section */}
 								<div className="mb-3">
 									<div className="text-sm font-normal mb-2">{t("skycodeRules.globalRules")}</div>
@@ -713,31 +622,6 @@ const SkycodeRulesToggleModal: React.FC = () => {
 							</>
 						) : currentView === "workflows" ? (
 							<>
-								{/* Remote Workflows Section */}
-								{hasRemoteWorkflows && (
-									<div className="mb-3">
-										<div className="text-sm font-normal mb-2">{t("skycodeRules.enterpriseWorkflows")}</div>
-										<div className="flex flex-col gap-0">
-											{remoteGlobalWorkflows.map((workflow) => {
-												const enabled =
-													workflow.alwaysEnabled || remoteWorkflowToggles[workflow.name] === true
-												return (
-													<RuleRow
-														alwaysEnabled={workflow.alwaysEnabled}
-														enabled={enabled}
-														isGlobal={false}
-														isRemote={true}
-														key={workflow.name}
-														rulePath={workflow.name}
-														ruleType="workflow"
-														toggleRule={toggleRemoteWorkflow}
-													/>
-												)
-											})}
-										</div>
-									</div>
-								)}
-
 								{/* Global Workflows Section */}
 								<div className="mb-3">
 									<div className="text-sm font-normal mb-2">{t("skycodeRules.globalWorkflows")}</div>

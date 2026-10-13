@@ -483,21 +483,12 @@ export class Controller {
 			throw new Error("Invalid MCP marketplace catalog data")
 		}
 
-		// Get allowlist from remote config
-		const allowedMCPServers = this.stateManager.getRemoteConfigSettings().allowedMCPServers
-
-		let items: McpMarketplaceItem[] = rawItems.map((item: McpMarketplaceItem) => ({
+		const items: McpMarketplaceItem[] = rawItems.map((item: McpMarketplaceItem) => ({
 			...item,
 			githubStars: item.githubStars ?? 0,
 			downloadCount: item.downloadCount ?? 0,
 			tags: item.tags ?? [],
 		}))
-
-		// Filter by allowlist if configured
-		if (allowedMCPServers) {
-			const allowedIds = new Set(allowedMCPServers.map((server) => server.id))
-			items = items.filter((item: McpMarketplaceItem) => allowedIds.has(item.mcpId))
-		}
 
 		const catalog: McpMarketplaceCatalog = { items }
 
@@ -771,7 +762,6 @@ export class Controller {
 		const yoloModeToggled = this.stateManager.getGlobalSettingsKey("yoloModeToggled")
 		const useAutoCondense = this.stateManager.getGlobalSettingsKey("useAutoCondense")
 		const userInfo = this.stateManager.getGlobalStateKey("userInfo")
-		const mcpMarketplaceEnabled = this.stateManager.getGlobalStateKey("mcpMarketplaceEnabled")
 		const mcpDisplayMode = this.stateManager.getGlobalStateKey("mcpDisplayMode")
 		const telemetrySetting = this.stateManager.getGlobalSettingsKey("telemetrySetting")
 		const planActSeparateModelsSetting = this.stateManager.getGlobalSettingsKey("planActSeparateModelsSetting")
@@ -779,8 +769,6 @@ export class Controller {
 		const globalWorkflowToggles = this.stateManager.getGlobalSettingsKey("globalWorkflowToggles")
 		const globalSkillsToggles = this.stateManager.getGlobalSettingsKey("globalSkillsToggles")
 		const localSkillsToggles = this.stateManager.getWorkspaceStateKey("localSkillsToggles")
-		const remoteRulesToggles = this.stateManager.getGlobalStateKey("remoteRulesToggles")
-		const remoteWorkflowToggles = this.stateManager.getGlobalStateKey("remoteWorkflowToggles")
 		const shellIntegrationTimeout = this.stateManager.getGlobalSettingsKey("shellIntegrationTimeout")
 		const terminalReuseEnabled = this.stateManager.getGlobalStateKey("terminalReuseEnabled")
 		const vscodeTerminalExecutionMode = this.stateManager.getGlobalStateKey("vscodeTerminalExecutionMode")
@@ -873,7 +861,6 @@ export class Controller {
 			yoloModeToggled,
 			useAutoCondense,
 			userInfo,
-			mcpMarketplaceEnabled,
 			mcpDisplayMode,
 			telemetrySetting,
 			planActSeparateModelsSetting,
@@ -889,8 +876,6 @@ export class Controller {
 			globalWorkflowToggles: globalWorkflowToggles || {},
 			globalSkillsToggles: globalSkillsToggles || {},
 			localSkillsToggles: localSkillsToggles || {},
-			remoteRulesToggles: remoteRulesToggles,
-			remoteWorkflowToggles: remoteWorkflowToggles,
 			shellIntegrationTimeout,
 			terminalReuseEnabled,
 			vscodeTerminalExecutionMode: vscodeTerminalExecutionMode,
@@ -924,14 +909,12 @@ export class Controller {
 			hooksEnabled: getHooksEnabledSafe(),
 			lastDismissedInfoBannerVersion,
 			lastDismissedModelBannerVersion,
-			remoteConfigSettings: this.stateManager.getRemoteConfigSettings(),
 			lastDismissedCliBannerVersion,
 			subagentsEnabled,
 			nativeToolCallSetting: this.stateManager.getGlobalStateKey("nativeToolCallEnabled"),
 			enableParallelToolCalling: this.stateManager.getGlobalSettingsKey("enableParallelToolCalling"),
 			backgroundEditEnabled: this.stateManager.getGlobalSettingsKey("backgroundEditEnabled"),
 			skillsEnabled,
-			optOutOfRemoteConfig: this.stateManager.getGlobalSettingsKey("optOutOfRemoteConfig"),
 			// Skycode AI: Lightweight mode for weak models
 			lightweightMode: this.stateManager.getGlobalSettingsKey("lightweightMode"),
 			// Skycode AI: Session budget — tier override + custom limits

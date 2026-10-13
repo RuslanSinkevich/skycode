@@ -1,7 +1,6 @@
 import { DeleteSkillRequest, RuleFileRequest } from "@shared/proto/index.skycode"
 import { StringRequest } from "@shared/proto/skycode/common"
-import { REMOTE_URI_SCHEME } from "@shared/remote-config/constants"
-import { EyeIcon, InfoIcon, PenIcon, PlayIcon, Trash2Icon, ZapIcon } from "lucide-react"
+import { InfoIcon, PenIcon, PlayIcon, Trash2Icon, ZapIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -35,8 +34,6 @@ const RuleRow: React.FC<{
 	isGlobal: boolean
 	ruleType: string
 	toggleRule: (rulePath: string, enabled: boolean) => void
-	isRemote?: boolean
-	alwaysEnabled?: boolean
 	onDeleteSkill?: () => void
 	isMultiStep?: boolean
 	multiStepName?: string
@@ -49,8 +46,6 @@ const RuleRow: React.FC<{
 	isGlobal,
 	toggleRule,
 	ruleType,
-	isRemote = false,
-	alwaysEnabled = false,
 	onDeleteSkill,
 	isMultiStep = false,
 	multiStepName,
@@ -62,9 +57,7 @@ const RuleRow: React.FC<{
 	const displayName = getDisplayNameFromPath(rulePath)
 	const skillDisplayName = getSkillDisplayNameFromSkillMdPath(rulePath)
 
-	// For remote rules, the rulePath is already the display name
-	const finalDisplayName = isRemote ? rulePath : ruleType === "skill" ? skillDisplayName : displayName
-	const isDisabled = isRemote && alwaysEnabled
+	const finalDisplayName = ruleType === "skill" ? skillDisplayName : displayName
 
 	const getRuleTypeIcon = () => {
 		switch (ruleType) {
@@ -122,9 +115,7 @@ const RuleRow: React.FC<{
 	}
 
 	const handleEditClick = () => {
-		// For remote rules, use the special remote:// URI format
-		const filePath = isRemote ? `${REMOTE_URI_SCHEME}${ruleType === "workflow" ? "workflow" : "rule"}/${rulePath}` : rulePath
-		FileServiceClient.openFile(StringRequest.create({ value: filePath })).catch((err) =>
+		FileServiceClient.openFile(StringRequest.create({ value: rulePath })).catch((err) =>
 			console.error("Failed to open file:", err),
 		)
 	}
@@ -180,10 +171,8 @@ const RuleRow: React.FC<{
 					<Switch
 						checked={enabled}
 						className="mx-1"
-						disabled={isDisabled}
 						key={rulePath}
 						onClick={() => toggleRule(rulePath, !enabled)}
-						title={isDisabled ? t("skycodeRules.ruleRequiredCannotDisable") : undefined}
 					/>
 					{isMultiStep && onEditWorkflow ? (
 						<Button
@@ -196,12 +185,12 @@ const RuleRow: React.FC<{
 						</Button>
 					) : (
 						<Button
-							aria-label={isRemote ? t("skycodeRules.viewRuleFile") : t("skycodeRules.editRuleFile")}
+							aria-label={t("skycodeRules.editRuleFile")}
 							onClick={handleEditClick}
 							size="xs"
-							title={isRemote ? t("skycodeRules.viewRuleFileReadOnly") : t("skycodeRules.editRuleFile")}
+							title={t("skycodeRules.editRuleFile")}
 							variant="icon">
-							{isRemote ? <EyeIcon /> : <PenIcon />}
+							<PenIcon />
 						</Button>
 					)}
 					{isMultiStep && onRunWorkflow && (
@@ -216,7 +205,6 @@ const RuleRow: React.FC<{
 					)}
 					<Button
 						aria-label={t("skycodeRules.deleteRuleFile")}
-						disabled={isRemote}
 						onClick={handleDeleteClick}
 						size="xs"
 						title={t("skycodeRules.deleteRuleFile")}

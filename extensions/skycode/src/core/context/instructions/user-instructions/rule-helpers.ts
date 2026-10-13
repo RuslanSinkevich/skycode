@@ -1,6 +1,5 @@
 import { ensureRulesDirectoryExists, ensureWorkflowsDirectoryExists, GlobalFileNames } from "@core/storage/disk"
 import { SkycodeRulesToggles } from "@shared/skycode-rules"
-import { GlobalInstructionsFile } from "@shared/remote-config/schema"
 import { fileExistsAtPath, isDirectory, readDirectory } from "@utils/fs"
 import fs from "fs/promises"
 import * as path from "path"
@@ -129,7 +128,6 @@ export type ActivatedConditionalRule = {
 export const RULE_SOURCE_PREFIX = {
 	workspace: "workspace",
 	global: "global",
-	remote: "remote",
 } as const
 
 export type RuleLoadResult = {
@@ -230,44 +228,6 @@ export const getRuleFilesTotalContentWithMetadata = async (
 			.filter((rule): rule is ActivatedConditionalRule => rule !== null),
 		criticalContent: criticalContent || undefined,
 	}
-}
-
-export function getRemoteRulesTotalContentWithMetadata(
-	remoteRules: GlobalInstructionsFile[],
-	remoteToggles: SkycodeRulesToggles,
-	opts?: { evaluationContext?: RuleEvaluationContext },
-): RuleLoadResult {
-	const activatedConditionalRules: ActivatedConditionalRule[] = []
-	const evaluationContext = opts?.evaluationContext ?? {}
-	let combinedContent = ""
-
-	for (const rule of remoteRules) {
-		const isEnabled = rule.alwaysEnabled || remoteToggles[rule.name] !== false
-		if (!isEnabled) { continue }
-
-		const raw = (rule.contents || "").trim()
-		if (!raw) { continue }
-
-		const { data, body, hadFrontmatter, parseError } = parseYamlFrontmatter(raw)
-		if (hadFrontmatter && parseError) {
-			// Fail open: include entire raw contents
-			if (combinedContent) { combinedContent += "\n\n" }
-			combinedContent += `${rule.name}\n${raw}`
-			continue
-		}
-
-		const { passed, matchedConditions } = evaluateRuleConditionals(data, evaluationContext)
-		if (!passed) { continue }
-
-		if (hadFrontmatter && Object.keys(matchedConditions).length > 0) {
-			activatedConditionalRules.push({ name: `${RULE_SOURCE_PREFIX.remote}:${rule.name}`, matchedConditions })
-		}
-
-		if (combinedContent) { combinedContent += "\n\n" }
-		combinedContent += `${rule.name}\n${body.trim()}`
-	}
-
-	return { content: combinedContent, activatedConditionalRules }
 }
 
 /**

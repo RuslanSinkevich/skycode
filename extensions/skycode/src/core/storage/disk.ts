@@ -3,7 +3,6 @@ import { EnvironmentMetadataEntry, TaskMetadata } from "@core/context/context-tr
 import { execa } from "@packages/execa"
 import { SkycodeMessage } from "@shared/ExtensionMessage"
 import { HistoryItem } from "@shared/HistoryItem"
-import { RemoteConfig } from "@shared/remote-config/schema"
 import { GlobalState, Settings } from "@shared/storage/state-keys"
 import { fileExistsAtPath, isDirectory } from "@utils/fs"
 import fs from "fs/promises"
@@ -13,7 +12,6 @@ import { HostProvider } from "@/hosts/host-provider"
 import { ExtensionRegistryInfo } from "@/registry"
 import { McpMarketplaceCatalog } from "@/shared/mcp"
 import { Logger } from "@/shared/services/Logger"
-import { syncWorker } from "@/shared/services/worker/sync"
 import { reconstructTaskHistory } from "../commands/reconstructTaskHistory"
 import { StateManager } from "./StateManager"
 
@@ -137,7 +135,6 @@ export const GlobalFileNames = {
 	agentsRulesFile: "AGENTS.md",
 	taskMetadata: "task_metadata.json",
 	mcpMarketplaceCatalog: "mcp_marketplace_catalog.json",
-	remoteConfig: (orgId: string) => `remote_config_${orgId}.json`,
 }
 
 export async function getDocumentsPath(): Promise<string> {
@@ -284,8 +281,6 @@ export async function saveApiConversationHistory(taskId: string, apiConversation
 		if (apiConversationHistory.length > 0) {
 			const fileName = GlobalFileNames.apiConversationHistory
 			const data = JSON.stringify(apiConversationHistory)
-			// Queue for remote sync without blocking
-			syncWorker().enqueue(taskId, fileName, data)
 			// Store locally
 			const filePath = path.join(await ensureTaskDirectoryExists(taskId), fileName)
 			await atomicWriteFile(filePath, data)
@@ -496,42 +491,6 @@ export async function writeTaskSettingsToStorage(taskId: string, settings: Parti
 	} catch (error) {
 		Logger.error("[Disk] Failed to write task settings:", error)
 		throw error
-	}
-}
-
-export async function readRemoteConfigFromCache(organizationId: string): Promise<RemoteConfig | undefined> {
-	try {
-		const remoteConfigFilePath = path.join(await ensureCacheDirectoryExists(), GlobalFileNames.remoteConfig(organizationId))
-		const fileExists = await fileExistsAtPath(remoteConfigFilePath)
-		if (fileExists) {
-			const fileContents = await fs.readFile(remoteConfigFilePath, "utf8")
-			return JSON.parse(fileContents)
-		}
-		return undefined
-	} catch (error) {
-		Logger.error("Failed to read remote config from cache:", error)
-		return undefined
-	}
-}
-
-export async function writeRemoteConfigToCache(organizationId: string, config: RemoteConfig): Promise<void> {
-	try {
-		const remoteConfigFilePath = path.join(await ensureCacheDirectoryExists(), GlobalFileNames.remoteConfig(organizationId))
-		await fs.writeFile(remoteConfigFilePath, JSON.stringify(config))
-	} catch (error) {
-		Logger.error("Failed to write remote config to cache:", error)
-	}
-}
-
-export async function deleteRemoteConfigFromCache(organizationId: string): Promise<void> {
-	try {
-		const remoteConfigFilePath = path.join(await ensureCacheDirectoryExists(), GlobalFileNames.remoteConfig(organizationId))
-		const fileExists = await fileExistsAtPath(remoteConfigFilePath)
-		if (fileExists) {
-			await fs.unlink(remoteConfigFilePath)
-		}
-	} catch (error) {
-		Logger.error("Failed to delete remote config from cache:", error)
 	}
 }
 

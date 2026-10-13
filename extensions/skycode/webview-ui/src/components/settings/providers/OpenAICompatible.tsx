@@ -1,10 +1,8 @@
-import { TooltipContent, TooltipTrigger } from "@radix-ui/react-tooltip"
 import { azureOpenAiDefaultApiVersion, openAiModelInfoSaneDefaults } from "@shared/api"
 import { OpenAiModelsRequest } from "@shared/proto/skycode/models"
 import { Mode } from "@shared/storage/types"
 import { VSCodeButton, VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Tooltip } from "@/components/ui/tooltip"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
 import { ModelsServiceClient } from "@/services/grpc-client"
@@ -31,7 +29,7 @@ interface OpenAICompatibleProviderProps {
  */
 export const OpenAICompatibleProvider = ({ showModelOptions, isPopup, currentMode }: OpenAICompatibleProviderProps) => {
 	const { t } = useI18n()
-	const { apiConfiguration, remoteConfigSettings } = useExtensionState()
+	const { apiConfiguration } = useExtensionState()
 	const { handleFieldChange, handleModeFieldChange } = useApiConfigurationHandlers()
 
 	const [modelConfigurationSelected, setModelConfigurationSelected] = useState(false)
@@ -74,32 +72,21 @@ export const OpenAICompatibleProvider = ({ showModelOptions, isPopup, currentMod
 
 	return (
 		<div>
-			<Tooltip>
-				<TooltipTrigger>
-					<div className="mb-2.5">
-						<div className="flex items-center gap-2 mb-1">
-							<span style={{ fontWeight: 500 }}>{t("provider.baseUrl")}</span>
-							{remoteConfigSettings?.openAiBaseUrl !== undefined && (
-								<i className="codicon codicon-lock text-description text-sm" />
-							)}
-						</div>
-						<DebouncedTextField
-							disabled={remoteConfigSettings?.openAiBaseUrl !== undefined}
-							initialValue={apiConfiguration?.openAiBaseUrl || ""}
-							onChange={(value) => {
-								handleFieldChange("openAiBaseUrl", value)
-								debouncedRefreshOpenAiModels(value, apiConfiguration?.openAiApiKey)
-							}}
-							placeholder={t("provider.enterBaseUrl")}
-							style={{ width: "100%", marginBottom: 10 }}
-							type="text"
-						/>
-					</div>
-				</TooltipTrigger>
-				<TooltipContent hidden={remoteConfigSettings?.openAiBaseUrl === undefined}>
-					{t("features.lockedByOrg")}
-				</TooltipContent>
-			</Tooltip>
+			<div className="mb-2.5">
+				<div className="mb-1">
+					<span style={{ fontWeight: 500 }}>{t("provider.baseUrl")}</span>
+				</div>
+				<DebouncedTextField
+					initialValue={apiConfiguration?.openAiBaseUrl || ""}
+					onChange={(value) => {
+						handleFieldChange("openAiBaseUrl", value)
+						debouncedRefreshOpenAiModels(value, apiConfiguration?.openAiApiKey)
+					}}
+					placeholder={t("provider.enterBaseUrl")}
+					style={{ width: "100%", marginBottom: 10 }}
+					type="text"
+				/>
+			</div>
 
 			<ApiKeyField
 				initialValue={apiConfiguration?.openAiApiKey || ""}
@@ -127,21 +114,8 @@ export const OpenAICompatibleProvider = ({ showModelOptions, isPopup, currentMod
 				return (
 					<div style={{ marginBottom: 10 }}>
 						<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-							<Tooltip>
-								<TooltipTrigger>
-									<div className="flex items-center gap-2">
-										<span style={{ fontWeight: 500 }}>{t("provider.customHeaders")}</span>
-										{remoteConfigSettings?.openAiHeaders !== undefined && (
-											<i className="codicon codicon-lock text-description text-sm" />
-										)}
-									</div>
-								</TooltipTrigger>
-								<TooltipContent hidden={remoteConfigSettings?.openAiHeaders === undefined}>
-									{t("features.lockedByOrg")}
-								</TooltipContent>
-							</Tooltip>
+							<span style={{ fontWeight: 500 }}>{t("provider.customHeaders")}</span>
 							<VSCodeButton
-								disabled={remoteConfigSettings?.openAiHeaders !== undefined}
 								onClick={() => {
 									const currentHeaders = { ...(apiConfiguration?.openAiHeaders || {}) }
 									const headerCount = Object.keys(currentHeaders).length
@@ -157,7 +131,6 @@ export const OpenAICompatibleProvider = ({ showModelOptions, isPopup, currentMod
 							{headerEntries.map(([key, value]) => (
 								<div key={key} style={{ display: "flex", gap: 5, marginTop: 5 }}>
 									<DebouncedTextField
-										disabled={remoteConfigSettings?.openAiHeaders !== undefined}
 										initialValue={key}
 										onChange={(newValue) => {
 											const currentHeaders = apiConfiguration?.openAiHeaders ?? {}
@@ -173,7 +146,6 @@ export const OpenAICompatibleProvider = ({ showModelOptions, isPopup, currentMod
 										style={{ width: "40%" }}
 									/>
 									<DebouncedTextField
-										disabled={remoteConfigSettings?.openAiHeaders !== undefined}
 										initialValue={value}
 										onChange={(newValue) => {
 											handleFieldChange("openAiHeaders", {
@@ -186,7 +158,6 @@ export const OpenAICompatibleProvider = ({ showModelOptions, isPopup, currentMod
 									/>
 									<VSCodeButton
 										appearance="secondary"
-										disabled={remoteConfigSettings?.openAiHeaders !== undefined}
 										onClick={() => {
 											const { [key]: _, ...rest } = apiConfiguration?.openAiHeaders ?? {}
 											handleFieldChange("openAiHeaders", rest)
@@ -200,28 +171,12 @@ export const OpenAICompatibleProvider = ({ showModelOptions, isPopup, currentMod
 				)
 			})()}
 
-			{remoteConfigSettings?.azureApiVersion !== undefined ? (
-				<Tooltip>
-					<TooltipTrigger>
-						<BaseUrlField
-							disabled={true}
-							initialValue={apiConfiguration?.azureApiVersion}
-							label={t("provider.azureApiVersion")}
-							onChange={(value) => handleFieldChange("azureApiVersion", value)}
-							placeholder={`${t("provider.defaultPrefix")} ${azureOpenAiDefaultApiVersion}`}
-							showLockIcon={true}
-						/>
-					</TooltipTrigger>
-					<TooltipContent>{t("features.lockedByOrg")}</TooltipContent>
-				</Tooltip>
-			) : (
-				<BaseUrlField
-					initialValue={apiConfiguration?.azureApiVersion}
-					label={t("provider.azureApiVersion")}
-					onChange={(value) => handleFieldChange("azureApiVersion", value)}
-					placeholder={`${t("provider.defaultPrefix")} ${azureOpenAiDefaultApiVersion}`}
-				/>
-			)}
+			<BaseUrlField
+				initialValue={apiConfiguration?.azureApiVersion}
+				label={t("provider.azureApiVersion")}
+				onChange={(value) => handleFieldChange("azureApiVersion", value)}
+				placeholder={`${t("provider.defaultPrefix")} ${azureOpenAiDefaultApiVersion}`}
+			/>
 
 			<VSCodeCheckbox
 				checked={apiConfiguration?.azureIdentity || false}
