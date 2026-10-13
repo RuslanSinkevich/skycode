@@ -117,12 +117,8 @@
 | React Webview UI (232+ компонентов) | ✅ |
 | Tree-sitter валидация (16 языков) | ✅ |
 | MCP Hub | ✅ |
-| 40+ API провайдеров (вкл. GigaChat, YandexGPT) | ✅ |
-| Telemetry (PostHog + OpenTelemetry) | ✅ |
-| Feature flags (PostHog) | ✅ |
+| 17 API-провайдеров (вкл. GigaChat, YandexGPT) | ✅ |
 | Voice/Dictation | ✅ |
-| Worktrees | ✅ |
-| Auth (OCA) | ✅ |
 | Browser/Puppeteer | ✅ |
 | i18n (RU + EN) | ✅ (IMPL-11) |
 | Worker Threads для индексации | ✅ (IMPL-10) |

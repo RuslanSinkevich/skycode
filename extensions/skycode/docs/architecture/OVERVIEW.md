@@ -66,15 +66,14 @@ Skycode AI — это расширение VS Code, состоящее из тр
 - Управление контекстом
 
 ### 5. API Handlers (`src/core/api/`)
-Провайдеры AI моделей (40+):
-- Anthropic (Claude)
-- OpenAI (GPT-4o, o1, o3, GPT-5)
+Провайдеры AI моделей (17, список — `src/shared/providers/providers.json`):
+- Anthropic (Claude), Claude Code
+- OpenAI (GPT-4o, o1, o3, GPT-5), OpenAI Codex
 - Google (Gemini 2.5/3)
 - OpenRouter (агрегатор 200+ моделей)
-- AWS Bedrock
-- Ollama / LM Studio
-- LiteLLM
-- И другие OpenAI-совместимые API
+- GigaChat, YandexGPT, DeepSeek, Qwen (API, Code, Web)
+- Ollama / LM Studio, LiteLLM, VS Code LM
+- OpenAI Compatible — любой совместимый эндпоинт
 
 ### 6. McpHub (`src/services/mcp/McpHub.ts`)
 Менеджер MCP серверов:

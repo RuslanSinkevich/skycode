@@ -46,28 +46,6 @@ export class SharedUriHandler {
 					Logger.warn("SharedUriHandler: Missing code parameter for OpenRouter callback")
 					return false
 				}
-				case "/requesty": {
-					const code = query.get("code")
-					if (code) {
-						await visibleWebview.controller.handleRequestyCallback(code)
-						return true
-					}
-					Logger.warn("SharedUriHandler: Missing code parameter for Requesty callback")
-					return false
-				}
-				case "/auth/oca": {
-					Logger.log("SharedUriHandler: Oca Auth callback received:", { path: path })
-
-					const code = query.get("code")
-					const state = query.get("state")
-
-					if (code && state) {
-						await visibleWebview.controller.handleOcaAuthCallback(code, state)
-						return true
-					}
-					Logger.warn("SharedUriHandler: Missing code parameter for auth callback")
-					return false
-				}
 				case "/task": {
 					const prompt = query.get("prompt")
 					if (prompt) {

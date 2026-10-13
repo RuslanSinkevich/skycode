@@ -29,9 +29,8 @@ import * as vscode from "vscode"
 import { SkycodeEnv } from "@/config"
 import { HostProvider } from "@/hosts/host-provider"
 import { ExtensionRegistryInfo } from "@/registry"
-import { OcaAuthService } from "@/services/auth/oca/OcaAuthService"
-import { LogoutReason } from "@/services/auth/types"
 import { getDistinctId } from "@/services/logging/distinctId"
+import PROVIDERS from "@/shared/providers/providers.json"
 import { BannerCardData } from "@/shared/skycode/banner"
 import { DEFAULT_INDEXING_CONFIG, type IndexingConfig, type IndexingMode, type LocalModelId } from "@/shared/IndexingTypes"
 import { getAxiosSettings } from "@/shared/net"
@@ -75,7 +74,6 @@ export class Controller {
 	readonly sessionManager = new SessionManager()
 
 	mcpHub: McpHub
-	ocaAuthService: OcaAuthService
 	readonly stateManager: StateManager
 
 	// NEW: Add workspace manager (optional initially)
@@ -121,17 +119,17 @@ export class Controller {
 				await this.postStateToWebview()
 			},
 		})
-		this.ocaAuthService = OcaAuthService.initialize(this)
-
-		// Migrate away from the removed "skycode" provider (its API lived on skycode-ai.ru)
+		// Migrate away from removed providers (Skycode, Bedrock, Vertex, OCA and others): fall back to OpenAI Compatible
 		const initConfig = this.stateManager.getApiConfiguration()
-		if (initConfig.planModeApiProvider === "skycode" || initConfig.actModeApiProvider === "skycode") {
+		const known = new Set<string>(PROVIDERS.list.map((p) => p.value))
+		const isRemoved = (p?: string) => !!p && !known.has(p)
+		if (isRemoved(initConfig.planModeApiProvider) || isRemoved(initConfig.actModeApiProvider)) {
 			const migrated = { ...initConfig }
-			if (migrated.planModeApiProvider === "skycode") {
-				migrated.planModeApiProvider = "openrouter" as ApiProvider
+			if (isRemoved(migrated.planModeApiProvider)) {
+				migrated.planModeApiProvider = "openai" as ApiProvider
 			}
-			if (migrated.actModeApiProvider === "skycode") {
-				migrated.actModeApiProvider = "openrouter" as ApiProvider
+			if (isRemoved(migrated.actModeApiProvider)) {
+				migrated.actModeApiProvider = "openai" as ApiProvider
 			}
 			this.stateManager.setApiConfiguration(migrated)
 		}
@@ -177,23 +175,6 @@ export class Controller {
 		this.mcpHub.dispose()
 
 		Logger.error("Controller disposed")
-	}
-
-	// Oca Auth methods
-	async handleOcaSignOut() {
-		try {
-			await this.ocaAuthService.handleDeauth(LogoutReason.USER_INITIATED)
-			await this.postStateToWebview()
-			HostProvider.window.showMessage({
-				type: ShowMessageType.INFORMATION,
-				message: t("auth.oca.logoutSuccess"),
-			})
-		} catch (_error) {
-			HostProvider.window.showMessage({
-				type: ShowMessageType.INFORMATION,
-				message: t("auth.oca.logoutFailed"),
-			})
-		}
 	}
 
 	async initTask(
@@ -469,57 +450,6 @@ export class Controller {
 		}
 	}
 
-	async handleOcaAuthCallback(code: string, state: string) {
-		try {
-			await this.ocaAuthService.handleAuthCallback(code, state)
-
-			const ocaProvider: ApiProvider = "oca"
-
-			// Get current settings to determine how to update providers
-			const planActSeparateModelsSetting = this.stateManager.getGlobalSettingsKey("planActSeparateModelsSetting")
-
-			const currentMode = this.stateManager.getGlobalSettingsKey("mode")
-
-			// Get current API configuration from cache
-			const currentApiConfiguration = this.stateManager.getApiConfiguration()
-
-			const updatedConfig = { ...currentApiConfiguration }
-
-			if (planActSeparateModelsSetting) {
-				// Only update the current mode's provider
-				if (currentMode === "plan") {
-					updatedConfig.planModeApiProvider = ocaProvider
-				} else {
-					updatedConfig.actModeApiProvider = ocaProvider
-				}
-			} else {
-				// Update both modes to keep them in sync
-				updatedConfig.planModeApiProvider = ocaProvider
-				updatedConfig.actModeApiProvider = ocaProvider
-			}
-
-			// Update the API configuration through cache service
-			this.stateManager.setApiConfiguration(updatedConfig)
-
-			// Mark welcome view as completed since user has successfully logged in
-			this.stateManager.setGlobalState("welcomeViewCompleted", true)
-
-			if (this.task) {
-				this.task.api = buildApiHandler({ ...updatedConfig, ulid: this.task.ulid }, currentMode)
-			}
-
-			await this.postStateToWebview()
-		} catch (error) {
-			Logger.error("Failed to handle auth callback:", error)
-			HostProvider.window.showMessage({
-				type: ShowMessageType.ERROR,
-				message: t("auth.oca.loginFailed"),
-			})
-			// Even on login failure, we preserve any existing tokens
-			// Only clear tokens on explicit logout
-		}
-	}
-
 	async handleMcpOAuthCallback(serverHash: string, code: string, state: string | null) {
 		try {
 			await this.mcpHub.completeOAuth(serverHash, code, state)
@@ -623,25 +553,6 @@ export class Controller {
 			this.task.api = buildApiHandler({ ...updatedConfig, ulid: this.task.ulid }, currentMode)
 		}
 		// Dont send settingsButtonClicked because its bad ux if user is on welcome
-	}
-
-	// Requesty
-
-	async handleRequestyCallback(code: string) {
-		const requesty: ApiProvider = "requesty"
-		const currentMode = this.stateManager.getGlobalSettingsKey("mode")
-		const currentApiConfiguration = this.stateManager.getApiConfiguration()
-		const updatedConfig = {
-			...currentApiConfiguration,
-			planModeApiProvider: requesty,
-			actModeApiProvider: requesty,
-			requestyApiKey: code,
-		}
-		this.stateManager.setApiConfiguration(updatedConfig)
-		await this.postStateToWebview()
-		if (this.task) {
-			this.task.api = buildApiHandler({ ...updatedConfig, ulid: this.task.ulid }, currentMode)
-		}
 	}
 
 	// Read OpenRouter models from disk cache
@@ -1038,24 +949,10 @@ export class Controller {
 					const modeKey = isPlan ? "planMode" : "actMode"
 					const providerModelSuffix: Record<string, string> = {
 						openrouter: "OpenRouterModelId",
-						skycode: "OpenRouterModelId",
 						openai: "OpenAiModelId",
 						ollama: "OllamaModelId",
 						lmstudio: "LmStudioModelId",
 						litellm: "LiteLlmModelId",
-						requesty: "RequestyModelId",
-						together: "TogetherModelId",
-						fireworks: "FireworksModelId",
-						groq: "GroqModelId",
-						baseten: "BasetenModelId",
-						huggingface: "HuggingFaceModelId",
-						sapaicore: "SapAiCoreModelId",
-						"huawei-cloud-maas": "HuaweiCloudMaasModelId",
-						oca: "OcaModelId",
-						aihubmix: "AihubmixModelId",
-						hicap: "HicapModelId",
-						nousResearch: "NousResearchModelId",
-						"vercel-ai-gateway": "VercelAiGatewayModelId",
 					}
 					const configModelId = (apiConfig as Record<string, unknown>)[
 						`${modeKey}${providerModelSuffix[providerId] ?? "ApiModelId"}`

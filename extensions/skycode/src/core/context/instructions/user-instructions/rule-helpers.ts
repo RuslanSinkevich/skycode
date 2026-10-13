@@ -106,36 +106,6 @@ export async function synchronizeRuleToggles(
 }
 
 /**
- * Synchronizes remote rule toggles with current remote config
- * Removes toggles for rules that no longer exist, adds defaults for new rules
- */
-export function synchronizeRemoteRuleToggles(
-	remoteRules: GlobalInstructionsFile[],
-	currentToggles: SkycodeRulesToggles,
-): SkycodeRulesToggles {
-	const updatedToggles: SkycodeRulesToggles = {}
-
-	// Create set of current remote rule names
-	const existingRuleNames = new Set(remoteRules.map((rule) => rule.name))
-
-	// Keep toggles only for rules that still exist
-	for (const [ruleName, enabled] of Object.entries(currentToggles)) {
-		if (existingRuleNames.has(ruleName)) {
-			updatedToggles[ruleName] = enabled
-		}
-	}
-
-	// Add default toggles for new rules (default to enabled)
-	for (const rule of remoteRules) {
-		if (!(rule.name in updatedToggles)) {
-			updatedToggles[rule.name] = true
-		}
-	}
-
-	return updatedToggles
-}
-
-/**
  * Certain project rules have more than a single location where rules are allowed to be stored
  */
 export function combineRuleToggles(toggles1: SkycodeRulesToggles, toggles2: SkycodeRulesToggles): SkycodeRulesToggles {

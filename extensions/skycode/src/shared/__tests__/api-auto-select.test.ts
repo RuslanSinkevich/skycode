@@ -12,17 +12,6 @@ describe("pickAutoProvider", () => {
 		expect(result.provider).to.equal("openai-native")
 	})
 
-	it("prefers Skycode account auth over any individual API key", () => {
-		const cfg: any = {
-			skycodeAccountId: "user-123",
-			apiKey: "anthropic-test",
-			openAiNativeApiKey: "openai-test",
-		}
-		const result = pickAutoProvider(cfg)
-		expect(result.provider).to.equal("skycode")
-		expect(result.reason).to.equal("auth")
-	})
-
 	it("prefers Anthropic over OpenAI when only those keys are present", () => {
 		const cfg: any = {
 			apiKey: "anthropic-test",
@@ -54,8 +43,8 @@ describe("pickAutoProvider", () => {
 
 	it("exposes the full provider list for UI override", () => {
 		expect(ALL_AUTO_PROVIDER_LABELS.length).to.be.greaterThan(5)
-		const skycode = ALL_AUTO_PROVIDER_LABELS.find((p) => p.provider === "skycode")
-		expect(skycode?.label).to.equal("Skycode")
+		const anthropic = ALL_AUTO_PROVIDER_LABELS.find((p) => p.provider === "anthropic")
+		expect(anthropic?.label).to.equal("Anthropic")
 	})
 
 	it("handles null/undefined config without throwing", () => {

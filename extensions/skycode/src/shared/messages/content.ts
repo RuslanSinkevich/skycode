@@ -18,7 +18,7 @@ interface SkycodeSharedMessageParam {
 	call_id?: string
 }
 
-export const REASONING_DETAILS_PROVIDERS = ["skycode", "openrouter"]
+export const REASONING_DETAILS_PROVIDERS = ["openrouter"]
 
 /**
  * An extension of Anthropic.MessageParam that includes Skycode-specific fields: reasoning_details.

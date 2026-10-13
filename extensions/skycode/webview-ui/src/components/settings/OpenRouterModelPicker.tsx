@@ -14,9 +14,8 @@ import { highlight } from "../history/HistoryView"
 import { ContextWindowSwitcher } from "./common/ContextWindowSwitcher"
 import { ModelInfoView } from "./common/ModelInfoView"
 import { DropdownContainer } from "./common/ModelSelector"
-import FeaturedModelCard from "./FeaturedModelCard"
 import ThinkingBudgetSlider from "./ThinkingBudgetSlider"
-import { filterOpenRouterModelIds, getModeSpecificFields, normalizeApiConfiguration } from "./utils/providerUtils"
+import { getModeSpecificFields, normalizeApiConfiguration } from "./utils/providerUtils"
 import { useApiConfigurationHandlers } from "./utils/useApiConfigurationHandlers"
 
 // Star icon for favorites
@@ -47,55 +46,6 @@ export interface OpenRouterModelPickerProps {
 	showProviderRouting?: boolean
 }
 
-// Featured models for Skycode provider organized by tabs
-export const recommendedModels = [
-	{
-		id: "anthropic/claude-sonnet-4.5",
-		description: "Best balance of speed, cost, and quality",
-		label: "BEST",
-	},
-	{
-		id: "google/gemini-3-flash-preview",
-		description: "Intelligent model built for speed and price efficiency",
-		label: "NEW",
-	},
-	{
-		id: "anthropic/claude-opus-4.5",
-		description: "State-of-the-art for complex coding",
-		label: "HOT",
-	},
-	{
-		id: "openai/gpt-5.2-codex",
-		description: "OpenAI's latest with strong coding abilities",
-		label: "NEW",
-	},
-	{
-		id: "google/gemini-3-pro-preview",
-		description: "1M context window for large codebases",
-		label: "1M CTX",
-	},
-]
-
-export const freeModels = [
-	{
-		id: "kwaipilot/kat-coder-pro",
-		description: "KwaiKAT's most advanced agentic coding model in the KAT-Coder series",
-		label: "FREE",
-	},
-	{
-		id: "x-ai/grok-code-fast-1",
-		description: "Fast inference with strong coding performance",
-		label: "FREE",
-	},
-	{
-		id: "mistralai/devstral-2512:free",
-		description: "Mistral's latest model with strong coding abilities",
-		label: "FREE",
-	},
-]
-
-const FREE_SKYCODE_MODELS = freeModels.map((m) => m.id)
-
 const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, currentMode, showProviderRouting }) => {
 	const { t } = useI18n()
 	const { handleModeFieldChange, handleModeFieldsChange, handleFieldChange } = useApiConfigurationHandlers()
@@ -104,10 +54,6 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 	const [searchTerm, setSearchTerm] = useState(modeFields.openRouterModelId || openRouterDefaultModelId)
 	const [isDropdownVisible, setIsDropdownVisible] = useState(false)
 	const [selectedIndex, setSelectedIndex] = useState(-1)
-	const [activeTab, setActiveTab] = useState<"recommended" | "free">(() => {
-		const currentModelId = modeFields.openRouterModelId || openRouterDefaultModelId
-		return freeModels.some((m) => m.id === currentModelId) ? "free" : "recommended"
-	})
 	const dropdownRef = useRef<HTMLDivElement>(null)
 	const itemRefs = useRef<(HTMLDivElement | null)[]>([])
 	const dropdownListRef = useRef<HTMLDivElement>(null)
@@ -130,24 +76,10 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 		)
 	}
 
-	const { selectedModelId, selectedModelInfo } = useMemo(() => {
-		const selected = normalizeApiConfiguration(apiConfiguration, currentMode)
-		const isSkycode = selected.selectedProvider === "skycode"
-		// Makes sure "Free" featured models have $0 pricing for Skycode provider
-		if (isSkycode && FREE_SKYCODE_MODELS.includes(selected.selectedModelId)) {
-			return {
-				...selected,
-				selectedModelInfo: {
-					...selected.selectedModelInfo,
-					inputPrice: 0,
-					outputPrice: 0,
-					cacheReadsPrice: 0,
-					cacheWritesPrice: 0,
-				},
-			}
-		}
-		return selected
-	}, [apiConfiguration, currentMode])
+	const { selectedModelId, selectedModelInfo } = useMemo(
+		() => normalizeApiConfiguration(apiConfiguration, currentMode),
+		[apiConfiguration, currentMode],
+	)
 
 	useMount(refreshOpenRouterModels)
 
@@ -170,10 +102,10 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 		}
 	}, [])
 
-	const modelIds = useMemo(() => {
-		const unfilteredModelIds = Object.keys(openRouterModels).sort((a, b) => a.localeCompare(b))
-		return filterOpenRouterModelIds(unfilteredModelIds, modeFields.apiProvider || "openrouter")
-	}, [openRouterModels, modeFields.apiProvider])
+	const modelIds = useMemo(
+		() => Object.keys(openRouterModels).sort((a, b) => a.localeCompare(b)),
+		[openRouterModels],
+	)
 
 	const searchableItems = useMemo(() => {
 		return modelIds.map((id) => ({
@@ -309,52 +241,6 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 				<label htmlFor="model-search">
 					<span style={{ fontWeight: 500 }}>{t("provider.model")}</span>
 				</label>
-
-				{modeFields.apiProvider === "skycode" && (
-					<>
-						{/* Tabs */}
-						<TabsContainer style={{ marginTop: 4 }}>
-							<Tab active={activeTab === "recommended"} onClick={() => setActiveTab("recommended")}>
-								Recommended
-							</Tab>
-							<Tab active={activeTab === "free"} onClick={() => setActiveTab("free")}>
-								Free
-							</Tab>
-						</TabsContainer>
-
-						{/* Model Cards */}
-						<div style={{ marginBottom: "6px" }}>
-							{activeTab === "recommended" &&
-								recommendedModels.map((model) => (
-									<FeaturedModelCard
-										description={model.description}
-										isSelected={selectedModelId === model.id}
-										key={model.id}
-										label={model.label}
-										modelId={model.id}
-										onClick={() => {
-											handleModelChange(model.id)
-											setIsDropdownVisible(false)
-										}}
-									/>
-								))}
-							{activeTab === "free" &&
-								freeModels.map((model) => (
-									<FeaturedModelCard
-										description={model.description}
-										isSelected={selectedModelId === model.id}
-										key={model.id}
-										label={model.label}
-										modelId={model.id}
-										onClick={() => {
-											handleModelChange(model.id)
-											setIsDropdownVisible(false)
-										}}
-									/>
-								))}
-						</div>
-					</>
-				)}
 
 				<DropdownWrapper ref={dropdownRef}>
 					<VSCodeTextField
@@ -557,28 +443,5 @@ const DropdownItem = styled.div<{ isSelected: boolean }>`
 
 	&:hover {
 		background-color: var(--vscode-list-activeSelectionBackground);
-	}
-`
-
-// Tabs
-
-const TabsContainer = styled.div`
-	display: flex;
-	gap: 0;
-	margin-bottom: 12px;
-	border-bottom: 1px solid #333;
-`
-
-const Tab = styled.div<{ active: boolean }>`
-	padding: 8px 16px;
-	cursor: pointer;
-	font-size: 12px;
-	font-weight: 500;
-	color: ${({ active }) => (active ? "var(--vscode-foreground)" : "var(--vscode-descriptionForeground)")};
-	border-bottom: 2px solid ${({ active }) => (active ? "var(--vscode-textLink-foreground)" : "transparent")};
-	transition: all 0.15s ease;
-
-	&:hover {
-		color: var(--vscode-foreground);
 	}
 `

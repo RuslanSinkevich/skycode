@@ -20,9 +20,6 @@ import { StreamAborter } from "../utils/abort-support"
 const rateLimitPatterns = [/got status: 429/i, /429 Too Many Requests/i, /rate limit exceeded/i, /too many requests/i]
 
 interface GeminiHandlerOptions extends CommonApiHandlerOptions {
-	isVertex?: boolean
-	vertexProjectId?: string
-	vertexRegion?: string
 	geminiApiKey?: string
 	geminiBaseUrl?: string
 	thinkingBudgetTokens?: number
@@ -67,33 +64,14 @@ export class GeminiHandler implements ApiHandler {
 
 	private ensureClient(): GoogleGenAI {
 		if (!this.client) {
-			const options = this.options as GeminiHandlerOptions
+			if (!this.options.geminiApiKey) {
+				throw new Error("API key is required for Google Gemini")
+			}
 
-			if (options.isVertex) {
-				// Initialize with Vertex AI configuration
-				const project = this.options.vertexProjectId ?? "not-provided"
-				const location = this.options.vertexRegion ?? "not-provided"
-
-				try {
-					this.client = new GoogleGenAI({
-						vertexai: true,
-						project,
-						location,
-					})
-				} catch (error) {
-					throw new Error(`Error creating Gemini Vertex AI client: ${error.message}`)
-				}
-			} else {
-				// Initialize with standard API key
-				if (!options.geminiApiKey) {
-					throw new Error("API key is required for Google Gemini when not using Vertex AI")
-				}
-
-				try {
-					this.client = new GoogleGenAI({ apiKey: options.geminiApiKey })
-				} catch (error) {
-					throw new Error(`Error creating Gemini client: ${error.message}`)
-				}
+			try {
+				this.client = new GoogleGenAI({ apiKey: this.options.geminiApiKey })
+			} catch (error) {
+				throw new Error(`Error creating Gemini client: ${error.message}`)
 			}
 		}
 		return this.client

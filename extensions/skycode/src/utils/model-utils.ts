@@ -7,19 +7,13 @@ const CLAUDE_VERSION_MATCH_REGEX = /[-_ ]([\d](?:\.[05])?)[-_ ]?/
 export function isNextGenModelProvider(providerInfo: ApiProviderInfo): boolean {
 	const providerId = normalize(providerInfo.providerId)
 	return [
-		"skycode",
 		"anthropic",
 		"gemini",
-		"vertex",
 		"openrouter",
 		"openai",
-		"minimax",
 		"openai-native",
 		"openai-compatible",
 		"openai-codex",
-		"baseten",
-		"vercel-ai-gateway",
-		"oca",
 	].some((id) => providerId === id)
 }
 

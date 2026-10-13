@@ -16,7 +16,6 @@ import { sendMcpButtonClickedEvent } from "./core/controller/ui/subscribeToMcpBu
 import { sendSettingsButtonClickedEvent } from "./core/controller/ui/subscribeToSettingsButtonClicked"
 import { WebviewProvider } from "./core/webview"
 import { createSkycodeAPI } from "./exports"
-import { cleanupTestMode, initializeTestMode } from "./services/test/TestMode"
 import "./utils/path" // necessary to have access to String.prototype.toPosix
 
 import path from "node:path"
@@ -211,10 +210,6 @@ export async function activate(context: vscode.ExtensionContext) {
 	SkycodeTempManager.startPeriodicCleanup()
 
 	Logger.log("Skycode extension activated")
-
-	const testModeWatchers = await initializeTestMode(webview)
-	// Initialize test mode and add disposables to context
-	context.subscriptions.push(...testModeWatchers)
 
 	vscode.commands.executeCommand("setContext", "skycode.isDevMode", IS_DEV && IS_DEV === "true")
 
@@ -936,9 +931,6 @@ export async function deactivate() {
 	SkycodeTempManager.stopPeriodicCleanup()
 
 	tearDown()
-
-	// Clean up test mode
-	cleanupTestMode()
 
 	// Kill any running hook processes to prevent zombies
 	await HookProcessRegistry.terminateAll()

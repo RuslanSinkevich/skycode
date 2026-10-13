@@ -248,7 +248,7 @@ describe("State Keys Type Safety", () => {
 
 		it("should correctly identify Secret keys", () => {
 			// Sample known secret keys
-			const knownSecretKeys = ["apiKey", "openRouterApiKey", "awsAccessKey"]
+			const knownSecretKeys = ["apiKey", "openRouterApiKey", "geminiApiKey"]
 
 			for (const key of knownSecretKeys) {
 				expect(isSecretKey(key), `${key} should be a SecretKey`).to.be.true
@@ -449,12 +449,6 @@ describe("State Keys Type Safety", () => {
 			expect(isSettingsKey("")).to.be.false
 			expect(isSecretKey("")).to.be.false
 			expect(isLocalStateKey("")).to.be.false
-		})
-
-		it("should handle keys with special characters", () => {
-			// The skycode:skycodeAccountId key has a colon
-			expect(SecretKeys).to.include("skycode:skycodeAccountId")
-			expect(isSecretKey("skycode:skycodeAccountId")).to.be.true
 		})
 
 		it("should not have keys that could cause prototype pollution", () => {

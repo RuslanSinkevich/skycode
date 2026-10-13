@@ -4,7 +4,6 @@ import {
 	migrateCustomInstructionsToGlobalRules,
 	migrateTaskHistoryToFile,
 	migrateWelcomeViewCompleted,
-	migrateWorkspaceToGlobalStorage,
 } from "./core/storage/state-migrations"
 import { WebviewProvider } from "./core/webview"
 import "./utils/path" // necessary to have access to String.prototype.toPosix
@@ -59,7 +58,6 @@ export async function initialize(context: vscode.ExtensionContext): Promise<Webv
 	runInBackground("state migrations", async () => {
 		await migrateCustomInstructionsToGlobalRules(context)
 		await migrateWelcomeViewCompleted(context)
-		await migrateWorkspaceToGlobalStorage(context)
 		await migrateTaskHistoryToFile(context)
 		await cleanupMcpMarketplaceCatalogFromGlobalState(context)
 	})

@@ -245,7 +245,6 @@ const ProviderSelectionStep = ({ autoResult, selectedProvider, onSelectProvider 
 	const [showList, setShowList] = useState(!detected || isOverridden)
 
 	const reasonLabel: Record<AutoProviderResult["reason"], string> = {
-		auth: "signed in",
 		"api-key": "API key found",
 		local: "local runtime",
 		default: "no key detected",

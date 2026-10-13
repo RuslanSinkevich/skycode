@@ -190,16 +190,16 @@ const contextVariations: Array<{ name: string; override: Partial<SystemPromptCon
 
 const modelTestCases = [
 	{ family: ModelFamily.GENERIC, modelId: "gpt-3", providerId: "openai" },
-	{ family: ModelFamily.GLM, modelId: "glm-4.6", providerId: "zai" },
+	{ family: ModelFamily.GLM, modelId: "glm-4.6", providerId: "openai" },
 	{ family: ModelFamily.HERMES, modelId: "hermes-4", providerId: "test" },
-	{ family: ModelFamily.DEVSTRAL, modelId: "devstral", providerId: "skycode" },
+	{ family: ModelFamily.DEVSTRAL, modelId: "devstral", providerId: "openrouter" },
 	{ family: ModelFamily.NEXT_GEN, modelId: "claude-sonnet-4", providerId: "anthropic" },
 	{ family: ModelFamily.XS, modelId: "qwen3_coder", providerId: "lmstudio" },
-	{ family: ModelFamily.NATIVE_NEXT_GEN, modelId: "claude-4-5-sonnet", providerId: "skycode" },
+	{ family: ModelFamily.NATIVE_NEXT_GEN, modelId: "claude-4-5-sonnet", providerId: "openrouter" },
 	{ family: ModelFamily.GPT_5, modelId: "gpt-5", providerId: "openai" },
 	{ family: ModelFamily.NATIVE_GPT_5, modelId: "gpt-5-codex", providerId: "openai" },
 	{ family: ModelFamily.NATIVE_GPT_5_1, modelId: "gpt-5-1", providerId: "openai" },
-	{ family: ModelFamily.GEMINI_3, modelId: "gemini-3", providerId: "vertex" },
+	{ family: ModelFamily.GEMINI_3, modelId: "gemini-3", providerId: "gemini" },
 ]
 
 // ============================================================================

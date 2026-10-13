@@ -154,35 +154,11 @@ export const ModelProvider = styled.span`
 	}
 `
 
-export const ModelLabel = styled.span`
-	font-size: 9px;
-	color: var(--vscode-textLink-foreground);
-	text-transform: uppercase;
-	letter-spacing: 0.5px;
-	font-weight: 500;
-	margin-left: auto;
-	margin-right: 8px;
-`
-
 export const EmptyState = styled.div`
 	padding: 12px 10px;
 	text-align: center;
 	font-size: 11px;
 	color: var(--vscode-descriptionForeground);
-`
-
-export const EmptyModelRow = styled.div`
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	padding: 8px 10px;
-	min-height: 28px;
-	box-sizing: border-box;
-	background: ${CODE_BLOCK_BG_COLOR};
-	position: sticky;
-	top: 0;
-	z-index: 1;
-	border-bottom: 1px solid var(--vscode-editorGroup-border);
 `
 
 export const CurrentModelRow = styled.div`

@@ -1,8 +1,7 @@
-import { LiteLLMModelInfo, ModelInfo, OcaModelInfo, OpenAiCompatibleModelInfo } from "@shared/api"
+import { LiteLLMModelInfo, ModelInfo, OpenAiCompatibleModelInfo } from "@shared/api"
 import {
 	OpenRouterModelInfo,
 	LiteLLMModelInfo as ProtoLiteLLMModelInfo,
-	OcaModelInfo as ProtoOcaModelInfo,
 	OpenAiCompatibleModelInfo as ProtoOpenAiCompatibleModelInfo,
 	ThinkingConfig,
 } from "@shared/proto/skycode/models"
@@ -121,32 +120,6 @@ export function fromProtobufLiteLLMModelInfo(protoInfo: ProtoLiteLLMModelInfo): 
 		supportsGlobalEndpoint: protoInfo.supportsGlobalEndpoint,
 		tiers: protoInfo.tiers.length > 0 ? protoInfo.tiers : undefined,
 		temperature: protoInfo.temperature,
-	}
-}
-
-/**
- * Convert protobuf OcaModelInfo to application OcaModelInfo
- */
-export function fromProtobufOcaModelInfo(protoInfo: ProtoOcaModelInfo): OcaModelInfo {
-	return {
-		maxTokens: protoInfo.maxTokens,
-		contextWindow: protoInfo.contextWindow,
-		supportsImages: protoInfo.supportsImages,
-		supportsPromptCache: protoInfo.supportsPromptCache,
-		inputPrice: protoInfo.inputPrice,
-		outputPrice: protoInfo.outputPrice,
-		cacheWritesPrice: protoInfo.cacheWritesPrice,
-		cacheReadsPrice: protoInfo.cacheReadsPrice,
-		description: protoInfo.description,
-		thinkingConfig: convertThinkingConfig(protoInfo.thinkingConfig),
-		temperature: protoInfo.temperature,
-		modelName: protoInfo.modelName,
-		surveyId: protoInfo.surveyId,
-		banner: protoInfo.banner,
-		surveyContent: protoInfo.surveyContent,
-		apiFormat: protoInfo.apiFormat,
-		supportsReasoning: protoInfo.supportsReasoning,
-		reasoningEffortOptions: protoInfo.reasoningEffortOptions,
 	}
 }
 

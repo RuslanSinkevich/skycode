@@ -67,23 +67,9 @@ export class StateManager {
 	// These are for dynamic providers that fetch models from APIs
 	private modelInfoCache: {
 		openRouterModels: Record<string, ModelInfo> | null
-		groqModels: Record<string, ModelInfo> | null
-		basetenModels: Record<string, ModelInfo> | null
-		huggingFaceModels: Record<string, ModelInfo> | null
-		requestyModels: Record<string, ModelInfo> | null
-		huaweiCloudMaasModels: Record<string, ModelInfo> | null
-		hicapModels: Record<string, ModelInfo> | null
-		aihubmixModels: Record<string, ModelInfo> | null
 		liteLlmModels: Record<string, ModelInfo> | null
 	} = {
 		openRouterModels: null,
-		groqModels: null,
-		basetenModels: null,
-		huggingFaceModels: null,
-		requestyModels: null,
-		huaweiCloudMaasModels: null,
-		hicapModels: null,
-		aihubmixModels: null,
 		liteLlmModels: null,
 	}
 
@@ -415,13 +401,6 @@ export class StateManager {
 	setModelsCache(
 		provider:
 			| "openRouter"
-			| "groq"
-			| "baseten"
-			| "huggingFace"
-			| "requesty"
-			| "huaweiCloudMaas"
-			| "hicap"
-			| "aihubmix"
 			| "liteLlm",
 		models: Record<string, ModelInfo>,
 	): void {
@@ -435,13 +414,6 @@ export class StateManager {
 	getModelInfo(
 		provider:
 			| "openRouter"
-			| "groq"
-			| "baseten"
-			| "huggingFace"
-			| "requesty"
-			| "huaweiCloudMaas"
-			| "hicap"
-			| "aihubmix"
 			| "liteLlm",
 		modelId: string,
 	): ModelInfo | undefined {

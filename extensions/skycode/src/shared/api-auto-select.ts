@@ -2,12 +2,11 @@ import { ApiConfiguration, ApiProvider, DEFAULT_API_PROVIDER } from "./api"
 
 /**
  * Reason the auto-selector picked a provider.
- *  - "auth"    — user is signed in to Skycode account
  *  - "api-key" — provider has a non-empty API key in current configuration
  *  - "local"   — provider works without keys (Ollama / LM Studio); only chosen as last resort
  *  - "default" — nothing detected; fall back to {@link DEFAULT_API_PROVIDER}
  */
-export type AutoProviderReason = "auth" | "api-key" | "local" | "default"
+export type AutoProviderReason = "api-key" | "local" | "default"
 
 export interface AutoProviderResult {
 	provider: ApiProvider
@@ -28,15 +27,9 @@ const isFilled = (value: unknown): boolean => typeof value === "string" && value
 
 /**
  * Priority order is intentional. First match wins.
- * Cloud accounts and direct keys outrank generic gateways and local runtimes.
+ * Direct keys outrank generic gateways and local runtimes.
  */
 const PROBES: ProviderProbe[] = [
-	{
-		provider: "skycode",
-		label: "Skycode",
-		reason: "auth",
-		matches: (cfg) => isFilled((cfg as any).skycodeAccountId) || isFilled((cfg as any)["skycode:skycodeAccountId"]),
-	},
 	{
 		provider: "anthropic",
 		label: "Anthropic",
@@ -84,36 +77,6 @@ const PROBES: ProviderProbe[] = [
 		label: "Qwen",
 		reason: "api-key",
 		matches: (cfg) => isFilled((cfg as any).qwenApiKey),
-	},
-	{
-		provider: "mistral",
-		label: "Mistral",
-		reason: "api-key",
-		matches: (cfg) => isFilled((cfg as any).mistralApiKey),
-	},
-	{
-		provider: "groq",
-		label: "Groq",
-		reason: "api-key",
-		matches: (cfg) => isFilled((cfg as any).groqApiKey),
-	},
-	{
-		provider: "xai",
-		label: "xAI",
-		reason: "api-key",
-		matches: (cfg) => isFilled((cfg as any).xaiApiKey),
-	},
-	{
-		provider: "moonshot",
-		label: "Moonshot",
-		reason: "api-key",
-		matches: (cfg) => isFilled((cfg as any).moonshotApiKey),
-	},
-	{
-		provider: "cerebras",
-		label: "Cerebras",
-		reason: "api-key",
-		matches: (cfg) => isFilled((cfg as any).cerebrasApiKey),
 	},
 	{
 		provider: "openai",

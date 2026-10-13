@@ -1,7 +1,15 @@
-import { fireEvent, render, screen } from "@testing-library/react"
+import { fireEvent, render as rtlRender, screen } from "@testing-library/react"
+import type { ReactElement } from "react"
 import { describe, expect, it, vi } from "vitest"
 import { ExtensionStateContextProvider } from "@/context/ExtensionStateContext"
 import OllamaModelPicker from "../OllamaModelPicker"
+import { I18nProvider } from "@/i18n"
+
+// The interface language defaults to Russian; the assertions below use the English strings.
+const render = (ui: ReactElement) => {
+	localStorage.setItem("skycode.interfaceLanguage", "en")
+	return rtlRender(ui, { wrapper: I18nProvider })
+}
 
 // Mock the ExtensionStateContext
 vi.mock("../../../context/ExtensionStateContext", async (importOriginal) => {

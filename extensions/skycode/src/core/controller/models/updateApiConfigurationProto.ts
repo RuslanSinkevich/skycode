@@ -4,7 +4,6 @@ import { convertProtoToApiProvider } from "@shared/proto-conversions/models/api-
 import {
 	fromProtobufLiteLLMModelInfo,
 	fromProtobufModelInfo,
-	fromProtobufOcaModelInfo,
 	fromProtobufOpenAiCompatibleModelInfo,
 } from "@shared/proto-conversions/models/typeConversion"
 import { buildApiHandler } from "@/core/api"
@@ -49,32 +48,8 @@ export async function updateApiConfigurationProto(
 			planModeOpenAiModelInfo: protoApiConfiguration.planModeOpenAiModelInfo
 				? fromProtobufOpenAiCompatibleModelInfo(protoApiConfiguration.planModeOpenAiModelInfo)
 				: undefined,
-			planModeHuggingFaceModelInfo: protoApiConfiguration.planModeHuggingFaceModelInfo
-				? fromProtobufModelInfo(protoApiConfiguration.planModeHuggingFaceModelInfo)
-				: undefined,
 			planModeLiteLlmModelInfo: protoApiConfiguration.planModeLiteLlmModelInfo
 				? fromProtobufLiteLLMModelInfo(protoApiConfiguration.planModeLiteLlmModelInfo)
-				: undefined,
-			planModeRequestyModelInfo: protoApiConfiguration.planModeRequestyModelInfo
-				? fromProtobufModelInfo(protoApiConfiguration.planModeRequestyModelInfo)
-				: undefined,
-			planModeGroqModelInfo: protoApiConfiguration.planModeGroqModelInfo
-				? fromProtobufModelInfo(protoApiConfiguration.planModeGroqModelInfo)
-				: undefined,
-			planModeHuaweiCloudMaasModelInfo: protoApiConfiguration.planModeHuaweiCloudMaasModelInfo
-				? fromProtobufModelInfo(protoApiConfiguration.planModeHuaweiCloudMaasModelInfo)
-				: undefined,
-			planModeBasetenModelInfo: protoApiConfiguration.planModeBasetenModelInfo
-				? fromProtobufModelInfo(protoApiConfiguration.planModeBasetenModelInfo)
-				: undefined,
-			planModeVercelAiGatewayModelInfo: protoApiConfiguration.planModeVercelAiGatewayModelInfo
-				? fromProtobufModelInfo(protoApiConfiguration.planModeVercelAiGatewayModelInfo)
-				: undefined,
-			planModeOcaModelInfo: protoApiConfiguration.planModeOcaModelInfo
-				? fromProtobufOcaModelInfo(protoApiConfiguration.planModeOcaModelInfo)
-				: undefined,
-			planModeAihubmixModelInfo: protoApiConfiguration.planModeAihubmixModelInfo
-				? fromProtobufOpenAiCompatibleModelInfo(protoApiConfiguration.planModeAihubmixModelInfo)
 				: undefined,
 
 			// Act Mode
@@ -86,30 +61,6 @@ export async function updateApiConfigurationProto(
 				: undefined,
 			actModeLiteLlmModelInfo: protoApiConfiguration.actModeLiteLlmModelInfo
 				? fromProtobufLiteLLMModelInfo(protoApiConfiguration.actModeLiteLlmModelInfo)
-				: undefined,
-			actModeRequestyModelInfo: protoApiConfiguration.actModeRequestyModelInfo
-				? fromProtobufModelInfo(protoApiConfiguration.actModeRequestyModelInfo)
-				: undefined,
-			actModeGroqModelInfo: protoApiConfiguration.actModeGroqModelInfo
-				? fromProtobufModelInfo(protoApiConfiguration.actModeGroqModelInfo)
-				: undefined,
-			actModeHuggingFaceModelInfo: protoApiConfiguration.actModeHuggingFaceModelInfo
-				? fromProtobufModelInfo(protoApiConfiguration.actModeHuggingFaceModelInfo)
-				: undefined,
-			actModeHuaweiCloudMaasModelInfo: protoApiConfiguration.actModeHuaweiCloudMaasModelInfo
-				? fromProtobufModelInfo(protoApiConfiguration.actModeHuaweiCloudMaasModelInfo)
-				: undefined,
-			actModeBasetenModelInfo: protoApiConfiguration.actModeBasetenModelInfo
-				? fromProtobufModelInfo(protoApiConfiguration.actModeBasetenModelInfo)
-				: undefined,
-			actModeVercelAiGatewayModelInfo: protoApiConfiguration.actModeVercelAiGatewayModelInfo
-				? fromProtobufModelInfo(protoApiConfiguration.actModeVercelAiGatewayModelInfo)
-				: undefined,
-			actModeOcaModelInfo: protoApiConfiguration.actModeOcaModelInfo
-				? fromProtobufOcaModelInfo(protoApiConfiguration.actModeOcaModelInfo)
-				: undefined,
-			actModeAihubmixModelInfo: protoApiConfiguration.actModeAihubmixModelInfo
-				? fromProtobufOpenAiCompatibleModelInfo(protoApiConfiguration.actModeAihubmixModelInfo)
 				: undefined,
 			geminiPlanModeThinkingLevel: protoApiConfiguration.geminiPlanModeThinkingLevel,
 			geminiActModeThinkingLevel: protoApiConfiguration.geminiActModeThinkingLevel,

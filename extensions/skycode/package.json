@@ -40,8 +40,7 @@
 		"llama"
 	],
 	"activationEvents": [
-		"onUri",
-		"workspaceContains:evals.env"
+		"onUri"
 	],
 	"main": "./dist/extension.js",
 	"contributes": {
@@ -675,7 +674,7 @@
 		"clean:all": "npm run clean:build && npm run clean:deps",
 		"compile-tests": "node ./scripts/build-tests.js",
 		"watch-tests": "tsc -p . -w --outDir out",
-		"check-types": "npm run protos && npx tsc --noEmit && cd webview-ui && npx tsc --noEmit",
+		"check-types": "npm run protos && npx tsc --noEmit && cd webview-ui && npx tsc --noEmit -p tsconfig.app.json",
 		"lint": "biome lint --no-errors-on-unmatched --files-ignore-unknown=true --diagnostic-level=error && npm run lint:proto",
 		"lint:proto": "node ./scripts/proto-lint.mjs",
 		"format": "biome format --changed --no-errors-on-unmatched --files-ignore-unknown=true --diagnostic-level=error",
@@ -872,8 +871,6 @@
 			"**/src/xml/**",
 			"**/standalone/**",
 			"**/src/generated/**",
-			"**/evals/cli/dist/**",
-			"**/evals/cli/src/**",
 			"dist"
 		],
 		"all": true,

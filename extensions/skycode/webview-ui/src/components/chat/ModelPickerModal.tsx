@@ -8,7 +8,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { useWindowSize } from "react-use"
 import PopupModalContainer from "@/components/common/PopupModalContainer"
-import { freeModels, recommendedModels } from "@/components/settings/OpenRouterModelPicker"
 import {
 	SearchContainer,
 	SearchInput,
@@ -22,9 +21,7 @@ import {
 	ModelInfoRow,
 	ModelName,
 	ModelProvider,
-	ModelLabel,
 	EmptyState,
-	EmptyModelRow,
 	CurrentModelRow,
 	SplitModeRow,
 	SplitModeCell,
@@ -35,9 +32,7 @@ import {
 	SettingsOnlyLink,
 } from "./ModelPickerModal.styles"
 import { SUPPORTED_ANTHROPIC_THINKING_MODELS } from "@/components/settings/providers/AnthropicProvider"
-import { SUPPORTED_BEDROCK_THINKING_MODELS } from "@/components/settings/providers/BedrockProvider"
 import {
-	filterOpenRouterModelIds,
 	getModelsForProvider,
 	getModeSpecificFields,
 	getProviderInfo,
@@ -57,15 +52,9 @@ const SETTINGS_ONLY_PROVIDERS: ApiProvider[] = [
 	"ollama",
 	"lmstudio",
 	"vscode-lm",
-	"requesty",
-	"hicap",
-	"dify",
-	"oca",
-	"aihubmix",
-	"together",
 ]
 
-const OPENROUTER_MODEL_PROVIDERS: ApiProvider[] = ["skycode", "openrouter", "vercel-ai-gateway"]
+const OPENROUTER_MODEL_PROVIDERS: ApiProvider[] = ["openrouter"]
 
 interface ModelPickerModalProps {
 	isOpen: boolean
@@ -83,7 +72,7 @@ interface ModelItem {
 	info?: ModelInfoType
 }
 
-// Star icon for favorites (only for openrouter/vercel-ai-gateway providers)
+// Star icon for favorites (only for the OpenRouter provider)
 const StarIcon = ({ isFavorite, onClick }: { isFavorite: boolean; onClick: (e: React.MouseEvent) => void }) => {
 	return (
 		<div
@@ -110,7 +99,6 @@ const ModelPickerModal: React.FC<ModelPickerModalProps> = ({ isOpen, onOpenChang
 	const {
 		apiConfiguration,
 		openRouterModels,
-		vercelAiGatewayModels,
 		navigateToSettings,
 		planActSeparateModelsSetting,
 		showSettings,
@@ -119,7 +107,6 @@ const ModelPickerModal: React.FC<ModelPickerModalProps> = ({ isOpen, onOpenChang
 		showAccount,
 		remoteConfigSettings,
 		favoritedModelIds,
-		basetenModels,
 		liteLlmModels,
 	} = useExtensionState()
 	const { handleModeFieldChange, handleModeFieldsChange, handleFieldsChange } = useApiConfigurationHandlers()
@@ -159,9 +146,6 @@ const ModelPickerModal: React.FC<ModelPickerModalProps> = ({ isOpen, onOpenChang
 		if (selectedProvider === "anthropic" || selectedProvider === "claude-code") {
 			return SUPPORTED_ANTHROPIC_THINKING_MODELS.includes(selectedModelId)
 		}
-		if (selectedProvider === "bedrock") {
-			return SUPPORTED_BEDROCK_THINKING_MODELS.includes(selectedModelId)
-		}
 		return selectedModelInfo?.supportsReasoning || !!selectedModelInfo?.thinkingConfig
 	}, [selectedProvider, selectedModelId, selectedModelInfo])
 
@@ -195,22 +179,16 @@ const ModelPickerModal: React.FC<ModelPickerModalProps> = ({ isOpen, onOpenChang
 	// Get models for current provider
 	const allModels = useMemo((): ModelItem[] => {
 		if (OPENROUTER_MODEL_PROVIDERS.includes(selectedProvider)) {
-			// Use vercelAiGatewayModels for Vercel provider, openRouterModels for others
-			const modelsSource = selectedProvider === "vercel-ai-gateway" ? vercelAiGatewayModels : openRouterModels
-			const modelIds = Object.keys(modelsSource || {})
-			const filteredIds = filterOpenRouterModelIds(modelIds, selectedProvider)
-
-			return filteredIds.map((id) => ({
+			return Object.keys(openRouterModels || {}).map((id) => ({
 				id,
 				name: id.split("/").pop() || id,
 				provider: id.split("/")[0],
-				info: modelsSource[id],
+				info: openRouterModels[id],
 			}))
 		}
 
 		// Use centralized helper for static provider models
 		const models = getModelsForProvider(selectedProvider, apiConfiguration, {
-			basetenModels,
 			liteLlmModels,
 		})
 		if (models) {
@@ -223,7 +201,7 @@ const ModelPickerModal: React.FC<ModelPickerModalProps> = ({ isOpen, onOpenChang
 		}
 
 		return []
-	}, [selectedProvider, openRouterModels, vercelAiGatewayModels, apiConfiguration, basetenModels, liteLlmModels])
+	}, [selectedProvider, openRouterModels, apiConfiguration, liteLlmModels])
 
 	// Multi-word substring search - all words must match somewhere in id/name/provider
 	const matchesSearch = useCallback((model: ModelItem, query: string): boolean => {
@@ -235,34 +213,20 @@ const ModelPickerModal: React.FC<ModelPickerModalProps> = ({ isOpen, onOpenChang
 		return queryWords.every((word) => searchText.includes(word))
 	}, [])
 
-	// Filtered models - for OpenRouter/Vercel show all by default, for Skycode only when searching
+	// Filtered models - all by default, narrowed by the search query
 	const filteredModels = useMemo(() => {
-		const isSkycode = selectedProvider === "skycode"
-
-		// For Skycode: only show non-featured models when searching
-		if (isSkycode && !searchQuery) {
-			return []
-		}
-
 		let models: ModelItem[]
 		if (searchQuery) {
 			models = allModels.filter((m) => matchesSearch(m, searchQuery))
 		} else {
-			// For non-Skycode OpenRouter providers: show all models by default
 			models = [...allModels]
 		}
 
 		// Filter out current model
 		models = models.filter((m) => m.id !== selectedModelId)
 
-		// For Skycode when searching, also filter out featured models (they're shown separately)
-		if (isSkycode) {
-			const featuredIds = new Set([...recommendedModels, ...freeModels].map((m) => m.id))
-			models = models.filter((m) => !featuredIds.has(m.id))
-		}
-
-		// For openrouter/vercel-ai-gateway (not skycode): put favorites first
-		if (!isSkycode && (selectedProvider === "openrouter" || selectedProvider === "vercel-ai-gateway")) {
+		// For OpenRouter: put favorites first
+		if (selectedProvider === "openrouter") {
 			const favoriteSet = new Set(favoritedModelIds || [])
 			const favoritedModels = models.filter((m) => favoriteSet.has(m.id))
 			const nonFavoritedModels = models.filter((m) => !favoriteSet.has(m.id))
@@ -276,53 +240,12 @@ const ModelPickerModal: React.FC<ModelPickerModalProps> = ({ isOpen, onOpenChang
 		return models
 	}, [searchQuery, matchesSearch, selectedModelId, selectedProvider, allModels, favoritedModelIds])
 
-	// Featured models for Skycode provider (recommended + free)
-	const featuredModels = useMemo(() => {
-		if (selectedProvider !== "skycode") {
-			return []
-		}
-
-		const allFeatured = [...recommendedModels, ...freeModels].map((m) => ({
-			...m,
-			name: m.id.split("/").pop() || m.id,
-			provider: m.id.split("/")[0],
-		}))
-
-		// Filter out current model
-		const filtered = allFeatured.filter((m) => m.id !== selectedModelId)
-
-		// Apply search filter if searching (uses same multi-word logic)
-		if (searchQuery) {
-			return filtered.filter((m) => matchesSearch(m, searchQuery))
-		}
-
-		return filtered
-	}, [selectedProvider, searchQuery, selectedModelId, matchesSearch])
-
 	// Handle model selection - in split mode uses activeEditMode, otherwise closes modal
 	const handleSelectModel = useCallback(
 		(modelId: string, modelInfo?: ModelInfoType) => {
 			const modeToUse = isSplit ? activeEditMode : currentMode
 
-			if (selectedProvider === "vercel-ai-gateway") {
-				// Vercel AI Gateway uses its own model fields
-				const modelInfoToUse = modelInfo || vercelAiGatewayModels[modelId]
-				handleModeFieldsChange(
-					{
-						vercelAiGatewayModelId: { plan: "planModeVercelAiGatewayModelId", act: "actModeVercelAiGatewayModelId" },
-						vercelAiGatewayModelInfo: {
-							plan: "planModeVercelAiGatewayModelInfo",
-							act: "actModeVercelAiGatewayModelInfo",
-						},
-					},
-					{
-						vercelAiGatewayModelId: modelId,
-						vercelAiGatewayModelInfo: modelInfoToUse,
-					},
-					modeToUse,
-				)
-			} else if (OPENROUTER_MODEL_PROVIDERS.includes(selectedProvider)) {
-				// Skycode and OpenRouter use openRouter fields
+			if (OPENROUTER_MODEL_PROVIDERS.includes(selectedProvider)) {
 				const modelInfoToUse = modelInfo || openRouterModels[modelId]
 				handleModeFieldsChange(
 					{
@@ -332,19 +255,6 @@ const ModelPickerModal: React.FC<ModelPickerModalProps> = ({ isOpen, onOpenChang
 					{
 						openRouterModelId: modelId,
 						openRouterModelInfo: modelInfoToUse,
-					},
-					modeToUse,
-				)
-			} else if (selectedProvider === "baseten") {
-				// Baseten uses provider-specific model ID and info fields
-				handleModeFieldsChange(
-					{
-						basetenModelId: { plan: "planModeBasetenModelId", act: "actModeBasetenModelId" },
-						basetenModelInfo: { plan: "planModeBasetenModelInfo", act: "actModeBasetenModelInfo" },
-					},
-					{
-						basetenModelId: modelId,
-						basetenModelInfo: modelInfo,
 					},
 					modeToUse,
 				)
@@ -383,7 +293,6 @@ const ModelPickerModal: React.FC<ModelPickerModalProps> = ({ isOpen, onOpenChang
 			isSplit,
 			activeEditMode,
 			openRouterModels,
-			vercelAiGatewayModels,
 			onOpenChange,
 		],
 	)
@@ -429,7 +338,7 @@ const ModelPickerModal: React.FC<ModelPickerModalProps> = ({ isOpen, onOpenChang
 	// Keyboard navigation handler
 	const handleKeyDown = useCallback(
 		(e: React.KeyboardEvent<HTMLInputElement>) => {
-			const totalItems = filteredModels.length + featuredModels.length
+			const totalItems = filteredModels.length
 			if (totalItems === 0) {
 				return
 			}
@@ -446,14 +355,8 @@ const ModelPickerModal: React.FC<ModelPickerModalProps> = ({ isOpen, onOpenChang
 				case "Enter":
 					e.preventDefault()
 					if (selectedIndex >= 0) {
-						// Determine which list the index falls into
-						if (selectedIndex < featuredModels.length) {
-							const model = featuredModels[selectedIndex]
-							handleSelectModel(model.id, openRouterModels[model.id])
-						} else {
-							const model = filteredModels[selectedIndex - featuredModels.length]
-							handleSelectModel(model.id, model.info)
-						}
+						const model = filteredModels[selectedIndex]
+						handleSelectModel(model.id, model.info)
 					}
 					break
 				case "Escape":
@@ -462,7 +365,7 @@ const ModelPickerModal: React.FC<ModelPickerModalProps> = ({ isOpen, onOpenChang
 					break
 			}
 		},
-		[filteredModels, featuredModels, selectedIndex, handleSelectModel, openRouterModels, onOpenChange],
+		[filteredModels, selectedIndex, handleSelectModel, onOpenChange],
 	)
 
 	// Reset selectedIndex and clear refs when search/provider changes
@@ -576,7 +479,6 @@ const ModelPickerModal: React.FC<ModelPickerModalProps> = ({ isOpen, onOpenChang
 		onOpenChange(!isOpen)
 	}, [isOpen, onOpenChange])
 
-	const isSkycodeProvider = selectedProvider === "skycode"
 	const isSearching = !!searchQuery
 
 	return (
@@ -740,72 +642,39 @@ const ModelPickerModal: React.FC<ModelPickerModalProps> = ({ isOpen, onOpenChang
 									</Tooltip>
 								</SplitModeRow>
 							) : selectedModelId && modelBelongsToProvider ? (
-								(() => {
-									// Check if current model has a featured label (only for Skycode provider)
-									const currentFeaturedModel = isSkycodeProvider
-										? [...recommendedModels, ...freeModels].find((m) => m.id === selectedModelId)
-										: undefined
-									return (
-										<CurrentModelRow onClick={() => onOpenChange(false)}>
-											<ModelInfoRow>
-												<div className="text-[11px] text-foreground whitespace-nowrap overflow-hidden text-ellipsis">
-													{selectedModelId.split("/").pop() || selectedModelId}
-												</div>
-												<ModelProvider>
-													{OPENROUTER_MODEL_PROVIDERS.includes(selectedProvider)
-														? selectedModelId.split("/")[0]
-														: selectedProvider}
-												</ModelProvider>
-											</ModelInfoRow>
-											{currentFeaturedModel?.label && <ModelLabel>{currentFeaturedModel.label}</ModelLabel>}
-											<Check
-												size={14}
-												style={{
-													color: "var(--vscode-foreground)",
-													flexShrink: 0,
-												}}
-											/>
-										</CurrentModelRow>
-									)
-								})()
-							) : !selectedModelId && selectedProvider === "vercel-ai-gateway" ? (
-								<EmptyModelRow>
-									<span className="text-[11px] text-description">{t("chat.selectModelBelow")}</span>
-								</EmptyModelRow>
+								<CurrentModelRow onClick={() => onOpenChange(false)}>
+									<ModelInfoRow>
+										<div className="text-[11px] text-foreground whitespace-nowrap overflow-hidden text-ellipsis">
+											{selectedModelId.split("/").pop() || selectedModelId}
+										</div>
+										<ModelProvider>
+											{OPENROUTER_MODEL_PROVIDERS.includes(selectedProvider)
+												? selectedModelId.split("/")[0]
+												: selectedProvider}
+										</ModelProvider>
+									</ModelInfoRow>
+									<Check
+										size={14}
+										style={{
+											color: "var(--vscode-foreground)",
+											flexShrink: 0,
+										}}
+									/>
+								</CurrentModelRow>
 							) : null}
 
-							{/* For Skycode: Show recommended models */}
-							{isSkycodeProvider &&
-								featuredModels.map((model, index) => (
+							{/* Model list */}
+							{filteredModels.map((model, index) => {
+								const isFavorite = (favoritedModelIds || []).includes(model.id)
+								const showStar = selectedProvider === "openrouter"
+								return (
 									<ModelItemContainer
 										$isSelected={index === selectedIndex}
 										key={model.id}
-										onClick={() => handleSelectModel(model.id, openRouterModels[model.id])}
+										onClick={() => handleSelectModel(model.id, model.info)}
 										onMouseEnter={() => setSelectedIndex(index)}
 										ref={(el) => {
 											itemRefs.current[index] = el
-										}}>
-										<ModelInfoRow>
-											<ModelName>{model.name}</ModelName>
-											<ModelProvider>{model.provider}</ModelProvider>
-										</ModelInfoRow>
-										<ModelLabel>{model.label}</ModelLabel>
-									</ModelItemContainer>
-								))}
-
-							{/* All other models (for non-Skycode always, for Skycode only when searching) */}
-							{filteredModels.map((model, index) => {
-								const globalIndex = featuredModels.length + index
-								const isFavorite = (favoritedModelIds || []).includes(model.id)
-								const showStar = selectedProvider === "openrouter" || selectedProvider === "vercel-ai-gateway"
-								return (
-									<ModelItemContainer
-										$isSelected={globalIndex === selectedIndex}
-										key={model.id}
-										onClick={() => handleSelectModel(model.id, model.info)}
-										onMouseEnter={() => setSelectedIndex(globalIndex)}
-										ref={(el) => {
-											itemRefs.current[globalIndex] = el
 										}}>
 										<ModelInfoRow>
 											<ModelName>{model.name}</ModelName>
@@ -876,7 +745,6 @@ const ModelPickerModal: React.FC<ModelPickerModalProps> = ({ isOpen, onOpenChang
 							{/* Empty state */}
 							{isSearching &&
 								filteredModels.length === 0 &&
-								featuredModels.length === 0 &&
 								!SETTINGS_ONLY_PROVIDERS.includes(selectedProvider) && (
 									<EmptyState>{t("chat.noModelsFound")}</EmptyState>
 								)}

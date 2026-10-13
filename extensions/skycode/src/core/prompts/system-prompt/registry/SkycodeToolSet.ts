@@ -129,18 +129,12 @@ export class SkycodeToolSet {
 	/**
 	 * Get the appropriate native tool converter for the given provider
 	 */
-	public static getNativeConverter(providerId: string, modelId?: string) {
+	public static getNativeConverter(providerId: string) {
 		switch (providerId) {
-			case "minimax":
 			case "anthropic":
 				return toolSpecInputSchema
 			case "gemini":
 				return toolSpecFunctionDeclarations
-			case "vertex":
-				if (modelId?.includes("gemini")) {
-					return toolSpecFunctionDeclarations
-				}
-				return toolSpecInputSchema
 			default:
 				// Default to OpenAI Compatible converter
 				return toolSpecFunctionDefinition
@@ -167,7 +161,7 @@ export class SkycodeToolSet {
 				.flatMap((server) => mcpToolToSkycodeToolSpec(variant.family, server))
 
 		const enabledTools = [...toolConfigs, ...mcpTools]
-		const converter = SkycodeToolSet.getNativeConverter(context.providerInfo.providerId, context.providerInfo.model.id)
+		const converter = SkycodeToolSet.getNativeConverter(context.providerInfo.providerId)
 
 		return enabledTools.map((tool) => converter(tool, context))
 	}

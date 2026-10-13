@@ -28,14 +28,6 @@ const en: Record<string, string> = {
 	"auth.success.heading": "Done!",
 	"auth.success.body": "You are authorized. Return to Skycode.",
 
-	"auth.oca.logoutSuccess": "Successfully logged out of OCA",
-	"auth.oca.logoutFailed": "OCA Logout failed",
-	"auth.oca.loginFailed": "Failed to log in to OCA",
-	"auth.oca.notAuthenticated": "Not authenticated with OCA. Please sign in first.",
-	"auth.oca.noModels": "No models found. Did you set up your OCA access (possibly through entitlements)?",
-	"auth.oca.refreshed": "Refreshed OCA models from {{url}}",
-	"auth.oca.fetchFailed": "Failed to fetch OCA models. Please check your configuration from {{url}}",
-	"auth.oca.refreshError": "Error refreshing OCA models. {{details}}",
 	"auth.codex.signInSuccess": "Successfully signed in to OpenAI Codex",
 	"auth.codex.signInFailed": "OpenAI Codex sign in failed: {{error}}",
 
@@ -122,22 +114,6 @@ const ru: Record<string, string> = {
 	// allow-any-unicode-next-line
 	"auth.success.body": "Вы авторизованы. Вернитесь в Skycode.",
 
-	// allow-any-unicode-next-line
-	"auth.oca.logoutSuccess": "Вы вышли из OCA",
-	// allow-any-unicode-next-line
-	"auth.oca.logoutFailed": "Не удалось выйти из OCA",
-	// allow-any-unicode-next-line
-	"auth.oca.loginFailed": "Не удалось войти в OCA",
-	// allow-any-unicode-next-line
-	"auth.oca.notAuthenticated": "Вы не авторизованы в OCA. Войдите в аккаунт.",
-	// allow-any-unicode-next-line
-	"auth.oca.noModels": "Модели не найдены. Настроен ли доступ к OCA (возможно, через entitlements)?",
-	// allow-any-unicode-next-line
-	"auth.oca.refreshed": "Модели OCA обновлены из {{url}}",
-	// allow-any-unicode-next-line
-	"auth.oca.fetchFailed": "Не удалось загрузить модели OCA. Проверьте конфигурацию: {{url}}",
-	// allow-any-unicode-next-line
-	"auth.oca.refreshError": "Ошибка обновления моделей OCA. {{details}}",
 	// allow-any-unicode-next-line
 	"auth.codex.signInSuccess": "Вход в OpenAI Codex выполнен",
 	// allow-any-unicode-next-line

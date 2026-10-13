@@ -1716,7 +1716,7 @@ export class Task {
 		const currentProvider = apiMode === "plan" ? apiConfiguration.planModeApiProvider : apiConfiguration.actModeApiProvider
 
 		const openaiReasoningEffort = this.stateManager.getGlobalSettingsKey("openaiReasoningEffort")
-		if (currentProvider === "openai" || currentProvider === "openai-native" || currentProvider === "sapaicore") {
+		if (currentProvider === "openai" || currentProvider === "openai-native") {
 			if (apiMode === "plan") {
 				effectiveApiConfiguration.planModeReasoningEffort = openaiReasoningEffort
 			} else {
@@ -2065,22 +2065,9 @@ export class Task {
 
 				const isAuthError = skycodeError.isErrorType(SkycodeErrorType.Auth)
 
-				// Check if this is a Skycode provider insufficient credits error - don't auto-retry these
-				const isSkycodeProviderInsufficientCredits = (() => {
-					if (providerId !== "skycode") {
-						return false
-					}
-					try {
-						const parsedError = SkycodeError.transform(error, model.id, providerId)
-						return parsedError.isErrorType(SkycodeErrorType.Balance)
-					} catch {
-						return false
-					}
-				})()
-
 				let response: SkycodeAskResponse
-				// Skip auto-retry for Skycode provider insufficient credits or auth errors
-				if (!isSkycodeProviderInsufficientCredits && !isAuthError && this.taskState.autoRetryAttempts < 3) {
+				// Skip auto-retry for auth errors
+				if (!isAuthError && this.taskState.autoRetryAttempts < 3) {
 					// Auto-retry enabled with max 3 attempts: automatically approve the retry
 					this.taskState.autoRetryAttempts++
 
@@ -2132,8 +2119,8 @@ export class Task {
 
 					await setTimeoutPromise(delay)
 				} else {
-					// Show error_retry with failed flag to indicate all retries exhausted (but not for insufficient credits)
-					if (!isSkycodeProviderInsufficientCredits && !isAuthError) {
+					// Show error_retry with failed flag to indicate all retries exhausted (but not for auth errors)
+					if (!isAuthError) {
 						await this.say(
 							"error_retry",
 							JSON.stringify({
