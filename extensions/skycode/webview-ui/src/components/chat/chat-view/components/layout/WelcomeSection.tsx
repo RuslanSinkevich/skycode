@@ -1,19 +1,13 @@
-import { EmptyRequest } from "@shared/proto/skycode/common"
-import type { Worktree } from "@shared/proto/skycode/worktree"
-import { TrackWorktreeViewOpenedRequest } from "@shared/proto/skycode/worktree"
 import { BANNER_DATA, BannerAction, BannerActionType, BannerCardData } from "@shared/skycode/banner"
-import { GitBranch } from "lucide-react"
-import React, { useCallback, useEffect, useMemo, useState } from "react"
+import React, { useCallback, useMemo } from "react"
 import BannerCarousel from "@/components/common/BannerCarousel"
 import HistoryPreview from "@/components/history/HistoryPreview"
 import { useApiConfigurationHandlers } from "@/components/settings/utils/useApiConfigurationHandlers"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import HomeHeader from "@/components/welcome/HomeHeader"
 import { SuggestedTasks } from "@/components/welcome/SuggestedTasks"
-import CreateWorktreeModal from "@/components/worktrees/CreateWorktreeModal"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
-import { StateServiceClient, UiServiceClient, WorktreeServiceClient } from "@/services/grpc-client"
+import { StateServiceClient, UiServiceClient } from "@/services/grpc-client"
 import { convertBannerData } from "@/utils/bannerUtils"
 import { getCurrentPlatform } from "@/utils/platformUtils"
 import { WelcomeSectionProps } from "../../types/chatTypes"
@@ -31,46 +25,18 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 	shouldShowQuickWins,
 }) => {
 	const { t } = useI18n()
-	const { lastDismissedInfoBannerVersion, lastDismissedCliBannerVersion, lastDismissedModelBannerVersion } = useExtensionState()
-
-	// Quick launch worktree modal
-	const [showCreateWorktreeModal, setShowCreateWorktreeModal] = useState(false)
-	const [isGitRepo, setIsGitRepo] = useState<boolean | null>(null)
-	const [currentWorktree, setCurrentWorktree] = useState<Worktree | null>(null)
-
-	// Check if we're in a git repo and get current worktree info on mount
-	useEffect(() => {
-		WorktreeServiceClient.listWorktrees(EmptyRequest.create({}))
-			.then((result) => {
-				const canUseWorktrees = result.isGitRepo && !result.isMultiRoot && !result.isSubfolder
-				setIsGitRepo(canUseWorktrees)
-				if (canUseWorktrees) {
-					const current = result.worktrees.find((w) => w.isCurrent)
-					setCurrentWorktree(current || null)
-				}
-			})
-			.catch(() => setIsGitRepo(false))
-	}, [])
-
 	const {
+		lastDismissedInfoBannerVersion,
+		lastDismissedCliBannerVersion,
+		lastDismissedModelBannerVersion,
 		openRouterModels,
 		setShowChatModelSelector,
 		navigateToSettings,
-		navigateToWorktrees,
 		navigateToAccount,
 		subagentsEnabled,
-		worktreesEnabled,
 		banners,
 	} = useExtensionState()
 	const { handleFieldsChange } = useApiConfigurationHandlers()
-
-	// Handle click on home page worktree element with telemetry
-	const handleWorktreeClick = useCallback(() => {
-		WorktreeServiceClient.trackWorktreeViewOpened(TrackWorktreeViewOpenedRequest.create({ source: "home_page" })).catch(
-			console.error,
-		)
-		navigateToWorktrees()
-	}, [navigateToWorktrees])
 
 	/**
 	 * Check if a banner has been dismissed based on its version
@@ -228,42 +194,8 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 				<HomeHeader shouldShowQuickWins={shouldShowQuickWins} />
 				<BannerCarousel banners={activeBanners} />
 				{!shouldShowQuickWins && taskHistory.length > 0 && <HistoryPreview showHistoryView={showHistoryView} />}
-				{/* Quick launch worktree button */}
-				{isGitRepo && worktreesEnabled?.featureFlag && worktreesEnabled?.user && (
-					<div className="flex flex-col items-center gap-3 mt-2 mb-4 px-5">
-						{currentWorktree && (
-							<Tooltip>
-								<TooltipTrigger asChild>
-									<button
-										className="flex flex-col items-center gap-0.5 text-xs text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)] cursor-pointer bg-transparent border-none p-1 rounded"
-										onClick={handleWorktreeClick}
-										type="button">
-										<div className="flex items-center gap-1.5 text-xs">
-											<GitBranch className="w-3 h-3 stroke-[2.5] flex-shrink-0" />
-											<span className="break-all text-center">
-												<span className="font-semibold">{t("chat.current")}:</span>{" "}
-												{currentWorktree.branch || t("chat.detachedHead")}
-											</span>
-										</div>
-										<span className="break-all text-center max-w-[300px]">
-											{currentWorktree.path}
-										</span>
-									</button>
-								</TooltipTrigger>
-								<TooltipContent side="bottom">{t("chat.viewManageWorktreesHint")}</TooltipContent>
-							</Tooltip>
-						)}
-					</div>
-				)}
 			</div>
 			<SuggestedTasks shouldShowQuickWins={shouldShowQuickWins} />
-
-			{/* Quick launch worktree modal */}
-			<CreateWorktreeModal
-				onClose={() => setShowCreateWorktreeModal(false)}
-				open={showCreateWorktreeModal}
-				openAfterCreate={true}
-			/>
 		</div>
 	)
 }

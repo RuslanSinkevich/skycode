@@ -104,7 +104,6 @@ export interface ExtensionState {
 	yoloModeToggled?: boolean
 	useAutoCondense?: boolean
 	skycodeWebToolsEnabled?: SkycodeFeatureSetting
-	worktreesEnabled?: SkycodeFeatureSetting
 	focusChainSettings: FocusChainSettings
 	dictationSettings: DictationSettings
 	customPrompt?: string

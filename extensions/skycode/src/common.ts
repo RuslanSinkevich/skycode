@@ -25,7 +25,6 @@ import { ShowMessageType } from "./shared/proto/host/window"
 import { syncWorker } from "./shared/services/worker/sync"
 import { getBlobStoreSettingsFromEnv } from "./shared/services/worker/worker"
 import { getLatestAnnouncementId } from "./utils/announcements"
-import { arePathsEqual } from "./utils/path"
 /**
  * Performs intialization for Skycode that is common to all platforms.
  *
@@ -76,7 +75,6 @@ export async function initialize(context: vscode.ExtensionContext): Promise<Webv
 	})
 	runInBackground("FileContextTracker.cleanupOrphanedWarnings", () => FileContextTracker.cleanupOrphanedWarnings(context))
 	runInBackground("showVersionUpdateAnnouncement", () => showVersionUpdateAnnouncement(context))
-	runInBackground("checkWorktreeAutoOpen", () => checkWorktreeAutoOpen(context))
 
 	telemetryService.captureExtensionActivated()
 
@@ -116,39 +114,6 @@ async function showVersionUpdateAnnouncement(context: vscode.ExtensionContext) {
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error)
 		Logger.error(`Error during post-update actions: ${errorMessage}, Stack trace: ${error.stack}`)
-	}
-}
-
-/**
- * Checks if this workspace was opened from the worktree quick launch button.
- * If so, opens the Skycode sidebar and clears the state.
- */
-async function checkWorktreeAutoOpen(context: vscode.ExtensionContext): Promise<void> {
-	try {
-		// Read directly from globalState (not StateManager cache) since this may have been
-		// set by another window right before this one opened
-		const worktreeAutoOpenPath = context.globalState.get<string>("worktreeAutoOpenPath")
-		if (!worktreeAutoOpenPath) {
-			return
-		}
-
-		// Get current workspace path
-		const workspacePaths = (await HostProvider.workspace.getWorkspacePaths({})).paths
-		if (workspacePaths.length === 0) {
-			return
-		}
-
-		const currentPath = workspacePaths[0]
-
-		// Check if current workspace matches the worktree path
-		if (arePathsEqual(currentPath, worktreeAutoOpenPath)) {
-			// Clear the state first to prevent re-triggering
-			await context.globalState.update("worktreeAutoOpenPath", undefined)
-			// Open the Skycode sidebar
-			await HostProvider.workspace.openSkycodeSidebarPanel({})
-		}
-	} catch (error) {
-		Logger.error("Error checking worktree auto-open", error)
 	}
 }
 

@@ -84,8 +84,6 @@ const GLOBAL_STATE_FIELDS = {
 	remoteRulesToggles: { default: {} as SkycodeRulesToggles },
 	remoteWorkflowToggles: { default: {} as SkycodeRulesToggles },
 	dismissedBanners: { default: [] as Array<{ bannerId: string; dismissedAt: number }> },
-	// Path to worktree that should auto-open Skycode sidebar when launched
-	worktreeAutoOpenPath: { default: undefined as string | undefined },
 } satisfies FieldDefinitions
 
 // Fields that map directly to ApiHandlerOptions in @shared/api.ts
@@ -254,7 +252,6 @@ const USER_SETTINGS_FIELDS = {
 	yoloModeToggled: { default: false as boolean },
 	useAutoCondense: { default: false as boolean },
 	skycodeWebToolsEnabled: { default: false as boolean },
-	worktreesEnabled: { default: false as boolean },
 	// allow-any-unicode-next-line
 	preferredLanguage: { default: "Russian - Русский" as string },
 	alwaysThinkInPreferredLanguage: { default: false as boolean },

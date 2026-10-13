@@ -12,7 +12,6 @@ interface ExperimentsSectionProps {
 const ExperimentsSection = ({ renderSectionHeader }: ExperimentsSectionProps) => {
 	const { t } = useI18n()
 	const {
-		worktreesEnabled,
 		multiRootSetting,
 		skillsEnabled,
 		nativeToolCallSetting,
@@ -68,21 +67,6 @@ const ExperimentsSection = ({ renderSectionHeader }: ExperimentsSectionProps) =>
 							<span className="text-description">{t("features.parallelToolCallingDescription")}</span>
 						</p>
 					</div>
-
-					{/* Worktrees */}
-					{worktreesEnabled?.featureFlag && (
-						<div style={{ marginTop: 10 }}>
-							<VSCodeCheckbox
-								checked={worktreesEnabled?.user}
-								onChange={(e: any) => {
-									const checked = e.target.checked === true
-									updateSetting("worktreesEnabled", checked)
-								}}>
-								{t("features.worktrees")}
-							</VSCodeCheckbox>
-							<p className="text-xs text-(--vscode-descriptionForeground)">{t("features.worktreesDescription")}</p>
-						</div>
-					)}
 
 					{/* Multi-Root */}
 					{multiRootSetting.featureFlag && (

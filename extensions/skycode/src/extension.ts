@@ -14,7 +14,6 @@ import { sendChatButtonClickedEvent } from "./core/controller/ui/subscribeToChat
 import { sendHistoryButtonClickedEvent } from "./core/controller/ui/subscribeToHistoryButtonClicked"
 import { sendMcpButtonClickedEvent } from "./core/controller/ui/subscribeToMcpButtonClicked"
 import { sendSettingsButtonClickedEvent } from "./core/controller/ui/subscribeToSettingsButtonClicked"
-import { sendWorktreesButtonClickedEvent } from "./core/controller/ui/subscribeToWorktreesButtonClicked"
 import { WebviewProvider } from "./core/webview"
 import { createSkycodeAPI } from "./exports"
 import { cleanupTestMode, initializeTestMode } from "./services/test/TestMode"
@@ -297,13 +296,6 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand(commands.AccountButton, () => {
 			// Send event to all subscribers using the gRPC streaming method
 			sendAccountButtonClickedEvent()
-		}),
-	)
-
-	context.subscriptions.push(
-		vscode.commands.registerCommand(commands.WorktreesButton, () => {
-			// Send event to all subscribers using the gRPC streaming method
-			sendWorktreesButtonClickedEvent()
 		}),
 	)
 

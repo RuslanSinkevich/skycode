@@ -10,7 +10,6 @@ export interface NavigationState {
 	settingsTargetSection: string | undefined
 	showHistory: boolean
 	showAccount: boolean
-	showWorktrees: boolean
 	showAnnouncement: boolean
 	showChatModelSelector: boolean
 }
@@ -23,7 +22,6 @@ export interface NavigationActions {
 	hideSettings: () => void
 	hideHistory: () => void
 	hideAccount: () => void
-	hideWorktrees: () => void
 	hideAnnouncement: () => void
 	hideChatModelSelector: () => void
 
@@ -31,7 +29,6 @@ export interface NavigationActions {
 	navigateToSettings: (targetSection?: string) => void
 	navigateToHistory: () => void
 	navigateToAccount: () => void
-	navigateToWorktrees: () => void
 	navigateToChat: () => void
 
 	setShowAnnouncement: (value: boolean) => void
@@ -45,7 +42,6 @@ export function useNavigation(): NavigationState & NavigationActions {
 	const [settingsTargetSection, setSettingsTargetSection] = useState<string | undefined>(undefined)
 	const [showHistory, setShowHistory] = useState(false)
 	const [showAccount, setShowAccount] = useState(false)
-	const [showWorktrees, setShowWorktrees] = useState(false)
 	const [showAnnouncement, setShowAnnouncement] = useState(false)
 	const [showChatModelSelector, setShowChatModelSelector] = useState(false)
 
@@ -61,7 +57,6 @@ export function useNavigation(): NavigationState & NavigationActions {
 	}, [])
 	const hideHistory = useCallback(() => setShowHistory(false), [])
 	const hideAccount = useCallback(() => setShowAccount(false), [])
-	const hideWorktrees = useCallback(() => setShowWorktrees(false), [])
 	const hideAnnouncement = useCallback(() => setShowAnnouncement(false), [])
 	const hideChatModelSelector = useCallback(() => setShowChatModelSelector(false), [])
 
@@ -70,7 +65,6 @@ export function useNavigation(): NavigationState & NavigationActions {
 			setShowSettings(false)
 			setShowHistory(false)
 			setShowAccount(false)
-			setShowWorktrees(false)
 			if (tab) { setMcpTab(tab) }
 			setShowMcp(true)
 		},
@@ -82,7 +76,6 @@ export function useNavigation(): NavigationState & NavigationActions {
 			setShowHistory(false)
 			closeMcpView()
 			setShowAccount(false)
-			setShowWorktrees(false)
 			setSettingsTargetSection(targetSection)
 			setShowSettings(true)
 		},
@@ -93,7 +86,6 @@ export function useNavigation(): NavigationState & NavigationActions {
 		setShowSettings(false)
 		closeMcpView()
 		setShowAccount(false)
-		setShowWorktrees(false)
 		setShowHistory(true)
 	}, [closeMcpView])
 
@@ -101,16 +93,7 @@ export function useNavigation(): NavigationState & NavigationActions {
 		setShowSettings(false)
 		closeMcpView()
 		setShowHistory(false)
-		setShowWorktrees(false)
 		setShowAccount(true)
-	}, [closeMcpView])
-
-	const navigateToWorktrees = useCallback(() => {
-		setShowSettings(false)
-		closeMcpView()
-		setShowHistory(false)
-		setShowAccount(false)
-		setShowWorktrees(true)
 	}, [closeMcpView])
 
 	const navigateToChat = useCallback(() => {
@@ -118,7 +101,6 @@ export function useNavigation(): NavigationState & NavigationActions {
 		closeMcpView()
 		setShowHistory(false)
 		setShowAccount(false)
-		setShowWorktrees(false)
 	}, [closeMcpView])
 
 	return {
@@ -128,7 +110,6 @@ export function useNavigation(): NavigationState & NavigationActions {
 		settingsTargetSection,
 		showHistory,
 		showAccount,
-		showWorktrees,
 		showAnnouncement,
 		showChatModelSelector,
 
@@ -138,7 +119,6 @@ export function useNavigation(): NavigationState & NavigationActions {
 		hideSettings,
 		hideHistory,
 		hideAccount,
-		hideWorktrees,
 		hideAnnouncement,
 		hideChatModelSelector,
 
@@ -146,7 +126,6 @@ export function useNavigation(): NavigationState & NavigationActions {
 		navigateToSettings,
 		navigateToHistory,
 		navigateToAccount,
-		navigateToWorktrees,
 		navigateToChat,
 
 		setShowAnnouncement,

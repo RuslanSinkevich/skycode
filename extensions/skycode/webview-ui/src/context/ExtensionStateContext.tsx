@@ -56,7 +56,6 @@ export interface ExtensionStateContextType extends ExtensionState {
 	settingsTargetSection?: string
 	showHistory: boolean
 	showAccount: boolean
-	showWorktrees: boolean
 	showAnnouncement: boolean
 	showChatModelSelector: boolean
 	expandTaskHeader: boolean
@@ -103,14 +102,12 @@ export interface ExtensionStateContextType extends ExtensionState {
 	navigateToSettings: (targetSection?: string) => void
 	navigateToHistory: () => void
 	navigateToAccount: () => void
-	navigateToWorktrees: () => void
 	navigateToChat: () => void
 
 	// Hide functions
 	hideSettings: () => void
 	hideHistory: () => void
 	hideAccount: () => void
-	hideWorktrees: () => void
 	hideAnnouncement: () => void
 	hideChatModelSelector: () => void
 	closeMcpView: () => void
@@ -131,7 +128,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		settingsTargetSection,
 		showHistory,
 		showAccount,
-		showWorktrees,
 		showAnnouncement,
 		showChatModelSelector,
 		setShowMcp,
@@ -140,14 +136,12 @@ export const ExtensionStateContextProvider: React.FC<{
 		hideSettings,
 		hideHistory,
 		hideAccount,
-		hideWorktrees,
 		hideAnnouncement,
 		hideChatModelSelector,
 		navigateToMcp,
 		navigateToSettings,
 		navigateToHistory,
 		navigateToAccount,
-		navigateToWorktrees,
 		navigateToChat,
 		setShowAnnouncement,
 		setShowChatModelSelector,
@@ -195,7 +189,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		customPrompt: undefined,
 		useAutoCondense: false,
 		skycodeWebToolsEnabled: { user: true, featureFlag: true },
-		worktreesEnabled: { user: true, featureFlag: false },
 		autoCondenseThreshold: undefined,
 		favoritedModelIds: [],
 		lastDismissedInfoBannerVersion: 0,
@@ -274,7 +267,6 @@ export const ExtensionStateContextProvider: React.FC<{
 	const chatButtonUnsubscribeRef = useRef<(() => void) | null>(null)
 	const accountButtonClickedSubscriptionRef = useRef<(() => void) | null>(null)
 	const settingsButtonClickedSubscriptionRef = useRef<(() => void) | null>(null)
-	const worktreesButtonClickedSubscriptionRef = useRef<(() => void) | null>(null)
 	const partialMessageUnsubscribeRef = useRef<(() => void) | null>(null)
 	const mcpMarketplaceUnsubscribeRef = useRef<(() => void) | null>(null)
 	const openRouterModelsUnsubscribeRef = useRef<(() => void) | null>(null)
@@ -426,21 +418,6 @@ export const ExtensionStateContextProvider: React.FC<{
 			},
 			onComplete: () => {},
 		})
-
-		// Set up worktrees button clicked subscription
-		worktreesButtonClickedSubscriptionRef.current = UiServiceClient.subscribeToWorktreesButtonClicked(
-			EmptyRequest.create({}),
-			{
-				onResponse: () => {
-					// When worktrees button is clicked, navigate to worktrees
-					navigateToWorktrees()
-				},
-				onError: (error) => {
-					console.error("Error in worktrees button clicked subscription:", error)
-				},
-			onComplete: () => {},
-			},
-		)
 
 		// [SKYCODE-PERF] Coalesce partial-message updates to ~30 fps via rAF.
 		// During streaming the backend sends a partial for every token; without
@@ -611,10 +588,6 @@ export const ExtensionStateContextProvider: React.FC<{
 				settingsButtonClickedSubscriptionRef.current()
 				settingsButtonClickedSubscriptionRef.current = null
 			}
-			if (worktreesButtonClickedSubscriptionRef.current) {
-				worktreesButtonClickedSubscriptionRef.current()
-				worktreesButtonClickedSubscriptionRef.current = null
-			}
 			if (partialMessageUnsubscribeRef.current) {
 				partialMessageUnsubscribeRef.current()
 				partialMessageUnsubscribeRef.current = null
@@ -774,7 +747,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		settingsTargetSection,
 		showHistory,
 		showAccount,
-		showWorktrees,
 		showAnnouncement,
 		showChatModelSelector,
 		globalSkycodeRulesToggles: state.globalSkycodeRulesToggles || {},
@@ -794,14 +766,12 @@ export const ExtensionStateContextProvider: React.FC<{
 		navigateToSettings,
 		navigateToHistory,
 		navigateToAccount,
-		navigateToWorktrees,
 		navigateToChat,
 
 		// Hide functions
 		hideSettings,
 		hideHistory,
 		hideAccount,
-		hideWorktrees,
 		hideAnnouncement,
 		setShowAnnouncement,
 		hideChatModelSelector,
@@ -832,11 +802,11 @@ export const ExtensionStateContextProvider: React.FC<{
 		openAiModels, requestyModels, groqModelsState, basetenModelsState,
 		huggingFaceModels, mcpServers, mcpMarketplaceCatalog, totalTasksSize,
 		availableTerminalProfiles, showMcp, mcpTab, showSettings,
-		settingsTargetSection, showHistory, showAccount, showWorktrees,
+		settingsTargetSection, showHistory, showAccount,
 		showAnnouncement, showChatModelSelector, expandTaskHeader,
 		navigateToMcp, navigateToSettings, navigateToHistory,
-		navigateToAccount, navigateToWorktrees, navigateToChat,
-		hideSettings, hideHistory, hideAccount, hideWorktrees,
+		navigateToAccount, navigateToChat,
+		hideSettings, hideHistory, hideAccount,
 		hideAnnouncement, hideChatModelSelector, closeMcpView,
 		setShowAnnouncement, setShowChatModelSelector,
 		refreshOpenRouterModels, refreshVercelAiGatewayModels,

@@ -1028,10 +1028,6 @@ export class Controller {
 				user: this.stateManager.getGlobalSettingsKey("skycodeWebToolsEnabled"),
 				featureFlag: true, // Web tools are always available, gated by authentication
 			},
-			worktreesEnabled: {
-				user: this.stateManager.getGlobalSettingsKey("worktreesEnabled"),
-				featureFlag: featureFlagsService.getWorktreesEnabled(),
-			},
 			hooksEnabled: getHooksEnabledSafe(),
 			lastDismissedInfoBannerVersion,
 			lastDismissedModelBannerVersion,

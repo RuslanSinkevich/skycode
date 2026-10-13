@@ -223,11 +223,6 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			}
 		}
 
-		// Update worktrees setting
-		if (request.worktreesEnabled !== undefined) {
-			controller.stateManager.setGlobalState("worktreesEnabled", request.worktreesEnabled)
-		}
-
 		if (request.dictationSettings !== undefined) {
 			const incoming = request.dictationSettings as any
 			const whisperModel = incoming.whisperModel ?? "tiny"

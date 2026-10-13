@@ -77,7 +77,6 @@ export async function updateSettingsCli(controller: Controller, request: UpdateS
 				yoloModeToggled,
 				useAutoCondense,
 				skycodeWebToolsEnabled,
-				worktreesEnabled,
 				focusChainSettings,
 				browserSettings,
 				defaultTerminalProfile,
@@ -178,11 +177,6 @@ export async function updateSettingsCli(controller: Controller, request: UpdateS
 					telemetryService.captureSkycodeWebToolsToggle(controller.task.ulid, skycodeWebToolsEnabled)
 				}
 				controller.stateManager.setGlobalState("skycodeWebToolsEnabled", skycodeWebToolsEnabled)
-			}
-
-			// Update worktrees setting
-			if (worktreesEnabled !== undefined) {
-				controller.stateManager.setGlobalState("worktreesEnabled", worktreesEnabled)
 			}
 
 			// Update focus chain settings (requires telemetry on state change)

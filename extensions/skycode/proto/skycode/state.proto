@@ -285,7 +285,7 @@ message Settings {
   optional int32 open_telemetry_log_batch_size = 169;
   optional int32 open_telemetry_log_batch_timeout = 170;
   optional int32 open_telemetry_log_max_queue_size = 171;
-  optional bool worktrees_enabled = 172;
+  reserved 172; // was worktrees_enabled
   map<string, string> open_ai_headers = 173;
   optional bool always_think_in_preferred_language = 174;
   optional string giga_chat_scope = 175;
@@ -444,7 +444,7 @@ message UpdateSettingsRequest {
   optional string oca_reasoning_effort = 37;
   optional bool skills_enabled = 38;
   optional bool opt_out_of_remote_config = 39;
-  optional bool worktrees_enabled = 40;
+  reserved 40; // was worktrees_enabled
   optional bool always_think_in_preferred_language = 41;
   // Skycode AI: syntax checks before applying edits (stored in VS Code configuration)
   // 42 was use_simplified_edit_tools — simplified tools follow lightweight_mode now.
