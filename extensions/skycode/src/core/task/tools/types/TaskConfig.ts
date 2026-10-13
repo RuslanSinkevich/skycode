@@ -99,8 +99,6 @@ export interface TaskCallbacks {
 		files?: string[]
 	}>
 
-	saveCheckpoint: (isAttemptCompletionMessage?: boolean, completionMessageTs?: number) => Promise<void>
-
 	sayAndCreateMissingParamError: (toolName: SkycodeDefaultTool, paramName: string, relPath?: string) => Promise<any>
 
 	removeLastPartialMessageIfExistsWithType: (type: "ask" | "say", askOrSay: SkycodeAsk | SkycodeSay) => Promise<void>
@@ -108,8 +106,6 @@ export interface TaskCallbacks {
 	executeCommandTool: (command: string, timeoutSeconds: number | undefined) => Promise<[boolean, any]>
 
 	checkBackgroundCommand: (id?: string) => Promise<string>
-
-	doesLatestTaskCompletionHaveNewChanges: () => Promise<boolean>
 
 	updateFCListFromToolResponse: (taskProgress: string | undefined) => Promise<void>
 

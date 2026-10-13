@@ -62,7 +62,6 @@ export interface ExtensionState {
 	alwaysThinkInPreferredLanguage?: boolean
 	openaiReasoningEffort?: OpenaiReasoningEffort
 	mode: Mode
-	checkpointManagerErrorMessage?: string
 	skycodeMessages: SkycodeMessage[]
 	/** ID текущей сессии (для подписки через SessionService) */
 	currentSessionId?: string
@@ -71,7 +70,6 @@ export interface ExtensionState {
 	mcpMarketplaceEnabled?: boolean
 	mcpDisplayMode: McpDisplayMode
 	planActSeparateModelsSetting: boolean
-	enableCheckpointsSetting?: boolean
 	platform: Platform
 	environment?: Environment
 	shouldShowAnnouncement: boolean

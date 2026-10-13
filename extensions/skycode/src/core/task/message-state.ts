@@ -1,4 +1,3 @@
-import CheckpointTracker from "@integrations/checkpoints/CheckpointTracker"
 import getFolderSize from "get-folder-size"
 import Mutex from "p-mutex"
 import { findLastIndex } from "@/shared/array"
@@ -19,7 +18,6 @@ interface MessageStateHandlerParams {
 	taskIsFavorited?: boolean
 	updateTaskHistory: (historyItem: HistoryItem) => Promise<HistoryItem[]>
 	taskState: TaskState
-	checkpointManagerErrorMessage?: string
 }
 
 /** Как часто пересчитывать размер папки задачи (значение только для отображения). */
@@ -29,7 +27,6 @@ export class MessageStateHandler {
 	private apiConversationHistory: SkycodeStorageMessage[] = []
 	private skycodeMessages: SkycodeMessage[] = []
 	private taskIsFavorited: boolean
-	private checkpointTracker: CheckpointTracker | undefined
 	private updateTaskHistory: (historyItem: HistoryItem) => Promise<HistoryItem[]>
 	private taskId: string
 	private ulid: string
@@ -53,10 +50,6 @@ export class MessageStateHandler {
 		this.taskState = params.taskState
 		this.taskIsFavorited = params.taskIsFavorited ?? false
 		this.updateTaskHistory = params.updateTaskHistory
-	}
-
-	setCheckpointTracker(tracker: CheckpointTracker | undefined) {
-		this.checkpointTracker = tracker
 	}
 
 	/**
@@ -117,11 +110,9 @@ export class MessageStateHandler {
 				cacheReads: apiMetrics.totalCacheReads,
 				totalCost: apiMetrics.totalCost,
 				size: taskDirSize,
-				shadowGitConfigWorkTree: await this.checkpointTracker?.getShadowGitConfigWorkTree(),
 				cwdOnTaskInitialization: cwd,
 				conversationHistoryDeletedRange: this.taskState.conversationHistoryDeletedRange,
 				isFavorited: this.taskIsFavorited,
-				checkpointManagerErrorMessage: this.taskState.checkpointManagerErrorMessage,
 				modelId: lastModelInfo?.modelInfo?.modelId,
 			})
 		} catch (error) {

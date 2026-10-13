@@ -125,12 +125,10 @@ export class ToolExecutor {
 			images?: string[]
 			files?: string[]
 		}>,
-		private saveCheckpoint: (isAttemptCompletionMessage?: boolean, completionMessageTs?: number) => Promise<void>,
 		private sayAndCreateMissingParamError: (toolName: SkycodeDefaultTool, paramName: string, relPath?: string) => Promise<any>,
 		private removeLastPartialMessageIfExistsWithType: (type: "ask" | "say", askOrSay: SkycodeAsk | SkycodeSay) => Promise<void>,
 		private executeCommandTool: (command: string, timeoutSeconds: number | undefined) => Promise<[boolean, any]>,
 		private checkBackgroundCommand: (id?: string) => Promise<string>,
-		private doesLatestTaskCompletionHaveNewChanges: () => Promise<boolean>,
 		private updateFCListFromToolResponse: (taskProgress: string | undefined) => Promise<void>,
 		private switchToActMode: () => Promise<boolean>,
 		private cancelTask: () => Promise<void>,
@@ -193,14 +191,12 @@ export class ToolExecutor {
 			callbacks: {
 				say: this.say,
 				ask: this.ask,
-				saveCheckpoint: this.saveCheckpoint,
 				postStateToWebview: async () => {},
 				reinitExistingTaskFromId: async () => {},
 				cancelTask: this.cancelTask,
 				updateTaskHistory: async (_: any) => [],
 				executeCommandTool: this.executeCommandTool,
 				checkBackgroundCommand: this.checkBackgroundCommand,
-				doesLatestTaskCompletionHaveNewChanges: this.doesLatestTaskCompletionHaveNewChanges,
 				updateFCListFromToolResponse: this.updateFCListFromToolResponse,
 				sayAndCreateMissingParamError: this.sayAndCreateMissingParamError,
 				removeLastPartialMessageIfExistsWithType: this.removeLastPartialMessageIfExistsWithType,

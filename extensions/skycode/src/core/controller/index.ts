@@ -6,8 +6,6 @@ import { tryAcquireTaskLockWithRetry } from "@core/task/TaskLockUtils"
 import { detectWorkspaceRoots } from "@core/workspace/detection"
 import { setupWorkspaceManager } from "@core/workspace/setup"
 import type { WorkspaceRootManager } from "@core/workspace/WorkspaceRootManager"
-// [SKYCODE] TEMPORARILY DISABLED — legacy Cline shadow-git checkpoint system
-// import { cleanupLegacyCheckpoints } from "@integrations/checkpoints/CheckpointMigration"
 import { McpHub } from "@services/mcp/McpHub"
 import type { ApiProvider, ModelInfo } from "@shared/api"
 import type { ChatContent } from "@shared/ChatContent"
@@ -146,11 +144,6 @@ export class Controller {
 			ExtensionRegistryInfo.version,
 			telemetryService,
 		)
-
-		// [SKYCODE] TEMPORARILY DISABLED — legacy Cline shadow-git checkpoint system.
-		// cleanupLegacyCheckpoints().catch((error) => {
-		// 	Logger.error("Failed to cleanup legacy checkpoints:", error)
-		// })
 
 		// Check CLI installation status once on startup
 		checkCliInstallation(this)
@@ -877,7 +870,6 @@ export class Controller {
 		const mcpDisplayMode = this.stateManager.getGlobalStateKey("mcpDisplayMode")
 		const telemetrySetting = this.stateManager.getGlobalSettingsKey("telemetrySetting")
 		const planActSeparateModelsSetting = this.stateManager.getGlobalSettingsKey("planActSeparateModelsSetting")
-		const enableCheckpointsSetting = this.stateManager.getGlobalSettingsKey("enableCheckpointsSetting")
 		const globalSkycodeRulesToggles = this.stateManager.getGlobalSettingsKey("globalSkycodeRulesToggles")
 		const globalWorkflowToggles = this.stateManager.getGlobalSettingsKey("globalWorkflowToggles")
 		const globalSkillsToggles = this.stateManager.getGlobalSettingsKey("globalSkillsToggles")
@@ -914,8 +906,6 @@ export class Controller {
 		const currentTaskItem = this.task?.taskId ? (taskHistory || []).find((item) => item.id === this.task?.taskId) : undefined
 		const skycodeMessages = (this.task?.messageStateHandler.getSkycodeMessages() || []).map(sanitizeTruncatedPlaceholder)
 		const currentSessionId = this.sessionManager.activeSessionId ?? undefined
-		// [SKYCODE] TEMPORARILY DISABLED — legacy Cline checkpoint error message
-		const checkpointManagerErrorMessage = undefined // was: this.task?.taskState.checkpointManagerErrorMessage
 
 		const processedTaskHistory = (taskHistory || [])
 			.filter((item) => item.ts && item.task)
@@ -966,7 +956,6 @@ export class Controller {
 			currentSessionId,
 			skycodeMessages,
 			currentFocusChainChecklist: this.task?.taskState.currentFocusChainChecklist || null,
-			checkpointManagerErrorMessage,
 			autoApprovalSettings,
 			browserSettings,
 			focusChainSettings,
@@ -983,7 +972,6 @@ export class Controller {
 			mcpDisplayMode,
 			telemetrySetting,
 			planActSeparateModelsSetting,
-			enableCheckpointsSetting: enableCheckpointsSetting ?? true,
 			platform,
 			environment,
 			distinctId,

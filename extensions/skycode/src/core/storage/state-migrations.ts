@@ -133,17 +133,6 @@ export async function migrateMcpMarketplaceEnableSetting(mcpMarketplaceEnabledRa
 	return mcpMarketplaceEnabledRaw ?? true
 }
 
-export async function migrateEnableCheckpointsSetting(enableCheckpointsSettingRaw: boolean | undefined): Promise<boolean> {
-	const config = vscode.workspace.getConfiguration("skycode")
-	const enableCheckpoints = config.get<boolean>("enableCheckpoints")
-	if (enableCheckpoints !== undefined) {
-		// Remove from VSCode configuration
-		await config.update("enableCheckpoints", undefined, true)
-		return enableCheckpoints
-	}
-	return enableCheckpointsSettingRaw ?? true
-}
-
 export async function migrateCustomInstructionsToGlobalRules(context: vscode.ExtensionContext) {
 	try {
 		const customInstructions = (await context.globalState.get("customInstructions")) as string | undefined

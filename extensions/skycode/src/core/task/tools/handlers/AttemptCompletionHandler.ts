@@ -6,7 +6,6 @@ import { processFilesIntoText } from "@integrations/misc/extract-text"
 import { showSystemNotification } from "@integrations/notifications"
 import { telemetryService } from "@services/telemetry"
 import { findLastIndex } from "@shared/array"
-import { COMPLETION_RESULT_CHANGES_FLAG } from "@shared/ExtensionMessage"
 import { SkycodeDefaultTool } from "@shared/tools"
 import { Logger } from "@/shared/services/Logger"
 import type { ToolResponse } from "../../index"
@@ -73,26 +72,6 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			})
 		}
 
-		const addNewChangesFlagToLastCompletionResultMessage = async () => {
-			// Add newchanges flag if there are new changes to the workspace
-			const hasNewChanges = await config.callbacks.doesLatestTaskCompletionHaveNewChanges()
-			const skycodeMessages = config.messageState.getSkycodeMessages()
-
-			const lastCompletionResultMessageIndex = findLastIndex(skycodeMessages, (m: any) => m.say === "completion_result")
-			const lastCompletionResultMessage =
-				lastCompletionResultMessageIndex !== -1 ? skycodeMessages[lastCompletionResultMessageIndex] : undefined
-			if (
-				lastCompletionResultMessage &&
-				lastCompletionResultMessageIndex !== -1 &&
-				hasNewChanges &&
-				!lastCompletionResultMessage.text?.endsWith(COMPLETION_RESULT_CHANGES_FLAG)
-			) {
-				await config.messageState.updateSkycodeMessage(lastCompletionResultMessageIndex, {
-					text: lastCompletionResultMessage.text + COMPLETION_RESULT_CHANGES_FLAG,
-				})
-			}
-		}
-
 		// Remove any partial completion_result message that may exist
 		// Search backwards since other messages may have been inserted after the partial
 		const skycodeMessages = config.messageState.getSkycodeMessages()
@@ -113,15 +92,11 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		const lastMessage = config.messageState.getSkycodeMessages().at(-1)
 
 		if (command) {
+			// If a command message was already sent, the complete completion message has been sent too
 			if (lastMessage && lastMessage.ask !== "command") {
 				// haven't sent a command message yet so first send completion_result then command
-				const completionMessageTs = await config.callbacks.say("completion_result", result, undefined, undefined, false)
-				await config.callbacks.saveCheckpoint(true, completionMessageTs)
-				await addNewChangesFlagToLastCompletionResultMessage()
+				await config.callbacks.say("completion_result", result, undefined, undefined, false)
 				telemetryService.captureTaskCompleted(config.ulid)
-			} else {
-				// we already sent a command message, meaning the complete completion message has also been sent
-				await config.callbacks.saveCheckpoint(true)
 			}
 
 			// Attempt completion is a special tool where we want to update the focus chain list before the user provides response
@@ -141,9 +116,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			commandResult = execCommandResult
 		} else {
 			// Send the complete completion_result message (partial was already removed above)
-			const completionMessageTs = await config.callbacks.say("completion_result", result, undefined, undefined, false)
-			await config.callbacks.saveCheckpoint(true, completionMessageTs)
-			await addNewChangesFlagToLastCompletionResultMessage()
+			await config.callbacks.say("completion_result", result, undefined, undefined, false)
 			telemetryService.captureTaskCompleted(config.ulid)
 		}
 

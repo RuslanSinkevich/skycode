@@ -69,11 +69,6 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			controller.stateManager.setGlobalState("planActSeparateModelsSetting", request.planActSeparateModelsSetting)
 		}
 
-		// Update checkpoints setting
-		if (request.enableCheckpointsSetting !== undefined) {
-			controller.stateManager.setGlobalState("enableCheckpointsSetting", request.enableCheckpointsSetting)
-		}
-
 		// Update MCP responses collapsed setting
 		if (request.mcpResponsesCollapsed !== undefined) {
 			controller.stateManager.setGlobalState("mcpResponsesCollapsed", request.mcpResponsesCollapsed)

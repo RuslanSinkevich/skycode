@@ -164,7 +164,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		telemetrySetting: "unset",
 		distinctId: "",
 		planActSeparateModelsSetting: true,
-		enableCheckpointsSetting: true,
 		mcpDisplayMode: DEFAULT_MCP_DISPLAY_MODE,
 		globalSkycodeRulesToggles: {},
 		localSkycodeRulesToggles: {},
@@ -758,7 +757,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		globalWorkflowToggles: state.globalWorkflowToggles || {},
 		remoteRulesToggles: state.remoteRulesToggles || {},
 		remoteWorkflowToggles: state.remoteWorkflowToggles || {},
-		enableCheckpointsSetting: state.enableCheckpointsSetting,
 		currentFocusChainChecklist: state.currentFocusChainChecklist,
 
 		// Navigation functions

@@ -237,11 +237,6 @@ const BrowserSessionRow = memo((props: BrowserSessionRowProps) => {
 		return launchMessage?.say === "browser_action_launch"
 	}, [messages])
 
-	// const lastCheckpointMessageTs = useMemo(() => {
-	// 	const lastCheckpointMessage = findLast(messages, (m) => m.lastCheckpointHash !== undefined)
-	// 	return lastCheckpointMessage?.ts
-	// }, [messages])
-
 	// Find the latest available URL and screenshot
 	const latestState = useMemo(() => {
 		for (let i = pages.length - 1; i >= 0; i--) {
@@ -334,11 +329,6 @@ const BrowserSessionRow = memo((props: BrowserSessionRowProps) => {
 
 	// Use latest click position while browsing, otherwise use display state
 	const mousePosition = isBrowsing ? latestClickPosition || displayState.mousePosition : displayState.mousePosition
-
-	// let shouldShowCheckpoints = true
-	// if (isLast) {
-	// 	shouldShowCheckpoints = lastModifiedMessage?.ask === "resume_completed_task" || lastModifiedMessage?.ask === "resume_task"
-	// }
 
 	const _shouldShowSettings = useMemo(() => {
 		const lastMessage = messages[messages.length - 1]
@@ -470,8 +460,6 @@ const BrowserSessionRow = memo((props: BrowserSessionRowProps) => {
 					</div>
 				</div>
 			)}
-
-			{/* {shouldShowCheckpoints && <CheckpointOverlay messageTs={lastCheckpointMessageTs} />} */}
 		</BrowserSessionRowContainer>,
 	)
 

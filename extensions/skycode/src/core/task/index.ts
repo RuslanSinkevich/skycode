@@ -40,10 +40,6 @@ import {
 import { releaseTaskLock } from "@core/task/TaskLockUtils"
 import { isMultiRootEnabled } from "@core/workspace/multi-root-utils"
 import { WorkspaceRootManager } from "@core/workspace/WorkspaceRootManager"
-// [SKYCODE] TEMPORARILY DISABLED — legacy Cline shadow-git checkpoint imports
-// import { buildCheckpointManager, shouldUseMultiRoot } from "@integrations/checkpoints/factory"
-// import { ensureCheckpointInitialized } from "@integrations/checkpoints/initializer"
-// import { ICheckpointManager } from "@integrations/checkpoints/types"
 import { DiffViewProvider } from "@integrations/editor/DiffViewProvider"
 import { formatContentBlockToMarkdown } from "@integrations/misc/export-markdown"
 import { processFilesIntoText } from "@integrations/misc/extract-text"
@@ -238,9 +234,6 @@ export class Task {
 	browserSession: BrowserSession
 	contextManager: ContextManager
 	private diffViewProvider: DiffViewProvider
-	// [SKYCODE] TEMPORARILY DISABLED — legacy Cline shadow-git checkpoint system
-	// public checkpointManager?: ICheckpointManager
-	// private initialCheckpointCommitPromise?: Promise<string | undefined>
 	private skycodeIgnoreController: SkycodeIgnoreController
 	private commandPermissionController: CommandPermissionController
 	private toolExecutor: ToolExecutor
@@ -366,9 +359,6 @@ export class Task {
 			this.ulid = historyItem.ulid ?? ulid()
 			this.taskIsFavorited = historyItem.isFavorited
 			this.taskState.conversationHistoryDeletedRange = historyItem.conversationHistoryDeletedRange
-			if (historyItem.checkpointManagerErrorMessage) {
-				this.taskState.checkpointManagerErrorMessage = historyItem.checkpointManagerErrorMessage
-			}
 		} else if (task || images || files) {
 			this.ulid = ulid()
 		} else {
@@ -401,22 +391,6 @@ export class Task {
 				focusChainSettings: focusChainSettings,
 			})
 		}
-
-		// [SKYCODE] TEMPORARILY DISABLED — legacy Cline shadow-git checkpoint system.
-		// Replaced by DiffSystem V2 (core/diff-v2). Will be removed after validation.
-		// See: docs/architecture/CORE.md for details.
-		// --- BEGIN DISABLED BLOCK ---
-		// const isMultiRootWorkspace = this.workspaceManager && this.workspaceManager.getRoots().length > 1
-		// const checkpointsEnabled = this.stateManager.getGlobalSettingsKey("enableCheckpointsSetting")
-		// if (isMultiRootWorkspace && checkpointsEnabled) {
-		// 	this.taskState.checkpointManagerErrorMessage = "Checkpoints are not currently supported in multi-root workspaces."
-		// }
-		// if (!isMultiRootWorkspace) {
-		// 	try {
-		// 		this.checkpointManager = buildCheckpointManager({ ... })
-		// 	} catch (error) { ... }
-		// }
-		// --- END DISABLED BLOCK ---
 
 		// Build API handler from current settings (also refreshed before each API attempt — see syncApiHandlerFromSettings)
 		this.syncApiHandlerFromSettings()
@@ -512,12 +486,10 @@ export class Task {
 			isMultiRootEnabled(this.stateManager),
 			this.say.bind(this),
 			this.ask.bind(this),
-			this.saveCheckpointCallback.bind(this),
 			this.sayAndCreateMissingParamError.bind(this),
 			this.removeLastPartialMessageIfExistsWithType.bind(this),
 			this.executeCommandTool.bind(this),
 			this.checkBackgroundCommand.bind(this),
-			() => Promise.resolve(false), // [SKYCODE] TEMPORARILY DISABLED — legacy Cline checkpoint doesLatestTaskCompletionHaveNewChanges
 			this.FocusChainManager?.updateFCListFromToolResponse.bind(this.FocusChainManager) || (async () => {}),
 			this.switchToActModeCallback.bind(this),
 			this.cancelTask,
@@ -796,13 +768,6 @@ export class Task {
 			this.messageStateHandler.setSkycodeMessages(skycodeMessages.slice(0, -1))
 			await this.messageStateHandler.saveSkycodeMessagesAndUpdateHistory()
 		}
-	}
-
-	// [SKYCODE] TEMPORARILY DISABLED — legacy Cline shadow-git checkpoint system.
-	// saveCheckpoint now no-ops since checkpointManager is never initialized.
-	private async saveCheckpointCallback(_isAttemptCompletionMessage?: boolean, _completionMessageTs?: number): Promise<void> {
-		// Legacy: return this.checkpointManager?.saveCheckpoint(isAttemptCompletionMessage, completionMessageTs) ?? Promise.resolve()
-		return Promise.resolve()
 	}
 
 	/**
@@ -1174,8 +1139,6 @@ export class Task {
 		let responseFiles: string[] | undefined
 		if (response === "messageResponse" || text || (images && images.length > 0) || (files && files.length > 0)) {
 			const feedbackTs = await this.say("user_feedback", text, images, files)
-			// [SKYCODE] TEMPORARILY DISABLED — legacy Cline shadow-git checkpoint
-			// await this.checkpointManager?.saveCheckpoint()
 
 			// Start a NEW checkpoint for this follow-up message.
 			// This allows per-message rollback: deleting this message
@@ -2357,15 +2320,6 @@ export class Task {
 				break
 			}
 			case "tool_use":
-				// [SKYCODE] TEMPORARILY DISABLED — legacy Cline shadow-git checkpoint system
-				// If we have a pending initial commit, we must block unsafe tools until it finishes.
-				// Safe tools (read-only) can run in parallel.
-				// if (this.initialCheckpointCommitPromise) {
-				// 	if (!READ_ONLY_TOOLS.includes(block.name as any)) {
-				// 		await this.initialCheckpointCommitPromise
-				// 		this.initialCheckpointCommitPromise = undefined
-				// 	}
-				// }
 				// Pipeline: tool_execution
 				this._session?.pipeline.setStage("tool_execution", block.name)
 				await this.toolExecutor.executeTool(block)
@@ -2582,17 +2536,6 @@ export class Task {
 		const isFirstRequest =
 			this.messageStateHandler.getSkycodeMessages().filter((m) => m.say === "api_req_started").length === 0
 
-		// [SKYCODE] TEMPORARILY DISABLED — legacy Cline shadow-git checkpoint system.
-		// ensureCheckpointInitialized, checkpoint_created message, and initial commit are all disabled.
-		// DiffSystem V2 handles checkpoints via startCheckpoint/finishCheckpoint.
-		// --- BEGIN DISABLED BLOCK ---
-		// if (isFirstRequest && this.checkpointManager && ...) {
-		//   await ensureCheckpointInitialized({ checkpointManager: this.checkpointManager })
-		//   await this.say("checkpoint_created")
-		//   this.checkpointManager?.commit()
-		// }
-		// --- END DISABLED BLOCK ---
-
 		// Determine if we should compact context window
 		// Note: We delay context loading until we know if we're compacting (performance optimization)
 		const useCompactPrompt = customPrompt === "compact" && isLocalModel(this.getCurrentProviderInfo())
@@ -2741,12 +2684,7 @@ export class Task {
 		// Capture task initialization timing telemetry for the first API request
 		if (isFirstRequest) {
 			const durationMs = Math.round(performance.now() - this.taskInitializationStartTime)
-			telemetryService.captureTaskInitialization(
-				this.ulid,
-				this.taskId,
-				durationMs,
-				this.stateManager.getGlobalSettingsKey("enableCheckpointsSetting"),
-			)
+			telemetryService.captureTaskInitialization(this.ulid, this.taskId, durationMs, false)
 		}
 
 		// since we sent off a placeholder api_req_started message to update the webview while waiting to actually start the API request (to load potential details for example), we need to update the text of that message
@@ -3211,9 +3149,6 @@ export class Task {
 				// }
 
 				await pWaitFor(() => this.taskState.userMessageContentReady)
-
-				// [SKYCODE] TEMPORARILY DISABLED — legacy Cline shadow-git checkpoint
-				// await this.checkpointManager?.saveCheckpoint()
 
 				// if the model did not tool use, then we need to tell it to either use a tool or attempt_completion
 				const didToolUse = this.taskState.assistantMessageContent.some((block) => block.type === "tool_use")

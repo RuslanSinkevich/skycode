@@ -10,11 +10,11 @@ export type HistoryItem = {
 	totalCost: number
 
 	size?: number
+	/** Written by the removed shadow-git checkpoints; still read to place older tasks in their workspace */
 	shadowGitConfigWorkTree?: string
 	cwdOnTaskInitialization?: string
 	conversationHistoryDeletedRange?: [number, number]
 	isFavorited?: boolean
-	checkpointManagerErrorMessage?: string
 
 	modelId?: string
 }

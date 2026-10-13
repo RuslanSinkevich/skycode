@@ -45,15 +45,11 @@ Controller.initTask()
 ### DiffSystem V4 (`src/core/diff-v2/`)
 Cursor-like inline diffs с per-message snapshots. См. [DIFF_SYSTEM.md](../DIFF_SYSTEM.md).
 
-> **⚠️ Legacy Cline Checkpoints (`src/integrations/checkpoints/`) — ВРЕМЕННО ОТКЛЮЧЕНЫ (2026-02-25)**
-> Старая система shadow-git чекпоинтов унаследована от Cline. Создавала теневой git-репозиторий
-> для каждой задачи, что вызывало тормоза и баннер "Инициализация контрольных точек занимает
-> больше времени". Заменена DiffSystem V2 (snapshot-based, без git). Код не удалён — закомментирован
-> с пометкой `[SKYCODE] TEMPORARILY DISABLED`. Файлы в `integrations/checkpoints/` не трогались.
-> Затронутые файлы: `core/task/index.ts`, `core/controller/index.ts`,
-> `core/controller/checkpoints/checkpointRestore.ts`, `core/controller/checkpoints/checkpointDiff.ts`,
-> `core/controller/task/taskCompletionViewChanges.ts`, `core/controller/task/explainChanges.ts`,
-> `webview-ui/src/components/chat/task-header/TaskHeader.tsx`.
+> **Старые чекпоинты Cline удалены (октябрь 2026).** Shadow-git чекпоинты (теневой git-репозиторий
+> на каждую задачу) были выключены с 2026-02-25 и заменены DiffSystem V2 (snapshot-based, без git);
+> в октябре 2026 удалены вместе с RPC `CheckpointsService`, `taskCompletionViewChanges`, `explainChanges`.
+> В старых историях остаются сообщения `checkpoint_created` и поле `shadowGitConfigWorkTree` —
+> чат и история их по-прежнему понимают.
 
 ```
 DiffSystem (facade)
@@ -170,7 +166,6 @@ context.secrets.get("apiKey")
 ├── api_conversation_history.json
 └── skycode_messages.json
 ```
-> `checkpoints/` — legacy Cline shadow-git, временно отключено (см. выше).
 
 ### DiffStore (per workspace, workspaceState)
 ```

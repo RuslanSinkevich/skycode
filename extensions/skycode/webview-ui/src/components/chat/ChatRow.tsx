@@ -116,12 +116,9 @@ export const ChatRowContent = memo(
 			backgroundEditEnabled,
 			mcpServers,
 			mcpMarketplaceCatalog,
-			onRelinquishControl,
 			vscodeTerminalExecutionMode,
 			skycodeMessages,
 		} = useExtensionState()
-		const [_seeNewChangesDisabled, setSeeNewChangesDisabled] = useState(false)
-		const [_explainChangesDisabled, setExplainChangesDisabled] = useState(false)
 		const contentRef = useRef<HTMLDivElement>(null)
 		const markdownRenderedRef = useRef<HTMLDivElement>(null)
 		const { quoteButtonState, handleQuoteClick, handleMouseUp } = useQuoteButton(contentRef, onSetQuote)
@@ -189,14 +186,6 @@ export const ChatRowContent = memo(
 		const handleToggle = useCallback(() => {
 			onToggleExpand(message.ts)
 		}, [onToggleExpand, message.ts])
-
-		// Use the onRelinquishControl hook instead of message event
-		useEffect(() => {
-			return onRelinquishControl(() => {
-				setSeeNewChangesDisabled(false)
-				setExplainChangesDisabled(false)
-			})
-		}, [onRelinquishControl])
 
 		const [icon, title] = useMemo(() => {
 			switch (type) {

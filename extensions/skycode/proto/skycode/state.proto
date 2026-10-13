@@ -249,7 +249,7 @@ message Settings {
   optional BrowserSettings browser_settings = 132;
   optional string telemetry_setting = 133;
   optional bool plan_act_separate_models_setting = 134;
-  optional bool enable_checkpoints_setting = 135;
+  reserved 135; // was enable_checkpoints_setting
   optional int32 shell_integration_timeout = 136;
   optional string default_terminal_profile = 137;
   optional int32 terminal_output_line_limit = 138;
@@ -411,7 +411,7 @@ message UpdateSettingsRequest {
   optional ModelsApiConfiguration api_configuration = 2;
   optional string telemetry_setting = 3;
   optional bool plan_act_separate_models_setting = 4;
-  optional bool enable_checkpoints_setting = 5;
+  reserved 5; // was enable_checkpoints_setting
   optional bool mcp_marketplace_enabled = 6;
   optional int32 shell_integration_timeout = 8;
   optional bool terminal_reuse_enabled = 9;

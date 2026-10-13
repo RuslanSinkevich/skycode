@@ -5,7 +5,6 @@
  *
  * Used for:
  * - showMessage notifications (native VS Code popups)
- * - checkpointManagerErrorMessage (checkpoint error banner)
  * - Inline diff buttons (Accept/Reject)
  *
  * Supports interpolation: t("key", { error: "text" })
@@ -19,27 +18,6 @@ const RUSSIAN_PREFERRED_LANGUAGE_PREFIX = "russian"
 
 // --- English translations ---
 const en: Record<string, string> = {
-	"checkpoint.error.slowInit":
-		"Checkpoints are taking longer than expected to initialize. Working in a large repository? Consider re-opening Skycode in a project that uses git, or disabling checkpoints.",
-	"checkpoint.error.timeout":
-		"Checkpoints initialization timed out. Consider re-opening Skycode in a project that uses git, or disabling checkpoints.",
-	"checkpoint.error.gitRequired": "Git must be installed to use checkpoints.",
-	"checkpoint.error.disabled": "Checkpoints are disabled in settings.",
-	"checkpoint.error.disabledNoDiff": "Checkpoints are disabled in settings. Cannot show diff.",
-	"checkpoint.error.restoreFailed": "Failed to restore checkpoint: {{error}}",
-	"checkpoint.error.restoreOffsetFailed": "Failed to restore offset checkpoint: {{error}}",
-	"checkpoint.error.noValidHash": "Failed to restore checkpoint: No valid checkpoint hash found",
-	"checkpoint.error.trackerNotAvailable": "Checkpoint tracker not available",
-	"checkpoint.error.unexpectedNoHash": "Unexpected error: No checkpoint hash found",
-	"checkpoint.error.diffFailed": "Failed to retrieve diff set: {{error}}",
-	"checkpoint.error.presentDiffFailed": "Failed to present diff: {{error}}",
-	"checkpoint.error.notInitialized": "Checkpoint manager is not initialized.",
-	"checkpoint.error.noPrimaryRoot": "No primary workspace root configured.",
-	"checkpoint.error.noTrackerForPrimary": "No checkpoint tracker available for the primary workspace.",
-	"checkpoint.info.noChanges": "No changes found",
-	"checkpoint.info.taskRestored": "Task messages have been restored to the checkpoint",
-	"checkpoint.info.workspaceRestored": "Workspace files have been restored to the checkpoint",
-	"checkpoint.info.taskAndWorkspaceRestored": "Task and workspace have been restored to the checkpoint",
 	"diff.accept": "Accept",
 	"diff.reject": "Reject",
 	"voice.preparing": "Preparing voice input... Downloading required components (~170 MB). This only happens on first launch. Please try again in a couple of minutes.",
@@ -125,44 +103,6 @@ const en: Record<string, string> = {
 
 // --- Russian translations ---
 const ru: Record<string, string> = {
-	// allow-any-unicode-next-line
-	"checkpoint.error.slowInit": "Инициализация контрольных точек занимает больше времени, чем ожидалось. Работаете с большим репозиторием? Попробуйте открыть Skycode в проекте с git или отключите контрольные точки.",
-	// allow-any-unicode-next-line
-	"checkpoint.error.timeout": "Инициализация контрольных точек превысила время ожидания. Попробуйте открыть Skycode в проекте с git или отключите контрольные точки.",
-	// allow-any-unicode-next-line
-	"checkpoint.error.gitRequired": "Для работы контрольных точек необходимо установить Git.",
-	// allow-any-unicode-next-line
-	"checkpoint.error.disabled": "Контрольные точки отключены в настройках.",
-	// allow-any-unicode-next-line
-	"checkpoint.error.disabledNoDiff": "Контрольные точки отключены в настройках. Невозможно показать различия.",
-	// allow-any-unicode-next-line
-	"checkpoint.error.restoreFailed": "Не удалось восстановить контрольную точку: {{error}}",
-	// allow-any-unicode-next-line
-	"checkpoint.error.restoreOffsetFailed": "Не удалось восстановить смещённую контрольную точку: {{error}}",
-	// allow-any-unicode-next-line
-	"checkpoint.error.noValidHash": "Не удалось восстановить контрольную точку: не найден действительный хеш",
-	// allow-any-unicode-next-line
-	"checkpoint.error.trackerNotAvailable": "Трекер контрольных точек недоступен",
-	// allow-any-unicode-next-line
-	"checkpoint.error.unexpectedNoHash": "Непредвиденная ошибка: хеш контрольной точки не найден",
-	// allow-any-unicode-next-line
-	"checkpoint.error.diffFailed": "Не удалось получить набор различий: {{error}}",
-	// allow-any-unicode-next-line
-	"checkpoint.error.presentDiffFailed": "Не удалось показать различия: {{error}}",
-	// allow-any-unicode-next-line
-	"checkpoint.error.notInitialized": "Менеджер контрольных точек не инициализирован.",
-	// allow-any-unicode-next-line
-	"checkpoint.error.noPrimaryRoot": "Основной корень рабочей области не настроен.",
-	// allow-any-unicode-next-line
-	"checkpoint.error.noTrackerForPrimary": "Трекер контрольных точек для основной рабочей области недоступен.",
-	// allow-any-unicode-next-line
-	"checkpoint.info.noChanges": "Изменений не найдено",
-	// allow-any-unicode-next-line
-	"checkpoint.info.taskRestored": "Сообщения задачи восстановлены до контрольной точки",
-	// allow-any-unicode-next-line
-	"checkpoint.info.workspaceRestored": "Файлы рабочей области восстановлены до контрольной точки",
-	// allow-any-unicode-next-line
-	"checkpoint.info.taskAndWorkspaceRestored": "Задача и рабочая область восстановлены до контрольной точки",
 	// allow-any-unicode-next-line
 	"diff.accept": "Принять",
 	// allow-any-unicode-next-line

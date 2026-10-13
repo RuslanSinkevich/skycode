@@ -38,8 +38,6 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	const {
 		apiConfiguration,
 		currentTaskItem,
-		checkpointManagerErrorMessage,
-		navigateToSettings,
 		mode,
 		expandTaskHeader: isTaskExpanded,
 		setExpandTaskHeader: setIsTaskExpanded,
@@ -97,19 +95,10 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	// Event handlers
 	const toggleTaskExpanded = useCallback(() => setIsTaskExpanded(!isTaskExpanded), [setIsTaskExpanded, isTaskExpanded])
 
-	const _handleCheckpointSettingsClick = useCallback(() => {
-		navigateToSettings("editing")
-	}, [navigateToSettings])
-
 	const environmentBorderColor = getEnvironmentColor(environment, "border")
 
 	return (
 		<div className="py-2 px-4 flex flex-col gap-2">
-			{/* [SKYCODE] TEMPORARILY DISABLED — legacy Cline checkpoint error banner */}
-			{/* <CheckpointError
-				checkpointManagerErrorMessage={checkpointManagerErrorMessage}
-				handleCheckpointSettingsClick={handleCheckpointSettingsClick}
-			/> */}
 			{/* Task Header — compact single row */}
 			<div
 				className={cn(

@@ -55,12 +55,10 @@ export const TASK_SERVICES_KEYS = [
 export const TASK_CALLBACKS_KEYS = [
 	"say",
 	"ask",
-	"saveCheckpoint",
 	"sayAndCreateMissingParamError",
 	"removeLastPartialMessageIfExistsWithType",
 	"executeCommandTool",
 	"checkBackgroundCommand",
-	"doesLatestTaskCompletionHaveNewChanges",
 	"updateFCListFromToolResponse",
 	"shouldAutoApproveToolWithPath",
 	"postStateToWebview",
