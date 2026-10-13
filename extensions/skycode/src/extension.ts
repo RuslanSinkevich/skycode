@@ -49,8 +49,6 @@ import { VscodeTerminalManager } from "./hosts/vscode/terminal/VscodeTerminalMan
 import { VscodeDiffViewProvider } from "./hosts/vscode/VscodeDiffViewProvider"
 import { VscodeWebviewProvider } from "./hosts/vscode/VscodeWebviewProvider"
 import { ExtensionRegistryInfo } from "./registry"
-import { AuthService } from "./services/auth/AuthService"
-import { LogoutReason } from "./services/auth/types"
 import { telemetryService } from "./services/telemetry"
 import { SkycodeTempManager } from "./services/temp"
 import { SharedUriHandler } from "./services/uri/SharedUriHandler"
@@ -824,26 +822,6 @@ ${ctx.cellJson || "{}"}
 		}),
 		vscode.commands.registerCommand(commands.AbortCommit, () => {
 			abortCommitGeneration()
-		}),
-	)
-
-	context.subscriptions.push(
-		context.secrets.onDidChange(async (event) => {
-			if (event.key === "skycode:skycodeAccountId") {
-				// Check if the secret was removed (logout) or added/updated (login)
-				const secretValue = await context.secrets.get(event.key)
-				const activeWebview = WebviewProvider.getVisibleInstance()
-				const controller = activeWebview?.controller
-
-				const authService = AuthService.getInstance(controller)
-				if (secretValue) {
-					// Secret was added or updated - restore auth info (login from another window)
-					authService?.restoreRefreshTokenAndRetrieveAuthInfo()
-				} else {
-					// Secret was removed - handle logout for all windows
-					authService?.handleDeauth(LogoutReason.CROSS_WINDOW_SYNC)
-				}
-			}
 		}),
 	)
 

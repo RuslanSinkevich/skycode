@@ -1,7 +1,6 @@
 import { synchronizeRemoteRuleToggles } from "@core/context/instructions/user-instructions/rule-helpers"
 import { RemoteConfig } from "@shared/remote-config/schema"
 import { GlobalStateAndSettings, RemoteConfigFields } from "@shared/storage/state-keys"
-import { AuthService } from "@/services/auth/AuthService"
 import { getDistinctId } from "@/services/logging/distinctId"
 import { getTelemetryService, telemetryService } from "@/services/telemetry"
 import { OpenTelemetryClientProvider } from "@/services/telemetry/providers/opentelemetry/OpenTelemetryClientProvider"
@@ -369,28 +368,4 @@ export function filterAllowedRemoteConfigFields(config: Partial<GlobalStateAndSe
 	}
 
 	return updatedFields
-}
-
-const canDisableRemoteConfig = (orgId: string) => {
-	// Check if they're an admin/owner
-	const authService = AuthService.getInstance()
-	const userOrgs = authService.getUserOrganizations()
-
-	if (!userOrgs) {
-		return false
-	}
-
-	const org = userOrgs.find((org) => org.organizationId === orgId)
-	const isAdminOrOwner = org?.roles?.some((role) => role === "admin" || role === "owner")
-
-	return isAdminOrOwner
-}
-
-export const isRemoteConfigEnabled = (orgId: string) => {
-	const stateManager = StateManager.get()
-	const hasOptedOut = stateManager.getGlobalSettingsKey("optOutOfRemoteConfig")
-
-	const isDisabled = hasOptedOut && canDisableRemoteConfig(orgId)
-
-	return !isDisabled
 }

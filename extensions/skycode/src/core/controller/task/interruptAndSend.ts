@@ -15,12 +15,6 @@ let interruptInProgress = false
  * @returns Empty response
  */
 export async function interruptAndSend(controller: Controller, request: AskResponseRequest): Promise<Empty> {
-	// Free-trial gate: check message limit
-	const allowed = await controller.checkFreeRequestGate()
-	if (!allowed) {
-		return Empty.create()
-	}
-
 	// Prevent concurrent calls - just update the pending message
 	if (interruptInProgress) {
 		// Update pending message with latest text (don't lose user input)

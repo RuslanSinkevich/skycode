@@ -192,21 +192,14 @@ Skycode AI — это форк VS Code с **глубоко интегриров�
 
 ## Скрытые / отложенные фичи
 
-### Провайдер "skycode" (собственный прокси моделей)
+### Провайдер "skycode", аккаунт Skycode, удалённый конфиг
 
-**Статус:** скрыт, код сохранён.
+**Статус:** удалены (октябрь 2026). Всё это работало через skycode-ai.ru, а домена больше нет.
 
-Провайдер `skycode` в списке API-провайдеров — заготовка под собственный прокси моделей через OpenRouter (пользователь не вводит ключ, биллинг через Skycode-аккаунт). Пока не реализован.
-
-**Как вернуть:**
-1. `webview-ui/src/utils/getConfiguredProviders.ts` — раскомментировать `configured.push("skycode")`
-2. `src/core/controller/index.ts` — удалить блок "Migrate away from deprecated skycode provider" из конструктора (~строка 151)
-3. `src/core/controller/index.ts` — в `handleAuthCallback()` вернуть установку `planModeApiProvider = "skycode"` после авторизации
-
-**Связанные файлы:**
-- `webview-ui/src/components/settings/providers/SkycodeProvider.tsx` — UI провайдера
-- `src/core/api/providers/skycode.ts` — API handler
-- `src/shared/providers/providers.json` — skycode НЕ в этом списке (добавлялся программно)
+Ушли: вход в аккаунт и кредиты, провайдер `skycode` (прокси моделей с биллингом через аккаунт),
+загрузка удалённого конфига организации, облачная расшифровка голоса, «бесплатный лимит» сообщений.
+Осталось: в конструкторе контроллера старый выбор провайдера `skycode` переключается на OpenRouter;
+голос — только локальный Whisper; маркетплейс MCP — встроенный каталог `assets/mcp-marketplace-catalog.json`.
 
 ---
 

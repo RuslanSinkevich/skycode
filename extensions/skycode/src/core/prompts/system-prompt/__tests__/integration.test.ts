@@ -129,7 +129,6 @@ const baseContext: SystemPromptContext = {
 	ide: "TestIde",
 	supportsBrowserUse: true,
 	skycodeWebToolsEnabled: true,
-	isAuthenticated: true,
 	mcpHub: {
 		getServers: () => [
 			{

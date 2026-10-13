@@ -9,7 +9,6 @@ import SettingsView from "./components/settings/SettingsView"
 import WelcomeView from "./components/welcome/WelcomeView"
 import WorktreesView from "./components/worktrees/WorktreesView"
 import { useExtensionState } from "./context/ExtensionStateContext"
-import { useSkycodeAuth } from "./context/SkycodeAuthContext"
 import { Providers } from "./Providers"
 import { UiServiceClient } from "./services/grpc-client"
 
@@ -37,8 +36,6 @@ const AppContent = () => {
 		hideWorktrees,
 		hideAnnouncement,
 	} = useExtensionState()
-
-	const { skycodeUser, organizations, activeOrganization } = useSkycodeAuth()
 
 	useEffect(() => {
 		if (shouldShowAnnouncement) {
@@ -68,14 +65,7 @@ const AppContent = () => {
 			{showSettings && <SettingsView onDone={hideSettings} targetSection={settingsTargetSection} />}
 			{showHistory && <HistoryView onDone={hideHistory} />}
 			{showMcp && <McpView initialTab={mcpTab} onDone={closeMcpView} />}
-			{showAccount && (
-				<AccountView
-					activeOrganization={activeOrganization}
-					onDone={hideAccount}
-					organizations={organizations}
-					skycodeUser={skycodeUser}
-				/>
-			)}
+			{showAccount && <AccountView onDone={hideAccount} />}
 			{showWorktrees && <WorktreesView onDone={hideWorktrees} />}
 			{/* Do not conditionally load ChatView, it's expensive and there's state we don't want to lose (user input, disableInput, askResponse promise, etc.) */}
 			<ChatView

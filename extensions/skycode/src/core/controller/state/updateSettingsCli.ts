@@ -16,7 +16,6 @@ import { Logger } from "@/shared/services/Logger"
 import { Mode, OpenaiReasoningEffort } from "@/shared/storage/types"
 import { telemetryService } from "../../../services/telemetry"
 import { Controller } from ".."
-import { accountLogoutClicked } from "../account/accountLogoutClicked"
 
 /**
  * Updates multiple extension settings in a single request
@@ -60,7 +59,6 @@ export async function updateSettingsCli(controller: Controller, request: UpdateS
 	try {
 		if (request.environment !== undefined) {
 			SkycodeEnv.setEnvironment(request.environment)
-			await accountLogoutClicked(controller, Empty.create())
 		}
 
 		if (request.settings) {

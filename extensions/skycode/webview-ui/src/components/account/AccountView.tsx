@@ -1,17 +1,12 @@
-import type { UserOrganization } from "@shared/proto/skycode/account"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import { memo } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { type SkycodeUser } from "@/context/SkycodeAuthContext"
 import { useI18n } from "@/i18n"
 import { cn } from "@/lib/utils"
 import { getSkycodeEnvironmentClassname } from "@/utils/environmentColors"
 import { AccountWelcomeView } from "./AccountWelcomeView"
 
 type AccountViewProps = {
-	skycodeUser: SkycodeUser | null
-	organizations: UserOrganization[] | null
-	activeOrganization: UserOrganization | null
 	onDone: () => void
 }
 

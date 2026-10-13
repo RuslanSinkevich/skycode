@@ -12,7 +12,6 @@ import HomeHeader from "@/components/welcome/HomeHeader"
 import { SuggestedTasks } from "@/components/welcome/SuggestedTasks"
 import CreateWorktreeModal from "@/components/worktrees/CreateWorktreeModal"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { useSkycodeAuth } from "@/context/SkycodeAuthContext"
 import { useI18n } from "@/i18n"
 import { StateServiceClient, UiServiceClient, WorktreeServiceClient } from "@/services/grpc-client"
 import { convertBannerData } from "@/utils/bannerUtils"
@@ -53,7 +52,6 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 			.catch(() => setIsGitRepo(false))
 	}, [])
 
-	const { skycodeUser } = useSkycodeAuth()
 	const {
 		openRouterModels,
 		setShowChatModelSelector,
@@ -114,8 +112,9 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 				return false
 			}
 
-			if (banner.isSkycodeUserOnly !== undefined) {
-				return banner.isSkycodeUserOnly === !!skycodeUser
+			// There is no Skycode account anymore, so nobody is a signed-in user
+			if (banner.isSkycodeUserOnly) {
+				return false
 			}
 
 			if (banner.platforms && !banner.platforms.includes(getCurrentPlatform())) {
@@ -124,7 +123,7 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 
 			return true
 		})
-	}, [isBannerDismissed, skycodeUser, t])
+	}, [isBannerDismissed, t])
 
 	/**
 	 * Action handler - maps action types to actual implementations
@@ -221,7 +220,7 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 
 		// Combine both sources: extension state banners first, then hardcoded banners
 		return [...extensionStateBanners, ...hardcodedBanners]
-	}, [bannerConfig, banners, skycodeUser, subagentsEnabled, handleBannerAction, handleBannerDismiss])
+	}, [bannerConfig, banners, subagentsEnabled, handleBannerAction, handleBannerDismiss])
 
 	return (
 		<div className="flex flex-col flex-1 w-full h-full p-0 m-0">

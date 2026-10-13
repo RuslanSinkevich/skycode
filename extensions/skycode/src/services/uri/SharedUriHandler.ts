@@ -55,19 +55,6 @@ export class SharedUriHandler {
 					Logger.warn("SharedUriHandler: Missing code parameter for Requesty callback")
 					return false
 				}
-				case "/auth": {
-					const provider = query.get("provider")
-
-					Logger.info(`SharedUriHandler - Auth callback received for ${provider} - ${path}`)
-
-					const token = query.get("refreshToken") || query.get("idToken") || query.get("code")
-					if (token) {
-						await visibleWebview.controller.handleAuthCallback(token, provider)
-						return true
-					}
-					Logger.warn("SharedUriHandler: Missing idToken parameter for auth callback")
-					return false
-				}
 				case "/auth/oca": {
 					Logger.log("SharedUriHandler: Oca Auth callback received:", { path: path })
 

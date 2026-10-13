@@ -9,7 +9,7 @@ import { SharedUriHandler } from "./SharedUriHandler"
 describe("SharedUriHandler", () => {
 	let sandbox: sinon.SinonSandbox
 	let handleOpenRouterCallbackStub: sinon.SinonStub
-	let handleAuthCallbackStub: sinon.SinonStub
+	let handleOcaAuthCallbackStub: sinon.SinonStub
 
 	beforeEach(async () => {
 		sandbox = sinon.createSandbox()
@@ -33,11 +33,11 @@ describe("SharedUriHandler", () => {
 		await ErrorService.initialize()
 
 		handleOpenRouterCallbackStub = sandbox.stub().resolves()
-		handleAuthCallbackStub = sandbox.stub().resolves()
+		handleOcaAuthCallbackStub = sandbox.stub().resolves()
 		const mockWebviewProvider = {
 			controller: {
 				handleOpenRouterCallback: handleOpenRouterCallbackStub,
-				handleAuthCallback: handleAuthCallbackStub,
+				handleOcaAuthCallback: handleOcaAuthCallbackStub,
 			},
 		} as any
 		sandbox.stub(WebviewProvider, "getVisibleInstance").returns(mockWebviewProvider)
@@ -72,35 +72,31 @@ describe("SharedUriHandler", () => {
 			})
 		})
 
-		describe("Auth callback handling", () => {
-			it("should successfully handle auth callback with idToken", async () => {
-				const result = await SharedUriHandler.handleUri("vscode://skycode.skycode/auth?idToken=jwt123&provider=google")
+		describe("OCA auth callback handling", () => {
+			it("should successfully handle OCA callback with code and state", async () => {
+				const result = await SharedUriHandler.handleUri("vscode://skycode.skycode/auth/oca?code=abc&state=xyz")
 
 				expect(result).to.be.true
-				sinon.assert.calledOnceWithExactly(handleAuthCallbackStub, "jwt123", "google")
+				sinon.assert.calledOnceWithExactly(handleOcaAuthCallbackStub, "abc", "xyz")
 			})
 
-			it("should successfully handle auth callback without provider", async () => {
-				const result = await SharedUriHandler.handleUri("vscode://skycode.skycode/auth?idToken=jwt123")
-
-				expect(result).to.be.true
-				sinon.assert.calledOnceWithExactly(handleAuthCallbackStub, "jwt123", null)
-			})
-
-			it("should return false when idToken is missing", async () => {
-				const result = await SharedUriHandler.handleUri("vscode://skycode.skycode/auth?provider=google")
+			it("should return false when state is missing", async () => {
+				const result = await SharedUriHandler.handleUri("vscode://skycode.skycode/auth/oca?code=abc")
 
 				expect(result).to.be.false
-				expect(handleAuthCallbackStub.called).to.be.false
+				expect(handleOcaAuthCallbackStub.called).to.be.false
 			})
 		})
 
 		describe("Unknown path handling", () => {
-			it("should return false for unknown paths", async () => {
-				const result = await SharedUriHandler.handleUri("vscode://skycode.skycode/unknown?param=value")
-
-				expect(result).to.be.false
-				expect(handleAuthCallbackStub.called).to.be.false
+			it("should return false for unknown paths, including the removed Skycode account callback", async () => {
+				for (const uri of [
+					"vscode://skycode.skycode/unknown?param=value",
+					"vscode://skycode.skycode/auth?idToken=jwt123&provider=google",
+				]) {
+					expect(await SharedUriHandler.handleUri(uri)).to.be.false
+				}
+				expect(handleOcaAuthCallbackStub.called).to.be.false
 				expect(handleOpenRouterCallbackStub.called).to.be.false
 			})
 		})
@@ -118,37 +114,25 @@ describe("SharedUriHandler", () => {
 				const result = await SharedUriHandler.handleUri("invalid://uri")
 
 				expect(result).to.be.false
-				expect(handleAuthCallbackStub.called).to.be.false
+				expect(handleOcaAuthCallbackStub.called).to.be.false
 				expect(handleOpenRouterCallbackStub.called).to.be.false
 			})
 		})
 
 		describe("Query parameter parsing", () => {
 			it("should correctly parse multiple query parameters", async () => {
-				const result = await SharedUriHandler.handleUri(
-					"vscode://skycode.skycode/auth?idToken=jwt123&provider=github&extra=param",
-				)
+				const result = await SharedUriHandler.handleUri("vscode://skycode.skycode/auth/oca?code=abc&state=xyz&extra=param")
 
 				expect(result).to.be.true
-				sinon.assert.calledOnceWithExactly(handleAuthCallbackStub, "jwt123", "github")
+				sinon.assert.calledOnceWithExactly(handleOcaAuthCallbackStub, "abc", "xyz")
 			})
 
 			it("should handle URL-encoded parameters", async () => {
-				const result = await SharedUriHandler.handleUri(
-					"vscode://skycode.skycode/auth?idToken=jwt%20with%20spaces&provider=google",
-				)
+				const result = await SharedUriHandler.handleUri("vscode://skycode.skycode/openrouter?code=with%20spaces")
 
 				expect(result).to.be.true
 				// URLSearchParams should decode %20 to spaces
-				sinon.assert.calledOnceWithExactly(handleAuthCallbackStub, "jwt with spaces", "google")
-			})
-
-			it("should handle empty query string", async () => {
-				const result = await SharedUriHandler.handleUri("vscode://skycode.skycode/openrouter")
-
-				expect(result).to.be.false
-				expect(handleAuthCallbackStub.called).to.be.false
-				expect(handleOpenRouterCallbackStub.called).to.be.false
+				sinon.assert.calledOnceWithExactly(handleOpenRouterCallbackStub, "with spaces")
 			})
 		})
 
@@ -161,10 +145,10 @@ describe("SharedUriHandler", () => {
 			})
 
 			it("should handle HTTPS scheme URIs", async () => {
-				const result = await SharedUriHandler.handleUri("https://example.com/auth?idToken=jwt123&provider=github")
+				const result = await SharedUriHandler.handleUri("https://example.com/auth/oca?code=abc&state=xyz")
 
 				expect(result).to.be.true
-				sinon.assert.calledOnceWithExactly(handleAuthCallbackStub, "jwt123", "github")
+				sinon.assert.calledOnceWithExactly(handleOcaAuthCallbackStub, "abc", "xyz")
 			})
 		})
 	})

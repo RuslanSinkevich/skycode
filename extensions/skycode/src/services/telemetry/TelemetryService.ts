@@ -2,12 +2,11 @@ import { HostProvider } from "@hosts/host-provider"
 import type { BrowserSettings } from "@shared/BrowserSettings"
 import type { TaskFeedbackType } from "@shared/WebviewMessage"
 import * as os from "os"
-import { SkycodeAccountUserInfo } from "@/services/auth/AuthService"
 import { Logger } from "@/shared/services/Logger"
 import { Mode } from "@/shared/storage/types"
 import { version as extensionVersion } from "../../../package.json"
 import { setDistinctId } from "../logging/distinctId"
-import type { ITelemetryProvider, TelemetryProperties } from "./providers/ITelemetryProvider"
+import type { ITelemetryProvider, TelemetryProperties, TelemetryUserInfo } from "./providers/ITelemetryProvider"
 import { TelemetryProviderFactory } from "./TelemetryProviderFactory"
 
 /**
@@ -579,7 +578,7 @@ export class TelemetryService {
 	 * Identifies the accounts user
 	 * @param userInfo The user's information
 	 */
-	public identifyAccount(userInfo: SkycodeAccountUserInfo) {
+	public identifyAccount(userInfo: TelemetryUserInfo) {
 		const propertiesWithMetadata: TelemetryProperties = {
 			...this.telemetryMetadata,
 		}

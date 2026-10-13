@@ -212,8 +212,6 @@ function createAuthSucceededHtml(): string {
 	const title = t("auth.success.title")
 	const heading = t("auth.success.heading")
 	const body1 = t("auth.success.body")
-	const body2prefix = t("auth.success.redirectPrefix")
-	const body2suffix = t("auth.success.redirectSuffix")
 	return [
 		"<!DOCTYPE html>",
 		'<html lang="ru">',
@@ -221,7 +219,6 @@ function createAuthSucceededHtml(): string {
 		'<meta charset="UTF-8">',
 		'<meta name="viewport" content="width=device-width, initial-scale=1.0">',
 		`<title>${title}</title>`,
-		'<script>setTimeout(function(){window.location.href="https://skycode-ai.ru"},2000);</script>',
 		"<style>",
 		"@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');",
 		"*{margin:0;padding:0;box-sizing:border-box}",
@@ -231,7 +228,6 @@ function createAuthSucceededHtml(): string {
 		".checkmark::after{content:'\\2713';font-size:28px;color:#fff;font-weight:600}",
 		"h1{font-size:1.375rem;margin-bottom:12px;font-weight:600;color:#111827}",
 		"p{font-size:.875rem;line-height:1.6;margin-bottom:24px;color:#6b7280}",
-		".countdown{font-weight:500;color:#111827}",
 		"@media(max-width:480px){.container{padding:28px 20px}}",
 		"</style>",
 		"</head>",
@@ -240,9 +236,7 @@ function createAuthSucceededHtml(): string {
 		'<div class="checkmark"></div>',
 		`<h1>${heading}</h1>`,
 		`<p>${body1}</p>`,
-		`<p>${body2prefix}<span class="countdown" id="sec">2</span>${body2suffix}</p>`,
 		"</div>",
-		'<script>var s=2;setInterval(function(){s--;var el=document.getElementById("sec");if(el)el.textContent=s>0?s:"0"},1000);</script>',
 		"</body>",
 		"</html>",
 	].join("\n")

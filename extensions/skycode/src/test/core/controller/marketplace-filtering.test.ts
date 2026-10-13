@@ -3,9 +3,8 @@ import "should"
 import { Controller } from "@core/controller"
 import type { McpMarketplaceItem } from "@shared/mcp"
 import type { RemoteConfig } from "@shared/remote-config/schema"
-import axios from "axios"
+import fs from "fs/promises"
 import * as sinon from "sinon"
-import { SkycodeEnv } from "@/config"
 import { HostProvider } from "@/hosts/host-provider"
 
 /**
@@ -17,7 +16,7 @@ describe("Controller Marketplace Filtering", () => {
 	let mockContext: any
 	let stateManagerStub: sinon.SinonStub
 	let mockStateManager: any
-	let axiosGetStub: sinon.SinonStub
+	let catalogStub: sinon.SinonStub
 	let hostProviderInitialized: boolean = false
 
 	const mockMarketplaceData: McpMarketplaceItem[] = [
@@ -139,10 +138,8 @@ describe("Controller Marketplace Filtering", () => {
 		const StateManager = require("@core/storage/StateManager").StateManager
 		stateManagerStub = sinon.stub(StateManager, "get").returns(mockStateManager)
 
-		// Mock axios
-		axiosGetStub = sinon.stub(axios, "get").resolves({
-			data: mockMarketplaceData,
-		})
+		// The catalog is the bundled assets/mcp-marketplace-catalog.json
+		catalogStub = sinon.stub(fs, "readFile").resolves(JSON.stringify(mockMarketplaceData))
 
 		// Create controller instance
 		controller = new Controller(mockContext)
@@ -150,7 +147,7 @@ describe("Controller Marketplace Filtering", () => {
 
 	afterEach(() => {
 		stateManagerStub.restore()
-		axiosGetStub.restore()
+		catalogStub.restore()
 
 		// Reset HostProvider if we initialized it
 		if (hostProviderInitialized) {
@@ -250,19 +247,18 @@ describe("Controller Marketplace Filtering", () => {
 		})
 	})
 
-	describe("API interaction", () => {
-		it("should call marketplace API with correct parameters", async () => {
+	describe("Catalog source", () => {
+		it("should read the bundled catalog", async () => {
 			mockStateManager.getRemoteConfigSettings.returns({})
 
 			await controller.refreshMcpMarketplace(false)
 
-			sinon.assert.calledOnce(axiosGetStub)
-			const callArgs = axiosGetStub.firstCall.args
-			callArgs[0].should.equal(`${SkycodeEnv.config().mcpBaseUrl}/marketplace`)
+			sinon.assert.calledOnce(catalogStub)
+			String(catalogStub.firstCall.args[0]).should.endWith("mcp-marketplace-catalog.json")
 		})
 
-		it("should handle API errors gracefully", async () => {
-			axiosGetStub.rejects(new Error("Network error"))
+		it("should handle read errors gracefully", async () => {
+			catalogStub.rejects(new Error("ENOENT"))
 			mockStateManager.getRemoteConfigSettings.returns({})
 
 			const catalog = await controller.refreshMcpMarketplace(false)
@@ -271,8 +267,8 @@ describe("Controller Marketplace Filtering", () => {
 			;(catalog === undefined).should.be.true()
 		})
 
-		it("should handle invalid API response", async () => {
-			axiosGetStub.resolves({ data: null })
+		it("should handle an invalid catalog", async () => {
+			catalogStub.resolves("null")
 			mockStateManager.getRemoteConfigSettings.returns({})
 
 			const catalog = await controller.refreshMcpMarketplace(false)
@@ -302,7 +298,7 @@ describe("Controller Marketplace Filtering", () => {
 					// Missing githubStars, downloadCount, tags
 				},
 			]
-			axiosGetStub.resolves({ data: incompleteData })
+			catalogStub.resolves(JSON.stringify(incompleteData))
 			mockStateManager.getRemoteConfigSettings.returns({})
 
 			const catalog = await controller.refreshMcpMarketplace(false)
@@ -440,7 +436,7 @@ describe("Controller Marketplace Filtering", () => {
 				updatedAt: "2024-01-01T00:00:00Z",
 				lastGithubSync: "2024-01-01T00:00:00Z",
 			}))
-			axiosGetStub.resolves({ data: largeCatalog })
+			catalogStub.resolves(JSON.stringify(largeCatalog))
 
 			const remoteConfig: Partial<RemoteConfig> = {
 				version: "v1",

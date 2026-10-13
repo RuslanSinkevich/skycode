@@ -5,12 +5,6 @@ import { Controller } from ".."
 
 export async function sendMessage(controller: Controller, request: SendMessageRequest): Promise<Empty> {
 	try {
-		// Free-trial gate: check message limit
-		const allowed = await controller.checkFreeRequestGate()
-		if (!allowed) {
-			return Empty.create()
-		}
-
 		const session = controller.sessionManager.get(request.sessionId)
 		if (!session) {
 			Logger.warn(`[SessionService] sendMessage: Session not found: ${request.sessionId}`)

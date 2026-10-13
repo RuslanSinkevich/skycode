@@ -12,7 +12,6 @@ import { convertProtoToApiProvider } from "@shared/proto-conversions/models/api-
 import { OpenaiReasoningEffort } from "@shared/storage/types"
 import { TelemetrySetting } from "@shared/TelemetrySetting"
 import { SkycodeEnv } from "@/config"
-import { fetchRemoteConfig } from "@/core/storage/remote-config/fetch"
 import { clearRemoteConfig } from "@/core/storage/remote-config/utils"
 import { HostProvider } from "@/hosts/host-provider"
 import { McpDisplayMode } from "@/shared/McpDisplayMode"
@@ -21,7 +20,6 @@ import { Logger } from "@/shared/services/Logger"
 import { telemetryService } from "../../../services/telemetry"
 import { BrowserSettings as SharedBrowserSettings } from "../../../shared/BrowserSettings"
 import { Controller } from ".."
-import { accountLogoutClicked } from "../account/accountLogoutClicked"
 
 /**
  * Updates multiple extension settings in a single request
@@ -33,7 +31,6 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 	try {
 		if (request.skycodeEnv !== undefined) {
 			SkycodeEnv.setEnvironment(request.skycodeEnv)
-			await accountLogoutClicked(controller, Empty.create())
 		}
 
 		if (request.apiConfiguration) {
@@ -517,21 +514,11 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 		}
 
 		if (request.optOutOfRemoteConfig !== undefined) {
-			const hadOptedOut = controller.stateManager.getGlobalSettingsKey("optOutOfRemoteConfig")
+			// Remote config is no longer fetched (its server was skycode-ai.ru); opting out only clears a cached one.
 			const isOptingOut = !!request.optOutOfRemoteConfig
-			const isReenablingRemoteConfig = !isOptingOut && hadOptedOut
-
-			// Update now so any subsequent function can access the updated value
 			controller.stateManager.setGlobalState("optOutOfRemoteConfig", isOptingOut)
-
-			if (isOptingOut && !hadOptedOut) {
+			if (isOptingOut) {
 				clearRemoteConfig()
-			} else if (isReenablingRemoteConfig) {
-				// Fire-and-forget: We don't need to await here
-				// The function catches any errors and posts the updated state to the webview
-				// The immediate state update below shows the user's intent (opted-in),
-				// and we apply the actual config afterwards without blocking the settings update
-				fetchRemoteConfig(controller)
 			}
 		}
 

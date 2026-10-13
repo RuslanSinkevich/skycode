@@ -46,16 +46,9 @@ const en: Record<string, string> = {
 	"voice.ready": "Voice input is ready! Click the microphone again.",
 	"voice.downloadFailed": "Failed to download voice input components: {{error}}",
 	"voice.downloadTimeout": "Download timed out. Please check your internet connection and try again.",
-	"auth.loginRequired": "Please sign in to continue. It's free!",
-	"auth.loginFailed": "Failed to log in to Skycode",
-	"auth.logoutSuccess": "Successfully logged out of Skycode",
-	"auth.logoutFailed": "Logout failed",
-	"auth.freeLimit": "You've used all {{limit}} free messages. Sign in to continue — it's free and takes 30 seconds!",
 	"auth.success.title": "Skycode - Authorization",
 	"auth.success.heading": "Done!",
 	"auth.success.body": "You are authorized. Return to Skycode.",
-	"auth.success.redirectPrefix": "Redirecting in ",
-	"auth.success.redirectSuffix": " sec...",
 
 	"auth.oca.logoutSuccess": "Successfully logged out of OCA",
 	"auth.oca.logoutFailed": "OCA Logout failed",
@@ -112,7 +105,6 @@ const en: Record<string, string> = {
 	"dictation.installWithSkycode": "Install with Skycode",
 	"dictation.copyCommand": "Copy Command",
 	"dictation.dismiss": "Dismiss",
-	"dictation.signIn": "Sign in to Skycode",
 
 	"gigachat.error.authRequired": "GigaChat Authorization Key is required",
 	"gigachat.error.oauthInvalidResponse": "GigaChat OAuth: invalid server response: {{details}}",
@@ -184,25 +176,11 @@ const ru: Record<string, string> = {
 	// allow-any-unicode-next-line
 	"voice.downloadTimeout": "Загрузка прервана по таймауту. Проверьте подключение к интернету и попробуйте снова.",
 	// allow-any-unicode-next-line
-	"auth.loginRequired": "Авторизуйтесь чтобы продолжить. Это бесплатно!",
-	// allow-any-unicode-next-line
-	"auth.loginFailed": "Не удалось войти в Skycode",
-	// allow-any-unicode-next-line
-	"auth.logoutSuccess": "Вы вышли из Skycode",
-	// allow-any-unicode-next-line
-	"auth.logoutFailed": "Не удалось выйти",
-	// allow-any-unicode-next-line
-	"auth.freeLimit": "Вы использовали все {{limit}} бесплатных сообщений. Авторизуйтесь чтобы продолжить — это бесплатно и займёт 30 секунд!",
-	// allow-any-unicode-next-line
 	"auth.success.title": "Skycode — Авторизация",
 	// allow-any-unicode-next-line
 	"auth.success.heading": "Готово!",
 	// allow-any-unicode-next-line
 	"auth.success.body": "Вы авторизованы. Вернитесь в Skycode.",
-	// allow-any-unicode-next-line
-	"auth.success.redirectPrefix": "Перенаправление через ",
-	// allow-any-unicode-next-line
-	"auth.success.redirectSuffix": " сек...",
 
 	// allow-any-unicode-next-line
 	"auth.oca.logoutSuccess": "Вы вышли из OCA",
@@ -302,8 +280,6 @@ const ru: Record<string, string> = {
 	"dictation.copyCommand": "Скопировать команду",
 	// allow-any-unicode-next-line
 	"dictation.dismiss": "Закрыть",
-	// allow-any-unicode-next-line
-	"dictation.signIn": "Войти в Skycode",
 
 	// allow-any-unicode-next-line
 	"gigachat.error.authRequired": "Требуется ключ авторизации GigaChat",

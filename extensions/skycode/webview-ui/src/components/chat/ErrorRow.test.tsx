@@ -1,23 +1,9 @@
 import type { SkycodeMessage } from "@shared/ExtensionMessage"
-import { render, screen } from "@testing-library/react"
-import { describe, expect, it, vi } from "vitest"
+import { render as rtlRender, screen } from "@testing-library/react"
+import type { ReactElement } from "react"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+import { I18nProvider } from "@/i18n"
 import ErrorRow from "./ErrorRow"
-
-// Mock the auth context
-vi.mock("@/context/SkycodeAuthContext", () => ({
-	useSkycodeAuth: () => ({
-		skycodeUser: null,
-	}),
-	useSkycodeSignIn: () => ({
-		isLoginLoading: false,
-	}),
-	handleSignOut: vi.fn(),
-}))
-
-// Mock CreditLimitError component
-vi.mock("@/components/chat/CreditLimitError", () => ({
-	default: ({ message }: { message: string }) => <div data-testid="credit-limit-error">{message}</div>,
-}))
 
 // Mock SkycodeError
 vi.mock("../../../../src/services/error/SkycodeError", () => ({
@@ -25,11 +11,16 @@ vi.mock("../../../../src/services/error/SkycodeError", () => ({
 		parse: vi.fn(),
 	},
 	SkycodeErrorType: {
-		Balance: "balance",
 		RateLimit: "rateLimit",
 		Auth: "auth",
 	},
 }))
+
+// The interface language defaults to Russian; the assertions below use the English strings.
+const render = (ui: ReactElement) => {
+	localStorage.setItem("skycode.interfaceLanguage", "en")
+	return rtlRender(<I18nProvider>{ui}</I18nProvider>)
+}
 
 describe("ErrorRow", () => {
 	const mockMessage: SkycodeMessage = {
@@ -73,30 +64,6 @@ describe("ErrorRow", () => {
 	})
 
 	describe("API error handling", () => {
-		it("renders credit limit error when balance error is detected", async () => {
-			const mockSkycodeError = {
-				message: "Insufficient credits",
-				isErrorType: vi.fn((type) => type === "balance"),
-				_error: {
-					details: {
-						current_balance: 0,
-						total_spent: 10.5,
-						total_promotions: 5.0,
-						message: "You have run out of credits.",
-						buy_credits_url: "#",
-					},
-				},
-			}
-
-			const { SkycodeError } = await import("../../../../src/services/error/SkycodeError")
-			vi.mocked(SkycodeError.parse).mockReturnValue(mockSkycodeError as any)
-
-			render(<ErrorRow apiRequestFailedMessage="Insufficient credits error" errorType="error" message={mockMessage} />)
-
-			expect(screen.getByTestId("credit-limit-error")).toBeInTheDocument()
-			expect(screen.getByText("You have run out of credits.")).toBeInTheDocument()
-		})
-
 		it("renders rate limit error with request ID", async () => {
 			const mockSkycodeError = {
 				message: "Rate limit exceeded",
@@ -115,24 +82,7 @@ describe("ErrorRow", () => {
 			expect(screen.getByText("Request ID: req_123456")).toBeInTheDocument()
 		})
 
-		it("renders auth error with sign in button when user is not signed in", async () => {
-			const mockSkycodeError = {
-				message: "Authentication failed",
-				isErrorType: vi.fn((type) => type === "auth"),
-				providerId: "skycode",
-				_error: {},
-			}
-
-			const { SkycodeError } = await import("../../../../src/services/error/SkycodeError")
-			vi.mocked(SkycodeError.parse).mockReturnValue(mockSkycodeError as any)
-
-			render(<ErrorRow apiRequestFailedMessage="Authentication failed" errorType="error" message={mockMessage} />)
-
-			expect(screen.getByText("Authentication failed")).toBeInTheDocument()
-			expect(screen.getByText("Sign in to Skycode")).toBeInTheDocument()
-		})
-
-		it("renders PowerShell troubleshooting link when error mentions PowerShell", async () => {
+		it("renders a PowerShell hint when the error mentions PowerShell", async () => {
 			const mockSkycodeError = {
 				message: "PowerShell is not recognized as an internal or external command",
 				isErrorType: vi.fn(() => false),
@@ -151,8 +101,8 @@ describe("ErrorRow", () => {
 			)
 
 			expect(screen.getByText(/PowerShell is not recognized/)).toBeInTheDocument()
-			expect(screen.getByText("troubleshooting guide")).toBeInTheDocument()
-			expect(screen.getByRole("link", { name: "troubleshooting guide" })).toHaveAttribute("href", "#")
+			expect(screen.getByText(/Looks like a Windows PowerShell issue/)).toBeInTheDocument()
+			expect(screen.queryByRole("link")).toBeNull()
 		})
 
 		it("handles apiReqStreamingFailedMessage instead of apiRequestFailedMessage", async () => {
@@ -176,8 +126,7 @@ describe("ErrorRow", () => {
 
 			render(<ErrorRow apiRequestFailedMessage="Some API error" errorType="error" message={mockMessage} />)
 
-			// When SkycodeError.parse returns null, we display the raw error message for non-Skycode providers
-			// Since skycodeError is undefined, isSkycodeProvider is false, so we show the raw apiRequestFailedMessage
+			// When SkycodeError.parse returns null, the raw apiRequestFailedMessage is shown
 			expect(screen.getByText("Some API error")).toBeInTheDocument()
 		})
 

@@ -8,7 +8,6 @@ import { setupWorkspaceManager } from "@core/workspace/setup"
 import type { WorkspaceRootManager } from "@core/workspace/WorkspaceRootManager"
 // [SKYCODE] TEMPORARILY DISABLED — legacy Cline shadow-git checkpoint system
 // import { cleanupLegacyCheckpoints } from "@integrations/checkpoints/CheckpointMigration"
-import { SkycodeAccountService } from "@services/account/SkycodeAccountService"
 import { McpHub } from "@services/mcp/McpHub"
 import type { ApiProvider, ModelInfo } from "@shared/api"
 import type { ChatContent } from "@shared/ChatContent"
@@ -21,7 +20,6 @@ import type { McpMarketplaceCatalog, McpMarketplaceItem } from "@shared/mcp"
 import type { Settings } from "@shared/storage/state-keys"
 import { getApiSettingsMode, type Mode } from "@shared/storage/types"
 import type { TelemetrySetting } from "@shared/TelemetrySetting"
-import type { UserInfo } from "@shared/UserInfo"
 import { fileExistsAtPath } from "@utils/fs"
 import axios from "axios"
 import fs from "fs/promises"
@@ -33,7 +31,6 @@ import * as vscode from "vscode"
 import { SkycodeEnv } from "@/config"
 import { HostProvider } from "@/hosts/host-provider"
 import { ExtensionRegistryInfo } from "@/registry"
-import { AuthService } from "@/services/auth/AuthService"
 import { OcaAuthService } from "@/services/auth/oca/OcaAuthService"
 import { LogoutReason } from "@/services/auth/types"
 import { featureFlagsService } from "@/services/feature-flags"
@@ -55,8 +52,6 @@ import {
 	GlobalFileNames,
 	writeMcpMarketplaceCatalogToCache,
 } from "../storage/disk"
-import { fetchRemoteConfig } from "../storage/remote-config/fetch"
-import { clearRemoteConfig } from "../storage/remote-config/utils"
 import { type PersistenceErrorEvent, StateManager } from "../storage/StateManager"
 import { Task } from "../task"
 import { SessionManager } from "../session"
@@ -84,8 +79,6 @@ export class Controller {
 	readonly sessionManager = new SessionManager()
 
 	mcpHub: McpHub
-	accountService: SkycodeAccountService
-	authService: AuthService
 	ocaAuthService: OcaAuthService
 	readonly stateManager: StateManager
 
@@ -96,9 +89,6 @@ export class Controller {
 
 	// Flag to prevent duplicate cancellations from spam clicking
 	private cancelInProgress = false
-
-	// Timer for periodic remote config fetching
-	private remoteConfigTimer?: NodeJS.Timeout
 
 	// Public getter for workspace manager with lazy initialization - To get workspaces when task isn't initialized (Used by file mentions)
 	async ensureWorkspaceManager(): Promise<WorkspaceRootManager | undefined> {
@@ -120,14 +110,6 @@ export class Controller {
 		return this.workspaceManager
 	}
 
-	/**
-	 * Starts the periodic remote config fetching timer
-	 * Server-side remote config is retired for the frozen standalone build.
-	 */
-	private startRemoteConfigTimer() {
-		Logger.log("[RemoteConfig] Disabled for standalone Skycode build")
-	}
-
 	constructor(readonly context: vscode.ExtensionContext) {
 		PromptRegistry.getInstance() // Ensure prompts and tools are registered
 		HostProvider.get().logToChannel("SkycodeProvider instantiated")
@@ -143,11 +125,9 @@ export class Controller {
 				await this.postStateToWebview()
 			},
 		})
-		this.authService = AuthService.getInstance(this)
 		this.ocaAuthService = OcaAuthService.initialize(this)
-		this.accountService = SkycodeAccountService.getInstance()
 
-		// Migrate away from deprecated "skycode" provider on startup
+		// Migrate away from the removed "skycode" provider (its API lived on skycode-ai.ru)
 		const initConfig = this.stateManager.getApiConfiguration()
 		if (initConfig.planModeApiProvider === "skycode" || initConfig.actModeApiProvider === "skycode") {
 			const migrated = { ...initConfig }
@@ -159,10 +139,6 @@ export class Controller {
 			}
 			this.stateManager.setApiConfiguration(migrated)
 		}
-
-		this.authService.restoreRefreshTokenAndRetrieveAuthInfo().then(() => {
-			this.startRemoteConfigTimer()
-		})
 
 		this.mcpHub = new McpHub(
 			() => ensureMcpServersDirectoryExists(),
@@ -186,12 +162,6 @@ export class Controller {
 	- https://github.com/microsoft/vscode-extension-samples/blob/main/webview-sample/src/extension.ts
 	*/
 	async dispose() {
-		// Clear the remote config timer
-		if (this.remoteConfigTimer) {
-			clearInterval(this.remoteConfigTimer)
-			this.remoteConfigTimer = undefined
-		}
-
 		// [SKYCODE-PERF] Clear postState throttle timer + drain any pending resolvers
 		// Otherwise the timer fires after dispose and tries to send state to a dead webview,
 		// and pending promises stay forever in memory.
@@ -219,35 +189,6 @@ export class Controller {
 		Logger.error("Controller disposed")
 	}
 
-	// Auth methods
-	async handleSignOut() {
-		try {
-			// AuthService now handles its own storage cleanup in handleDeauth()
-			this.stateManager.setGlobalState("userInfo", undefined)
-			clearRemoteConfig()
-
-			// Update API providers through cache service
-			const apiConfiguration = this.stateManager.getApiConfiguration()
-			const updatedConfig = {
-				...apiConfiguration,
-				planModeApiProvider: "openrouter" as ApiProvider,
-				actModeApiProvider: "openrouter" as ApiProvider,
-			}
-			this.stateManager.setApiConfiguration(updatedConfig)
-
-			await this.postStateToWebview()
-			HostProvider.window.showMessage({
-				type: ShowMessageType.INFORMATION,
-				message: t("auth.logoutSuccess"),
-			})
-		} catch (_error) {
-			HostProvider.window.showMessage({
-				type: ShowMessageType.INFORMATION,
-				message: t("auth.logoutFailed"),
-			})
-		}
-	}
-
 	// Oca Auth methods
 	async handleOcaSignOut() {
 		try {
@@ -265,23 +206,6 @@ export class Controller {
 		}
 	}
 
-	async setUserInfo(info?: UserInfo) {
-		this.stateManager.setGlobalState("userInfo", info)
-	}
-
-	// Legacy value kept for state compatibility. The standalone build does not gate usage.
-	static readonly FREE_REQUEST_LIMIT = Number.MAX_SAFE_INTEGER
-
-	/**
-	 * Checks if the user has exceeded the free request limit.
-	 * If not authenticated and limit reached — navigates to Account view.
-	 * If not authenticated and under limit — increments counter.
-	 * @returns true if the request is allowed, false if blocked (limit reached)
-	 */
-	async checkFreeRequestGate(): Promise<boolean> {
-		return true
-	}
-
 	async initTask(
 		task?: string,
 		images?: string[],
@@ -289,23 +213,6 @@ export class Controller {
 		historyItem?: HistoryItem,
 		taskSettings?: Partial<Settings>,
 	) {
-		// === Free-trial gate: require auth after N messages ===
-		if (!historyItem) {
-			const allowed = await this.checkFreeRequestGate()
-			if (!allowed) {
-				return undefined
-			}
-		}
-
-		// Fire-and-forget: We intentionally don't await fetchRemoteConfig here.
-		// Remote config is already fetched in startRemoteConfigTimer() which runs in the constructor,
-		// so enterprise policies (yoloModeAllowed, allowedMCPServers, etc.) are already applied.
-		// This call just ensures we have the latest state, but we shouldn't block the UI for it.
-		// getGlobalSettingsKey() reads from remoteConfigCache on each call, so any updates
-		// will apply as soon as this fetch completes. The function also calls postStateToWebview()
-		// when done and catches all errors internally.
-		fetchRemoteConfig(this)
-
 		await this.clearTask() // ensures that an existing task doesn't exist before starting a new one, although this shouldn't be possible since user must clear task before starting a new one
 
 		const autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
@@ -572,49 +479,6 @@ export class Controller {
 		const didCancel = await this.task?.cancelBackgroundCommand()
 		if (!didCancel) {
 			this.updateBackgroundCommandState(false)
-		}
-	}
-
-	async handleAuthCallback(customToken: string, provider: string | null = null) {
-		try {
-			await this.authService.handleAuthCallback(customToken, provider ? provider : "google")
-
-			// Mark welcome view as completed since user has successfully logged in
-			this.stateManager.setGlobalState("welcomeViewCompleted", true)
-
-			// Migrate away from "skycode" provider (not available yet)
-			const currentApiConfiguration = this.stateManager.getApiConfiguration()
-			if (
-				currentApiConfiguration.planModeApiProvider === "skycode" ||
-				currentApiConfiguration.actModeApiProvider === "skycode"
-			) {
-				const updatedConfig = { ...currentApiConfiguration }
-				if (updatedConfig.planModeApiProvider === "skycode") {
-					updatedConfig.planModeApiProvider = "openrouter" as ApiProvider
-				}
-				if (updatedConfig.actModeApiProvider === "skycode") {
-					updatedConfig.actModeApiProvider = "openrouter" as ApiProvider
-				}
-				this.stateManager.setApiConfiguration(updatedConfig)
-			}
-
-			await fetchRemoteConfig(this)
-
-			if (this.task) {
-				const apiConfig = this.stateManager.getApiConfiguration()
-				const currentMode = this.stateManager.getGlobalSettingsKey("mode")
-				this.task.api = buildApiHandler({ ...apiConfig, ulid: this.task.ulid }, currentMode)
-			}
-
-			await this.postStateToWebview()
-		} catch (error) {
-			Logger.error("Failed to handle auth callback:", error)
-			HostProvider.window.showMessage({
-				type: ShowMessageType.ERROR,
-				message: t("auth.loginFailed"),
-			})
-			// Even on login failure, we preserve any existing tokens
-			// Only clear tokens on explicit logout
 		}
 	}
 
@@ -1282,9 +1146,6 @@ export class Controller {
 			pendingChanges: this.getPendingChangesInfo(),
 			banners,
 			openAiCodexIsAuthenticated,
-			// Free-trial gate
-			freeRequestCount: this.stateManager.getGlobalStateKey("freeRequestCount") ?? 0,
-			freeRequestLimit: Controller.FREE_REQUEST_LIMIT,
 		}
 	}
 

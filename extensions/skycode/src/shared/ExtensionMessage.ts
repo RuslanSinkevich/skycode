@@ -144,9 +144,6 @@ export interface ExtensionState {
 	optOutOfRemoteConfig?: boolean
 	banners?: BannerCardData[]
 	openAiCodexIsAuthenticated?: boolean
-	// Free-trial gate
-	freeRequestCount?: number
-	freeRequestLimit?: number
 	// Multi-step workflow
 	activeWorkflowName?: string
 	// Session Budget

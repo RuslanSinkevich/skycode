@@ -10,7 +10,6 @@ import { BasetenHandler } from "./providers/baseten"
 import { AwsBedrockHandler } from "./providers/bedrock"
 import { CerebrasHandler } from "./providers/cerebras"
 import { ClaudeCodeHandler } from "./providers/claude-code"
-import { SkycodeHandler } from "./providers/skycode"
 import { DeepSeekHandler } from "./providers/deepseek"
 import { DifyHandler } from "./providers/dify"
 import { DoubaoHandler } from "./providers/doubao"
@@ -266,19 +265,6 @@ function createHandlerForProvider(
 				onRetryAttempt: options.onRetryAttempt,
 				vsCodeLmModelSelector:
 					isPlan ? options.planModeVsCodeLmModelSelector : options.actModeVsCodeLmModelSelector,
-			})
-		case "skycode":
-			return new SkycodeHandler({
-				onRetryAttempt: options.onRetryAttempt,
-				skycodeAccountId: options.skycodeAccountId,
-				ulid: options.ulid,
-				reasoningEffort: isPlan ? options.planModeReasoningEffort : options.actModeReasoningEffort,
-				thinkingBudgetTokens:
-					isPlan ? options.planModeThinkingBudgetTokens : options.actModeThinkingBudgetTokens,
-				openRouterProviderSorting: options.openRouterProviderSorting,
-				openRouterModelId: isPlan ? options.planModeOpenRouterModelId : options.actModeOpenRouterModelId,
-				openRouterModelInfo: isPlan ? options.planModeOpenRouterModelInfo : options.actModeOpenRouterModelInfo,
-				geminiThinkingLevel: isPlan ? options.geminiPlanModeThinkingLevel : options.geminiActModeThinkingLevel,
 			})
 		case "litellm":
 			return new LiteLlmHandler({

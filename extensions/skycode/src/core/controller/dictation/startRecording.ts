@@ -68,22 +68,6 @@ async function handleMissingDependency(
 }
 
 /**
- * Handles sign-in errors for dictation
- */
-async function handleSignInError(controller: Controller, errorMessage: string): Promise<void> {
-	const signInAction = t("dictation.signIn")
-	const action = await HostProvider.window.showMessage({
-		type: ShowMessageType.ERROR,
-		message: t("dictation.error", { error: errorMessage }),
-		options: { items: [signInAction] },
-	})
-
-	if (action.selectedOption === signInAction) {
-		await controller.authService.createAuthRequest()
-	}
-}
-
-/**
  * Shows a generic error message
  */
 async function showGenericError(errorMessage: string): Promise<void> {
@@ -200,14 +184,8 @@ export const startRecording = async (controller: Controller): Promise<RecordingR
 		Logger.error("Error starting recording:", error)
 		const errorMessage = error instanceof Error ? error.message : "Unknown error occurred"
 
-		// Handle different error types
-		if (errorMessage.includes("sign in")) {
-			// Don't await - show dialog asynchronously so frontend gets immediate response
-			handleSignInError(controller, errorMessage)
-		} else {
-			// Don't await - show dialog asynchronously so frontend gets immediate response
-			showGenericError(errorMessage)
-		}
+		// Don't await - show dialog asynchronously so frontend gets immediate response
+		showGenericError(errorMessage)
 
 		return RecordingResult.create({
 			success: false,

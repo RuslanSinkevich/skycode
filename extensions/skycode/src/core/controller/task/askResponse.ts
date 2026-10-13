@@ -17,14 +17,6 @@ import { Controller } from ".."
  */
 export async function askResponse(controller: Controller, request: AskResponseRequest): Promise<Empty> {
 	try {
-		// Free-trial gate: check message limit for user messages
-		if (request.responseType === "messageResponse") {
-			const allowed = await controller.checkFreeRequestGate()
-			if (!allowed) {
-				return Empty.create()
-			}
-		}
-
 		if (!controller.task) {
 			Logger.warn("askResponse: No active task to receive response")
 			return Empty.create()

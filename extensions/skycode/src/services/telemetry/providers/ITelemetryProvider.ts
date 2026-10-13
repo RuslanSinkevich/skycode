@@ -3,7 +3,13 @@
  * Allows switching between different analytics providers (PostHog, etc.)
  */
 
-import type { SkycodeAccountUserInfo } from "../../auth/AuthService"
+/**
+ * User identity attached to telemetry events.
+ */
+export interface TelemetryUserInfo {
+	id: string
+	displayName?: string
+}
 
 /**
  * JSON-serializable primitive types for telemetry properties
@@ -68,7 +74,7 @@ export interface ITelemetryProvider {
 	 * @param userInfo The user's information
 	 * @param properties Optional additional JSON-serializable properties
 	 */
-	identifyUser(userInfo: SkycodeAccountUserInfo, properties?: TelemetryProperties): void
+	identifyUser(userInfo: TelemetryUserInfo, properties?: TelemetryProperties): void
 
 	/**
 	 * Update telemetry opt-in/out status

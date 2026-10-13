@@ -3,7 +3,6 @@ import { type ReactNode } from "react"
 import { CustomPostHogProvider } from "./CustomPostHogProvider"
 import { ExtensionStateContextProvider } from "./context/ExtensionStateContext"
 import { PlatformProvider } from "./context/PlatformContext"
-import { SkycodeAuthProvider } from "./context/SkycodeAuthContext"
 import { I18nProvider } from "./i18n"
 
 export function Providers({ children }: { children: ReactNode }) {
@@ -12,9 +11,7 @@ export function Providers({ children }: { children: ReactNode }) {
 			<ExtensionStateContextProvider>
 				<I18nProvider>
 					<CustomPostHogProvider>
-						<SkycodeAuthProvider>
-							<HeroUIProvider>{children}</HeroUIProvider>
-						</SkycodeAuthProvider>
+						<HeroUIProvider>{children}</HeroUIProvider>
 					</CustomPostHogProvider>
 				</I18nProvider>
 			</ExtensionStateContextProvider>

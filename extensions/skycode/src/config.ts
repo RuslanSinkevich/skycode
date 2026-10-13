@@ -4,11 +4,12 @@ export enum Environment {
 	local = "local",
 }
 
+/**
+ * Only the environment name is left: the per-environment URLs pointed at skycode-ai.ru
+ * (account, remote config, MCP marketplace API), which no longer exists.
+ */
 export interface EnvironmentConfig {
 	environment: Environment
-	appBaseUrl: string
-	apiBaseUrl: string
-	mcpBaseUrl: string
 }
 
 class SkycodeEndpoint {
@@ -47,29 +48,7 @@ class SkycodeEndpoint {
 	}
 
 	public getEnvironment(): EnvironmentConfig {
-		switch (this.environment) {
-	case Environment.staging:
-		return {
-			environment: Environment.staging,
-			appBaseUrl: "https://skycode-ai.ru",
-			apiBaseUrl: "https://skycode-ai.ru",
-			mcpBaseUrl: "https://skycode-ai.ru/v1/mcp",
-		}
-	case Environment.local:
-		return {
-			environment: Environment.local,
-			appBaseUrl: "http://localhost:3000",
-			apiBaseUrl: "http://localhost:3000",
-			mcpBaseUrl: "http://localhost:3000/v1/mcp",
-		}
-	default:
-		return {
-			environment: Environment.production,
-			appBaseUrl: "https://skycode-ai.ru",
-			apiBaseUrl: "https://skycode-ai.ru",
-			mcpBaseUrl: "https://skycode-ai.ru/v1/mcp",
-		}
-		}
+		return { environment: this.environment }
 	}
 }
 

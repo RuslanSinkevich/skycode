@@ -5,7 +5,6 @@ import { DEFAULT_DICTATION_SETTINGS, DictationSettings } from "@shared/Dictation
 import { DEFAULT_PLATFORM, type ExtensionState } from "@shared/ExtensionMessage"
 import { DEFAULT_FOCUS_CHAIN_SETTINGS } from "@shared/FocusChainSettings"
 import { DEFAULT_MCP_DISPLAY_MODE } from "@shared/McpDisplayMode"
-import type { UserInfo } from "@shared/proto/skycode/account"
 import { EmptyRequest } from "@shared/proto/skycode/common"
 import type { OpenRouterCompatibleModelInfo } from "@shared/proto/skycode/models"
 import { OnboardingModelGroup, type TerminalProfile } from "@shared/proto/skycode/state"
@@ -94,7 +93,6 @@ export interface ExtensionStateContextType extends ExtensionState {
 	refreshVercelAiGatewayModels: () => void
 	refreshHicapModels: () => void
 	refreshLiteLlmModels: () => void
-	setUserInfo: (userInfo?: UserInfo) => void
 
 	// Navigation state setters
 	setShowMcp: (value: boolean) => void
@@ -748,8 +746,6 @@ export const ExtensionStateContextProvider: React.FC<{
 			setState((prev) => ({ ...prev, remoteRulesToggles: toggles })),
 		setRemoteWorkflowToggles: (toggles: Record<string, boolean>) =>
 			setState((prev) => ({ ...prev, remoteWorkflowToggles: toggles })),
-		setUserInfo: (userInfo?: UserInfo) =>
-			setState((prev) => ({ ...prev, userInfo })),
 		setDictationSettings: (value: DictationSettings) =>
 			setState((prev) => ({ ...prev, dictationSettings: value })),
 	}).current

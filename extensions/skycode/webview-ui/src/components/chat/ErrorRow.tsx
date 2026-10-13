@@ -1,6 +1,5 @@
 import { SkycodeMessage } from "@shared/ExtensionMessage"
 import { memo } from "react"
-import CreditLimitError from "@/components/chat/CreditLimitError"
 import { useI18n } from "@/i18n"
 import { SkycodeError, SkycodeErrorType } from "../../../../src/services/error/SkycodeError"
 
@@ -29,19 +28,6 @@ const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStre
 					const requestId = skycodeError?._error?.request_id
 					const providerId = skycodeError?.providerId || skycodeError?._error?.providerId
 					const errorCode = skycodeError?._error?.code
-
-					if (skycodeError?.isErrorType(SkycodeErrorType.Balance)) {
-						const errorDetails = skycodeError._error?.details
-						return (
-							<CreditLimitError
-								buyCreditsUrl={errorDetails?.buy_credits_url}
-								currentBalance={errorDetails?.current_balance}
-								message={errorDetails?.message}
-								totalPromotions={errorDetails?.total_promotions}
-								totalSpent={errorDetails?.total_spent}
-							/>
-						)
-					}
 
 					if (skycodeError?.isErrorType(SkycodeErrorType.RateLimit)) {
 						return (
