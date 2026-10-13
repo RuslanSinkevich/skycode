@@ -1,6 +1,5 @@
 import { RecordingResult } from "@shared/proto/skycode/dictation"
 import { audioRecordingService } from "@/services/dictation/AudioRecordingService"
-import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
 import { Controller } from ".."
 
@@ -8,9 +7,6 @@ import { Controller } from ".."
  * Cancels audio recording without saving or transcribing the audio
  */
 export const cancelRecording = async (controller: Controller): Promise<RecordingResult> => {
-	const taskId = controller.task?.taskId
-	const recordingStatus = audioRecordingService.getRecordingStatus()
-	const recordingDuration = recordingStatus.durationSeconds * 1000
 	let errorMessage = ""
 	let isSuccess = true
 
@@ -24,7 +20,6 @@ export const cancelRecording = async (controller: Controller): Promise<Recording
 		errorMessage = error instanceof Error ? error.message : "Unknown error occurred"
 	}
 
-	telemetryService.captureVoiceRecordingStopped(taskId, recordingDuration, false, process.platform)
 	return RecordingResult.create({
 		success: isSuccess,
 		error: errorMessage ?? "",

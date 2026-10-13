@@ -123,9 +123,6 @@ export default defineConfig({
 				IS_DEV: JSON.stringify(process?.env?.IS_DEV),
 				IS_TEST: JSON.stringify(process?.env?.IS_TEST),
 				CI: JSON.stringify(process?.env?.CI),
-				// PostHog environment variables
-				TELEMETRY_SERVICE_API_KEY: JSON.stringify(process?.env?.TELEMETRY_SERVICE_API_KEY),
-				ERROR_SERVICE_API_KEY: JSON.stringify(process?.env?.ERROR_SERVICE_API_KEY),
 			},
 		}),
 	},

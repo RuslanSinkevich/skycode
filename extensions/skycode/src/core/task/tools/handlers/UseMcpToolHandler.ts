@@ -1,7 +1,6 @@
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
 import { SkycodeAsk, SkycodeAskUseMcpServer } from "@shared/ExtensionMessage"
-import { telemetryService } from "@/services/telemetry"
 import { SkycodeDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApproval } from "../../utils"
@@ -47,10 +46,6 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 		const tool_name: string | undefined = block.params.tool_name
 		const mcp_arguments: string | undefined = block.params.arguments
 
-		// Extract provider information for telemetry
-		const apiConfig = config.services.stateManager.getApiConfiguration()
-		const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
-		const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 
 		// Validate required parameters
 		if (!server_name) {
@@ -95,16 +90,6 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 			await config.callbacks.say("use_mcp_server", completeMessage, undefined, undefined, false)
 
 			// Capture telemetry
-			telemetryService.captureToolUsage(
-				config.ulid,
-				block.name,
-				config.api.getModel().id,
-				provider,
-				true,
-				true,
-				undefined,
-				block.isNativeToolCall,
-			)
 		} else {
 			// Manual approval flow
 			const notificationMessage = `Skycode wants to use ${tool_name || "unknown tool"} on ${server_name || "unknown server"}`
@@ -116,28 +101,7 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 
 			const didApprove = await ToolResultUtils.askApprovalAndPushFeedback("use_mcp_server", completeMessage, config)
 			if (!didApprove) {
-				telemetryService.captureToolUsage(
-					config.ulid,
-					block.name,
-					config.api.getModel().id,
-					provider,
-					false,
-					false,
-					undefined,
-					block.isNativeToolCall,
-				)
 				return formatResponse.toolDenied()
-			} else {
-				telemetryService.captureToolUsage(
-					config.ulid,
-					block.name,
-					config.api.getModel().id,
-					provider,
-					false,
-					true,
-					undefined,
-					block.isNativeToolCall,
-				)
 			}
 		}
 

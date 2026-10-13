@@ -16,11 +16,7 @@ import { StateManager } from "./core/storage/StateManager"
 import { openAiCodexOAuthManager } from "./integrations/openai-codex/oauth"
 import { ExtensionRegistryInfo } from "./registry"
 import { audioRecordingService } from "./services/dictation/AudioRecordingService"
-import { ErrorService } from "./services/error"
-import { featureFlagsService } from "./services/feature-flags"
 import { getDistinctId, initializeDistinctId } from "./services/logging/distinctId"
-import { telemetryService } from "./services/telemetry"
-import { PostHogClientProvider } from "./services/telemetry/providers/posthog/PostHogClientProvider"
 import { ShowMessageType } from "./shared/proto/host/window"
 import { syncWorker } from "./shared/services/worker/sync"
 import { getBlobStoreSettingsFromEnv } from "./shared/services/worker/worker"
@@ -54,18 +50,12 @@ export async function initialize(context: vscode.ExtensionContext): Promise<Webv
 	// Initialize OpenAI Codex OAuth manager with extension context for secrets storage
 	openAiCodexOAuthManager.initialize(context)
 
-	// Set the distinct ID for logging and telemetry
+	// Set the distinct ID used for logging
 	await initializeDistinctId(context)
-
-	// Initialize PostHog client provider
-	PostHogClientProvider.getInstance()
 
 	const webview = HostProvider.get().createWebviewProvider()
 
-	// Keep the webview activation path short. These services are useful, but they
-	// should not hold the Chat panel blank on cold start or slow networks.
-	runInBackground("ErrorService.initialize", () => ErrorService.initialize())
-	runInBackground("featureFlagsService.poll", () => featureFlagsService.poll(null))
+	// Keep the webview activation path short: nothing below may hold the Chat panel blank.
 	runInBackground("state migrations", async () => {
 		await migrateCustomInstructionsToGlobalRules(context)
 		await migrateWelcomeViewCompleted(context)
@@ -75,8 +65,6 @@ export async function initialize(context: vscode.ExtensionContext): Promise<Webv
 	})
 	runInBackground("FileContextTracker.cleanupOrphanedWarnings", () => FileContextTracker.cleanupOrphanedWarnings(context))
 	runInBackground("showVersionUpdateAnnouncement", () => showVersionUpdateAnnouncement(context))
-
-	telemetryService.captureExtensionActivated()
 
 	// Use remote config blobStoreConfig if available, otherwise fall back to env vars
 	const blobStoreSettings = StateManager.get().getRemoteConfigSettings()?.blobStoreConfig ?? getBlobStoreSettingsFromEnv()
@@ -124,10 +112,6 @@ export async function tearDown(): Promise<void> {
 	// Clean up audio recording service to ensure no orphaned processes
 	audioRecordingService.cleanup()
 
-	PostHogClientProvider.getInstance().dispose()
-	telemetryService.dispose()
-	ErrorService.get().dispose()
-	featureFlagsService.dispose()
 	// Dispose all webview instances
 	await WebviewProvider.disposeAllInstances()
 	syncWorker().dispose()

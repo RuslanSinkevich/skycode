@@ -4,7 +4,6 @@ import { formatResponse } from "@core/prompts/responses"
 import { resolveWorkspacePath } from "@core/workspace"
 import { globby } from "globby"
 import { getReadablePath, isLocatedInWorkspace } from "@utils/path"
-import { telemetryService } from "@/services/telemetry"
 import { SkycodeDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
@@ -55,10 +54,6 @@ export class GlobToolHandler implements IFullyManagedTool {
 		const pattern: string | undefined = block.params.pattern
 		const relDirPath: string | undefined = block.params.path
 
-		// Extract provider for telemetry
-		const apiConfig = config.services.stateManager.getApiConfiguration()
-		const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
-		const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 
 		// Validate required parameters
 		if (!pattern) {
@@ -133,21 +128,6 @@ export class GlobToolHandler implements IFullyManagedTool {
 			await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
 			await config.callbacks.say("tool", completeMessage, undefined, undefined, false)
 
-			telemetryService.captureToolUsage(
-				config.ulid,
-				block.name,
-				config.api.getModel().id,
-				provider,
-				true,
-				true,
-				{
-					isMultiRootEnabled: config.isMultiRootEnabled || false,
-					usedWorkspaceHint: false,
-					resolvedToNonPrimary: false,
-					resolutionMethod: "primary_fallback" as const,
-				},
-				block.isNativeToolCall,
-			)
 
 			// Run PreToolUse hook
 			try {

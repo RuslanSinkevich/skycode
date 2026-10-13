@@ -48,7 +48,6 @@ import { VscodeTerminalManager } from "./hosts/vscode/terminal/VscodeTerminalMan
 import { VscodeDiffViewProvider } from "./hosts/vscode/VscodeDiffViewProvider"
 import { VscodeWebviewProvider } from "./hosts/vscode/VscodeWebviewProvider"
 import { ExtensionRegistryInfo } from "./registry"
-import { telemetryService } from "./services/telemetry"
 import { SkycodeTempManager } from "./services/temp"
 import { SharedUriHandler } from "./services/uri/SharedUriHandler"
 import { AuthHandler } from "./hosts/external/AuthHandler"
@@ -545,7 +544,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
 			// Send show webview event with preserveEditorFocus flag
 			sendShowWebviewEvent(preserveEditorFocus)
-			telemetryService.captureButtonClick("command_focusChatInput", webview.controller?.task?.ulid)
 		}),
 	)
 
@@ -794,7 +792,6 @@ ${ctx.cellJson || "{}"}
 	context.subscriptions.push(
 		vscode.commands.registerCommand(commands.Walkthrough, async () => {
 			await vscode.commands.executeCommand("workbench.action.openWalkthrough", `${context.extension.id}#SkycodeWalkthrough`)
-			telemetryService.captureButtonClick("command_openWalkthrough")
 		}),
 	)
 
@@ -803,7 +800,6 @@ ${ctx.cellJson || "{}"}
 		vscode.commands.registerCommand(commands.ReconstructTaskHistory, async () => {
 			const { reconstructTaskHistory } = await import("./core/commands/reconstructTaskHistory")
 			await reconstructTaskHistory()
-			telemetryService.captureButtonClick("command_reconstructTaskHistory")
 		}),
 	)
 

@@ -1,5 +1,4 @@
 import { Empty, StringRequest } from "@shared/proto/skycode/common"
-import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
 import { Controller } from ".."
 
@@ -25,10 +24,6 @@ export async function toggleFavoriteModel(controller: Controller, request: Strin
 			: [...favoritedModelIds, modelId]
 
 		controller.stateManager.setGlobalState("favoritedModelIds", updatedFavorites)
-
-		// Capture telemetry for model favorite toggle
-		const isFavorited = !favoritedModelIds.includes(modelId)
-		telemetryService.captureModelFavoritesUsage(modelId, isFavorited)
 
 		// Post state to webview without changing any other configuration
 		await controller.postStateToWebview()

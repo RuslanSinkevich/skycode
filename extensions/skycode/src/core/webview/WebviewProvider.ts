@@ -119,7 +119,7 @@ export abstract class WebviewProvider {
 					- style-src 'unsafe-inline' is required by vscode-webview-ui-toolkit dynamic style injection.
 				-->
 				<meta http-equiv="Content-Security-Policy" content="default-src 'none';
-					connect-src https://*.posthog.com https://openrouter.ai https://*.openrouter.ai;
+					connect-src https://openrouter.ai https://*.openrouter.ai;
 					font-src ${this.getCspSource()} data:;
 					style-src ${this.getCspSource()} 'unsafe-inline';
 					img-src ${this.getCspSource()} https: data:;

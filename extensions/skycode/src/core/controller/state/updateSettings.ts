@@ -17,7 +17,6 @@ import { HostProvider } from "@/hosts/host-provider"
 import { McpDisplayMode } from "@/shared/McpDisplayMode"
 import { ShowMessageType } from "@/shared/proto/host/window"
 import { Logger } from "@/shared/services/Logger"
-import { telemetryService } from "../../../services/telemetry"
 import { BrowserSettings as SharedBrowserSettings } from "../../../shared/BrowserSettings"
 import { Controller } from ".."
 
@@ -200,17 +199,11 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 		}
 		// Update yolo mode setting
 		if (request.yoloModeToggled !== undefined) {
-			if (controller.task) {
-				telemetryService.captureYoloModeToggle(controller.task.ulid, request.yoloModeToggled)
-			}
 			controller.stateManager.setGlobalState("yoloModeToggled", request.yoloModeToggled)
 		}
 
 		// Update skycode web tools setting
 		if (request.skycodeWebToolsEnabled !== undefined) {
-			if (controller.task) {
-				telemetryService.captureSkycodeWebToolsToggle(controller.task.ulid, request.skycodeWebToolsEnabled)
-			}
 			controller.stateManager.setGlobalState("skycodeWebToolsEnabled", request.skycodeWebToolsEnabled)
 
 			if (request.skycodeWebToolsEnabled) {
@@ -304,34 +297,15 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 		}
 		// Update auto-condense setting
 		if (request.useAutoCondense !== undefined) {
-			if (controller.task) {
-				telemetryService.captureAutoCondenseToggle(
-					controller.task.ulid,
-					request.useAutoCondense,
-					controller.task.api.getModel().id,
-				)
-			}
 			controller.stateManager.setGlobalState("useAutoCondense", request.useAutoCondense)
 		}
 
 		// Update focus chain settings
 		if (request.focusChainSettings !== undefined) {
-			{
-				const currentSettings = controller.stateManager.getGlobalSettingsKey("focusChainSettings")
-				const wasEnabled = currentSettings?.enabled ?? false
-				const isEnabled = request.focusChainSettings.enabled
-
-				const focusChainSettings = {
-					enabled: isEnabled,
-					remindSkycodeInterval: request.focusChainSettings.remindSkycodeInterval,
-				}
-				controller.stateManager.setGlobalState("focusChainSettings", focusChainSettings)
-
-				// Capture telemetry when setting changes
-				if (wasEnabled !== isEnabled) {
-					telemetryService.captureFocusChainToggle(isEnabled)
-				}
-			}
+			controller.stateManager.setGlobalState("focusChainSettings", {
+				enabled: request.focusChainSettings.enabled,
+				remindSkycodeInterval: request.focusChainSettings.remindSkycodeInterval,
+			})
 		}
 
 		// Update custom prompt choice
@@ -434,8 +408,6 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 		}
 
 		if (request.subagentsEnabled !== undefined) {
-			const currentSettings = controller.stateManager.getGlobalSettingsKey("subagentsEnabled")
-			const wasEnabled = currentSettings ?? false
 			const isEnabled = !!request.subagentsEnabled
 
 			// Platform validation: Only allow enabling subagents on macOS and Linux
@@ -444,12 +416,6 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			}
 
 			controller.stateManager.setGlobalState("subagentsEnabled", isEnabled)
-
-			// Capture telemetry when setting changes
-			if (wasEnabled !== isEnabled) {
-				telemetryService.captureSubagentToggle(isEnabled)
-			}
-			controller.stateManager.setGlobalState("subagentsEnabled", !!request.subagentsEnabled)
 		}
 
 		if (request.skillsEnabled !== undefined) {
@@ -458,14 +424,6 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 
 		if (request.nativeToolCallEnabled !== undefined) {
 			controller.stateManager.setGlobalState("nativeToolCallEnabled", !!request.nativeToolCallEnabled)
-			if (controller.task) {
-				telemetryService.captureFeatureToggle(
-					controller.task.ulid,
-					"native-tool-call",
-					request.nativeToolCallEnabled,
-					controller.task.api.getModel().id,
-				)
-			}
 		}
 
 		if (request.enableParallelToolCalling !== undefined) {

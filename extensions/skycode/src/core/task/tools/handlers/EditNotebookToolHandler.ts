@@ -6,7 +6,6 @@ import { resolveWorkspacePath } from "@core/workspace"
 import { SkycodeSayTool } from "@shared/ExtensionMessage"
 import { fileExistsAtPath } from "@utils/fs"
 import { getReadablePath, isLocatedInWorkspace } from "@utils/path"
-import { telemetryService } from "@/services/telemetry"
 import { SkycodeDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApproval } from "../../utils"
@@ -268,10 +267,6 @@ export class EditNotebookToolHandler implements IFullyManagedTool {
 			const readablePath = getReadablePath(config.cwd, resolvedPath)
 			const isInWorkspace = await isLocatedInWorkspace(resolvedPath)
 
-			// Extract provider for telemetry
-			const apiConfig = config.services.stateManager.getApiConfiguration()
-			const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
-			const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 
 			// [SKYCODE] Check editNotebooks auto-approval setting
 			const autoApproveResult = config.autoApprover
@@ -300,16 +295,6 @@ export class EditNotebookToolHandler implements IFullyManagedTool {
 				await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "tool")
 				const didApprove = await ToolResultUtils.askApprovalAndPushFeedback("tool", completeMessage, config)
 				if (!didApprove) {
-					telemetryService.captureToolUsage(
-						config.ulid,
-						block.name,
-						config.api.getModel().id,
-						provider,
-						false,
-						false,
-						undefined,
-						block.isNativeToolCall,
-					)
 					return formatResponse.toolDenied()
 				}
 			}
@@ -329,16 +314,6 @@ export class EditNotebookToolHandler implements IFullyManagedTool {
 			}
 
 			// Track telemetry
-			telemetryService.captureToolUsage(
-				config.ulid,
-				block.name,
-				config.api.getModel().id,
-				provider,
-				didAutoApprove,
-				true,
-				undefined,
-				block.isNativeToolCall,
-			)
 
 			config.taskState.didEditFile = true
 			config.services.fileContextTracker.markFileAsEditedBySkycode(resolvedPath)

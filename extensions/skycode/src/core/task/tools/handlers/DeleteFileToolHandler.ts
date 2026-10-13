@@ -6,7 +6,6 @@ import { resolveWorkspacePath } from "@core/workspace"
 import { SkycodeSayTool } from "@shared/ExtensionMessage"
 import { fileExistsAtPath } from "@utils/fs"
 import { getReadablePath } from "@utils/path"
-import { telemetryService } from "@/services/telemetry"
 import { SkycodeDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApproval } from "../../utils"
@@ -42,10 +41,6 @@ export class DeleteFileToolHandler implements IFullyManagedTool {
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
 		const rawRelPath = block.params.path || block.params.absolutePath
 
-		// Extract provider for telemetry
-		const apiConfig = config.services.stateManager.getApiConfiguration()
-		const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
-		const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 
 		// Validate required params
 		if (!rawRelPath) {
@@ -113,16 +108,6 @@ export class DeleteFileToolHandler implements IFullyManagedTool {
 			await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "tool")
 			const didApprove = await ToolResultUtils.askApprovalAndPushFeedback("tool", completeMessage, config)
 			if (!didApprove) {
-				telemetryService.captureToolUsage(
-					config.ulid,
-					block.name,
-					config.api.getModel().id,
-					provider,
-					false,
-					false,
-					undefined,
-					block.isNativeToolCall,
-				)
 				return formatResponse.toolDenied()
 			}
 		}
@@ -133,16 +118,6 @@ export class DeleteFileToolHandler implements IFullyManagedTool {
 			await vscode.workspace.fs.delete(uri)
 
 			// Track telemetry
-			telemetryService.captureToolUsage(
-				config.ulid,
-				block.name,
-				config.api.getModel().id,
-				provider,
-				didAutoApprove,
-				true,
-				undefined,
-				block.isNativeToolCall,
-			)
 
 			return `File successfully deleted: ${readablePath}`
 		} catch (error) {

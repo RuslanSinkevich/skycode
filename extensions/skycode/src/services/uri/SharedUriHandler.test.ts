@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, it } from "mocha"
 import * as sinon from "sinon"
 import { WebviewProvider } from "@/core/webview"
 import { Logger } from "@/shared/services/Logger"
-import { ErrorService } from "../error"
 import { SharedUriHandler } from "./SharedUriHandler"
 
 describe("SharedUriHandler", () => {
@@ -11,26 +10,12 @@ describe("SharedUriHandler", () => {
 	let handleOpenRouterCallbackStub: sinon.SinonStub
 	let handleOcaAuthCallbackStub: sinon.SinonStub
 
-	beforeEach(async () => {
+	beforeEach(() => {
 		sandbox = sinon.createSandbox()
 
 		// Mock Logger methods to avoid HostProvider dependency
 		sandbox.stub(Logger, "info").returns()
 		sandbox.stub(Logger, "error").returns()
-		// Mock ErrorService to avoid telemetry dependency
-		const mockErrorService = {
-			logMessage: sandbox.stub(),
-			logException: sandbox.stub(),
-			toSkycodeError: sandbox.stub(),
-			isEnabled: sandbox.stub().returns(false),
-			getSettings: sandbox.stub().returns({ enabled: false, hostEnabled: false }),
-			getProvider: sandbox.stub(),
-			dispose: sandbox.stub().resolves(),
-		}
-		sandbox.stub(ErrorService, "initialize").resolves(mockErrorService as any)
-		sandbox.stub(ErrorService, "get").returns(mockErrorService as any)
-
-		await ErrorService.initialize()
 
 		handleOpenRouterCallbackStub = sandbox.stub().resolves()
 		handleOcaAuthCallbackStub = sandbox.stub().resolves()

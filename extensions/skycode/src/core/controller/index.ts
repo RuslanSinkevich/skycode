@@ -31,9 +31,7 @@ import { HostProvider } from "@/hosts/host-provider"
 import { ExtensionRegistryInfo } from "@/registry"
 import { OcaAuthService } from "@/services/auth/oca/OcaAuthService"
 import { LogoutReason } from "@/services/auth/types"
-import { featureFlagsService } from "@/services/feature-flags"
 import { getDistinctId } from "@/services/logging/distinctId"
-import { telemetryService } from "@/services/telemetry"
 import { BannerCardData } from "@/shared/skycode/banner"
 import { DEFAULT_INDEXING_CONFIG, type IndexingConfig, type IndexingMode, type LocalModelId } from "@/shared/IndexingTypes"
 import { getAxiosSettings } from "@/shared/net"
@@ -142,7 +140,6 @@ export class Controller {
 			() => ensureMcpServersDirectoryExists(),
 			() => ensureSettingsDirectoryExists(),
 			ExtensionRegistryInfo.version,
-			telemetryService,
 		)
 
 		// Check CLI installation status once on startup
@@ -322,8 +319,6 @@ export class Controller {
 
 	async updateTelemetrySetting(telemetrySetting: TelemetrySetting) {
 		this.stateManager.setGlobalState("telemetrySetting", telemetrySetting)
-		const isOptedIn = telemetrySetting !== "disabled"
-		telemetryService.updateTelemetryState(isOptedIn)
 		await this.postStateToWebview()
 	}
 
@@ -357,7 +352,6 @@ export class Controller {
 		this.stateManager.setGlobalState("mode", modeToSwitchTo)
 
 		// Capture mode switch telemetry | Capture regardless of if we know the taskId
-		telemetryService.captureModeSwitch(this.task?.ulid ?? "0", modeToSwitchTo)
 
 		// Update API handler with new mode (buildApiHandler now selects provider based on mode)
 		if (this.task) {

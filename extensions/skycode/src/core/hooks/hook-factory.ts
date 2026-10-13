@@ -3,7 +3,6 @@ import path from "path"
 import { Logger } from "@/shared/services/Logger"
 import { version as skycodeVersion } from "../../../package.json"
 import { getDistinctId } from "../../services/logging/distinctId"
-import { telemetryService } from "../../services/telemetry"
 import {
 	HookInput,
 	HookOutput,
@@ -27,8 +26,6 @@ const HOOK_EXECUTION_TIMEOUT_MS = 30000
 // Maximum size for context modification (to prevent prompt overflow)
 const MAX_CONTEXT_MODIFICATION_SIZE = 50000 // ~50KB
 
-// Exit code indicating cancellation/interruption (Unix SIGINT convention: 128 + signal 2)
-const EXIT_CODE_SIGINT = 130
 
 /**
  * Validates hook output JSON structure.
@@ -268,21 +265,6 @@ class StdioHookRunner<Name extends HookName> extends HookRunner<Name> {
 	}
 
 	override async [exec](input: HookInput): Promise<HookOutput> {
-		const startTime = performance.now()
-		const taskId = this.taskId // Local const for type narrowing in closures
-
-		// Capture telemetry at the start of individual hook execution
-		if (taskId) {
-			telemetryService.safeCapture(
-				() =>
-					telemetryService.captureHookExecution(taskId, this.hookName, "started", {
-						source: this.source,
-						toolName: this.toolName,
-					}),
-				"HookFactory.exec.started",
-			)
-		}
-
 		// Check if already aborted before starting
 		if (this.abortSignal?.aborted) {
 			throw HookExecutionError.cancellation(this.scriptPath)
@@ -434,46 +416,12 @@ class StdioHookRunner<Name extends HookName> extends HookRunner<Name> {
 
 			// If we have valid JSON, honor it regardless of exit code
 			if (parsedOutput) {
-				const durationMs = performance.now() - startTime
 
 				// Log warning if non-zero exit but valid JSON (for developers)
 				if (exitCode !== 0) {
 					Logger.warn(`[Hook ${this.hookName}] Exited with code ${exitCode} but provided valid JSON response`)
 					if (stderr) {
 						Logger.warn(`[Hook ${this.hookName}] stderr: ${stderr}`)
-					}
-				}
-
-				// Capture success/cancellation telemetry
-				if (taskId) {
-					if (parsedOutput.cancel) {
-						telemetryService.safeCapture(
-							() =>
-								telemetryService.captureHookExecution(taskId, this.hookName, "completed", {
-									source: this.source,
-									toolName: this.toolName,
-									durationMs,
-									exitCode: exitCode ?? EXIT_CODE_SIGINT,
-									cancelRequested: true,
-									contextModified: !!parsedOutput.contextModification,
-									contextSize: parsedOutput.contextModification?.length,
-								}),
-							"HookFactory.exec.completed.cancel",
-						)
-					} else {
-						telemetryService.safeCapture(
-							() =>
-								telemetryService.captureHookExecution(taskId, this.hookName, "completed", {
-									source: this.source,
-									toolName: this.toolName,
-									durationMs,
-									exitCode: exitCode ?? 0,
-									cancelRequested: false,
-									contextModified: !!parsedOutput.contextModification,
-									contextSize: parsedOutput.contextModification?.length,
-								}),
-							"HookFactory.exec.completed.success",
-						)
 					}
 				}
 
@@ -484,23 +432,8 @@ class StdioHookRunner<Name extends HookName> extends HookRunner<Name> {
 			if (exitCode === 0) {
 				// Hook succeeded but didn't provide JSON - allow execution (no cancellation)
 				Logger.warn(`[Hook ${this.hookName}] Completed successfully but no JSON response found`)
-				const durationMs = performance.now() - startTime
 
 				// Capture success telemetry even without JSON
-				if (taskId) {
-					telemetryService.safeCapture(
-						() =>
-							telemetryService.captureHookExecution(taskId, this.hookName, "completed", {
-								source: this.source,
-								toolName: this.toolName,
-								durationMs,
-								exitCode: 0,
-								cancelRequested: false,
-								contextModified: false,
-							}),
-						"HookFactory.exec.completed.noJson",
-					)
-				}
 
 				return HookOutput.create({
 					cancel: false,
@@ -510,48 +443,9 @@ class StdioHookRunner<Name extends HookName> extends HookRunner<Name> {
 				throw HookExecutionError.execution(this.scriptPath, exitCode ?? 1, stderr, this.hookName)
 			}
 		} catch (error) {
-			const durationMs = performance.now() - startTime
 
 			// If it's already a HookExecutionError, re-throw it
 			if (HookExecutionError.isHookError(error)) {
-				// Capture failure telemetry based on error type
-				if (taskId) {
-					if (error.errorInfo.type === "cancellation") {
-						telemetryService.safeCapture(
-							() =>
-								telemetryService.captureHookExecution(taskId, this.hookName, "cancelled", {
-									source: this.source,
-									toolName: this.toolName,
-								}),
-							"HookFactory.exec.error.cancellation",
-						)
-					} else if (error.errorInfo.type === "timeout") {
-						telemetryService.safeCapture(
-							() =>
-								telemetryService.captureHookExecution(taskId, this.hookName, "failed", {
-									source: this.source,
-									toolName: this.toolName,
-									durationMs,
-									errorType: "timeout",
-									errorMessage: error.message,
-								}),
-							"HookFactory.exec.error.timeout",
-						)
-					} else {
-						telemetryService.safeCapture(
-							() =>
-								telemetryService.captureHookExecution(taskId, this.hookName, "failed", {
-									source: this.source,
-									toolName: this.toolName,
-									durationMs,
-									exitCode: error.errorInfo.exitCode ?? 1,
-									errorType: error.errorInfo.type as "execution" | "timeout" | "validation",
-									errorMessage: error.message,
-								}),
-							"HookFactory.exec.error.failed",
-						)
-					}
-				}
 				throw error
 			}
 
@@ -561,52 +455,15 @@ class StdioHookRunner<Name extends HookName> extends HookRunner<Name> {
 
 			// Check for timeout
 			if (error instanceof Error && error.message.includes("timed out")) {
-				if (taskId) {
-					telemetryService.safeCapture(
-						() =>
-							telemetryService.captureHookExecution(taskId, this.hookName, "failed", {
-								source: this.source,
-								toolName: this.toolName,
-								durationMs,
-								errorType: "timeout",
-								errorMessage: error.message,
-							}),
-						"HookFactory.exec.catch.timeout",
-					)
-				}
 				throw HookExecutionError.timeout(this.scriptPath, HOOK_EXECUTION_TIMEOUT_MS, stderr, this.hookName)
 			}
 
 			// Check for cancellation
 			if (error instanceof Error && error.message.includes("cancelled")) {
-				if (taskId) {
-					telemetryService.safeCapture(
-						() =>
-							telemetryService.captureHookExecution(taskId, this.hookName, "cancelled", {
-								source: this.source,
-								toolName: this.toolName,
-							}),
-						"HookFactory.exec.catch.cancelled",
-					)
-				}
 				throw HookExecutionError.cancellation(this.scriptPath, this.hookName)
 			}
 
 			// Generic execution error - include hook name
-			if (taskId) {
-				telemetryService.safeCapture(
-					() =>
-						telemetryService.captureHookExecution(taskId, this.hookName, "failed", {
-							source: this.source,
-							toolName: this.toolName,
-							durationMs,
-							exitCode: exitCode ?? 1,
-							errorType: "execution",
-							errorMessage: error instanceof Error ? error.message : String(error),
-						}),
-					"HookFactory.exec.catch.execution",
-				)
-			}
 			throw HookExecutionError.execution(this.scriptPath, exitCode ?? 1, stderr, this.hookName)
 		}
 	}
@@ -765,15 +622,6 @@ export class HookFactory {
 		// Fetch hooks dirs once for source determination and telemetry
 		const hooksDirs = await getAllHooksDirs()
 
-		// Capture hook discovery telemetry
-		// Categorize scripts by location (global vs workspace)
-		const { globalCount, workspaceCount } = this.categorizeHookScripts(scripts, hooksDirs)
-		if (scripts.length > 0) {
-			telemetryService.safeCapture(
-				() => telemetryService.captureHookDiscovery(hookName, globalCount, workspaceCount),
-				"HookFactory.createWithStreaming.discovery",
-			)
-		}
 
 		// Create runners with source determination for each script
 		const runners = scripts.map((script) => {

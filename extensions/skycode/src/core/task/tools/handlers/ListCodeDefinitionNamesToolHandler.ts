@@ -3,7 +3,6 @@ import { resolveWorkspacePath } from "@core/workspace"
 import { parseSourceCodeForDefinitionsTopLevel } from "@services/tree-sitter"
 import { getReadablePath, isLocatedInWorkspace } from "@utils/path"
 import { formatResponse } from "@/core/prompts/responses"
-import { telemetryService } from "@/services/telemetry"
 import { SkycodeDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
@@ -43,10 +42,6 @@ export class ListCodeDefinitionNamesToolHandler implements IFullyManagedTool {
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
 		const relDirPath: string | undefined = block.params.path
 
-		// Extract provider using the proven pattern from ReportBugHandler
-		const apiConfig = config.services.stateManager.getApiConfiguration()
-		const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
-		const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 
 		// Validate required parameters
 		const pathValidation = this.validator.assertRequiredParams(block, "path")
@@ -79,16 +74,6 @@ export class ListCodeDefinitionNamesToolHandler implements IFullyManagedTool {
 		await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
 		await config.callbacks.say("tool", completeMessage, undefined, undefined, false)
 
-		telemetryService.captureToolUsage(
-			config.ulid,
-			block.name,
-			config.api.getModel().id,
-			provider,
-			true,
-			true,
-			undefined,
-			block.isNativeToolCall,
-		)
 
 		// Run PreToolUse hook after approval but before execution
 		try {

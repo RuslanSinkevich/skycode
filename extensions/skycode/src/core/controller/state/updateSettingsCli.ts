@@ -14,7 +14,6 @@ import { HostProvider } from "@/hosts/host-provider"
 import { ShowMessageType } from "@/shared/proto/host/window"
 import { Logger } from "@/shared/services/Logger"
 import { Mode, OpenaiReasoningEffort } from "@/shared/storage/types"
-import { telemetryService } from "../../../services/telemetry"
 import { Controller } from ".."
 
 /**
@@ -153,48 +152,25 @@ export async function updateSettingsCli(controller: Controller, request: UpdateS
 
 			// Update yolo mode setting (requires telemetry)
 			if (yoloModeToggled !== undefined) {
-				if (controller.task) {
-					telemetryService.captureYoloModeToggle(controller.task.ulid, yoloModeToggled)
-				}
 				controller.stateManager.setGlobalState("yoloModeToggled", yoloModeToggled)
 			}
 
 			// Update auto-condense setting (requires telemetry)
 			if (useAutoCondense !== undefined) {
-				if (controller.task) {
-					telemetryService.captureAutoCondenseToggle(
-						controller.task.ulid,
-						useAutoCondense,
-						controller.task.api.getModel().id,
-					)
-				}
 				controller.stateManager.setGlobalState("useAutoCondense", useAutoCondense)
 			}
 
 			// Update Skycode web tools setting (requires telemetry)
 			if (skycodeWebToolsEnabled !== undefined) {
-				if (controller.task) {
-					telemetryService.captureSkycodeWebToolsToggle(controller.task.ulid, skycodeWebToolsEnabled)
-				}
 				controller.stateManager.setGlobalState("skycodeWebToolsEnabled", skycodeWebToolsEnabled)
 			}
 
-			// Update focus chain settings (requires telemetry on state change)
+			// Update focus chain settings
 			if (focusChainSettings !== undefined) {
-				const currentSettings = controller.stateManager.getGlobalSettingsKey("focusChainSettings")
-				const wasEnabled = currentSettings?.enabled ?? false
-				const isEnabled = focusChainSettings.enabled
-
-				const newFocusChainSettings = {
-					enabled: isEnabled,
+				controller.stateManager.setGlobalState("focusChainSettings", {
+					enabled: focusChainSettings.enabled,
 					remindSkycodeInterval: focusChainSettings.remindSkycodeInterval,
-				}
-				controller.stateManager.setGlobalState("focusChainSettings", newFocusChainSettings)
-
-				// Capture telemetry when setting changes
-				if (wasEnabled !== isEnabled) {
-					telemetryService.captureFocusChainToggle(isEnabled)
-				}
+				})
 			}
 
 			// Update browser settings (requires careful merging to avoid protobuf defaults)

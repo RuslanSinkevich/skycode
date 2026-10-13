@@ -1,7 +1,6 @@
 import type { ApiProviderInfo } from "@core/api"
 import { SkycodeRulesToggles } from "@shared/skycode-rules"
 import fs from "fs/promises"
-import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
 import { isNativeToolCallingConfig } from "@/utils/model-utils"
 import {
@@ -139,7 +138,6 @@ export async function parseSlashCommands(
 				const processedText = commandReplacements[commandName] + textWithoutSlashCommand
 
 				// Track telemetry for builtin slash command usage
-				telemetryService.captureSlashCommandUsed(ulid, commandName, "builtin")
 
 				return { processedText: processedText, needsSkycoderulesFileCheck: commandName === "newrule" }
 			}
@@ -201,7 +199,6 @@ export async function parseSlashCommands(
 						textWithoutSlashCommand
 
 					// Track telemetry for workflow command usage
-					telemetryService.captureSlashCommandUsed(ulid, commandName, "workflow")
 
 					return { processedText, needsSkycoderulesFileCheck: false }
 				} catch (error) {

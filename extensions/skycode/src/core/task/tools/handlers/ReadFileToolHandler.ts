@@ -1,11 +1,10 @@
-import path from "node:path"
+
 import * as vscode from "vscode"
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
 import { resolveWorkspacePath } from "@core/workspace"
 import { extractFileContent } from "@integrations/misc/extract-file-content"
-import { arePathsEqual, getReadablePath, isLocatedInWorkspace } from "@utils/path"
-import { telemetryService } from "@/services/telemetry"
+import { getReadablePath, isLocatedInWorkspace } from "@utils/path"
 import { SkycodeSayTool } from "@/shared/ExtensionMessage"
 import { SkycodeDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
@@ -46,10 +45,6 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
 		const relPath: string | undefined = block.params.path
 
-		// Extract provider information for telemetry
-		const apiConfig = config.services.stateManager.getApiConfiguration()
-		const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
-		const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 
 		// Validate required parameters
 		const pathValidation = this.validator.assertRequiredParams(block, "path")
@@ -72,14 +67,6 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 		const { absolutePath, displayPath } =
 			typeof pathResult === "string" ? { absolutePath: pathResult, displayPath: relPath! } : pathResult
 
-		// Determine workspace context for telemetry
-		const fallbackAbsolutePath = path.resolve(config.cwd, relPath ?? "")
-		const workspaceContext = {
-			isMultiRootEnabled: config.isMultiRootEnabled || false,
-			usedWorkspaceHint: typeof pathResult !== "string", // multi-root path result indicates hint usage
-			resolvedToNonPrimary: !arePathsEqual(absolutePath, fallbackAbsolutePath),
-			resolutionMethod: (typeof pathResult !== "string" ? "hint" : "primary_fallback") as "hint" | "primary_fallback",
-		}
 
 		// Handle approval flow
 		const sharedMessageProps = {
@@ -95,16 +82,6 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 		await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
 		await config.callbacks.say("tool", completeMessage, undefined, undefined, false)
 
-		telemetryService.captureToolUsage(
-			config.ulid,
-			block.name,
-			config.api.getModel().id,
-			provider,
-			true,
-			true,
-			workspaceContext,
-			block.isNativeToolCall,
-		)
 
 		// Run PreToolUse hook after approval but before execution
 		try {

@@ -7,7 +7,6 @@ import { getSearchEngine } from "@/core/indexing/searchEngineInstance"
 import { parseWorkspaceInlinePath } from "@/core/workspace/utils/parseWorkspaceInlinePath"
 import { WorkspacePathAdapter } from "@/core/workspace/WorkspacePathAdapter"
 import { resolveWorkspacePath } from "@/core/workspace/WorkspaceResolver"
-import { telemetryService } from "@/services/telemetry"
 import { SkycodeSayTool } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import { SkycodeDefaultTool } from "@/shared/tools"
@@ -303,10 +302,6 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 		const regex: string | undefined = block.params.regex
 		const filePattern: string | undefined = block.params.file_pattern
 
-		// Extract provider information for telemetry
-		const apiConfig = config.services.stateManager.getApiConfiguration()
-		const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
-		const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 
 		if (!regex?.trim()) {
 			config.taskState.consecutiveMistakeCount++
@@ -321,39 +316,8 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 		// Determine which paths to search
 		const searchPaths = this.determineSearchPaths(config, parsedPath, workspaceHint, relDirPath)
 
-		// Determine workspace context for telemetry
-		const primaryWorkspaceRoot = searchPaths[0]?.workspaceRoot
-		const resolvedToNonPrimary =
-			searchPaths.length === 0
-				? true
-				: searchPaths.length > 1 || (primaryWorkspaceRoot ? !arePathsEqual(primaryWorkspaceRoot, config.cwd) : true)
-		const workspaceContext = {
-			isMultiRootEnabled: config.isMultiRootEnabled || false,
-			usedWorkspaceHint: !!workspaceHint,
-			resolvedToNonPrimary,
-			resolutionMethod: (workspaceHint ? "hint" : searchPaths.length > 1 ? "path_detection" : "primary_fallback") as
-				| "hint"
-				| "primary_fallback"
-				| "path_detection",
-		}
 
 		// Capture workspace path resolution telemetry
-		if (config.isMultiRootEnabled && config.workspaceManager) {
-			const resolutionType = workspaceHint
-				? "hint_provided"
-				: searchPaths.length > 1
-					? "cross_workspace_search"
-					: "fallback_to_primary"
-			telemetryService.captureWorkspacePathResolved(
-				config.ulid,
-				"SearchFilesToolHandler",
-				resolutionType,
-				workspaceHint ? "workspace_name" : undefined,
-				searchPaths.length > 0, // resolution success = found paths to search
-				undefined, // TODO: could calculate primary workspace index
-				true,
-			)
-		}
 
 		let effectiveFilePattern = filePattern
 		let guardrailPrefix = ""
@@ -362,35 +326,18 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 		const searchesWorkspaceRoot = searchPaths.some(({ absolutePath, workspaceRoot }) =>
 			workspaceRoot ? arePathsEqual(absolutePath, workspaceRoot) : arePathsEqual(absolutePath, config.cwd),
 		)
-		const scope = this.pathScope(config, searchPaths)
 		let effectiveSearchPaths = searchPaths
-		let strategy: "index_first" | "regex_only" | "regex_first" = "regex_only"
 		if (missingPattern && broadRegex && searchesWorkspaceRoot) {
-			telemetryService.captureSearchGuardrailTriggered(
-				config.ulid,
-				"root_path_no_pattern_broad_regex",
-				scope,
-				true,
-			)
 			const shortlistPaths = await this.buildIndexShortlistPaths(config, searchPaths, regex)
 			if (shortlistPaths.length > 0) {
 				effectiveSearchPaths = shortlistPaths
-				strategy = "index_first"
 				guardrailPrefix =
 					`[Guardrail] Wide search detected. Discover->inspect mode enabled with ${shortlistPaths.length} shortlist path(s).\n\n`
 			}
 			effectiveFilePattern = SearchFilesToolHandler.SAFE_FILE_PATTERN
 			guardrailPrefix += `[Guardrail] Applied safe file pattern: ${effectiveFilePattern}\n\n`
-			telemetryService.captureSearchFilesProfileApplied(
-				config.ulid,
-				"safe_code_files",
-				effectiveFilePattern,
-				"root_path_no_pattern_broad_regex",
-			)
 		}
 		if (this.isWeakModel(config) && searchesWorkspaceRoot && missingPattern) {
-			telemetryService.captureSearchGuardrailTriggered(config.ulid, "weak_model_root_path_missing_pattern_blocked", scope, false)
-			telemetryService.captureSearchStrategyChosen(config.ulid, strategy, effectiveSearchPaths.length, !!workspaceHint)
 			const blockedResults = `[Guardrail] Your search is too broad for the workspace root. Please:\n1. Use codebase_search first to find relevant directories.\n2. Then call search_files with a specific path and file_pattern.\nExample: search_files with path="src/core" and file_pattern="*.ts"`
 			const blockedMessage = JSON.stringify({
 				tool: "searchFiles",
@@ -402,19 +349,8 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 			} satisfies SkycodeSayTool)
 			await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
 			await config.callbacks.say("tool", blockedMessage, undefined, undefined, false)
-			telemetryService.captureToolUsage(
-				config.ulid,
-				block.name,
-				config.api.getModel().id,
-				provider,
-				true,
-				true,
-				workspaceContext,
-				block.isNativeToolCall,
-			)
 			return blockedResults
 		}
-		telemetryService.captureSearchStrategyChosen(config.ulid, strategy, effectiveSearchPaths.length, !!workspaceHint)
 
 		// Execute searches in all relevant workspaces in parallel
 		const searchPromises = effectiveSearchPaths.map(({ absolutePath, workspaceName, workspaceRoot }) =>
@@ -429,33 +365,12 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 			Logger.warn(
 				`[Search] Slow search_files: ${Math.round(searchDurationMs)}ms, regex="${regex}", path="${relDirPath}", pattern="${effectiveFilePattern || ""}"`,
 			)
-			telemetryService.captureSearchSlowQuery(config.ulid, searchDurationMs, scope, regex, effectiveFilePattern)
 		}
 
 		// Format and combine results
 		const results = guardrailPrefix + this.formatSearchResults(config, searchResults, effectiveSearchPaths)
-		if (searchResults.some((result) => result.errorType === "timeout")) {
-			telemetryService.captureSearchFilesTimeout(config.ulid, searchDurationMs, scope)
-		}
 
 		// Capture workspace search pattern telemetry
-		if (config.isMultiRootEnabled && config.workspaceManager) {
-			const searchType = workspaceHint
-				? "targeted"
-				: effectiveSearchPaths.length > 1
-					? "cross_workspace"
-					: "primary_only"
-			const resultsFound = searchResults.some((result) => result.resultCount > 0)
-
-			telemetryService.captureWorkspaceSearchPattern(
-				config.ulid,
-				searchType,
-				effectiveSearchPaths.length,
-				!!workspaceHint,
-				resultsFound,
-				searchDurationMs,
-			)
-		}
 
 		const sharedMessageProps = {
 			tool: "searchFiles",
@@ -472,16 +387,6 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 		await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
 		await config.callbacks.say("tool", completeMessage, undefined, undefined, false)
 
-		telemetryService.captureToolUsage(
-			config.ulid,
-			block.name,
-			config.api.getModel().id,
-			provider,
-			true,
-			true,
-			workspaceContext,
-			block.isNativeToolCall,
-		)
 
 		// Run PreToolUse hook after approval but before execution
 		try {

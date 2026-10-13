@@ -1,4 +1,3 @@
-import { TerminalOutputFailureReason, telemetryService } from "@services/telemetry"
 import { EventEmitter } from "events"
 import * as vscode from "vscode"
 import { stripAnsi } from "@/hosts/vscode/terminal/ansiUtils"
@@ -208,24 +207,12 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 				// the command process is finished, let's check the output to see if we need to use the terminal capture fallback
 				if (!this.fullOutput.trim()) {
 					// No output captured via shell integration, trying fallback
-					telemetryService.captureTerminalOutputFailure(TerminalOutputFailureReason.TIMEOUT, "vscode")
 					await returnCurrentTerminalContents()
-					// Check if fallback worked
-					const terminalSnapshot = await getLatestTerminalOutput()
-					if (terminalSnapshot && terminalSnapshot.trim()) {
-						telemetryService.captureTerminalExecution(true, "vscode", "clipboard")
-					} else {
-						telemetryService.captureTerminalExecution(false, "vscode", "none")
-					}
-				} else {
-					// Shell integration worked
-					telemetryService.captureTerminalExecution(true, "vscode", "shell_integration")
 				}
 
 				this.complete()
 			} else {
 				// no shell integration detected, we'll fallback to running the command and capturing the terminal's output after some time
-				telemetryService.captureTerminalOutputFailure(TerminalOutputFailureReason.NO_SHELL_INTEGRATION, "vscode")
 				terminal.sendText(command, true)
 
 				// wait 3 seconds for the command to run
@@ -233,13 +220,6 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 
 				// For terminals without shell integration, also try to capture terminal content
 				await returnCurrentTerminalContents()
-				// Check if clipboard fallback worked
-				const terminalSnapshot = await getLatestTerminalOutput()
-				if (terminalSnapshot && terminalSnapshot.trim()) {
-					telemetryService.captureTerminalExecution(true, "vscode", "clipboard")
-				} else {
-					telemetryService.captureTerminalExecution(false, "vscode", "none")
-				}
 				// For terminals without shell integration, we can't know when the command completes
 				// So we'll just emit the continue event after a delay
 				this.complete()
@@ -247,7 +227,6 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 			}
 		} catch (error) {
 			Logger.error("VSCode terminal command failed:", error)
-			telemetryService.captureTerminalExecution(false, "vscode", "none")
 			await returnCurrentTerminalContents()
 			this.emit("error", error instanceof Error ? error : new Error(String(error)))
 			this.complete()

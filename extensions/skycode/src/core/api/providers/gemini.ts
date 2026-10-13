@@ -9,7 +9,6 @@ import {
 	ThinkingLevel,
 } from "@google/genai"
 import { GeminiModelId, geminiDefaultModelId, geminiModels, ModelInfo } from "@shared/api"
-import { telemetryService } from "@/services/telemetry"
 import { SkycodeStorageMessage } from "@/shared/messages/content"
 import { Logger } from "@/shared/services/Logger"
 import { ApiHandler, CommonApiHandlerOptions } from "../"
@@ -162,11 +161,7 @@ export class GeminiHandler implements ApiHandler {
 		}
 
 		// Generate content using the configured parameters
-		const sdkCallStartTime = Date.now()
 		let responseId: string | undefined
-		let sdkFirstChunkTime: number | undefined
-		let ttftSdkMs: number | undefined
-		let apiSuccess = false
 		let apiError: string | undefined
 		let promptTokens = 0
 		let outputTokens = 0
@@ -195,15 +190,9 @@ export class GeminiHandler implements ApiHandler {
 				},
 			})
 
-			let isFirstSdkChunk = true
 			for await (const chunk of result) {
 				if (abortSignal.aborted) {
 					throw new Error("Aborted by user")
-				}
-				if (isFirstSdkChunk) {
-					sdkFirstChunkTime = Date.now()
-					ttftSdkMs = sdkFirstChunkTime - sdkCallStartTime
-					isFirstSdkChunk = false
 				}
 
 				// Handle thinking content from Gemini's response
@@ -253,7 +242,6 @@ export class GeminiHandler implements ApiHandler {
 					cacheReadTokens = lastUsageMetadata.cachedContentTokenCount ?? cacheReadTokens
 				}
 			}
-			apiSuccess = true
 
 			if (lastUsageMetadata) {
 				const totalCost = this.calculateCost({
@@ -275,9 +263,7 @@ export class GeminiHandler implements ApiHandler {
 				}
 			}
 		} catch (error) {
-			apiSuccess = false
 			// Let the error propagate to be handled by withRetry or Task.ts
-			// Telemetry will be sent in the finally block.
 			if (error instanceof Error) {
 				apiError = error.message
 
@@ -322,29 +308,6 @@ export class GeminiHandler implements ApiHandler {
 
 			throw error
 		} finally {
-			const sdkCallEndTime = Date.now()
-			const totalDurationSdkMs = sdkCallEndTime - sdkCallStartTime
-			const cacheHit = cacheReadTokens > 0
-			const cacheHitPercentage = promptTokens > 0 ? (cacheReadTokens / promptTokens) * 100 : undefined
-			const throughputTokensPerSecSdk =
-				totalDurationSdkMs > 0 && outputTokens > 0 ? outputTokens / (totalDurationSdkMs / 1000) : undefined
-
-			if (this.options.ulid) {
-				telemetryService.captureGeminiApiPerformance(this.options.ulid, modelId, {
-					ttftSec: ttftSdkMs !== undefined ? ttftSdkMs / 1000 : undefined,
-					totalDurationSec: totalDurationSdkMs / 1000,
-					promptTokens,
-					outputTokens,
-					cacheReadTokens,
-					cacheHit,
-					cacheHitPercentage,
-					apiSuccess,
-					apiError,
-					throughputTokensPerSec: throughputTokensPerSecSdk,
-				})
-			} else {
-				Logger.warn("GeminiHandler: ulid not available for telemetry in createMessage.")
-			}
 			this.aborter.clear()
 		}
 	}

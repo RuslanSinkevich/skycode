@@ -8,7 +8,6 @@ import { StateManager } from "@core/storage/StateManager"
 import { resolveWorkspacePath } from "@core/workspace"
 import { extractFileContent } from "@integrations/misc/extract-file-content"
 import { SkycodeSayTool } from "@shared/ExtensionMessage"
-import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
 import { SkycodeDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
@@ -238,27 +237,7 @@ export class SummarizeTaskHandler implements IToolHandler, IPartialBlockHandler 
 			// Set summarizing state
 			config.taskState.currentlySummarizing = true
 
-			// Capture telemetry after main business logic is complete
-			const telemetryData = config.services.contextManager.getContextTelemetryData(
-				config.messageState.getSkycodeMessages(),
-				config.api,
-				config.taskState.lastAutoCompactTriggerIndex,
-			)
 
-			if (telemetryData) {
-				// Extract provider information for telemetry
-				const apiConfig = config.services.stateManager.getApiConfiguration()
-				const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
-				const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
-
-				telemetryService.captureSummarizeTask(
-					config.ulid,
-					config.api.getModel().id,
-					provider,
-					telemetryData.tokensUsed,
-					telemetryData.maxContextWindow,
-				)
-			}
 
 			return toolResult
 		} catch (error) {

@@ -2,7 +2,6 @@ import { SkycodeSayTool } from "@shared/ExtensionMessage"
 import { SkycodeDefaultTool } from "@shared/tools"
 import { UrlContentFetcher } from "@/services/browser/UrlContentFetcher"
 import { assertSafeUrl, UnsafeUrlError } from "@/services/browser/urlSafety"
-import { telemetryService } from "@/services/telemetry"
 
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
@@ -38,9 +37,6 @@ export class WebFetchToolHandler implements IFullyManagedTool {
 			const url: string | undefined = block.params.url
 			const prompt: string | undefined = block.params.prompt
 
-			const apiConfig = config.services.stateManager.getApiConfiguration()
-			const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
-			const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 
 			const skycodeWebToolsEnabled = config.services.stateManager.getGlobalSettingsKey("skycodeWebToolsEnabled")
 			if (!skycodeWebToolsEnabled) {
@@ -79,16 +75,6 @@ export class WebFetchToolHandler implements IFullyManagedTool {
 
 			await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
 			await config.callbacks.say("tool", completeMessage, undefined, undefined, false)
-			telemetryService.captureToolUsage(
-				config.ulid,
-				"web_fetch",
-				config.api.getModel().id,
-				provider,
-				true,
-				true,
-				undefined,
-				block.isNativeToolCall,
-			)
 
 			try {
 				const { ToolHookUtils } = await import("../utils/ToolHookUtils")

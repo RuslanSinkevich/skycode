@@ -1,7 +1,6 @@
 import { FocusChainSettings } from "@shared/FocusChainSettings"
 import * as chokidar from "chokidar"
 import * as fs from "fs/promises"
-import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
 import { SkycodeSay } from "../../../shared/ExtensionMessage"
 import { Mode } from "../../../shared/storage/types"
@@ -41,7 +40,6 @@ export class FocusChainManager {
 		partial?: boolean,
 	) => Promise<number | undefined>
 	private focusChainFileWatcher?: chokidar.FSWatcher
-	private hasTrackedFirstProgress = false
 	private focusChainSettings: FocusChainSettings
 	private fileUpdateDebounceTimer?: NodeJS.Timeout
 
@@ -121,7 +119,6 @@ export class FocusChainManager {
 						this.taskState.todoListWasUpdatedByUser = true
 
 						await this.postStateToWebview()
-						telemetryService.captureFocusChainListWritten(this.taskId)
 					} else {
 						Logger.log(
 							`[Task ${this.taskId}] Focus Chain List: File watcher triggered but content unchanged, skipping update`,
@@ -264,10 +261,10 @@ export class FocusChainManager {
 
 	/**
 	 * Processes focus chain list updates from the AI model's task_progress parameter and persists them to disk.
-	 * Handles telemetry tracking for progress updates and falls back to reading existing files if no update provided.
+	 * Falls back to reading existing files if no update provided.
 	 * Also manages the apiRequestsSinceLastTodoUpdate counter and includes comprehensive error handling.
 	 * @param taskProgress - Optional focus chain list string from AI model's task_progress parameter
-	 * @requires this.taskState, this.say method, and telemetryService to be available
+	 * @requires this.taskState and this.say method to be available
 	 * @returns Promise<void> - Updates taskState.currentFocusChainChecklist and sends UI messages
 	 */
 	public async updateFCListFromToolResponse(taskProgress: string | undefined) {
@@ -284,19 +281,6 @@ export class FocusChainManager {
 				Logger.debug(
 					`[Task ${this.taskId}] focus chain list: LLM provided focus chain list update via task_progress parameter. Length ${previousList?.length || 0} > ${this.taskState.currentFocusChainChecklist.length}`,
 				)
-
-				// Parse focus chain list counts for telemetry
-				const { totalItems, completedItems } = parseFocusChainListCounts(taskProgress.trim())
-
-				// Track first progress creation
-				if (!this.hasTrackedFirstProgress && totalItems > 0) {
-					telemetryService.captureFocusChainProgressFirst(this.taskId, totalItems)
-					this.hasTrackedFirstProgress = true
-				}
-				// Track progress updates (only if not the first, and has items)
-				else if (this.hasTrackedFirstProgress && totalItems > 0) {
-					telemetryService.captureFocusChainProgressUpdate(this.taskId, totalItems, completedItems)
-				}
 
 				// Write the model's update to the markdown file
 				try {
@@ -359,33 +343,6 @@ export class FocusChainManager {
 			hasNoTodoListAfterMultipleRequests
 
 		return shouldInclude
-	}
-
-	/**
-	 * Analyzes the current focus chain list for incomplete items when a task is marked as complete.
-	 * Captures telemetry data about unfinished progress items to help improve the focus chain system.
-	 * @param modelId The model ID being used (for telemetry)
-	 * @param provider The API provider being used (for telemetry)
-	 * @requires this.focusChainSettings.enabled and this.taskState.currentFocusChainChecklist to exist
-	 * @returns void - Sends telemetry data if incomplete items found, no return value
-	 */
-	public checkIncompleteProgressOnCompletion(modelId: string, provider: string) {
-		if (this.focusChainSettings.enabled && this.taskState.currentFocusChainChecklist) {
-			const { totalItems, completedItems } = parseFocusChainListCounts(this.taskState.currentFocusChainChecklist)
-
-			// Only track if there are items and not all are marked as completed
-			if (totalItems > 0 && completedItems < totalItems) {
-				const incompleteItems = totalItems - completedItems
-				telemetryService.captureFocusChainIncompleteOnCompletion(
-					this.taskId,
-					totalItems,
-					completedItems,
-					incompleteItems,
-					modelId,
-					provider,
-				)
-			}
-		}
 	}
 
 	/**

@@ -3,7 +3,6 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { TranscribeAudioRequest, Transcription } from "@shared/proto/skycode/dictation"
 import { getWhisperLocalService } from "@/services/dictation/WhisperLocalService"
-import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
 import { Controller } from ".."
 
@@ -13,11 +12,8 @@ import { Controller } from ".."
  * Local mode: audioBase64 → temp .webm file → ffmpeg convert to .wav → whisper.cpp → text
  */
 export const transcribeAudio = async (controller: Controller, request: TranscribeAudioRequest): Promise<Transcription> => {
-	const taskId = controller.task?.taskId
 	const startTime = Date.now()
 	const language = request.language || "ru"
-
-	telemetryService.captureVoiceTranscriptionStarted(taskId, language)
 
 	try {
 		// Try local Whisper.cpp first
@@ -28,24 +24,15 @@ export const transcribeAudio = async (controller: Controller, request: Transcrib
 			const durationMs = Date.now() - startTime
 			Logger.info(`[transcribeAudio] Result: "${text?.substring(0, 80)}", ${durationMs}ms`)
 
-			if (text) {
-				telemetryService.captureVoiceTranscriptionCompleted(taskId, text.length, durationMs, language)
-			}
-
 			return Transcription.create({ text: text ?? "", error: "" })
 		}
 
-		const durationMs = Date.now() - startTime
 		const error = "Local voice components are not installed. Open Voice settings and download the local Whisper package."
-		telemetryService.captureVoiceTranscriptionError(taskId, "local_whisper_not_ready", error, durationMs)
 
 		return Transcription.create({ text: "", error })
 	} catch (error) {
 		Logger.error("[transcribeAudio] Error:", error)
-		const durationMs = Date.now() - startTime
 		const errorMessage = error instanceof Error ? error.message : "Unknown error occurred"
-
-		telemetryService.captureVoiceTranscriptionError(taskId, "unexpected_error", errorMessage, durationMs)
 
 		return Transcription.create({
 			text: "",

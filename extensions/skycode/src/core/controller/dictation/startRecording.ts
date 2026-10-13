@@ -3,7 +3,6 @@ import * as os from "os"
 import { HostProvider } from "@/hosts/host-provider"
 import { t } from "@/i18n/backend-i18n"
 import { audioRecordingService } from "@/services/dictation/AudioRecordingService"
-import { telemetryService } from "@/services/telemetry"
 import { AUDIO_PROGRAM_CONFIG } from "@/shared/audioProgramConstants"
 import { ShowMessageType } from "@/shared/proto/host/window"
 import { Logger } from "@/shared/services/Logger"
@@ -94,8 +93,6 @@ function isMissingDependencyError(
  * @returns RecordingResult with success status
  */
 export const startRecording = async (controller: Controller): Promise<RecordingResult> => {
-	const taskId = controller.task?.taskId
-
 	try {
 		// Check if local Whisper.cpp is available (use model from user settings)
 		let whisper: any = null
@@ -160,7 +157,6 @@ export const startRecording = async (controller: Controller): Promise<RecordingR
 
 		// Handle successful recording start
 		if (result.success) {
-			telemetryService.captureVoiceRecordingStarted(taskId, process.platform)
 			return RecordingResult.create({
 				success: true,
 				error: "",

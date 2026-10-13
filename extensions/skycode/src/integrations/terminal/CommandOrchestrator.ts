@@ -13,7 +13,6 @@
 
 import { setTimeout as setTimeoutPromise } from "node:timers/promises"
 import { processFilesIntoText as _unusedProcessFilesIntoText } from "@integrations/misc/extract-text"
-import { telemetryService } from "@services/telemetry"
 import { SkycodeTempManager } from "@services/temp"
 import * as fs from "fs"
 import { Logger } from "@/shared/services/Logger"
@@ -54,7 +53,7 @@ export async function orchestrateCommandExecution(
 ): Promise<OrchestrationResult> {
 	// autoProceedAfterMs is decided by the caller (resolveCommandTiming) — an explicit
 	// timeout from the model must not be shortened by the soft auto-proceed here.
-	const { timeoutSeconds, terminalType = "vscode", autoProceedAfterMs, onOutputLine, onProceedWhileRunning } = options
+	const { timeoutSeconds, autoProceedAfterMs, onOutputLine, onProceedWhileRunning } = options
 
 	// Track command execution state (для UI индикации "идёт команда" и Cancel кнопки)
 	callbacks.updateBackgroundCommandState(true)
@@ -233,7 +232,6 @@ export async function orchestrateCommandExecution(
 	// Start timer to detect if waiting for completion takes too long (telemetry only)
 	completionTimer = setTimeout(() => {
 		if (!completed) {
-			telemetryService.captureTerminalHang("waiting_for_completion" as any, terminalType)
 			completionTimer = null
 		}
 	}, COMPLETION_TIMEOUT_MS)

@@ -16,7 +16,6 @@
  */
 
 import { isSubagentCommand, transformSkycodeCommand } from "@integrations/cli-subagents/subagent_command"
-import { telemetryService } from "@services/telemetry"
 import { findLastIndex } from "@shared/array"
 import { SkycodeToolResponseContent } from "@shared/messages"
 import { Logger } from "@/shared/services/Logger"
@@ -116,7 +115,6 @@ export class CommandExecutor {
 			command = command.substring(workspaceCdPrefix.length)
 		}
 
-		const subAgentStartTime = isSubagent ? performance.now() : 0
 
 		// Select the appropriate terminal manager
 		// Subagents always use standalone manager (hidden terminal)
@@ -169,10 +167,6 @@ export class CommandExecutor {
 		})
 
 		// Capture subagent telemetry
-		if (isSubagent && subAgentStartTime > 0) {
-			const durationMs = Math.round(performance.now() - subAgentStartTime)
-			telemetryService.captureSubagentExecution(this.ulid, durationMs, result.outputLines.length, result.completed)
-		}
 
 		// If the command was cancelled externally (via cancel button), return a clear cancellation message
 		// This ensures the AI agent knows the command was cancelled by the user

@@ -80,8 +80,7 @@ import {
 	FullCommandExecutorConfig,
 	StandaloneTerminalManager,
 } from "@/integrations/terminal"
-import { ErrorService, SkycodeError, SkycodeErrorType } from "@/services/error"
-import { telemetryService } from "@/services/telemetry"
+import { SkycodeError, SkycodeErrorType } from "@/services/error"
 import {
 	SkycodeAssistantContent,
 	SkycodeContent,
@@ -109,7 +108,7 @@ import { MessageStateHandler } from "./message-state"
 import { StreamResponseHandler } from "./StreamResponseHandler"
 import { TaskState } from "./TaskState"
 import { ToolExecutor } from "./ToolExecutor"
-import { extractProviderDomainFromUrl, updateApiReqMsg } from "./utils"
+import { updateApiReqMsg } from "./utils"
 import { buildUserFeedbackContent } from "./utils/buildUserFeedbackContent"
 
 export type ToolResponse = SkycodeToolResponseContent
@@ -395,12 +394,6 @@ export class Task {
 		// Build API handler from current settings (also refreshed before each API attempt — see syncApiHandlerFromSettings)
 		this.syncApiHandlerFromSettings()
 
-		const apiConfiguration = this.stateManager.getApiConfiguration()
-		const mode = this.stateManager.getGlobalSettingsKey("mode")
-		const apiMode = getApiSettingsMode(mode)
-		const currentProvider = apiMode === "plan" ? apiConfiguration.planModeApiProvider : apiConfiguration.actModeApiProvider
-
-		// Set ulid on browserSession for telemetry tracking
 		this.browserSession.setUlid(this.ulid)
 
 		// Note: Task initialization (startTask/resumeTaskFromHistory) is now called
@@ -412,22 +405,6 @@ export class Task {
 			this.FocusChainManager.setupFocusChainFileWatcher().catch((error) => {
 				Logger.error(`[Task ${this.taskId}] Failed to setup focus chain file watcher:`, error)
 			})
-		}
-
-		// initialize telemetry
-
-		// Extract domain of the provider endpoint if using OpenAI Compatible provider
-		let openAiCompatibleDomain: string | undefined
-		if (currentProvider === "openai" && apiConfiguration.openAiBaseUrl) {
-			openAiCompatibleDomain = extractProviderDomainFromUrl(apiConfiguration.openAiBaseUrl)
-		}
-
-		if (historyItem) {
-			// Open task from history
-			telemetryService.captureTaskRestarted(this.ulid, currentProvider, openAiCompatibleDomain)
-		} else {
-			// New task started
-			telemetryService.captureTaskCreated(this.ulid, currentProvider, openAiCompatibleDomain)
 		}
 
 		// Initialize command executor with config and callbacks
@@ -1594,20 +1571,7 @@ export class Task {
 				Logger.error("Failed to post state after setting abort flag", error)
 			}
 
-			// PHASE 6: Check for incomplete progress
-			if (this.FocusChainManager) {
-				// Extract current model and provider for telemetry
-				const apiConfig = this.stateManager.getApiConfiguration()
-				const currentMode = this.stateManager.getGlobalSettingsKey("mode")
-				const currentProvider = (
-					currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider
-				) as string
-				const currentModelId = this.api.getModel().id
-
-				this.FocusChainManager.checkIncompleteProgressOnCompletion(currentModelId, currentProvider)
-			}
-
-			// PHASE 7: Clean up resources
+			// PHASE 6: Clean up resources
 			this.terminalManager.disposeAll()
 			this.urlContentFetcher.closeBrowser()
 			await this.browserSession.dispose()
@@ -2054,10 +2018,8 @@ export class Task {
 		} catch (error) {
 			const isContextWindowExceededError = checkContextWindowExceededError(error)
 			const { model, providerId } = this.getCurrentProviderInfo()
-			const skycodeError = ErrorService.get().toSkycodeError(error, model.id, providerId)
-
-			// Capture provider failure telemetry using skycodeError
-			ErrorService.get().logMessage(skycodeError.message)
+			const skycodeError = SkycodeError.transform(error, model.id, providerId)
+			Logger.error(`[Task] API request failed (${providerId}/${model.id}):`, skycodeError.message)
 
 			if (isContextWindowExceededError && !this.taskState.didAutomaticallyRetryFailedApiRequest) {
 				await this.handleContextWindowExceededError()
@@ -2532,9 +2494,6 @@ export class Task {
 			(m) => m.say === "api_req_started",
 		)
 
-		// Save checkpoint if this is the first API request
-		const isFirstRequest =
-			this.messageStateHandler.getSkycodeMessages().filter((m) => m.say === "api_req_started").length === 0
 
 		// Determine if we should compact context window
 		// Note: We delay context loading until we know if we're compacting (performance optimization)
@@ -2679,13 +2638,8 @@ export class Task {
 			content: userContent,
 		})
 
-		telemetryService.captureConversationTurnEvent(this.ulid, providerId, model.id, "user", modelInfo.mode)
 
 		// Capture task initialization timing telemetry for the first API request
-		if (isFirstRequest) {
-			const durationMs = Math.round(performance.now() - this.taskInitializationStartTime)
-			telemetryService.captureTaskInitialization(this.ulid, this.taskId, durationMs, false)
-		}
 
 		// since we sent off a placeholder api_req_started message to update the webview while waiting to actually start the API request (to load potential details for example), we need to update the text of that message
 		const lastApiReqIndex = findLastIndex(this.messageStateHandler.getSkycodeMessages(), (m) => m.say === "api_req_started")
@@ -2760,21 +2714,6 @@ export class Task {
 					},
 				})
 
-				telemetryService.captureConversationTurnEvent(
-					this.ulid,
-					providerId,
-					modelInfo.modelId,
-					"assistant",
-					modelInfo.mode,
-					{
-						tokensIn: taskMetrics.inputTokens,
-						tokensOut: taskMetrics.outputTokens,
-						cacheWriteTokens: taskMetrics.cacheWriteTokens,
-						cacheReadTokens: taskMetrics.cacheReadTokens,
-						totalCost: taskMetrics.totalCost,
-					},
-					this.useNativeToolCalls, // For assistant turn only.
-				)
 
 				// signals to provider that it can retrieve the saved messages from disk, as abortTask can not be awaited on in nature
 				this.taskState.didFinishAbortingStream = true
@@ -2950,7 +2889,8 @@ export class Task {
 				}
 				// abandoned happens when extension is no longer waiting for the skycode instance to finish aborting (error is thrown here when any function in the for loop throws due to this.abort)
 				if (!this.taskState.abandoned) {
-					const skycodeError = ErrorService.get().toSkycodeError(error, this.api.getModel().id)
+					const skycodeError = SkycodeError.transform(error, this.api.getModel().id)
+					Logger.error("[Task] API stream failed:", skycodeError.message)
 					const errorMessage = skycodeError.serialize()
 					// Auto-retry for streaming failures (always enabled)
 					if (this.taskState.autoRetryAttempts < 3) {
@@ -3043,21 +2983,6 @@ export class Task {
 			// Stored the assistant API response immediately after the stream finishes in the same turn
 			const assistantHasContent = assistantMessage.length > 0 || this.useNativeToolCalls
 			if (assistantHasContent) {
-				telemetryService.captureConversationTurnEvent(
-					this.ulid,
-					providerId,
-					model.id,
-					"assistant",
-					modelInfo.mode,
-					{
-						tokensIn: taskMetrics.inputTokens,
-						tokensOut: taskMetrics.outputTokens,
-						cacheWriteTokens: taskMetrics.cacheWriteTokens,
-						cacheReadTokens: taskMetrics.cacheReadTokens,
-						totalCost: taskMetrics.totalCost,
-					},
-					this.useNativeToolCalls,
-				)
 
 				const { reasonsHandler } = this.streamHandler.getHandlers()
 				const redactedThinkingContent = reasonsHandler.getRedactedThinking()
@@ -3193,19 +3118,9 @@ export class Task {
 					didEndLoop = recDidEndLoop
 				}
 			} else {
-				// if there's no assistant_responses, that means we got no text or tool_use content blocks from API which we should assume is an error
-				const { model, providerId } = this.getCurrentProviderInfo()
 				const reqId = this.getApiRequestIdSafe()
 
 				// Minimal diagnostics: structured log and telemetry
-				telemetryService.captureProviderApiError({
-					ulid: this.ulid,
-					model: model.id,
-					provider: providerId,
-					errorMessage: "empty_assistant_message",
-					requestId: reqId,
-					isNativeToolCall: this.useNativeToolCalls,
-				})
 
 				const baseErrorMessage =
 					"Invalid API Response: The provider returned an empty or unparsable response. This is a provider-side issue where the model failed to generate valid output or returned tool calls that Skycode cannot process. Retrying the request may help resolve this issue."

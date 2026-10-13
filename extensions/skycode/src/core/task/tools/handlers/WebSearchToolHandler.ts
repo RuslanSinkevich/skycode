@@ -1,7 +1,6 @@
 import { SkycodeSayTool } from "@shared/ExtensionMessage"
 import { SkycodeDefaultTool } from "@shared/tools"
 import { LocalWebSearchService } from "@/services/browser/LocalWebSearchService"
-import { telemetryService } from "@/services/telemetry"
 import { parsePartialArrayString } from "@/shared/array"
 
 import { ToolUse } from "../../../assistant-message"
@@ -39,9 +38,6 @@ export class WebSearchToolHandler implements IFullyManagedTool {
 			const allowedDomainsRaw: string | undefined = block.params.allowed_domains
 			const blockedDomainsRaw: string | undefined = block.params.blocked_domains
 
-			const apiConfig = config.services.stateManager.getApiConfiguration()
-			const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
-			const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 
 			const skycodeWebToolsEnabled = config.services.stateManager.getGlobalSettingsKey("skycodeWebToolsEnabled")
 			if (!skycodeWebToolsEnabled) {
@@ -72,16 +68,6 @@ export class WebSearchToolHandler implements IFullyManagedTool {
 
 			await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
 			await config.callbacks.say("tool", completeMessage, undefined, undefined, false)
-			telemetryService.captureToolUsage(
-				config.ulid,
-				"web_search",
-				config.api.getModel().id,
-				provider,
-				true,
-				true,
-				undefined,
-				block.isNativeToolCall,
-			)
 
 			try {
 				const { ToolHookUtils } = await import("../utils/ToolHookUtils")

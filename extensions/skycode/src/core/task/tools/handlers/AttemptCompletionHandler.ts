@@ -4,7 +4,6 @@ import { getHooksEnabledSafe } from "@core/hooks/hooks-utils"
 import { formatResponse } from "@core/prompts/responses"
 import { processFilesIntoText } from "@integrations/misc/extract-text"
 import { showSystemNotification } from "@integrations/notifications"
-import { telemetryService } from "@services/telemetry"
 import { findLastIndex } from "@shared/array"
 import { SkycodeDefaultTool } from "@shared/tools"
 import { Logger } from "@/shared/services/Logger"
@@ -96,7 +95,6 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			if (lastMessage && lastMessage.ask !== "command") {
 				// haven't sent a command message yet so first send completion_result then command
 				await config.callbacks.say("completion_result", result, undefined, undefined, false)
-				telemetryService.captureTaskCompleted(config.ulid)
 			}
 
 			// Attempt completion is a special tool where we want to update the focus chain list before the user provides response
@@ -117,7 +115,6 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		} else {
 			// Send the complete completion_result message (partial was already removed above)
 			await config.callbacks.say("completion_result", result, undefined, undefined, false)
-			telemetryService.captureTaskCompleted(config.ulid)
 		}
 
 		// we already sent completion_result says, an empty string asks relinquishes control over button and field

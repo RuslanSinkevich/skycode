@@ -1,7 +1,5 @@
-import { getWorkspaceBasename } from "@core/workspace"
 import type { ToggleSkycodeRuleRequest } from "@shared/proto/skycode/file"
 import { RuleScope, ToggleSkycodeRules } from "@shared/proto/skycode/file"
-import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
 import type { Controller } from "../index"
 
@@ -48,12 +46,6 @@ export async function toggleSkycodeRule(controller: Controller, request: ToggleS
 	}
 
 	// Track rule toggle telemetry with current task context
-	if (controller.task?.ulid) {
-		// Extract just the filename for privacy (no full paths)
-		const ruleFileName = getWorkspaceBasename(rulePath, "Controller.toggleSkycodeRule")
-		const isGlobal = scope === RuleScope.GLOBAL
-		telemetryService.captureSkycodeRuleToggled(controller.task.ulid, ruleFileName, enabled, isGlobal)
-	}
 
 	// Get the current state to return in the response
 	const globalToggles = controller.stateManager.getGlobalSettingsKey("globalSkycodeRulesToggles")

@@ -1,6 +1,5 @@
 import { getFileMentionFromPath } from "@/core/mentions"
 import { singleFileDiagnosticsToProblemsString } from "@/integrations/diagnostics"
-import { telemetryService } from "@/services/telemetry"
 import { CommandContext, Empty } from "@/shared/proto/index.skycode"
 import { Logger } from "@/shared/services/Logger"
 import { Controller } from "../index"
@@ -16,6 +15,5 @@ export async function fixWithSkycode(controller: Controller, request: CommandCon
 	)
 	Logger.log("fixWithSkycode", request.selectedText, request.filePath, request.language, problemsString)
 
-	telemetryService.captureButtonClick("codeAction_fixWithSkycode", controller.task?.ulid)
 	return {}
 }

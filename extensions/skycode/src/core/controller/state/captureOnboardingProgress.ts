@@ -1,7 +1,6 @@
 import { Empty } from "@shared/proto/skycode/common"
 import { OnboardingProgressRequest } from "@shared/proto/skycode/state"
 import { Logger } from "@/shared/services/Logger"
-import { telemetryService } from "../../../services/telemetry"
 import type { Controller } from "../index"
 
 /**
@@ -12,12 +11,6 @@ import type { Controller } from "../index"
  */
 export async function captureOnboardingProgress(_controller: Controller, request: OnboardingProgressRequest): Promise<Empty> {
 	try {
-		telemetryService.captureOnboardingProgress({
-			step: Number(request.step),
-			model: request.modelSelected,
-			action: request.action,
-			completed: !!request.completed,
-		})
 		return Empty.create({})
 	} catch (error) {
 		Logger.error("Failed to set welcome view completed:", error)

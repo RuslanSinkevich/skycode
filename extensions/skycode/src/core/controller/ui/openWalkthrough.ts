@@ -2,7 +2,6 @@ import type { EmptyRequest } from "@shared/proto/skycode/common"
 import { Empty } from "@shared/proto/skycode/common"
 import * as vscode from "vscode"
 import { ExtensionRegistryInfo } from "@/registry"
-import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
 import type { Controller } from "../index"
 
@@ -15,7 +14,6 @@ import type { Controller } from "../index"
 export async function openWalkthrough(_controller: Controller, _request: EmptyRequest): Promise<Empty> {
 	try {
 		await vscode.commands.executeCommand("workbench.action.openWalkthrough", `${ExtensionRegistryInfo.id}#SkycodeWalkthrough`)
-		telemetryService.captureButtonClick("webview_openWalkthrough")
 		return Empty.create({})
 	} catch (error) {
 		Logger.error(`Failed to open walkthrough: ${error}`)

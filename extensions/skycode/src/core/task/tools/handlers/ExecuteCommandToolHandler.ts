@@ -2,8 +2,6 @@ import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
 import { WorkspacePathAdapter } from "@core/workspace/WorkspacePathAdapter"
 import { showSystemNotification } from "@integrations/notifications"
-import { arePathsEqual } from "@utils/path"
-import { telemetryService } from "@/services/telemetry"
 import { SkycodeDefaultTool } from "@/shared/tools"
 import { CommandSafetyClassifier } from "@core/permissions/CommandSafetyClassifier"
 import type { ToolResponse } from "../../index"
@@ -34,10 +32,6 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 		let command: string | undefined = block.params.command?.trim()
 		const timeoutParam: string | undefined = block.params.timeout
 
-		// Extract provider using the proven pattern from ReportBugHandler
-		const apiConfig = config.services.stateManager.getApiConfiguration()
-		const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
-		const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 
 		// Validate required parameters
 		if (!command) {
@@ -78,13 +72,11 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 		let executionDir: string = config.cwd
 		let actualCommand: string = command
 
-		let workspaceHintUsed = false
 		let workspaceHint: string | undefined
 
 		if (config.isMultiRootEnabled && config.workspaceManager) {
 			const commandMatch = command.match(/^@(\w+):(.+)$/)
 			if (commandMatch) {
-				workspaceHintUsed = true
 				workspaceHint = commandMatch[1]
 				actualCommand = commandMatch[2].trim()
 				const adapter = new WorkspacePathAdapter({
@@ -163,14 +155,6 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 			didAutoApprove = findAllowedCommandPattern(actualCommand, patterns) !== undefined
 		}
 
-		// Determine workspace context for telemetry
-		const resolvedToNonPrimary = !arePathsEqual(executionDir, config.cwd)
-		const workspaceContext = {
-			isMultiRootEnabled: config.isMultiRootEnabled || false,
-			usedWorkspaceHint: workspaceHintUsed,
-			resolvedToNonPrimary,
-			resolutionMethod: (workspaceHintUsed ? "hint" : "primary_fallback") as "hint" | "primary_fallback",
-		}
 
 		if (didAutoApprove) {
 			// Auto-approve: show as info message (no ask)
@@ -189,16 +173,6 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 			}
 		}
 
-		telemetryService.captureToolUsage(
-			config.ulid,
-			block.name,
-			config.api.getModel().id,
-			provider,
-			didAutoApprove,
-			true,
-			workspaceContext,
-			block.isNativeToolCall,
-		)
 
 		// Run PreToolUse hook after approval but before execution
 		try {

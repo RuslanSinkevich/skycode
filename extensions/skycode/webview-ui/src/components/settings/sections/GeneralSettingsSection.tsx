@@ -64,9 +64,6 @@ const GeneralSettingsSection = ({ renderSectionHeader }: GeneralSettingsSectionP
 					</p>
 				</div>
 
-				{/* [SKYCODE] Галочки телеметрии нет: сервер PostHog не задан (posthog-config.ts, host ""),
-				    поэтому телеметрия выключена в коде и переключатель ни на что не влиял. */}
-
 				{/* About */}
 				<div
 					className="mt-4 p-3 rounded-md"

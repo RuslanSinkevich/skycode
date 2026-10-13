@@ -5,7 +5,6 @@ import { resolveWorkspacePath } from "@core/workspace"
 import type { SkycodeSayTool } from "@shared/ExtensionMessage"
 import { fileExistsAtPath } from "@utils/fs"
 import { getReadablePath, isLocatedInWorkspace } from "@utils/path"
-import { telemetryService } from "@/services/telemetry"
 import { BASH_WRAPPERS, DiffError, PATCH_MARKERS, type Patch, PatchActionType, type PatchChunk } from "@/shared/Patch"
 import { preserveEscaping } from "@/shared/string"
 import { SkycodeDefaultTool } from "@/shared/tools"
@@ -574,26 +573,11 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 		const patch = { ...message, content: rawInput }
 		const completeMessage = JSON.stringify(patch)
 
-		// Extract provider using the proven pattern from ReportBugHandler
-		const apiConfig = config.services.stateManager.getApiConfiguration()
-		const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
-		const providerId = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
-		const modelId = config.api.getModel().id
 
 		// [SKYCODE-SKYCODE] Cursor-style: always auto-approve patches (no ask)
 		// Post-factum control via diff Accept/Reject in editor
 		await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
 		await config.callbacks.say("tool", completeMessage, undefined, undefined, false)
-		telemetryService.captureToolUsage(
-			config.ulid,
-			this.name,
-			modelId,
-			providerId,
-			true,
-			true,
-			undefined,
-			block.isNativeToolCall,
-		)
 		return true
 	}
 }

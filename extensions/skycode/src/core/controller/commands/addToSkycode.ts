@@ -1,6 +1,5 @@
 import { getFileMentionFromPath } from "@/core/mentions"
 import { singleFileDiagnosticsToProblemsString } from "@/integrations/diagnostics"
-import { telemetryService } from "@/services/telemetry"
 import { CommandContext, Empty } from "@/shared/proto/index.skycode"
 import { Logger } from "@/shared/services/Logger"
 import { Controller } from "../index"
@@ -40,7 +39,6 @@ export async function addToSkycode(controller: Controller, request: CommandConte
 	}
 
 	Logger.log("addToSkycode", request.selectedText, filePath, request.language)
-	telemetryService.captureButtonClick("codeAction_addToChat", controller.task?.ulid)
 
 	return {}
 }

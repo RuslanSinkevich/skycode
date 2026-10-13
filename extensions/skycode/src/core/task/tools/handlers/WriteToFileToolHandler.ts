@@ -8,7 +8,6 @@ import { resolveWorkspacePath } from "@core/workspace"
 import { SkycodeSayTool } from "@shared/ExtensionMessage"
 import { fileExistsAtPath } from "@utils/fs"
 import { arePathsEqual, getReadablePath, isLocatedInWorkspace } from "@utils/path"
-import { telemetryService } from "@/services/telemetry"
 import { SkycodeDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
@@ -82,8 +81,6 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 		const rawQuery = block.params.query // for delete_block, replace_text
 		const rawReplace = block.params.replace // for replace_text
 
-		// Extract provider information for telemetry
-		const { providerId, modelId } = this.getModelInfo(config)
 
 		// Validate required parameters based on tool type
 		if (!rawRelPath) {
@@ -717,18 +714,8 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 				await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "diff_error")
 				await config.callbacks.say("diff_error", relPath, undefined, undefined, true)
 
-				// Extract provider information for telemetry
-				const { providerId, modelId } = this.getModelInfo(config)
 
-				// Extract error type from error message if possible
-				const errorType =
-					error instanceof Error && error.message.includes("does not match anything")
-						? "search_not_found"
-						: "other_diff_error"
 
-				// Add telemetry for diff edit failure
-				const isNativeToolCall = block.isNativeToolCall === true
-				telemetryService.captureDiffEditFailure(config.ulid, modelId, providerId, errorType, isNativeToolCall)
 
 				// Push tool result with detailed error using existing utilities
 				const errorResponse = formatResponse.toolError(

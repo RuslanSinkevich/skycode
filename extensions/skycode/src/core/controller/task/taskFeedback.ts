@@ -1,5 +1,4 @@
 import { Empty, StringRequest } from "@shared/proto/skycode/common"
-import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
 import { Controller } from ".."
 
@@ -16,9 +15,7 @@ export async function taskFeedback(controller: Controller, request: StringReques
 	}
 
 	try {
-		if (controller.task?.ulid) {
-			telemetryService.captureTaskFeedback(controller.task.ulid, request.value as any)
-		} else {
+		if (!controller.task?.ulid) {
 			Logger.warn("taskFeedback: No active task to receive feedback")
 		}
 	} catch (error) {

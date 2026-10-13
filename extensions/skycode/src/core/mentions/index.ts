@@ -2,7 +2,6 @@ import { diagnosticsToProblemsString } from "@integrations/diagnostics"
 import { extractTextFromFile } from "@integrations/misc/extract-text"
 import { openFile } from "@integrations/misc/open-file"
 import { UrlContentFetcher } from "@services/browser/UrlContentFetcher"
-import { telemetryService } from "@services/telemetry"
 import { mentionRegexGlobal } from "@shared/context-mentions"
 import { WorkspaceRoot } from "@shared/multi-root/types"
 import { openExternal } from "@utils/env"
@@ -123,13 +122,11 @@ export async function parseMentions(
 			if (launchBrowserError) {
 				result = `Error fetching content: ${launchBrowserError.message}`
 				// Track failed URL mention
-				telemetryService.captureMentionFailed("url", "network_error", launchBrowserError?.message || "")
 			} else {
 				try {
 					const markdown = await urlContentFetcher.urlToMarkdown(mention)
 					result = markdown
 					// Track successful URL mention
-					telemetryService.captureMentionUsed("url", markdown.length)
 				} catch (error) {
 					HostProvider.window.showMessage({
 						type: ShowMessageType.ERROR,
@@ -137,13 +134,11 @@ export async function parseMentions(
 					})
 					result = `Error fetching content: ${error.message}`
 					// Track failed URL mention
-					telemetryService.captureMentionFailed("url", "network_error", error.message)
 				}
 			}
 			parsedText += `\n\n<url_content url="${mention}">\n${result}\n</url_content>`
 		} else if (isFileMention(mention)) {
 			const mentionPath = getFilePathFromMention(mention)
-			const mentionType = mention.endsWith("/") ? "folder" : "file"
 			const workspaceHint = getWorkspaceHintFromMention(mention)
 
 			const isMultiRoot = workspaceManager && workspaceManager.getRoots().length > 1
@@ -178,7 +173,6 @@ export async function parseMentions(
 					} else {
 						parsedText += `\n\n<file_content path="${mentionPath}">\nError fetching content: ${errorMsg}\n</file_content>`
 					}
-					telemetryService.captureMentionFailed(mentionType, "not_found", errorMsg)
 				} else if (successfulResults.length === 1) {
 					// Found in exactly one workspace
 					const result = successfulResults[0]
@@ -190,7 +184,6 @@ export async function parseMentions(
 							await fileContextTracker.trackFileContext(mentionPath, "file_mentioned")
 						}
 					}
-					telemetryService.captureMentionUsed(mentionType, result.content!.length)
 				} else {
 					// Found in multiple workspaces - include all candidates with workspace name
 					for (const result of successfulResults) {
@@ -200,8 +193,6 @@ export async function parseMentions(
 							parsedText += `\n\n<file_content path="${mentionPath}" workspace="${result.workspaceName}">\n${result.content}\n</file_content>`
 						}
 					}
-					const totalLength = successfulResults.reduce((sum, r) => sum + (r.content?.length || 0), 0)
-					telemetryService.captureMentionUsed(mentionType, totalLength)
 				}
 			} else if (isMultiRoot && workspaceHint) {
 				// Search only in specified workspace
@@ -213,7 +204,6 @@ export async function parseMentions(
 					} else {
 						parsedText += `\n\n<file_content path="${mentionPath}" workspace="${workspaceHint}">\nError fetching content: ${errorMsg}\n</file_content>`
 					}
-					telemetryService.captureMentionFailed(mentionType, "not_found", errorMsg)
 				} else {
 					try {
 						const content = await getFileOrFolderContent(mentionPath, targetRoot.path)
@@ -225,20 +215,12 @@ export async function parseMentions(
 								await fileContextTracker.trackFileContext(mentionPath, "file_mentioned")
 							}
 						}
-						telemetryService.captureMentionUsed(mentionType, content.length)
 					} catch (error) {
 						if (mention.endsWith("/")) {
 							parsedText += `\n\n<folder_content path="${mentionPath}" workspace="${workspaceHint}">\nError fetching content: ${error.message}\n</folder_content>`
 						} else {
 							parsedText += `\n\n<file_content path="${mentionPath}" workspace="${workspaceHint}">\nError fetching content: ${error.message}\n</file_content>`
 						}
-						let errorType: "not_found" | "permission_denied" | "unknown" = "unknown"
-						if (error.message.includes("ENOENT") || error.message.includes("Failed to access")) {
-							errorType = "not_found"
-						} else if (error.message.includes("EACCES") || error.message.includes("permission")) {
-							errorType = "permission_denied"
-						}
-						telemetryService.captureMentionFailed(mentionType, errorType, error.message)
 					}
 				}
 			} else {
@@ -253,20 +235,12 @@ export async function parseMentions(
 							await fileContextTracker.trackFileContext(mentionPath, "file_mentioned")
 						}
 					}
-					telemetryService.captureMentionUsed(mentionType, content.length)
 				} catch (error) {
 					if (mention.endsWith("/")) {
 						parsedText += `\n\n<folder_content path="${mentionPath}">\nError fetching content: ${error.message}\n</folder_content>`
 					} else {
 						parsedText += `\n\n<file_content path="${mentionPath}">\nError fetching content: ${error.message}\n</file_content>`
 					}
-					let errorType: "not_found" | "permission_denied" | "unknown" = "unknown"
-					if (error.message.includes("ENOENT") || error.message.includes("Failed to access")) {
-						errorType = "not_found"
-					} else if (error.message.includes("EACCES") || error.message.includes("permission")) {
-						errorType = "permission_denied"
-					}
-					telemetryService.captureMentionFailed(mentionType, errorType, error.message)
 				}
 			}
 		} else if (mention === "problems") {
@@ -274,44 +248,36 @@ export async function parseMentions(
 				const problems = await getWorkspaceProblems()
 				parsedText += `\n\n<workspace_diagnostics>\n${problems}\n</workspace_diagnostics>`
 				// Track successful problems mention
-				telemetryService.captureMentionUsed("problems", problems.length)
 			} catch (error) {
 				parsedText += `\n\n<workspace_diagnostics>\nError fetching diagnostics: ${error.message}\n</workspace_diagnostics>`
 				// Track failed problems mention
-				telemetryService.captureMentionFailed("problems", "unknown", error.message)
 			}
 		} else if (mention === "terminal") {
 			try {
 				const terminalOutput = await getLatestTerminalOutput()
 				parsedText += `\n\n<terminal_output>\n${terminalOutput}\n</terminal_output>`
 				// Track successful terminal mention
-				telemetryService.captureMentionUsed("terminal", terminalOutput.length)
 			} catch (error) {
 				parsedText += `\n\n<terminal_output>\nError fetching terminal output: ${error.message}\n</terminal_output>`
 				// Track failed terminal mention
-				telemetryService.captureMentionFailed("terminal", "unknown", error.message)
 			}
 		} else if (mention === "git-changes") {
 			try {
 				const workingState = await getWorkingState(cwd)
 				parsedText += `\n\n<git_working_state>\n${workingState}\n</git_working_state>`
 				// Track successful git-changes mention
-				telemetryService.captureMentionUsed("git-changes", workingState.length)
 			} catch (error) {
 				parsedText += `\n\n<git_working_state>\nError fetching working state: ${error.message}\n</git_working_state>`
 				// Track failed git-changes mention
-				telemetryService.captureMentionFailed("git-changes", "unknown", error.message)
 			}
 		} else if (/^[a-f0-9]{7,40}$/.test(mention)) {
 			try {
 				const commitInfo = await getCommitInfo(mention, cwd)
 				parsedText += `\n\n<git_commit hash="${mention}">\n${commitInfo}\n</git_commit>`
 				// Track successful commit mention
-				telemetryService.captureMentionUsed("commit", commitInfo.length)
 			} catch (error) {
 				parsedText += `\n\n<git_commit hash="${mention}">\nError fetching commit info: ${error.message}\n</git_commit>`
 				// Track failed commit mention
-				telemetryService.captureMentionFailed("commit", "unknown", error.message)
 			}
 		}
 	}
