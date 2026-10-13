@@ -9,7 +9,6 @@ const __dirname = path.dirname(__filename)
 const production = process.argv.includes("--production") || process.env["IS_DEBUG_BUILD"] === "false"
 const watch = process.argv.includes("--watch")
 const standalone = process.argv.includes("--standalone")
-const e2eBuild = process.argv.includes("--e2e-build")
 const destDir = standalone ? "dist-standalone" : "dist"
 
 /**
@@ -190,16 +189,6 @@ const standaloneConfig = {
 	external: ["vscode", "@grpc/reflection", "grpc-health-check"],
 }
 
-// E2E build script configuration
-const e2eBuildConfig = {
-	...baseConfig,
-	entryPoints: ["src/test/e2e/utils/build.ts"],
-	outfile: `${destDir}/e2e-build.mjs`,
-	external: ["@vscode/test-electron", "execa"],
-	sourcemap: false,
-	plugins: [aliasResolverPlugin, esbuildProblemMatcherPlugin],
-}
-
 // Worker thread for embedding computation (separate bundle, loaded at runtime)
 const workerConfig = {
 	...baseConfig,
@@ -211,20 +200,18 @@ const workerConfig = {
 }
 
 async function main() {
-	const config = standalone ? standaloneConfig : e2eBuild ? e2eBuildConfig : extensionConfig
+	const config = standalone ? standaloneConfig : extensionConfig
 
 	// Build main extension/standalone
 	const extensionCtx = await esbuild.context(config)
 
-	// Build worker (always, unless e2e)
-	if (!e2eBuild) {
-		const workerCtx = await esbuild.context(workerConfig)
-		if (watch) {
-			await workerCtx.watch()
-		} else {
-			await workerCtx.rebuild()
-			await workerCtx.dispose()
-		}
+	// Build worker
+	const workerCtx = await esbuild.context(workerConfig)
+	if (watch) {
+		await workerCtx.watch()
+	} else {
+		await workerCtx.rebuild()
+		await workerCtx.dispose()
 	}
 
 	if (watch) {

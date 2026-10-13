@@ -69,11 +69,6 @@ old_docs/**
 # Include icons
 !assets/icons/**
 
-# Ignore E2E build files
-e2e-build.mjs
-e2e.vsix
-test-results/
-
 # Ignore Storybook files
 **/*.stories.tsx
 *storybook.log
@@ -89,8 +84,6 @@ vendor/whisper/**
 vendor/**/.cache/**
 biome.jsonc
 knip.json
-playwright.config.ts
-tests/**
 test-setup.js
 .nycrc.unit.json
 .worktreeinclude

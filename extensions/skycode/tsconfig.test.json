@@ -31,7 +31,6 @@
 	],
 	"exclude": [
 		"src/test/**/*.js",
-		"src/**/__tests__/*",
-		"src/test/e2e/**/*.test.ts"
+		"src/**/__tests__/*"
 	]
 }
