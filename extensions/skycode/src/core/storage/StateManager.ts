@@ -12,19 +12,14 @@ import {
 	SecretKeys,
 	Secrets,
 	Settings,
-	SettingsKey,
 } from "@shared/storage/state-keys"
 import chokidar, { FSWatcher } from "chokidar"
 import type { ExtensionContext } from "vscode"
-import { HostProvider } from "@/hosts/host-provider"
-import { ShowMessageType } from "@/shared/proto/index.host"
 import { Logger } from "@/shared/services/Logger"
 import {
 	getTaskHistoryStateFilePath,
 	readTaskHistoryFromState,
-	readTaskSettingsFromStorage,
 	writeTaskHistoryToState,
-	writeTaskSettingsToStorage,
 } from "./disk"
 import { STATE_MANAGER_NOT_INITIALIZED } from "./error-messages"
 import { readGlobalStateFromDisk, readSecretsFromDisk, readWorkspaceStateFromDisk } from "./utils/state-helpers"
@@ -54,7 +49,6 @@ export class StateManager {
 	private static instance: StateManager | null = null
 
 	private globalStateCache: GlobalStateAndSettings = {} as GlobalStateAndSettings
-	private taskStateCache: Partial<Settings> = {}
 	private secretsCache: Secrets = {} as Secrets
 	private workspaceStateCache: LocalState = {} as LocalState
 	private context: ExtensionContext
@@ -72,7 +66,6 @@ export class StateManager {
 
 	// Debounced persistence state
 	private pendingGlobalState = new Set<GlobalStateAndSettingsKey>()
-	private pendingTaskState = new Map<string, Set<SettingsKey>>()
 	private pendingSecrets = new Set<SecretKey>()
 	private pendingWorkspaceState = new Set<LocalStateKey>()
 	private persistenceTimeout: NodeJS.Timeout | null = null
@@ -180,93 +173,6 @@ export class StateManager {
 
 		// Schedule debounced persistence
 		this.scheduleDebouncedPersistence()
-	}
-
-	/**
-	 * Set method for task settings keys - updates cache immediately and schedules debounced persistence
-	 */
-	setTaskSettings<K extends keyof Settings>(taskId: string, key: K, value: Settings[K]): void {
-		if (!this.isInitialized) {
-			throw new Error(STATE_MANAGER_NOT_INITIALIZED)
-		}
-
-		// Update cache immediately for instant access
-		this.taskStateCache[key] = value
-
-		// Add to pending persistence set and schedule debounced write
-		if (!this.pendingTaskState.has(taskId)) {
-			this.pendingTaskState.set(taskId, new Set())
-		}
-		this.pendingTaskState.get(taskId)!.add(key)
-		this.scheduleDebouncedPersistence()
-	}
-
-	/**
-	 * Batch set method for task settings keys - updates cache immediately and schedules debounced persistence
-	 */
-	setTaskSettingsBatch(taskId: string, updates: Partial<Settings>): void {
-		if (!this.isInitialized) {
-			throw new Error(STATE_MANAGER_NOT_INITIALIZED)
-		}
-
-		// Update cache in one go
-		Object.assign(this.taskStateCache, updates)
-
-		// Then track the keys for persistence
-		if (!this.pendingTaskState.has(taskId)) {
-			this.pendingTaskState.set(taskId, new Set())
-		}
-		Object.keys(updates).forEach((key) => {
-			this.pendingTaskState.get(taskId)!.add(key as SettingsKey)
-		})
-
-		// Schedule debounced persistence
-		this.scheduleDebouncedPersistence()
-	}
-
-	/**
-	 * Load task settings from disk into cache
-	 */
-	async loadTaskSettings(taskId: string): Promise<void> {
-		if (!this.isInitialized) {
-			throw new Error(STATE_MANAGER_NOT_INITIALIZED)
-		}
-
-		try {
-			const taskSettings = await readTaskSettingsFromStorage(taskId)
-			// Populate task cache with loaded settings
-			Object.assign(this.taskStateCache, taskSettings)
-		} catch (error) {
-			// If reading fails, just use empty cache
-
-			Logger.error("[StateManager] Failed to load task settings:", error)
-			HostProvider.window.showMessage({
-				type: ShowMessageType.ERROR,
-				message: `Failed to load task settings, defaulting to globally selected settings.`,
-			})
-		}
-	}
-
-	/**
-	 * Clear task settings cache - ensures pending changes are persisted first
-	 */
-	async clearTaskSettings(): Promise<void> {
-		// If there are pending task settings, persist them first
-		if (this.pendingTaskState.size > 0) {
-			try {
-				// Persist pending task state immediately
-				await this.persistTaskStateBatch(this.pendingTaskState)
-				// Clear pending set after successful persistence
-				this.pendingTaskState.clear()
-			} catch (error) {
-				Logger.error("[StateManager] Failed to persist task settings before clearing:", error)
-				// If persistence fails, we just move on with clearing the in-memory state.
-				// clearTaskSettings realistically probably won't be called in the small window of time between task settings being set and their persistence anyways
-			}
-		}
-
-		this.taskStateCache = {}
-		this.pendingTaskState.clear()
 	}
 
 	/**
@@ -474,14 +380,10 @@ export class StateManager {
 
 	/**
 	 * Get method for global settings keys - reads from in-memory cache
-	 * Precedence: task settings > global settings
 	 */
 	getGlobalSettingsKey<K extends keyof Settings>(key: K): Settings[K] {
 		if (!this.isInitialized) {
 			throw new Error(STATE_MANAGER_NOT_INITIALIZED)
-		}
-		if (this.taskStateCache[key] !== undefined) {
-			return this.taskStateCache[key]
 		}
 		return this.globalStateCache[key]
 	}
@@ -520,17 +422,12 @@ export class StateManager {
 	 * Reinitialize the state manager by clearing all state and reloading from disk
 	 * Used for error recovery when write operations fail
 	 */
-	async reInitialize(currentTaskId?: string): Promise<void> {
+	async reInitialize(): Promise<void> {
 		// Clear all cached data and pending state
 		this.dispose()
 
 		// Reinitialize from disk
 		await StateManager.initialize(this.context)
-
-		// If there's an active task, reload its settings
-		if (currentTaskId) {
-			await this.loadTaskSettings(currentTaskId)
-		}
 	}
 
 	/**
@@ -550,12 +447,10 @@ export class StateManager {
 		this.pendingGlobalState.clear()
 		this.pendingSecrets.clear()
 		this.pendingWorkspaceState.clear()
-		this.pendingTaskState.clear()
 
 		this.globalStateCache = {} as GlobalStateAndSettings
 		this.secretsCache = {} as Secrets
 		this.workspaceStateCache = {} as LocalState
-		this.taskStateCache = {}
 
 		this.isInitialized = false
 	}
@@ -569,8 +464,7 @@ export class StateManager {
 		if (
 			this.pendingGlobalState.size === 0 &&
 			this.pendingSecrets.size === 0 &&
-			this.pendingWorkspaceState.size === 0 &&
-			this.pendingTaskState.size === 0
+			this.pendingWorkspaceState.size === 0
 		) {
 			return
 		}
@@ -580,14 +474,12 @@ export class StateManager {
 			this.persistGlobalStateBatch(this.pendingGlobalState),
 			this.persistSecretsBatch(this.pendingSecrets),
 			this.persistWorkspaceStateBatch(this.pendingWorkspaceState),
-			this.persistTaskStateBatch(this.pendingTaskState),
 		])
 
 		// Clear pending sets after successful persistence
 		this.pendingGlobalState.clear()
 		this.pendingSecrets.clear()
 		this.pendingWorkspaceState.clear()
-		this.pendingTaskState.clear()
 	}
 
 	/**
@@ -650,36 +542,6 @@ export class StateManager {
 	}
 
 	/**
-	 * Private method to batch persist task state keys with a single write operation
-	 */
-	private async persistTaskStateBatch(pendingTaskStates: Map<string, Set<SettingsKey>>): Promise<void> {
-		if (pendingTaskStates.size === 0) {
-			return
-		}
-		try {
-			// Persist each task's settings
-			await Promise.all(
-				Array.from(pendingTaskStates.entries()).map(([taskId, keys]) => {
-					if (keys.size === 0) {
-						return Promise.resolve()
-					}
-					const settingsToWrite: Record<string, any> = {}
-					for (const key of keys) {
-						const value = this.taskStateCache[key]
-						if (value !== undefined) {
-							settingsToWrite[key] = value
-						}
-					}
-					return writeTaskSettingsToStorage(taskId, settingsToWrite)
-				}),
-			)
-		} catch (error) {
-			Logger.error("[StateManager] Failed to persist task settings batch:", error)
-			throw error
-		}
-	}
-
-	/**
 	 * Private method to batch persist secrets with Promise.all
 	 */
 	private async persistSecretsBatch(keys: Set<SecretKey>): Promise<void> {
@@ -728,18 +590,6 @@ export class StateManager {
 	}
 
 	/**
-	 * Helper to get a setting value with override support
-	 * Precedence: task settings > global settings
-	 */
-	private getSettingWithOverride<K extends keyof Settings>(key: K): Settings[K] {
-		const taskValue = this.taskStateCache[key]
-		if (taskValue !== undefined) {
-			return taskValue
-		}
-		return this.globalStateCache[key]
-	}
-
-	/**
 	 * Helper to get a secret value
 	 */
 	private getSecret<K extends keyof Secrets>(key: K): Secrets[K] {
@@ -753,8 +603,8 @@ export class StateManager {
 		// Build secrets object
 		const secrets = Object.fromEntries(SecretKeys.map((key) => [key, this.getSecret(key)])) as Secrets
 
-		// Build API handler settings object with task override support
-		const settings = Object.fromEntries(ApiHandlerSettingsKeys.map((key) => [key, this.getSettingWithOverride(key)]))
+		// Build API handler settings object
+		const settings = Object.fromEntries(ApiHandlerSettingsKeys.map((key) => [key, this.globalStateCache[key]]))
 
 		return { ...secrets, ...settings } satisfies ApiConfiguration
 	}

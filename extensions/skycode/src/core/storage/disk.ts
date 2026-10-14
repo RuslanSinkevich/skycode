@@ -3,7 +3,6 @@ import { EnvironmentMetadataEntry, TaskMetadata } from "@core/context/context-tr
 import { execa } from "@packages/execa"
 import { SkycodeMessage } from "@shared/ExtensionMessage"
 import { HistoryItem } from "@shared/HistoryItem"
-import { GlobalState, Settings } from "@shared/storage/state-keys"
 import { fileExistsAtPath, isDirectory } from "@utils/fs"
 import fs from "fs/promises"
 import os from "os"
@@ -453,43 +452,6 @@ export async function writeTaskHistoryToState(items: HistoryItem[]): Promise<voi
 		await atomicWriteFile(filePath, JSON.stringify(items))
 	} catch (error) {
 		Logger.error("[Disk] Failed to write task history:", error)
-		throw error
-	}
-}
-
-export async function readTaskSettingsFromStorage(taskId: string): Promise<Partial<GlobalState>> {
-	try {
-		const taskDirectoryFilePath = await ensureTaskDirectoryExists(taskId)
-		const settingsFilePath = path.join(taskDirectoryFilePath, "settings.json")
-
-		if (await fileExistsAtPath(settingsFilePath)) {
-			const settingsContent = await fs.readFile(settingsFilePath, "utf8")
-			return JSON.parse(settingsContent)
-		}
-
-		// Return empty object if settings file doesn't exist (new task)
-		return {}
-	} catch (error) {
-		Logger.error("[Disk] Failed to read task settings:", error)
-		throw error
-	}
-}
-
-export async function writeTaskSettingsToStorage(taskId: string, settings: Partial<Settings>) {
-	try {
-		const taskDirectoryFilePath = await ensureTaskDirectoryExists(taskId)
-		const settingsFilePath = path.join(taskDirectoryFilePath, "settings.json")
-
-		let existingSettings = {}
-		if (await fileExistsAtPath(settingsFilePath)) {
-			const existingSettingsContent = await fs.readFile(settingsFilePath, "utf8")
-			existingSettings = JSON.parse(existingSettingsContent)
-		}
-
-		const updatedSettings = { ...existingSettings, ...settings }
-		await fs.writeFile(settingsFilePath, JSON.stringify(updatedSettings, null, 2))
-	} catch (error) {
-		Logger.error("[Disk] Failed to write task settings:", error)
 		throw error
 	}
 }

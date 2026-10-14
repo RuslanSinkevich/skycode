@@ -334,8 +334,8 @@ export class Task {
 		const backgroundEditEnabled = this.stateManager.getGlobalSettingsKey("backgroundEditEnabled")
 		this.diffViewProvider = backgroundEditEnabled ? new FileEditProvider() : HostProvider.get().createDiffViewProvider()
 
-		// Set up MCP notification callback for real-time notifications
-		this.mcpHub.setNotificationCallback(async (serverName: string, _level: string, message: string) => {
+		// Subscribe to MCP notifications (per task, by taskId)
+		this.mcpHub.addNotificationListener(taskId, async (serverName: string, _level: string, message: string) => {
 			// Display notification in chat immediately
 			await this.say("mcp_notification", `[${serverName}] ${message}`)
 		})
@@ -1569,8 +1569,8 @@ export class Task {
 			// need to await for when we want to make sure directories/files are reverted before
 			// re-starting the task from a checkpoint
 			await this.diffViewProvider.revertChanges()
-			// Clear the notification callback when task is aborted
-			this.mcpHub.clearNotificationCallback()
+			// Unsubscribe from MCP notifications when task is aborted
+			this.mcpHub.removeNotificationListener(this.taskId)
 			if (this.FocusChainManager) {
 				this.FocusChainManager.dispose()
 			}

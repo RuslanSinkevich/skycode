@@ -14,7 +14,6 @@ import { getDiffSystem } from "@core/diff-v2"
 import { getBackendLocaleForPreferredLanguage, setBackendLocale, t } from "../../i18n/backend-i18n"
 import type { HistoryItem } from "@shared/HistoryItem"
 import type { McpMarketplaceCatalog, McpMarketplaceItem } from "@shared/mcp"
-import type { Settings } from "@shared/storage/state-keys"
 import { getApiSettingsMode, type Mode } from "@shared/storage/types"
 import { fileExistsAtPath } from "@utils/fs"
 import axios from "axios"
@@ -181,13 +180,7 @@ export class Controller {
 		Logger.error("Controller disposed")
 	}
 
-	async initTask(
-		task?: string,
-		images?: string[],
-		files?: string[],
-		historyItem?: HistoryItem,
-		taskSettings?: Partial<Settings>,
-	) {
+	async initTask(task?: string, images?: string[], files?: string[], historyItem?: HistoryItem) {
 		await this.clearTask() // ensures that an existing task doesn't exist before starting a new one, although this shouldn't be possible since user must clear task before starting a new one
 
 		const autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
@@ -224,11 +217,6 @@ export class Controller {
 		const cwd = this.workspaceManager?.getPrimaryRoot()?.path || (await getCwd(getDesktopDir()))
 
 		const taskId = historyItem?.id || Date.now().toString()
-
-		await this.stateManager.loadTaskSettings(taskId)
-		if (taskSettings) {
-			this.stateManager.setTaskSettingsBatch(taskId, taskSettings)
-		}
 
 		const newTask = new Task({
 			controller: this,
@@ -400,7 +388,7 @@ export class Controller {
 			// Only re-initialize if we found a history item, otherwise just clear
 			if (historyItem) {
 				// Re-initialize task to keep it visible in UI with resume button
-				await this.initTask(undefined, undefined, undefined, historyItem, undefined)
+				await this.initTask(undefined, undefined, undefined, historyItem)
 			} else {
 				await this.clearTask()
 			}
@@ -1002,10 +990,6 @@ export class Controller {
 	}
 
 	async clearTask() {
-		if (this.activeTask) {
-			// Clear task settings cache when task ends
-			await this.stateManager.clearTaskSettings()
-		}
 		await this.activeTask?.abortTask()
 		this._task = undefined // removes reference to it, so once promises end it will be garbage collected
 

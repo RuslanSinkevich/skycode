@@ -85,8 +85,8 @@ export class McpHub {
 		timestamp: number
 	}> = []
 
-	// Callback for sending notifications to active task
-	private notificationCallback?: (serverName: string, level: string, message: string) => void
+	// [SKYCODE] Подписчики на уведомления по id (taskId): несколько задач получают уведомления одновременно
+	private notificationListeners = new Map<string, (serverName: string, level: string, message: string) => void>()
 
 	constructor(
 		getMcpServersPath: () => Promise<string>,
@@ -413,10 +413,16 @@ export class McpHub {
 					// Format the message
 					const message = logger ? `[${logger}] ${data}` : data
 
-					// Send notification directly to active task if callback is set
-					if (this.notificationCallback) {
-						//Logger.log(`[MCP Debug] Sending notification to active task: ${message}`)
-						this.notificationCallback(name, level, message)
+					// Send notification directly to every subscribed task
+					if (this.notificationListeners.size > 0) {
+						//Logger.log(`[MCP Debug] Sending notification to subscribed tasks: ${message}`)
+						for (const listener of [...this.notificationListeners.values()]) {
+							try {
+								listener(name, level, message)
+							} catch (error) {
+								Logger.error(`[MCP] Notification listener failed for ${name}`, error)
+							}
+						}
 					} else {
 						// Fallback: store for later retrieval
 						//Logger.log(`[MCP Debug] No active task, storing notification: ${message}`)
@@ -1265,20 +1271,19 @@ export class McpHub {
 	}
 
 	/**
-	 * Set the notification callback for real-time notifications
+	 * Subscribe to real-time notifications. Every notification is delivered to every listener.
+	 * @param id Subscriber id (taskId); subscribing again with the same id replaces the listener
 	 * @param callback Function to call when notifications arrive
 	 */
-	setNotificationCallback(callback: (serverName: string, level: string, message: string) => void): void {
-		this.notificationCallback = callback
-		//Logger.log("[MCP Debug] Notification callback set")
+	addNotificationListener(id: string, callback: (serverName: string, level: string, message: string) => void): void {
+		this.notificationListeners.set(id, callback)
 	}
 
 	/**
-	 * Clear the notification callback
+	 * Remove a notification listener
 	 */
-	clearNotificationCallback(): void {
-		this.notificationCallback = undefined
-		//Logger.log("[MCP Debug] Notification callback cleared")
+	removeNotificationListener(id: string): void {
+		this.notificationListeners.delete(id)
 	}
 
 	/**
@@ -1354,7 +1359,7 @@ export class McpHub {
 
 		// [SKYCODE-PERF] Drop pending notifications + callback so closures can be GC'd.
 		this.pendingNotifications = []
-		this.notificationCallback = undefined
+		this.notificationListeners.clear()
 
 		this.removeAllFileWatchers()
 		for (const connection of this.connections) {
