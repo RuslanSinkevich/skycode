@@ -10,6 +10,7 @@
  * Каждый блок сворачивается/разворачивается независимо.
  */
 
+import { COMMAND_OUTPUT_STRING, COMMAND_REQ_APP_STRING } from "@shared/combineCommandSequences"
 import type { SkycodeMessage, SkycodeSayTool } from "@shared/ExtensionMessage"
 import { StringRequest } from "@shared/proto/skycode/common"
 import { BrainIcon, ChevronRightIcon, Loader2Icon, TerminalSquareIcon } from "lucide-react"
@@ -39,6 +40,10 @@ interface ToolItemData {
 	filePath?: string
 	isActive: boolean // true = сейчас выполняется (спиннер)
 	toolType: ToolType
+	/** Полная подпись для всплывающей подсказки (label обрезается) */
+	fullLabel?: string
+	/** Вывод команды (для toolType "cmd") */
+	output?: string
 }
 
 // ==================== Главный компонент ====================
@@ -87,12 +92,15 @@ export const ProcessBlock = memo(
 				if (isLowStakesTool(msg)) {
 					const isCommand = msg.say === "command" || msg.ask === "command"
 					if (isCommand) {
+						const { command, output } = splitCommandText(msg.text || "")
 						tools.push({
-							label: `$ ${(msg.text || "command").substring(0, 80)}`,
+							label: `$ ${(command || "command").substring(0, 80)}`,
+							fullLabel: command,
 							icon: TerminalSquareIcon,
 							filePath: undefined,
 							isActive: !!msg.partial,
 							toolType: "cmd",
+							output,
 						})
 					} else {
 						const tool = parseToolSafe(msg.text)
@@ -431,7 +439,7 @@ const ExploringSection = memo(({ items, isExploringLive, isLastBlock, t, onExpan
 			{isOpen && (
 				<div
 					className={cn(
-						"mt-1 ml-4 overflow-y-auto text-[11px] leading-[18px] text-description opacity-50",
+						"mt-1 ml-4 overflow-y-auto text-[11px] leading-[18px] text-description",
 						maxHeightClass,
 					)}
 					ref={scrollRef}>
@@ -451,26 +459,49 @@ ExploringSection.displayName = "ExploringSection"
 const ToolItem = memo(
 	({ item, isActive, onOpenFile }: { item: ToolItemData; isActive: boolean; onOpenFile: (path: string) => void }) => {
 		const Icon = item.icon
+		// Команда раскрывается по клику и показывает свой вывод — в фоновом режиме другого способа его увидеть нет.
+		const [showOutput, setShowOutput] = useState(false)
+		const hasOutput = !!item.output
 
-		const clickable = !!item.filePath
+		const clickable = !!item.filePath || hasOutput
+		const handleClick = () => {
+			if (item.filePath) {
+				onOpenFile(item.filePath)
+			} else if (hasOutput) {
+				setShowOutput((shown) => !shown)
+			}
+		}
 		return (
-			<button
-				className={cn(
-					"flex items-center gap-1.5 py-0.5 min-w-0 w-full text-left bg-transparent border-0 p-0 text-inherit",
-					{ "cursor-pointer group": clickable },
+			<div className="min-w-0">
+				<button
+					className={cn(
+						"flex items-center gap-1.5 py-0.5 min-w-0 w-full text-left bg-transparent border-0 p-0 text-inherit opacity-50",
+						{ "cursor-pointer group hover:opacity-80": clickable },
+					)}
+					onClick={handleClick}
+					title={item.fullLabel}
+					type="button">
+					{/* Спиннер вместо иконки для активного инструмента */}
+					{isActive ? (
+						<Loader2Icon className="size-3 shrink-0 opacity-70 animate-spin" />
+					) : (
+						Icon && <Icon className={cn("size-3 shrink-0 opacity-70", { "group-hover:opacity-100": clickable })} />
+					)}
+					<span className={cn("truncate", { "group-hover:underline group-hover:opacity-100": clickable })}>
+						{item.label}
+					</span>
+					{hasOutput && (
+						<ChevronRightIcon
+							className={cn("size-3 shrink-0 opacity-70 transition-transform duration-150", { "rotate-90": showOutput })}
+						/>
+					)}
+				</button>
+				{showOutput && (
+					<pre className="ml-4 my-1 p-1.5 max-h-[200px] overflow-auto whitespace-pre-wrap break-all font-editor text-[11px] leading-[16px] rounded-xs bg-code-block-background text-foreground opacity-100">
+						{item.output}
+					</pre>
 				)}
-				onClick={() => item.filePath && onOpenFile(item.filePath)}
-				type="button">
-				{/* Спиннер вместо иконки для активного инструмента */}
-				{isActive ? (
-					<Loader2Icon className="size-3 shrink-0 opacity-70 animate-spin" />
-				) : (
-					Icon && <Icon className={cn("size-3 shrink-0 opacity-70", { "group-hover:opacity-100": clickable })} />
-				)}
-				<span className={cn("truncate", { "group-hover:underline group-hover:opacity-100": clickable })}>
-					{item.label}
-				</span>
-			</button>
+			</div>
 		)
 	},
 )
@@ -478,6 +509,18 @@ const ToolItem = memo(
 ToolItem.displayName = "ToolItem"
 
 // ==================== Хелперы ====================
+
+/** Текст сообщения команды — «команда\nOutput:вывод»; делим на две части. */
+function splitCommandText(text: string): { command: string; output?: string } {
+	const outputIndex = text.indexOf(COMMAND_OUTPUT_STRING)
+	const commandPart = outputIndex === -1 ? text : text.slice(0, outputIndex)
+	const command = commandPart.replace(COMMAND_REQ_APP_STRING, "").trim()
+	if (outputIndex === -1) {
+		return { command }
+	}
+	const output = text.slice(outputIndex + COMMAND_OUTPUT_STRING.length).trim()
+	return { command, output: output || undefined }
+}
 
 /** Локализованное саммари для блока исследования */
 function getLocalizedSummary(items: ToolItemData[], isActive: boolean, t: (key: string) => string): string {

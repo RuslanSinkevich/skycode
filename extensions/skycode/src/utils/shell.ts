@@ -1,4 +1,5 @@
 import { userInfo } from "os"
+import * as path from "path"
 import * as vscode from "vscode"
 
 const SHELL_PATHS = {
@@ -337,4 +338,22 @@ export function getShell(): string {
 	}
 	// On macOS/Linux, fallback to a POSIX shell - This is the behavior of our old shell detection method.
 	return SHELL_PATHS.FALLBACK
+}
+
+/**
+ * Shell for commands that run outside the VS Code terminal (background exec mode).
+ * On Windows this is Windows PowerShell rather than cmd.exe: models write PowerShell far more reliably,
+ * and it matches the default VS Code terminal there.
+ */
+export function getBackgroundShell(): string {
+	if (process.platform === "win32") {
+		const systemRoot = process.env.SystemRoot || "C:\\Windows"
+		return path.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+	}
+	return process.env.SHELL || "/bin/bash"
+}
+
+/** True for Windows PowerShell 5.x (powershell.exe), which lacks the `&&` / `||` chain operators of pwsh 7. */
+export function isWindowsPowerShell(shell: string): boolean {
+	return /(^|[\\/])powershell(\.exe)?$/i.test(shell.trim())
 }

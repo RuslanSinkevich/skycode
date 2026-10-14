@@ -9,6 +9,16 @@
  */
 
 import { ChildProcess, spawn } from "child_process"
+import { getBackgroundShell } from "@utils/shell"
+
+/** Environment variable that carries the command to the PowerShell runner script. */
+const POWERSHELL_COMMAND_ENV = "SKYCODE_COMMAND"
+const POWERSHELL_RUNNER = [
+	"[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
+	"$global:LASTEXITCODE = 0",
+	`. ([scriptblock]::Create($env:${POWERSHELL_COMMAND_ENV}))`,
+	"if ($LASTEXITCODE) { exit $LASTEXITCODE } elseif (-not $?) { exit 1 }",
+].join("; ")
 import { EventEmitter } from "events"
 import { terminateProcessTree } from "@/utils/process-termination"
 
@@ -95,6 +105,7 @@ export class StandaloneTerminalProcess extends EventEmitter<TerminalProcessEvent
 				stdio: ["ignore", "pipe", "pipe"], // Disable STDIN to prevent interactivity
 				env: {
 					...process.env,
+					[POWERSHELL_COMMAND_ENV]: command,
 					TERM: "xterm-256color",
 					PAGER: "cat", // Prevent less from being used, reducing interactivity
 					EDITOR: process.env.EDITOR || "cat", // Set EDITOR if not already set
@@ -111,11 +122,12 @@ export class StandaloneTerminalProcess extends EventEmitter<TerminalProcessEvent
 				// Spawn the process with special handling for "cmd.exe"
 				this.childProcess = spawn("cmd.exe", shellArgs, shellOptions)
 			} else {
-				// Spawn the process with detached: true to create a process group
-				// This allows us to kill the entire process tree when terminating
+				// On Unix, detached: true creates a process group so the whole tree can be killed.
+				// On Windows tree-kill handles the tree, and detached would open a separate console window.
 				this.childProcess = spawn(shell, shellArgs, {
 					...shellOptions,
-					detached: true,
+					detached: process.platform !== "win32",
+					windowsHide: true,
 				})
 			}
 
@@ -292,11 +304,7 @@ export class StandaloneTerminalProcess extends EventEmitter<TerminalProcessEvent
 	 * @returns The default shell path
 	 */
 	private getDefaultShell(): string {
-		if (process.platform === "win32") {
-			return process.env.COMSPEC || "cmd.exe"
-		} else {
-			return process.env.SHELL || "/bin/bash"
-		}
+		return getBackgroundShell()
 	}
 
 	/**
@@ -308,7 +316,10 @@ export class StandaloneTerminalProcess extends EventEmitter<TerminalProcessEvent
 	private getShellArgs(shell: string, command: string): string[] {
 		if (process.platform === "win32") {
 			if (shell.toLowerCase().includes("powershell") || shell.toLowerCase().includes("pwsh")) {
-				return ["-Command", command]
+				// The command itself arrives in POWERSHELL_COMMAND_ENV (see run()) and is compiled only after
+				// the output encoding is switched to UTF-8, so even parse errors (e.g. `&&` in Windows PowerShell)
+				// reach us readable instead of in the OEM code page. The native exit code is passed through.
+				return ["-NoProfile", "-NoLogo", "-NonInteractive", "-Command", POWERSHELL_RUNNER]
 			} else {
 				return ["/c", command]
 			}

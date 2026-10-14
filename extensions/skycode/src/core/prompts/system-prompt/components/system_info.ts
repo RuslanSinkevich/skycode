@@ -1,5 +1,5 @@
 import osModule from "node:os"
-import { getShell } from "@utils/shell"
+import { getBackgroundShell, getShell, isWindowsPowerShell } from "@utils/shell"
 import osName from "os-name"
 import { getWorkspacePaths } from "@/hosts/vscode/hostbridge/workspace/getWorkspacePaths"
 import { SystemPromptSection } from "../templates/placeholders"
@@ -16,20 +16,15 @@ Home Directory: {{homeDir}}
 
 /**
  * Get the shell that will actually be used for command execution.
- * When using background exec mode, commands run in the system default shell
- * (cmd.exe on Windows, /bin/bash on Unix), not the VS Code configured shell.
+ * Background exec mode runs commands in getBackgroundShell() (Windows PowerShell on Windows),
+ * the VS Code terminal mode uses the VS Code configured shell.
+ * Windows PowerShell 5.x gets a hint about command chaining, since models default to `&&`.
  */
 function getEffectiveShell(context: SystemPromptContext): string {
-	if (context.terminalExecutionMode === "backgroundExec") {
-		// Background exec uses the system default shell, not VS Code config
-		if (process.platform === "win32") {
-			return process.env.COMSPEC || "cmd.exe"
-		} else {
-			return process.env.SHELL || "/bin/bash"
-		}
-	}
-	// VS Code terminal mode (or undefined) uses the VS Code configured shell
-	return getShell()
+	const shell = context.terminalExecutionMode === "backgroundExec" ? getBackgroundShell() : getShell()
+	return isWindowsPowerShell(shell)
+		? `${shell} (Windows PowerShell 5.1: chain commands with ";", the "&&" and "||" operators are not supported)`
+		: shell
 }
 
 export async function getSystemEnv(context: SystemPromptContext, isTesting = false) {
