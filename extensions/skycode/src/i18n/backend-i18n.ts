@@ -31,6 +31,8 @@ const en: Record<string, string> = {
 	"auth.codex.signInSuccess": "Successfully signed in to OpenAI Codex",
 	"auth.codex.signInFailed": "OpenAI Codex sign in failed: {{error}}",
 
+	"file.notFound": "File no longer exists: {{path}}",
+
 	"mcp.authSuccess": "Successfully authenticated MCP server",
 	"mcp.authFailed": "Failed to authenticate MCP server",
 	"mcp.installSuccess": "MCP server \"{{name}}\" installed successfully.",
@@ -116,6 +118,9 @@ const ru: Record<string, string> = {
 	"auth.codex.signInSuccess": "Вход в OpenAI Codex выполнен",
 	// allow-any-unicode-next-line
 	"auth.codex.signInFailed": "Не удалось войти в OpenAI Codex: {{error}}",
+
+	// allow-any-unicode-next-line
+	"file.notFound": "Файла больше нет: {{path}}",
 
 	// allow-any-unicode-next-line
 	"mcp.authSuccess": "MCP-сервер успешно авторизован",

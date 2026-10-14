@@ -3,8 +3,10 @@ import { workspaceResolver } from "@core/workspace"
 import { getDiffSystem } from "@/core/diff-v2"
 import { Empty, StringRequest } from "@shared/proto/skycode/common"
 import { getWorkspacePath } from "@utils/path"
-import { isDirectory } from "@utils/fs"
+import { fileExistsAtPath, isDirectory } from "@utils/fs"
 import { HostProvider } from "@/hosts/host-provider"
+import { t } from "@/i18n/backend-i18n"
+import { ShowMessageType } from "@/shared/proto/host/window"
 import { Logger } from "@/shared/services/Logger"
 import { Controller } from ".."
 
@@ -86,6 +88,16 @@ export async function openFileRelativePath(_controller: Controller, request: Str
 			// Check if path is a directory — reveal in explorer instead of opening as text
 			if (await isDirectory(absolutePath)) {
 				await HostProvider.workspace.openInFileExplorerPanel({ path: absolutePath })
+				return Empty.create()
+			}
+
+			// The file may be gone (e.g. an edit card of a file the agent deleted later). Without this check
+			// VS Code opens an empty editor at that path, and saving it would recreate the file.
+			if (!(await fileExistsAtPath(absolutePath))) {
+				await HostProvider.window.showMessage({
+					type: ShowMessageType.INFORMATION,
+					message: t("file.notFound", { path: filePath }),
+				})
 				return Empty.create()
 			}
 
