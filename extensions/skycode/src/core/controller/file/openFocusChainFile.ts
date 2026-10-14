@@ -16,7 +16,7 @@ export async function openFocusChainFile(controller: Controller, request: String
 
 	// Get the current focus chain list from the task's most recent task_progress message
 	let initialFocusChainContent: string | undefined
-	const currentTask = controller.task
+	const currentTask = controller.activeTask
 	if (currentTask) {
 		// Get the task's message history and find the most recent task_progress message
 		// TODO - can we decouple this from SkycodeMessages?

@@ -94,7 +94,7 @@ describe("SkycodeAPI Core Functionality", () => {
 			const mockTask = {
 				handleWebviewAskResponse: sandbox.stub().resolves(),
 			}
-			mockController.task = mockTask
+			mockController.activeTask = mockTask
 
 			await api.sendMessage("Test message", ["image.png"])
 
@@ -104,7 +104,7 @@ describe("SkycodeAPI Core Functionality", () => {
 		})
 
 		it("should handle no active task gracefully", async () => {
-			mockController.task = undefined
+			mockController.activeTask = undefined
 
 			await api.sendMessage("Message to nowhere", [])
 
@@ -115,7 +115,7 @@ describe("SkycodeAPI Core Functionality", () => {
 			const mockTask = {
 				handleWebviewAskResponse: sandbox.stub().resolves(),
 			}
-			mockController.task = mockTask
+			mockController.activeTask = mockTask
 
 			await api.sendMessage("", [])
 
@@ -126,7 +126,7 @@ describe("SkycodeAPI Core Functionality", () => {
 			const mockTask = {
 				handleWebviewAskResponse: sandbox.stub().resolves(),
 			}
-			mockController.task = mockTask
+			mockController.activeTask = mockTask
 
 			await api.sendMessage(undefined, [])
 
@@ -142,7 +142,7 @@ describe("SkycodeAPI Core Functionality", () => {
 				const mockTask = {
 					handleWebviewAskResponse: sandbox.stub().resolves(),
 				}
-				mockController.task = mockTask
+				mockController.activeTask = mockTask
 
 				await api.pressPrimaryButton()
 
@@ -152,7 +152,7 @@ describe("SkycodeAPI Core Functionality", () => {
 			})
 
 			it("should handle primary button press with no active task", async () => {
-				mockController.task = undefined
+				mockController.activeTask = undefined
 
 				await api.pressPrimaryButton()
 
@@ -165,7 +165,7 @@ describe("SkycodeAPI Core Functionality", () => {
 				const mockTask = {
 					handleWebviewAskResponse: sandbox.stub().resolves(),
 				}
-				mockController.task = mockTask
+				mockController.activeTask = mockTask
 
 				await api.pressSecondaryButton()
 
@@ -175,7 +175,7 @@ describe("SkycodeAPI Core Functionality", () => {
 			})
 
 			it("should handle secondary button press with no active task", async () => {
-				mockController.task = undefined
+				mockController.activeTask = undefined
 
 				await api.pressSecondaryButton()
 

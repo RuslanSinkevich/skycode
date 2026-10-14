@@ -34,8 +34,8 @@ export async function improveWithSkycode(
 	}
 
 	// Send: notebooks go to existing task if available, non-notebooks always create new task
-	if (notebookContext && controller.task) {
-		await controller.task.handleWebviewAskResponse("messageResponse", prompt)
+	if (notebookContext && controller.activeTask) {
+		await controller.activeTask.handleWebviewAskResponse("messageResponse", prompt)
 	} else {
 		await controller.initTask(prompt)
 	}

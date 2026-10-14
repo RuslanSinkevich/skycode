@@ -2862,10 +2862,10 @@ export class Task {
 						// Wait with exponential backoff before auto-resuming
 						setTimeoutPromise(delay).then(async () => {
 							// Programmatically click the resume button on the new task instance
-							if (this.controller.task) {
+							if (this.controller.activeTask) {
 								// Pass retry state to the new task instance
-								this.controller.task.taskState.autoRetryAttempts = this.taskState.autoRetryAttempts
-								await this.controller.task.handleWebviewAskResponse("yesButtonClicked", "", [])
+								this.controller.activeTask.taskState.autoRetryAttempts = this.taskState.autoRetryAttempts
+								await this.controller.activeTask.handleWebviewAskResponse("yesButtonClicked", "", [])
 							}
 						})
 					} else if (this.taskState.autoRetryAttempts >= 3) {

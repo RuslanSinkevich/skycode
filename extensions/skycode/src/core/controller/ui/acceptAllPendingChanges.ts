@@ -16,7 +16,7 @@ export async function acceptAllPendingChanges(controller: Controller, _request: 
 	Logger.log("[acceptAllPendingChanges] Called")
 	const diffSystem = getDiffSystem()
 	const store = diffSystem.getStore()
-	const taskId = controller.task?.taskId
+	const taskId = controller.activeTask?.taskId
 
 	const count = store.getPendingCount(taskId)
 	Logger.log("[acceptAllPendingChanges] Pending hunks:", count, "taskId:", taskId)

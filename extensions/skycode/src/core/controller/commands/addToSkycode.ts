@@ -30,8 +30,8 @@ export async function addToSkycode(controller: Controller, request: CommandConte
 	}
 
 	// Notebooks send immediately, regular adds just fill input
-	if (notebookContext && controller.task) {
-		await controller.task.handleWebviewAskResponse("messageResponse", input)
+	if (notebookContext && controller.activeTask) {
+		await controller.activeTask.handleWebviewAskResponse("messageResponse", input)
 	} else if (notebookContext) {
 		await controller.initTask(input)
 	} else {

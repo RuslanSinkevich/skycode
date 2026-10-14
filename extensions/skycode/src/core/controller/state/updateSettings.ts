@@ -46,13 +46,13 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 
 			controller.stateManager.setApiConfiguration(convertedApiConfigurationFromProto)
 
-			if (controller.task) {
+			if (controller.activeTask) {
 				const currentMode = controller.stateManager.getGlobalSettingsKey("mode")
 				const apiConfigForHandler = {
 					...convertedApiConfigurationFromProto,
-					ulid: controller.task.ulid,
+					ulid: controller.activeTask.ulid,
 				}
-				controller.task.api = buildApiHandler(apiConfigForHandler, currentMode)
+				controller.activeTask.api = buildApiHandler(apiConfigForHandler, currentMode)
 			}
 		}
 
@@ -342,10 +342,10 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			let busyTerminalsCount = 0
 
 			// Update the terminal manager of the current task if it exists
-			if (controller.task) {
+			if (controller.activeTask) {
 				// Call the updated setDefaultTerminalProfile method that returns closed terminal info
 				// Use `as any` to handle type incompatibility between VSCode's TerminalInfo and standalone TerminalInfo
-				const result = controller.task.terminalManager.setDefaultTerminalProfile(profileId) as any
+				const result = controller.activeTask.terminalManager.setDefaultTerminalProfile(profileId) as any
 				closedCount = result.closedCount
 				busyTerminalsCount = result.busyTerminals?.length ?? 0
 

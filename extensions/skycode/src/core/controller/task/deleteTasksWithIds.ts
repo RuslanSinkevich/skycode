@@ -50,7 +50,7 @@ export async function deleteTasksWithIds(controller: Controller, request: String
 async function deleteTaskWithId(controller: Controller, id: string): Promise<void> {
 	try {
 		// Clear current task if it matches the ID being deleted
-		if (id === controller.task?.taskId) {
+		if (id === controller.activeTask?.taskId) {
 			await controller.clearTask()
 			Logger.debug("cleared task")
 		}

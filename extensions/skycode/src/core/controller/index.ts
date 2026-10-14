@@ -60,11 +60,22 @@ https://github.com/KumarVariable/vscode-extension-sidebar-html/blob/master/src/c
 */
 
 export class Controller {
-	task?: Task
+	// [SKYCODE] Хранилище задачи приватное; чтение только через activeTask (единая точка для вкладок).
+	private _task?: Task
+
+	/** Задача активной сессии. */
+	get activeTask(): Task | undefined {
+		return this._task
+	}
+
+	/** Сбрасывает ссылку на задачу без abort (для resetState; запись остаётся внутри Controller). */
+	detachActiveTask(): void {
+		this._task = undefined
+	}
 
 	/**
 	 * SessionManager - управление сессиями (замена controller.task в будущем).
-	 * Шаг 1: работает параллельно с this.task для обратной совместимости.
+	 * Шаг 1: работает параллельно с this._task для обратной совместимости.
 	 * Каждый initTask/clearTask синхронизирует текущую сессию с Task.
 	 */
 	readonly sessionManager = new SessionManager()
@@ -219,7 +230,7 @@ export class Controller {
 			this.stateManager.setTaskSettingsBatch(taskId, taskSettings)
 		}
 
-		this.task = new Task({
+		const newTask = new Task({
 			controller: this,
 			mcpHub: this.mcpHub,
 			updateTaskHistory: (historyItem) => this.updateTaskHistory(historyItem),
@@ -240,11 +251,12 @@ export class Controller {
 			historyItem,
 			taskId,
 		})
+		this._task = newTask
 
 		// --- SESSION SYNC: привязываем Task <-> Session двусторонне ---
 		const session = this.sessionManager.create(taskId)
-		session.setTask(this.task)
-		this.task.setSession(session)
+		session.setTask(newTask)
+		newTask.setSession(session)
 
 		// v4: привязываем DiffSystem к текущей задаче для scoped rollback
 		try {
@@ -255,12 +267,12 @@ export class Controller {
 		}
 
 		if (historyItem) {
-			this.task.resumeTaskFromHistory()
+			newTask.resumeTaskFromHistory()
 		} else if (task || images || files) {
-			this.task.startTask(task, images, files)
+			newTask.startTask(task, images, files)
 		}
 
-		return this.task.taskId
+		return newTask.taskId
 	}
 
 	async reinitExistingTaskFromId(taskId: string) {
@@ -277,15 +289,15 @@ export class Controller {
 		this.stateManager.setGlobalState("mode", modeToSwitchTo)
 
 		// Update API handler with new mode (buildApiHandler now selects provider based on mode)
-		if (this.task) {
+		if (this.activeTask) {
 			const apiConfiguration = this.stateManager.getApiConfiguration()
-			this.task.api = buildApiHandler({ ...apiConfiguration, ulid: this.task.ulid }, modeToSwitchTo)
+			this.activeTask.api = buildApiHandler({ ...apiConfiguration, ulid: this.activeTask.ulid }, modeToSwitchTo)
 		}
 
 		await this.postStateToWebview()
 
 		// Additional safety
-		if (this.task) {
+		if (this.activeTask) {
 			return true
 		}
 		return false
@@ -302,18 +314,18 @@ export class Controller {
 		// Capture mode switch telemetry | Capture regardless of if we know the taskId
 
 		// Update API handler with new mode (buildApiHandler now selects provider based on mode)
-		if (this.task) {
+		if (this.activeTask) {
 			const apiConfiguration = this.stateManager.getApiConfiguration()
-			this.task.api = buildApiHandler({ ...apiConfiguration, ulid: this.task.ulid }, modeToSwitchTo)
+			this.activeTask.api = buildApiHandler({ ...apiConfiguration, ulid: this.activeTask.ulid }, modeToSwitchTo)
 		}
 
 		await this.postStateToWebview()
 
-		if (this.task) {
-			if (this.task.taskState.isAwaitingPlanResponse && didSwitchToWriteMode) {
-				this.task.taskState.didRespondToPlanAskBySwitchingMode = true
+		if (this.activeTask) {
+			if (this.activeTask.taskState.isAwaitingPlanResponse && didSwitchToWriteMode) {
+				this.activeTask.taskState.didRespondToPlanAskBySwitchingMode = true
 				// Use chatContent if provided, otherwise use default message
-				await this.task.handleWebviewAskResponse(
+				await this.activeTask.handleWebviewAskResponse(
 					"messageResponse",
 					chatContent?.message || "PLAN_MODE_TOGGLE_RESPONSE",
 					chatContent?.images || [],
@@ -337,7 +349,7 @@ export class Controller {
 			return
 		}
 
-		if (!this.task) {
+		if (!this.activeTask) {
 			return
 		}
 
@@ -348,17 +360,17 @@ export class Controller {
 			this.updateBackgroundCommandState(false)
 
 			try {
-				await this.task.abortTask()
+				await this.activeTask.abortTask()
 			} catch (error) {
 				Logger.error("Failed to abort task", error)
 			}
 
 			await pWaitFor(
 				() =>
-					this.task === undefined ||
-					this.task.taskState.isStreaming === false ||
-					this.task.taskState.didFinishAbortingStream ||
-					this.task.taskState.isWaitingForFirstChunk,
+					this.activeTask === undefined ||
+					this.activeTask.taskState.isStreaming === false ||
+					this.activeTask.taskState.didFinishAbortingStream ||
+					this.activeTask.taskState.isWaitingForFirstChunk,
 				{
 					timeout: 800,
 				},
@@ -366,9 +378,9 @@ export class Controller {
 				Logger.warn("[Controller.cancelTask] Timed out waiting for stream abort — force-continuing")
 			})
 
-			if (this.task) {
+			if (this.activeTask) {
 				// 'abandoned' will prevent this skycode instance from affecting future skycode instance gui. this may happen if its hanging on a streaming request
-				this.task.taskState.abandoned = true
+				this.activeTask.taskState.abandoned = true
 			}
 
 			// Small delay to ensure state manager has persisted the history update
@@ -377,7 +389,7 @@ export class Controller {
 			// NOW try to get history after abort has finished (hook may have saved messages)
 			let historyItem: HistoryItem | undefined
 			try {
-				const result = await this.getTaskWithId(this.task.taskId)
+				const result = await this.getTaskWithId(this.activeTask.taskId)
 				historyItem = result.historyItem
 			} catch (error) {
 				// Task not in history yet (new task with no messages); catch the
@@ -411,7 +423,7 @@ export class Controller {
 	}
 
 	async cancelBackgroundCommand(): Promise<void> {
-		const didCancel = await this.task?.cancelBackgroundCommand()
+		const didCancel = await this.activeTask?.cancelBackgroundCommand()
 		if (!didCancel) {
 			this.updateBackgroundCommandState(false)
 		}
@@ -507,8 +519,8 @@ export class Controller {
 		this.stateManager.setApiConfiguration(updatedConfig)
 
 		await this.postStateToWebview()
-		if (this.task) {
-			this.task.api = buildApiHandler({ ...updatedConfig, ulid: this.task.ulid }, currentMode)
+		if (this.activeTask) {
+			this.activeTask.api = buildApiHandler({ ...updatedConfig, ulid: this.activeTask.ulid }, currentMode)
 		}
 		// Dont send settingsButtonClicked because its bad ux if user is on welcome
 	}
@@ -758,8 +770,12 @@ export class Controller {
 		const workflowToggles = this.stateManager.getWorkspaceStateKey("workflowToggles")
 		const autoCondenseThreshold = this.stateManager.getGlobalSettingsKey("autoCondenseThreshold")
 
-		const currentTaskItem = this.task?.taskId ? (taskHistory || []).find((item) => item.id === this.task?.taskId) : undefined
-		const skycodeMessages = (this.task?.messageStateHandler.getSkycodeMessages() || []).map(sanitizeTruncatedPlaceholder)
+		const currentTaskItem = this.activeTask?.taskId
+			? (taskHistory || []).find((item) => item.id === this.activeTask?.taskId)
+			: undefined
+		const skycodeMessages = (this.activeTask?.messageStateHandler.getSkycodeMessages() || []).map(
+			sanitizeTruncatedPlaceholder,
+		)
 		const currentSessionId = this.sessionManager.activeSessionId ?? undefined
 
 		const processedTaskHistory = (taskHistory || [])
@@ -810,7 +826,7 @@ export class Controller {
 			currentTaskItem,
 			currentSessionId,
 			skycodeMessages,
-			currentFocusChainChecklist: this.task?.taskState.currentFocusChainChecklist || null,
+			currentFocusChainChecklist: this.activeTask?.taskState.currentFocusChainChecklist || null,
 			autoApprovalSettings,
 			browserSettings,
 			focusChainSettings,
@@ -897,7 +913,7 @@ export class Controller {
 					const configModelId = (apiConfig as Record<string, unknown>)[
 						`${modeKey}${providerModelSuffix[providerId] ?? "ApiModelId"}`
 					] as string | undefined
-					const modelId = this.task?.api?.getModel()?.id ?? configModelId ?? "unknown"
+					const modelId = this.activeTask?.api?.getModel()?.id ?? configModelId ?? "unknown"
 					const providerInfo = { model: { id: modelId, info: {} as ModelInfo }, providerId, mode }
 					// Read user's session budget override (auto / strong / medium / weak / custom).
 					// Without this, the prompt profile pill always shows the auto-detected tier
@@ -972,7 +988,7 @@ export class Controller {
 			const storage = getPendingChangesStorage()
 			// [SKYCODE] Бар внизу показывает изменения ТЕКУЩЕЙ задачи. Раньше он брал все правки
 			// workspace, поэтому в новой вкладке висели файлы, изменённые агентом в прошлой.
-			const fileStats = storage.getFileStats(this.task?.taskId)
+			const fileStats = storage.getFileStats(this.activeTask?.taskId)
 			return fileStats.map((stats) => ({
 				id: stats.fsPath, // Use fsPath as id for grouping
 				fileName: stats.fileName,
@@ -986,12 +1002,12 @@ export class Controller {
 	}
 
 	async clearTask() {
-		if (this.task) {
+		if (this.activeTask) {
 			// Clear task settings cache when task ends
 			await this.stateManager.clearTaskSettings()
 		}
-		await this.task?.abortTask()
-		this.task = undefined // removes reference to it, so once promises end it will be garbage collected
+		await this.activeTask?.abortTask()
+		this._task = undefined // removes reference to it, so once promises end it will be garbage collected
 
 		// v4: завершаем текущий checkpoint при переключении задач
 		try {

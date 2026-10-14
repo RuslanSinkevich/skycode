@@ -16,10 +16,10 @@ export async function getBrowserConnectionInfo(controller: Controller, _: EmptyR
 
 		// Check if there's an active browser session by using the controller's handleWebviewMessage approach
 		// This is similar to what's done in controller/index.ts for the "getBrowserConnectionInfo" message
-		if (controller.task?.browserSession) {
+		if (controller.activeTask?.browserSession) {
 			// Access the browser session through the controller's task property
 			// Using indexer notation to access private property
-			const browserSession = controller.task.browserSession
+			const browserSession = controller.activeTask.browserSession
 			const connectionInfo = browserSession.getConnectionInfo()
 
 			// Convert from BrowserSession.BrowserConnectionInfo to proto.BrowserConnectionInfo

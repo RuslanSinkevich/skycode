@@ -33,8 +33,8 @@ export async function resendFromMessage(controller: Controller, request: ResendF
 	}
 
 	// 2. Truncate skycodeMessages and API history
-	if (controller.task) {
-		const messageStateHandler = controller.task.messageStateHandler
+	if (controller.activeTask) {
+		const messageStateHandler = controller.activeTask.messageStateHandler
 		const skycodeMessages = messageStateHandler.getSkycodeMessages()
 		const messageIndex = skycodeMessages.findIndex((m) => m.ts === messageTs)
 
@@ -81,14 +81,16 @@ export async function resendFromMessage(controller: Controller, request: ResendF
 	await controller.cancelTask()
 
 	// 4. Wait for task to be ready for input, then send EDITED text
-	if (controller.task) {
+	if (controller.activeTask) {
 		try {
 			await pWaitFor(
-				() => controller.task?.taskState.isInitialized === true && controller.task?.approvalGate.hasPending === true,
+				() =>
+					controller.activeTask?.taskState.isInitialized === true &&
+					controller.activeTask?.approvalGate.hasPending === true,
 				{ timeout: 5_000 },
 			)
 			Logger.log(`[resendFromMessage] Task ready, sending edited text: "${newText.substring(0, 60)}"`)
-			await controller.task.handleWebviewAskResponse("messageResponse", newText, newImages, newFiles)
+			await controller.activeTask.handleWebviewAskResponse("messageResponse", newText, newImages, newFiles)
 		} catch (error) {
 			Logger.error("[resendFromMessage] Failed to auto-resume:", error)
 		}

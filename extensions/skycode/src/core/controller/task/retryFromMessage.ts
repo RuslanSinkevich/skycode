@@ -30,8 +30,8 @@ export async function retryFromMessage(controller: Controller, request: Int64Req
 	let originalImages: string[] = []
 	let originalFiles: string[] = []
 
-	if (controller.task) {
-		const messageStateHandler = controller.task.messageStateHandler
+	if (controller.activeTask) {
+		const messageStateHandler = controller.activeTask.messageStateHandler
 		const skycodeMessages = messageStateHandler.getSkycodeMessages()
 
 		Logger.log(`[retryFromMessage] Total skycodeMessages: ${skycodeMessages.length}`)
@@ -59,8 +59,8 @@ export async function retryFromMessage(controller: Controller, request: Int64Req
 	}
 
 	// 2. Truncate skycodeMessages and API history (persist to disk)
-	if (controller.task) {
-		const messageStateHandler = controller.task.messageStateHandler
+	if (controller.activeTask) {
+		const messageStateHandler = controller.activeTask.messageStateHandler
 		const skycodeMessages = messageStateHandler.getSkycodeMessages()
 
 		const messageIndex = skycodeMessages.findIndex((m) => m.ts === messageTs)
@@ -118,19 +118,26 @@ export async function retryFromMessage(controller: Controller, request: Int64Req
 	// 3. Cancel the current task — aborts it, re-initializes from the truncated history on disk
 	Logger.log(`[retryFromMessage] Calling cancelTask()...`)
 	await controller.cancelTask()
-	Logger.log(`[retryFromMessage] cancelTask() done. task exists: ${!!controller.task}`)
+	Logger.log(`[retryFromMessage] cancelTask() done. task exists: ${!!controller.activeTask}`)
 
 	// 4. Wait for the re-initialized task to have a pending ask (resume prompt)
-	if (originalMessageText && controller.task) {
+	if (originalMessageText && controller.activeTask) {
 		try {
 			await pWaitFor(
-				() => controller.task?.taskState.isInitialized === true && controller.task?.approvalGate.hasPending === true,
+				() =>
+					controller.activeTask?.taskState.isInitialized === true &&
+					controller.activeTask?.approvalGate.hasPending === true,
 				{ timeout: 5_000 },
 			)
 			Logger.log(`[retryFromMessage] Task ready, auto-responding with: "${originalMessageText.substring(0, 50)}"`)
 
 			// 5. Auto-respond to the resume ask with the original message
-			await controller.task.handleWebviewAskResponse("messageResponse", originalMessageText, originalImages, originalFiles)
+			await controller.activeTask.handleWebviewAskResponse(
+				"messageResponse",
+				originalMessageText,
+				originalImages,
+				originalFiles,
+			)
 		} catch (error) {
 			Logger.error("[retryFromMessage] Failed to auto-resume:", error)
 		}

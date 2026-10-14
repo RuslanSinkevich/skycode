@@ -5,6 +5,6 @@ import { Controller } from ".."
  * Report bug slash command logic
  */
 export async function reportBug(controller: Controller, _request: StringRequest): Promise<Empty> {
-	await controller.task?.handleWebviewAskResponse("yesButtonClicked")
+	await controller.activeTask?.handleWebviewAskResponse("yesButtonClicked")
 	return Empty.create()
 }

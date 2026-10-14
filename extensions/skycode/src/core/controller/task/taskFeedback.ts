@@ -15,7 +15,7 @@ export async function taskFeedback(controller: Controller, request: StringReques
 	}
 
 	try {
-		if (!controller.task?.ulid) {
+		if (!controller.activeTask?.ulid) {
 			Logger.warn("taskFeedback: No active task to receive feedback")
 		}
 	} catch (error) {

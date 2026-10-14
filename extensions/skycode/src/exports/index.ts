@@ -21,8 +21,8 @@ export function createSkycodeAPI(sidebarController: Controller): SkycodeAPI {
 			HostProvider.get().logToChannel(
 				`Sending message: ${message ? `"${message}"` : "undefined"} with ${images?.length || 0} image(s)`,
 			)
-			if (sidebarController.task) {
-				await sidebarController.task.handleWebviewAskResponse("messageResponse", message || "", images || [])
+			if (sidebarController.activeTask) {
+				await sidebarController.activeTask.handleWebviewAskResponse("messageResponse", message || "", images || [])
 			} else {
 				HostProvider.get().logToChannel("No active task to send message to")
 			}
@@ -30,8 +30,8 @@ export function createSkycodeAPI(sidebarController: Controller): SkycodeAPI {
 
 		pressPrimaryButton: async () => {
 			HostProvider.get().logToChannel("Pressing primary button")
-			if (sidebarController.task) {
-				await sidebarController.task.handleWebviewAskResponse("yesButtonClicked", "", [])
+			if (sidebarController.activeTask) {
+				await sidebarController.activeTask.handleWebviewAskResponse("yesButtonClicked", "", [])
 			} else {
 				HostProvider.get().logToChannel("No active task to press button for")
 			}
@@ -39,8 +39,8 @@ export function createSkycodeAPI(sidebarController: Controller): SkycodeAPI {
 
 		pressSecondaryButton: async () => {
 			HostProvider.get().logToChannel("Pressing secondary button")
-			if (sidebarController.task) {
-				await sidebarController.task.handleWebviewAskResponse("noButtonClicked", "", [])
+			if (sidebarController.activeTask) {
+				await sidebarController.activeTask.handleWebviewAskResponse("noButtonClicked", "", [])
 			} else {
 				HostProvider.get().logToChannel("No active task to press button for")
 			}

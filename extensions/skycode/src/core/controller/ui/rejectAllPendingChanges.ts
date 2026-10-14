@@ -12,7 +12,7 @@ export async function rejectAllPendingChanges(controller: Controller, _request: 
 	Logger.log("[rejectAllPendingChanges] Called")
 	const diffSystem = getDiffSystem()
 	// [SKYCODE] Только текущая задача — см. комментарий в acceptAllPendingChanges.
-	const taskId = controller.task?.taskId
+	const taskId = controller.activeTask?.taskId
 
 	const count = diffSystem.getStore().getPendingCount(taskId)
 	Logger.log("[rejectAllPendingChanges] Pending hunks:", count, "taskId:", taskId)

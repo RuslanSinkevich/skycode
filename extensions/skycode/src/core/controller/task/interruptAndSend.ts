@@ -18,8 +18,8 @@ export async function interruptAndSend(controller: Controller, request: AskRespo
 	// Prevent concurrent calls - just update the pending message
 	if (interruptInProgress) {
 		// Update pending message with latest text (don't lose user input)
-		if (controller.task?.taskState) {
-			controller.task.taskState.pendingUserMessage = {
+		if (controller.activeTask?.taskState) {
+			controller.activeTask.taskState.pendingUserMessage = {
 				text: request.text || "",
 				images: request.images,
 				files: request.files,
@@ -28,14 +28,14 @@ export async function interruptAndSend(controller: Controller, request: AskRespo
 		return Empty.create()
 	}
 
-	if (!controller.task) {
+	if (!controller.activeTask) {
 		return Empty.create()
 	}
 
 	interruptInProgress = true
 
 	try {
-		const task = controller.task
+		const task = controller.activeTask
 		const taskState = task.taskState
 
 		// Store the pending message

@@ -32,8 +32,8 @@ export async function deleteFromMessage(controller: Controller, request: Int64Re
 	}
 
 	// 2. Truncate skycodeMessages and API history (persist to disk)
-	if (controller.task) {
-		const messageStateHandler = controller.task.messageStateHandler
+	if (controller.activeTask) {
+		const messageStateHandler = controller.activeTask.messageStateHandler
 		const skycodeMessages = messageStateHandler.getSkycodeMessages()
 
 		Logger.log(`[deleteFromMessage] Total skycodeMessages: ${skycodeMessages.length}`)

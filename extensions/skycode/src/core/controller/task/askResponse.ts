@@ -17,7 +17,7 @@ import { Controller } from ".."
  */
 export async function askResponse(controller: Controller, request: AskResponseRequest): Promise<Empty> {
 	try {
-		if (!controller.task) {
+		if (!controller.activeTask) {
 			Logger.warn("askResponse: No active task to receive response")
 			return Empty.create()
 		}
@@ -41,7 +41,7 @@ export async function askResponse(controller: Controller, request: AskResponseRe
 
 		// Call the task's handler for webview responses
 		// Pass approvalId if present (for ApprovalGate routing)
-		await controller.task.handleWebviewAskResponse(
+		await controller.activeTask.handleWebviewAskResponse(
 			responseType,
 			request.text,
 			request.images,
