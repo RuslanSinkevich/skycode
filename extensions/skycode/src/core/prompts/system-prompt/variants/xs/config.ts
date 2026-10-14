@@ -34,7 +34,6 @@ export const config = createVariant(ModelFamily.XS)
 		SystemPromptSection.TOOL_USE,
 		SystemPromptSection.RULES,
 		SystemPromptSection.ACT_VS_PLAN,
-		SystemPromptSection.CLI_SUBAGENTS,
 		SystemPromptSection.CAPABILITIES,
 		SystemPromptSection.EDITING_FILES,
 		SystemPromptSection.OBJECTIVE,
@@ -70,9 +69,6 @@ export const config = createVariant(ModelFamily.XS)
 	})
 	.overrideComponent(SystemPromptSection.RULES, {
 		template: xsComponentOverrides.RULES,
-	})
-	.overrideComponent(SystemPromptSection.CLI_SUBAGENTS, {
-		template: xsComponentOverrides.CLI_SUBAGENTS,
 	})
 	.overrideComponent(SystemPromptSection.ACT_VS_PLAN, {
 		template: xsComponentOverrides.ACT_VS_PLAN,

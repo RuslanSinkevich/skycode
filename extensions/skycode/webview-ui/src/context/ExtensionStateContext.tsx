@@ -29,7 +29,6 @@ export interface ExtensionStateContextType extends ExtensionState {
 	mcpServers: McpServer[]
 	mcpMarketplaceCatalog: McpMarketplaceCatalog
 	totalTasksSize: number | null
-	lastDismissedCliBannerVersion: number
 
 	availableTerminalProfiles: TerminalProfile[]
 
@@ -152,7 +151,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		vscodeTerminalExecutionMode: "vscodeTerminal",
 		terminalOutputLineLimit: 500,
 		maxConsecutiveMistakes: 3,
-		subagentTerminalOutputLineLimit: 2000,
 		defaultTerminalProfile: "default",
 		isNewUser: false,
 		welcomeViewCompleted: false,
@@ -169,8 +167,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		lastDismissedModelBannerVersion: 0,
 		backgroundCommandRunning: false,
 		backgroundCommandTaskId: undefined,
-		lastDismissedCliBannerVersion: 0,
-		subagentsEnabled: false,
 		backgroundEditEnabled: true,
 		pendingChanges: [],
 		skillsEnabled: false,

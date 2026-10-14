@@ -10,7 +10,6 @@ import {
 	newRuleToolResponse,
 	newTaskToolResponse,
 	reportBugToolResponse,
-	subagentToolResponse,
 } from "../prompts/commands"
 
 type Workflow = {
@@ -38,7 +37,6 @@ export async function parseSlashCommands(
 		"newrule",
 		"reportbug",
 		"deep-planning",
-		"subagent",
 		"explain-changes",
 	]
 
@@ -52,7 +50,6 @@ export async function parseSlashCommands(
 		newrule: newRuleToolResponse(),
 		reportbug: reportBugToolResponse(),
 		"deep-planning": deepPlanningToolResponse(focusChainSettings, providerInfo, willUseNativeTools),
-		subagent: subagentToolResponse(),
 		"explain-changes": explainChangesToolResponse(),
 	}
 

@@ -25,13 +25,11 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 	const { t } = useI18n()
 	const {
 		lastDismissedInfoBannerVersion,
-		lastDismissedCliBannerVersion,
 		lastDismissedModelBannerVersion,
 		openRouterModels,
 		setShowChatModelSelector,
 		navigateToSettings,
 		navigateToAccount,
-		subagentsEnabled,
 		banners,
 	} = useExtensionState()
 	const { handleFieldsChange } = useApiConfigurationHandlers()
@@ -48,12 +46,9 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 			if (bannerId.startsWith("new-model")) {
 				return (lastDismissedModelBannerVersion ?? 0) >= 1
 			}
-			if (bannerId.startsWith("cli-")) {
-				return (lastDismissedCliBannerVersion ?? 0) >= 1
-			}
 			return false
 		},
-		[lastDismissedInfoBannerVersion, lastDismissedModelBannerVersion, lastDismissedCliBannerVersion],
+		[lastDismissedInfoBannerVersion, lastDismissedModelBannerVersion],
 	)
 
 	/**
@@ -127,12 +122,6 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 				navigateToSettings("permissions")
 				break
 
-				case BannerActionType.InstallCli:
-					StateServiceClient.installSkycodeCli({}).catch((error) =>
-						console.error("Failed to initiate CLI installation:", error),
-					)
-					break
-
 				default:
 					console.warn("Unknown banner action:", action.action)
 			}
@@ -151,8 +140,6 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 			StateServiceClient.updateInfoBannerVersion({ value: 1 }).catch(console.error)
 		} else if (bannerId.startsWith("new-model")) {
 			StateServiceClient.updateModelBannerVersion({ value: 1 }).catch(console.error)
-		} else if (bannerId.startsWith("cli-")) {
-			StateServiceClient.updateCliBannerVersion({ value: 1 }).catch(console.error)
 		} else {
 			// Mark the banner as dismissed by its ID.
 			StateServiceClient.dismissBanner({ value: bannerId }).catch(console.error)
@@ -184,7 +171,7 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 
 		// Combine both sources: extension state banners first, then hardcoded banners
 		return [...extensionStateBanners, ...hardcodedBanners]
-	}, [bannerConfig, banners, subagentsEnabled, handleBannerAction, handleBannerDismiss])
+	}, [bannerConfig, banners, handleBannerAction, handleBannerDismiss])
 
 	return (
 		<div className="flex flex-col flex-1 w-full h-full p-0 m-0">

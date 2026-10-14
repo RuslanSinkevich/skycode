@@ -24,11 +24,8 @@ service StateService {
   rpc setWelcomeViewCompleted(BooleanRequest) returns (Empty);
   rpc updateInfoBannerVersion(Int64Request) returns (Empty);
   rpc updateModelBannerVersion(Int64Request) returns (Empty);
-  rpc updateCliBannerVersion(Int64Request) returns (Empty);
   rpc dismissBanner(StringRequest) returns (Empty);
   rpc refreshBanners(EmptyRequest) returns (Empty);
-  rpc installSkycodeCli(EmptyRequest) returns (Empty);
-  rpc checkCliInstallation(EmptyRequest) returns (Boolean);
   rpc getProcessInfo(EmptyRequest) returns (ProcessInfo);
   rpc flushPendingState(EmptyRequest) returns (Empty);
 }
@@ -142,7 +139,7 @@ message Settings {
   optional string default_terminal_profile = 137;
   optional int32 terminal_output_line_limit = 138;
   optional int32 max_consecutive_mistakes = 139;
-  optional int32 subagent_terminal_output_line_limit = 140;
+  reserved 140; // was subagent_terminal_output_line_limit
   optional bool strict_plan_mode_enabled = 141;
   optional bool yolo_mode_toggled = 142;
   optional bool use_auto_condense = 143;
@@ -154,7 +151,7 @@ message Settings {
   optional FocusChainSettings focus_chain_settings = 149;
   optional string custom_prompt = 150;
   optional double auto_condense_threshold = 151;
-  optional bool subagents_enabled = 153;
+  reserved 153; // was subagents_enabled
   optional bool enable_parallel_tool_calling = 154;
   optional bool background_edit_enabled = 155;
   optional bool skills_enabled = 156;
@@ -291,8 +288,8 @@ message UpdateSettingsRequest {
   optional bool multi_root_enabled = 25;
   optional string vscode_terminal_execution_mode = 27;
   optional int32 max_consecutive_mistakes = 28;
-  optional bool subagents_enabled = 29;
-  optional int32 subagent_terminal_output_line_limit = 30;
+  reserved 29; // was subagents_enabled
+  reserved 30; // was subagent_terminal_output_line_limit
   optional string skycode_env = 31;
   optional bool native_tool_call_enabled = 32;
   optional OnboardingModelGroup onboarding_models = 33;

@@ -26,7 +26,6 @@ export const config = createVariant(ModelFamily.QWEN)
 		SystemPromptSection.TOOL_USE,
 		SystemPromptSection.RULES,
 		SystemPromptSection.ACT_VS_PLAN,
-		SystemPromptSection.CLI_SUBAGENTS,
 		SystemPromptSection.CAPABILITIES,
 		SystemPromptSection.EDITING_FILES,
 		SystemPromptSection.MCP,

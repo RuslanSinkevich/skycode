@@ -28,7 +28,6 @@ export const config = createVariant(ModelFamily.DEVSTRAL)
 		SystemPromptSection.MCP,
 		SystemPromptSection.EDITING_FILES,
 		SystemPromptSection.ACT_VS_PLAN,
-		SystemPromptSection.CLI_SUBAGENTS,
 		SystemPromptSection.CAPABILITIES,
 		SystemPromptSection.RULES,
 		SystemPromptSection.SYSTEM_INFO,

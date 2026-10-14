@@ -52,7 +52,6 @@ import { SessionManager } from "../session"
 import { sendMcpMarketplaceCatalogEvent } from "./mcp/subscribeToMcpMarketplaceCatalog"
 import { getSkycodeOnboardingModels } from "./models/getSkycodeOnboardingModels"
 import { appendSkycodeStealthModels } from "./models/refreshOpenRouterModels"
-import { checkCliInstallation } from "./state/checkCliInstallation"
 import { sendStateUpdate } from "./state/subscribeToState"
 import { sendChatButtonClickedEvent } from "./ui/subscribeToChatButtonClicked"
 
@@ -138,9 +137,6 @@ export class Controller {
 			() => ensureSettingsDirectoryExists(),
 			ExtensionRegistryInfo.version,
 		)
-
-		// Check CLI installation status once on startup
-		checkCliInstallation(this)
 	}
 
 	/*
@@ -190,7 +186,6 @@ export class Controller {
 		const terminalReuseEnabled = this.stateManager.getGlobalStateKey("terminalReuseEnabled")
 		const vscodeTerminalExecutionMode = this.stateManager.getGlobalStateKey("vscodeTerminalExecutionMode")
 		const terminalOutputLineLimit = this.stateManager.getGlobalSettingsKey("terminalOutputLineLimit")
-		const subagentTerminalOutputLineLimit = this.stateManager.getGlobalSettingsKey("subagentTerminalOutputLineLimit")
 		const defaultTerminalProfile = this.stateManager.getGlobalSettingsKey("defaultTerminalProfile")
 		const isNewUser = this.stateManager.getGlobalStateKey("isNewUser")
 		const taskHistory = this.stateManager.getGlobalStateKey("taskHistory")
@@ -254,7 +249,6 @@ export class Controller {
 			shellIntegrationTimeout,
 			terminalReuseEnabled: terminalReuseEnabled ?? true,
 			terminalOutputLineLimit: terminalOutputLineLimit ?? 500,
-			subagentTerminalOutputLineLimit: subagentTerminalOutputLineLimit ?? 2000,
 			defaultTerminalProfile: defaultTerminalProfile ?? "default",
 			vscodeTerminalExecutionMode,
 			cwd,
@@ -773,12 +767,9 @@ export class Controller {
 		const mcpResponsesCollapsed = this.stateManager.getGlobalStateKey("mcpResponsesCollapsed")
 		const terminalOutputLineLimit = this.stateManager.getGlobalSettingsKey("terminalOutputLineLimit")
 		const maxConsecutiveMistakes = this.stateManager.getGlobalSettingsKey("maxConsecutiveMistakes")
-		const subagentTerminalOutputLineLimit = this.stateManager.getGlobalSettingsKey("subagentTerminalOutputLineLimit")
 		const favoritedModelIds = this.stateManager.getGlobalStateKey("favoritedModelIds")
 		const lastDismissedInfoBannerVersion = this.stateManager.getGlobalStateKey("lastDismissedInfoBannerVersion") || 0
 		const lastDismissedModelBannerVersion = this.stateManager.getGlobalStateKey("lastDismissedModelBannerVersion") || 0
-		const lastDismissedCliBannerVersion = this.stateManager.getGlobalStateKey("lastDismissedCliBannerVersion") || 0
-		const subagentsEnabled = this.stateManager.getGlobalSettingsKey("subagentsEnabled")
 		const skillsEnabled = this.stateManager.getGlobalSettingsKey("skillsEnabled")
 
 		const localSkycodeRulesToggles = this.stateManager.getWorkspaceStateKey("localSkycodeRulesToggles")
@@ -876,7 +867,6 @@ export class Controller {
 			mcpResponsesCollapsed,
 			terminalOutputLineLimit,
 			maxConsecutiveMistakes,
-			subagentTerminalOutputLineLimit,
 			customPrompt,
 			taskHistory: processedTaskHistory,
 			shouldShowAnnouncement,
@@ -899,8 +889,6 @@ export class Controller {
 			hooksEnabled: getHooksEnabledSafe(),
 			lastDismissedInfoBannerVersion,
 			lastDismissedModelBannerVersion,
-			lastDismissedCliBannerVersion,
-			subagentsEnabled,
 			nativeToolCallSetting: this.stateManager.getGlobalStateKey("nativeToolCallEnabled"),
 			enableParallelToolCalling: this.stateManager.getGlobalSettingsKey("enableParallelToolCalling"),
 			backgroundEditEnabled: this.stateManager.getGlobalSettingsKey("backgroundEditEnabled"),

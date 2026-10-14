@@ -74,7 +74,6 @@ export interface ExtensionState {
 	terminalReuseEnabled?: boolean
 	terminalOutputLineLimit: number
 	maxConsecutiveMistakes: number
-	subagentTerminalOutputLineLimit: number
 	defaultTerminalProfile?: string
 	vscodeTerminalExecutionMode: string
 	backgroundCommandRunning?: boolean
@@ -106,9 +105,7 @@ export interface ExtensionState {
 	multiRootSetting: SkycodeFeatureSetting
 	lastDismissedInfoBannerVersion: number
 	lastDismissedModelBannerVersion: number
-	lastDismissedCliBannerVersion: number
 	hooksEnabled?: boolean
-	subagentsEnabled?: boolean
 	skillsEnabled?: boolean
 	globalSkillsToggles?: Record<string, boolean>
 	localSkillsToggles?: Record<string, boolean>

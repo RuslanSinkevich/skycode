@@ -60,7 +60,6 @@ const GLOBAL_STATE_FIELDS = {
 	multiRootEnabled: { default: false as boolean },
 	lastDismissedInfoBannerVersion: { default: 0 as number },
 	lastDismissedModelBannerVersion: { default: 0 as number },
-	lastDismissedCliBannerVersion: { default: 0 as number },
 	nativeToolCallEnabled: { default: false as boolean },
 	dismissedBanners: { default: [] as Array<{ bannerId: string; dismissedAt: number }> },
 } satisfies FieldDefinitions
@@ -145,7 +144,6 @@ const USER_SETTINGS_FIELDS = {
 	defaultTerminalProfile: { default: "default" as string },
 	terminalOutputLineLimit: { default: 500 as number },
 	maxConsecutiveMistakes: { default: 3 as number },
-	subagentTerminalOutputLineLimit: { default: 2000 as number },
 	strictPlanModeEnabled: { default: true as boolean },
 	yoloModeToggled: { default: false as boolean },
 	useAutoCondense: { default: false as boolean },
@@ -162,7 +160,6 @@ const USER_SETTINGS_FIELDS = {
 	focusChainSettings: { default: DEFAULT_FOCUS_CHAIN_SETTINGS as FocusChainSettings },
 	customPrompt: { default: undefined as "compact" | undefined },
 	autoCondenseThreshold: { default: 0.75 as number }, // number from 0 to 1
-	subagentsEnabled: { default: false as boolean },
 	enableParallelToolCalling: { default: false as boolean },
 	backgroundEditEnabled: { default: true as boolean },
 	skillsEnabled: { default: false as boolean },

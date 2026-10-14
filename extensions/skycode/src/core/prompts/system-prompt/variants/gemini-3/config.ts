@@ -35,7 +35,6 @@ export const config = createVariant(ModelFamily.GEMINI_3)
 		SystemPromptSection.TOOL_USE,
 		SystemPromptSection.RULES,
 		SystemPromptSection.ACT_VS_PLAN,
-		SystemPromptSection.CLI_SUBAGENTS,
 		SystemPromptSection.CAPABILITIES,
 		SystemPromptSection.EDITING_FILES,
 		SystemPromptSection.FEEDBACK,

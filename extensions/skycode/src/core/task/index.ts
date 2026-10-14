@@ -93,7 +93,6 @@ import {
 } from "@/shared/messages"
 import { ApiFormat } from "@/shared/proto/skycode/models"
 import { Logger } from "@/shared/services/Logger"
-import { isCliSubagentContext, isSkycodeCliInstalled } from "@/utils/cli-detector"
 import { getGitStatusCompact } from "@/utils/git"
 import { RuleContextBuilder } from "../context/instructions/user-instructions/RuleContextBuilder"
 import { ensureLocalSkycodeDirExists } from "../context/instructions/user-instructions/rule-helpers"
@@ -123,7 +122,6 @@ type TaskParams = {
 	shellIntegrationTimeout: number
 	terminalReuseEnabled: boolean
 	terminalOutputLineLimit: number
-	subagentTerminalOutputLineLimit: number
 	defaultTerminalProfile: string
 	vscodeTerminalExecutionMode: "vscodeTerminal" | "backgroundExec"
 	cwd: string
@@ -287,7 +285,6 @@ export class Task {
 			shellIntegrationTimeout,
 			terminalReuseEnabled,
 			terminalOutputLineLimit,
-			subagentTerminalOutputLineLimit,
 			defaultTerminalProfile,
 			vscodeTerminalExecutionMode,
 			cwd,
@@ -329,7 +326,6 @@ export class Task {
 		this.terminalManager.setShellIntegrationTimeout(shellIntegrationTimeout)
 		this.terminalManager.setTerminalReuseEnabled(terminalReuseEnabled ?? true)
 		this.terminalManager.setTerminalOutputLineLimit(terminalOutputLineLimit)
-		this.terminalManager.setSubagentTerminalOutputLineLimit(subagentTerminalOutputLineLimit)
 		this.terminalManager.setDefaultTerminalProfile(defaultTerminalProfile)
 
 		this.urlContentFetcher = new UrlContentFetcher(controller.context)
@@ -1838,14 +1834,6 @@ export class Task {
 				}`
 			: ""
 
-		// Check CLI installation status only if subagents are enabled
-		const subagentsEnabled = this.stateManager.getGlobalSettingsKey("subagentsEnabled")
-		let isSubagentsEnabledAndCliInstalled = false
-		if (subagentsEnabled) {
-			const skycodeCliInstalled = await isSkycodeCliInstalled()
-			isSubagentsEnabledAndCliInstalled = subagentsEnabled && skycodeCliInstalled
-		}
-
 		const { globalToggles, localToggles } = await refreshSkycodeRulesToggles(this.controller, this.cwd)
 		const { windsurfLocalToggles, cursorLocalToggles, agentsLocalToggles } = await refreshExternalRulesToggles(
 			this.controller,
@@ -1892,12 +1880,6 @@ export class Task {
 				vcs: root.vcs as string | undefined, // Cast VcsType to string
 			}))
 		}
-
-		// Detect if this is a CLI subagent to prevent nested subagent creation
-		const isCliSubagent = isCliSubagentContext({
-			yoloModeToggled: this.stateManager.getGlobalSettingsKey("yoloModeToggled"),
-			maxConsecutiveMistakes: this.stateManager.getGlobalSettingsKey("maxConsecutiveMistakes"),
-		})
 
 		// Discover and filter available skills (gated by skillsEnabled setting)
 		const skillsEnabled = this.stateManager.getGlobalSettingsKey("skillsEnabled") ?? false
@@ -1958,8 +1940,6 @@ export class Task {
 			skycodeWebToolsEnabled: this.stateManager.getGlobalSettingsKey("skycodeWebToolsEnabled"),
 			isMultiRootEnabled: multiRootEnabled,
 			workspaceRoots,
-			isSubagentsEnabledAndCliInstalled,
-			isCliSubagent,
 			enableNativeToolCalls:
 				providerInfo.model.info.apiFormat === ApiFormat.OPENAI_RESPONSES ||
 				providerInfo.providerId === "gigachat" ||

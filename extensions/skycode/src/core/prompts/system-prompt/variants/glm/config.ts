@@ -27,7 +27,6 @@ export const config = createVariant(ModelFamily.GLM)
 		SystemPromptSection.TASK_PROGRESS,
 		SystemPromptSection.RULES,
 		SystemPromptSection.ACT_VS_PLAN,
-		SystemPromptSection.CLI_SUBAGENTS,
 		SystemPromptSection.CAPABILITIES,
 		SystemPromptSection.EDITING_FILES,
 		SystemPromptSection.MCP,

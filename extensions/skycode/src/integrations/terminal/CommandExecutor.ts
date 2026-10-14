@@ -8,14 +8,8 @@
  * The differentiation between modes happens at the TerminalManager level:
  * - VscodeTerminalManager → VscodeTerminalProcess (shell integration)
  * - StandaloneTerminalManager → StandaloneTerminalProcess (child_process)
- *
- * IMPORTANT: Subagent commands (skycode CLI) are ALWAYS routed to use
- * StandaloneTerminalManager regardless of the configured mode. This ensures
- * subagents run in hidden/background terminals rather than cluttering the
- * user's visible VSCode terminal.
  */
 
-import { isSubagentCommand, transformSkycodeCommand } from "@integrations/cli-subagents/subagent_command"
 import { findLastIndex } from "@shared/array"
 import { SkycodeToolResponseContent } from "@shared/messages"
 import { Logger } from "@/shared/services/Logger"
@@ -74,10 +68,9 @@ export class CommandExecutor {
 			this.standaloneManager = config.terminalManager
 			Logger.info(`[CommandExecutor] Reusing Task's StandaloneTerminalManager for backgroundExec mode`)
 		} else {
-			// Create new StandaloneTerminalManager for subagents (even in VSCode mode)
-			// This ensures subagents run in hidden terminals, not cluttering the user's VSCode terminal
+			// Create a separate StandaloneTerminalManager (used for background command tracking)
 			this.standaloneManager = new StandaloneTerminalManager()
-			Logger.info(`[CommandExecutor] Created new StandaloneTerminalManager for subagents`)
+			Logger.info(`[CommandExecutor] Created new StandaloneTerminalManager`)
 
 			// Copy settings from the provided terminalManager to ensure consistency
 			if ("shellIntegrationTimeout" in config.terminalManager) {
@@ -85,7 +78,6 @@ export class CommandExecutor {
 				this.standaloneManager.setShellIntegrationTimeout(tm.shellIntegrationTimeout || 4000)
 				this.standaloneManager.setTerminalReuseEnabled(tm.terminalReuseEnabled ?? true)
 				this.standaloneManager.setTerminalOutputLineLimit(tm.terminalOutputLineLimit || 500)
-				this.standaloneManager.setSubagentTerminalOutputLineLimit(tm.subagentTerminalOutputLineLimit || 2000)
 			}
 		}
 	}
@@ -93,22 +85,14 @@ export class CommandExecutor {
 	/**
 	 * Execute a command in the terminal.
 	 *
-	 * Routing logic:
-	 * 1. Subagent commands (skycode CLI) → Always use StandaloneTerminalManager
-	 *    This ensures subagents run in hidden terminals, not cluttering the user's VSCode terminal
-	 * 2. Regular commands → Use the configured terminal manager based on terminalExecutionMode
+	 * Routing logic: use the configured terminal manager based on terminalExecutionMode
+	 * (backgroundExec → StandaloneTerminalManager, otherwise the host terminal manager).
 	 *
 	 * @param command The command to execute
 	 * @param timeoutSeconds Optional timeout in seconds
 	 * @returns [userRejected, result] tuple
 	 */
 	async execute(command: string, timeoutSeconds: number | undefined): Promise<[boolean, SkycodeToolResponseContent]> {
-		// Transform subagent commands to ensure flags are correct
-		const isSubagent = isSubagentCommand(command)
-		if (isSubagent) {
-			command = transformSkycodeCommand(command)
-		}
-
 		// Strip leading `cd` to workspace from command
 		const workspaceCdPrefix = `cd ${this.cwd} && `
 		if (command.startsWith(workspaceCdPrefix)) {
@@ -117,8 +101,7 @@ export class CommandExecutor {
 
 
 		// Select the appropriate terminal manager
-		// Subagents always use standalone manager (hidden terminal)
-		const useStandalone = isSubagent || this.terminalExecutionMode === "backgroundExec"
+		const useStandalone = this.terminalExecutionMode === "backgroundExec"
 		const manager = useStandalone ? this.standaloneManager : this.terminalManager
 		Logger.info(`Executing command in ${useStandalone ? "standalone" : "VSCode"} terminal: ${command}`)
 
@@ -165,8 +148,6 @@ export class CommandExecutor {
 			showShellIntegrationSuggestion: this.shouldShowBackgroundTerminalSuggestion(),
 			terminalType,
 		})
-
-		// Capture subagent telemetry
 
 		// If the command was cancelled externally (via cancel button), return a clear cancellation message
 		// This ensures the AI agent knows the command was cancelled by the user

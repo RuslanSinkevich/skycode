@@ -40,7 +40,6 @@ export const config = createVariant(ModelFamily.NEXT_GEN)
 		SystemPromptSection.MCP,
 		SystemPromptSection.EDITING_FILES,
 		SystemPromptSection.ACT_VS_PLAN,
-		SystemPromptSection.CLI_SUBAGENTS,
 		SystemPromptSection.CAPABILITIES,
 		SystemPromptSection.FEEDBACK,
 		SystemPromptSection.RULES,

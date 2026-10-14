@@ -36,12 +36,6 @@ export const BASE_SLASH_COMMANDS: SlashCommand[] = [
 		section: "default",
 		cliCompatible: true,
 	},
-	{
-		name: "subagent",
-		description: "Invoke a Skycode CLI subagent for focused research tasks",
-		section: "default",
-		cliCompatible: true,
-	},
 ]
 
 // VS Code-only slash commands

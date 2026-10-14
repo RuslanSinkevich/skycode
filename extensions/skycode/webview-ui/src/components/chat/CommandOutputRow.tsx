@@ -2,9 +2,7 @@ import { COMMAND_OUTPUT_STRING, COMMAND_REQ_APP_STRING } from "@shared/combineCo
 import { SkycodeMessage } from "@shared/ExtensionMessage"
 import { StringRequest } from "@shared/proto/skycode/common"
 import { memo, useEffect, useRef } from "react"
-import { SkycodeCompactIcon } from "@/assets/SkycodeCompactIcon"
 import { Button } from "@/components/ui/button"
-import { PLATFORM_CONFIG, PlatformType } from "@/config/platform.config"
 import { useI18n } from "@/i18n"
 import { cn } from "@/lib/utils"
 import { FileServiceClient } from "@/services/grpc-client"
@@ -176,40 +174,10 @@ export const CommandOutputRow = memo(
 		const showCancelButton =
 			(isCommandExecuting || isCommandPending) && typeof onCancelCommand === "function" && isBackgroundExec
 
-		// Check if this is a Skycode subagent command (only on VSCode platform, not JetBrains/standalone)
-		const isSubagentCommand = PLATFORM_CONFIG.type === PlatformType.VSCODE && command.trim().startsWith("skycode ")
-		let subagentPrompt: string | undefined
-
-		if (isSubagentCommand) {
-			// Parse the skycode command to extract prompt
-			// Format: skycode "prompt"
-			const skycodeCommandRegex = /^skycode\s+"([^"]+)"(?:\s+--no-interactive)?/
-			const match = command.match(skycodeCommandRegex)
-
-			if (match) {
-				subagentPrompt = match[1]
-			}
-		}
-
-		// Customize icon and title for subagent commands
-		const displayIcon = isSubagentCommand ? (
-			<span className="text-foreground mb-[-1.5px]">
-				<SkycodeCompactIcon />
-			</span>
-		) : (
-			icon
-		)
-
-		const displayTitle = isSubagentCommand ? (
-			<span className="text-foreground font-bold">{t("chat.skycodeWantsToUseSubagent")}</span>
-		) : (
-			title
-		)
-
 		const commandHeader = (
 			<div className="flex items-center gap-2.5 mb-3">
-				{displayIcon}
-				{displayTitle}
+				{icon}
+				{title}
 			</div>
 		)
 
@@ -259,20 +227,9 @@ export const CommandOutputRow = memo(
 						</div>
 					)}
 
-					{isSubagentCommand && subagentPrompt && (
-						<div className="p-2.5 border-b border-editor-group-border">
-							<div className="mb-0">
-								<strong>{t("chat.prompt")}:</strong>{" "}
-								<span className="ph-no-capture font-editor">{subagentPrompt}</span>
-							</div>
-						</div>
-					)}
-
-					{!isSubagentCommand && (
-						<div className="bg-code opacity-60 text-sm">
-							<CodeBlock forceWrap={true} source={`${"```"}shell\n${command}\n${"```"}`} />
-						</div>
-					)}
+					<div className="bg-code opacity-60 text-sm">
+						<CodeBlock forceWrap={true} source={`${"```"}shell\n${command}\n${"```"}`} />
+					</div>
 
 					{output.length > 0 && (
 						<CommandOutputContent

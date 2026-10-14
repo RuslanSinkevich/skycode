@@ -67,8 +67,6 @@ const en: Record<string, string> = {
 	"state.resetDone": "State reset",
 	"state.resetFailed": "Failed to reset state: {{error}}",
 
-	"cli.installFailed": "Failed to start CLI installation: {{error}}",
-
 	"dictation.installCopied": "Installation command copied to clipboard: {{command}}",
 	"dictation.error": "Voice recording error: {{error}}",
 	"dictation.missingDep": "{{name}} is required for voice recording. {{description}}",
@@ -180,9 +178,6 @@ const ru: Record<string, string> = {
 	"state.resetDone": "Состояние сброшено",
 	// allow-any-unicode-next-line
 	"state.resetFailed": "Не удалось сбросить состояние: {{error}}",
-
-	// allow-any-unicode-next-line
-	"cli.installFailed": "Не удалось запустить установку CLI: {{error}}",
 
 	// allow-any-unicode-next-line
 	"dictation.installCopied": "Команда установки скопирована в буфер обмена: {{command}}",

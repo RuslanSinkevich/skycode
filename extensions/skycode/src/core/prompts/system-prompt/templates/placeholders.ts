@@ -5,7 +5,6 @@ export enum SystemPromptSection {
 	MCP = "MCP_SECTION",
 	EDITING_FILES = "EDITING_FILES_SECTION",
 	ACT_VS_PLAN = "ACT_VS_PLAN_SECTION",
-	CLI_SUBAGENTS = "CLI_SUBAGENTS_SECTION",
 	// [SKYCODE] TODO_SECTION удалён: компонента для него не существовало, поэтому каждая сборка
 	// промпта писала в лог "Component 'TODO_SECTION' not found" (сотни строк за сессию).
 	// Чек-листы делает TASK_PROGRESS.

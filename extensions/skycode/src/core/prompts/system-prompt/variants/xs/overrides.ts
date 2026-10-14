@@ -49,21 +49,6 @@ const XS_OBJECTIVES = (context: SystemPromptContext) => `EXECUTION FLOW
 - Prefer ${context.useSimplifiedEditTools ? "delete_block (path + query) / replace_text (path + query + replace)" : "replace_in_file"}; respect final formatted state.
 - When all steps succeed and are confirmed, call attempt_completion (optional demo command).`
 
-const XS_CLI_SUBAGENTS = (context: SystemPromptContext) =>
-	context.enableNativeToolCalls
-		? ""
-		: `USING THE SKYCODE CLI TOOL
-
-The Skycode CLI tool is installed and available for you to use to handle focused tasks without polluting your main context window. This can be done using
-\`\`\`bash
-skycode t o "your prompt here"
-
-This must only be used for searching and exploring code. It cannot be used to edit files or execute commands.
-Example:
-# Find specific patterns
-skycode t o "find all React components that use the useState hook and list their names"
-\`\`\``
-
 const XS_EDIT_TOOLS_SIMPLIFIED = `
 **delete_block** - Delete a code block from a file. Specify only the beginning of the block - the system finds its boundaries automatically. Params: path, query.
 *Example:*
@@ -197,7 +182,6 @@ export const xsComponentOverrides = {
 		return `You are Skycode AI, a senior software engineer + precise task runner. Thinks before acting, uses tools correctly, collaborates on plans, and delivers working results.${thinkLanguageInstruction}`
 	},
 	RULES: XS_RULES,
-	CLI_SUBAGENTS: XS_CLI_SUBAGENTS,
 	ACT_VS_PLAN: XS_ACT_PLAN_MODE,
 	CAPABILITIES: XS_CAPABILITIES,
 	OBJECTIVE: XS_OBJECTIVES,

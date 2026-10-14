@@ -107,7 +107,6 @@ export class VscodeTerminalManager implements ITerminalManager {
 	private shellIntegrationTimeout: number = 4000
 	private terminalReuseEnabled: boolean = true
 	private terminalOutputLineLimit: number = 500
-	private subagentTerminalOutputLineLimit: number = 2000
 	private defaultTerminalProfile: string = "default"
 
 	// Background command tracking (VSCode mode) — pull-based: output is read
@@ -587,16 +586,8 @@ export class VscodeTerminalManager implements ITerminalManager {
 		this.terminalOutputLineLimit = limit
 	}
 
-	setSubagentTerminalOutputLineLimit(limit: number): void {
-		this.subagentTerminalOutputLineLimit = limit
-	}
-
-	public processOutput(outputLines: string[], overrideLimit?: number, isSubagentCommand?: boolean): string {
-		const limit = isSubagentCommand
-			? overrideLimit !== undefined
-				? overrideLimit
-				: this.subagentTerminalOutputLineLimit
-			: this.terminalOutputLineLimit
+	public processOutput(outputLines: string[], overrideLimit?: number): string {
+		const limit = overrideLimit !== undefined ? overrideLimit : this.terminalOutputLineLimit
 		if (outputLines.length > limit) {
 			const halfLimit = Math.floor(limit / 2)
 			const start = outputLines.slice(0, halfLimit)
