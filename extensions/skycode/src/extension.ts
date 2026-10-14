@@ -49,7 +49,7 @@ import { VscodeWebviewProvider } from "./hosts/vscode/VscodeWebviewProvider"
 import { ExtensionRegistryInfo } from "./registry"
 import { SkycodeTempManager } from "./services/temp"
 import { SharedUriHandler } from "./services/uri/SharedUriHandler"
-import { AuthHandler } from "./hosts/external/AuthHandler"
+import { AuthHandler } from "./hosts/vscode/AuthHandler"
 import { ShowMessageType } from "./shared/proto/host/window"
 import { fileExistsAtPath } from "./utils/fs"
 /*

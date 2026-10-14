@@ -6,8 +6,7 @@ import { HostBridgeClientProvider } from "./host-provider-types"
 /**
  * Singleton class that manages host-specific providers for dependency injection.
  *
- * This system runs on two different platforms (VSCode extension and skycode-core),
- * so all the host-specific classes and properties are contained in here. The
+ * Skycode runs only inside VS Code. All the host-specific classes and properties are contained in here. The
  * rest of the codebase can use the host provider interface to access platform-specific
  * implementations in a platform-agnostic way.
  *

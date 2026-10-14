@@ -4,10 +4,8 @@
 .worktrees/**
 CLAUDE.local.md
 out/
-dist-standalone/
 node_modules/
 src/**
-standalone/**
 .gitignore
 .yarnrc
 esbuild.js

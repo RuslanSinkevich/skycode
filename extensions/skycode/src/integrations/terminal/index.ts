@@ -1,10 +1,8 @@
 /**
- * Shared terminal module for both VSCode and Standalone environments.
+ * Terminal module of the VSCode extension.
  *
- * This module provides terminal management functionality that works across:
- * - VSCode Extension (using VSCode's terminal API or background execution)
- * - CLI (using StandaloneTerminalManager)
- * - JetBrains (using StandaloneTerminalManager via skycode-core)
+ * This module provides terminal management functionality:
+ * - VSCode terminal API or background execution (StandaloneTerminalManager, child_process based)
  *
  * @example
  * ```typescript

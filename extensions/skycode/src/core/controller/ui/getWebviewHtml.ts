@@ -5,8 +5,8 @@ import type { Controller } from "../index"
 /**
  * Returns the HTML content of the webview.
  *
- * This is only used by the standalone service. The Vscode extension gets the HTML directly from the webview when it
- * resolved through `resolveWebviewView()`.
+ * The VSCode extension gets the HTML directly from the webview when it is resolved through `resolveWebviewView()`;
+ * this RPC is kept because it is part of the ProtoBus ui service.
  */
 export async function getWebviewHtml(_controller: Controller, _: EmptyRequest): Promise<String> {
 	const webview = WebviewProvider.getInstance()

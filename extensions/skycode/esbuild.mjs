@@ -8,8 +8,7 @@ const __dirname = path.dirname(__filename)
 
 const production = process.argv.includes("--production") || process.env["IS_DEBUG_BUILD"] === "false"
 const watch = process.argv.includes("--watch")
-const standalone = process.argv.includes("--standalone")
-const destDir = standalone ? "dist-standalone" : "dist"
+const destDir = "dist"
 
 /**
  * @type {import('esbuild').Plugin}
@@ -139,7 +138,6 @@ const copyWasmFiles = {
 
 const buildEnvVars = {
 	"import.meta.url": "_importMetaUrl",
-	"process.env.IS_STANDALONE": JSON.stringify(standalone ? "true" : "false"),
 }
 
 if (production) {
@@ -149,7 +147,7 @@ if (production) {
 if (process.env.SKYCODE_ENVIRONMENT) {
 	buildEnvVars["process.env.SKYCODE_ENVIRONMENT"] = JSON.stringify(process.env.SKYCODE_ENVIRONMENT)
 }
-// Base configuration shared between extension and standalone builds
+// Base configuration shared between the extension and worker builds
 const baseConfig = {
 	bundle: true,
 	minify: production,
@@ -179,16 +177,6 @@ const extensionConfig = {
 	external: ["vscode", "onnxruntime-node"],
 }
 
-// Standalone-specific configuration
-const standaloneConfig = {
-	...baseConfig,
-	entryPoints: ["src/standalone/skycode-core.ts"],
-	outfile: `${destDir}/skycode-core.js`,
-	// These modules need to load files from the module directory at runtime,
-	// so they cannot be bundled.
-	external: ["vscode", "@grpc/reflection", "grpc-health-check"],
-}
-
 // Worker thread for embedding computation (separate bundle, loaded at runtime)
 const workerConfig = {
 	...baseConfig,
@@ -200,10 +188,8 @@ const workerConfig = {
 }
 
 async function main() {
-	const config = standalone ? standaloneConfig : extensionConfig
-
-	// Build main extension/standalone
-	const extensionCtx = await esbuild.context(config)
+	// Build main extension
+	const extensionCtx = await esbuild.context(extensionConfig)
 
 	// Build worker
 	const workerCtx = await esbuild.context(workerConfig)

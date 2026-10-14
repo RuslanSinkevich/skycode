@@ -24,16 +24,11 @@ export const DEFAULT_RETRY_CONFIG: FolderLockRetryConfig = {
 }
 
 /**
- * Get the lock manager instance for standalone mode.
+ * Get the lock manager instance. The VS Code extension has no lock manager (it was only
+ * created by the removed standalone server), so folder locking is always skipped.
  */
 export async function getStandaloneLockManager(): Promise<SqliteLockManager | undefined> {
-	try {
-		const { getLockManager } = await import("../../standalone/lock-manager")
-		return getLockManager()
-	} catch (_importError) {
-		Logger.debug("Lock manager not available")
-		return undefined
-	}
+	return undefined
 }
 
 /**

@@ -5,7 +5,7 @@ import * as protoLoader from "@grpc/proto-loader"
 import * as fs from "fs/promises"
 import * as path from "path"
 
-const DESCRIPTOR_SET = path.resolve("dist-standalone/proto/descriptor_set.pb")
+const DESCRIPTOR_SET = path.resolve("out/proto/descriptor_set.pb")
 
 const typeNameToFQN = new Map()
 

@@ -313,7 +313,7 @@ export class Task {
 		this.terminalExecutionMode = vscodeTerminalExecutionMode || "vscodeTerminal"
 
 		// When backgroundExec mode is selected, use StandaloneTerminalManager for hidden execution
-		// Otherwise, use the HostProvider's terminal manager (VSCode terminal in VSCode, standalone in CLI)
+		// Otherwise, use the HostProvider's terminal manager (VSCode terminal)
 		if (this.terminalExecutionMode === "backgroundExec") {
 			// Import StandaloneTerminalManager for background execution
 			this.terminalManager = new StandaloneTerminalManager()

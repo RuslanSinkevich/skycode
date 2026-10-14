@@ -16,9 +16,8 @@ const PROTOC = path.join(require.resolve("grpc-tools"), "../bin/protoc")
 
 const PROTO_DIR = path.resolve("proto")
 const TS_OUT_DIR = path.resolve("src/shared/proto")
-const GRPC_JS_OUT_DIR = path.resolve("src/generated/grpc-js")
-const NICE_JS_OUT_DIR = path.resolve("src/generated/nice-grpc")
-const DESCRIPTOR_OUT_DIR = path.resolve("dist-standalone/proto")
+// Descriptor set consumed by the generator scripts (proto-utils.mjs). Not shipped in the VSIX (out/ is excluded).
+const DESCRIPTOR_OUT_DIR = path.resolve("out/proto")
 
 const isWindows = process.platform === "win32"
 const TS_PROTO_PLUGIN = isWindows
@@ -47,7 +46,7 @@ async function compileProtos() {
 	checkAppleSiliconCompatibility()
 
 	// Create output directories if they don't exist
-	for (const dir of [TS_OUT_DIR, GRPC_JS_OUT_DIR, NICE_JS_OUT_DIR, DESCRIPTOR_OUT_DIR]) {
+	for (const dir of [TS_OUT_DIR, DESCRIPTOR_OUT_DIR]) {
 		await fs.mkdir(dir, { recursive: true })
 	}
 
@@ -56,10 +55,6 @@ async function compileProtos() {
 	console.log(chalk.cyan(`Processing ${protoFiles.length} proto files from`), PROTO_DIR)
 
 	tsProtoc(TS_OUT_DIR, protoFiles, TS_PROTO_OPTIONS)
-	// grpc-js is used to generate service impls for the ProtoBus service.
-	tsProtoc(GRPC_JS_OUT_DIR, protoFiles, ["outputServices=grpc-js", ...TS_PROTO_OPTIONS])
-	// nice-js is used for the Host Bridge client impls because it uses promises.
-	tsProtoc(NICE_JS_OUT_DIR, protoFiles, ["outputServices=nice-grpc,useExactTypes=false", ...TS_PROTO_OPTIONS])
 
 	const descriptorFile = path.join(DESCRIPTOR_OUT_DIR, "descriptor_set.pb")
 	const descriptorProtocCommand = [
@@ -108,8 +103,6 @@ async function cleanup() {
 	await rmrf("src/generated")
 
 	// Clean up generated files that were moved.
-	await rmrf("src/standalone/services/host-grpc-client.ts")
-	await rmrf("src/standalone/server-setup.ts")
 	await rmrf("src/hosts/vscode/host-grpc-service-config.ts")
 	await rmrf("src/core/controller/grpc-service-config.ts")
 	const oldhostbridgefiles = [
