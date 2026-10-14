@@ -16,7 +16,9 @@ const POWERSHELL_COMMAND_ENV = "SKYCODE_COMMAND"
 const POWERSHELL_RUNNER = [
 	"[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
 	"$global:LASTEXITCODE = 0",
-	`. ([scriptblock]::Create($env:${POWERSHELL_COMMAND_ENV}))`,
+	// Out-String -Width: without a console PowerShell cuts tables at 80 columns ("C:\long\pa..."),
+	// and models re-run the command to get full paths. -Stream keeps output line-by-line.
+	`. ([scriptblock]::Create($env:${POWERSHELL_COMMAND_ENV})) | Out-String -Width 4096 -Stream`,
 	"if ($LASTEXITCODE) { exit $LASTEXITCODE } elseif (-not $?) { exit 1 }",
 ].join("; ")
 import { EventEmitter } from "events"
