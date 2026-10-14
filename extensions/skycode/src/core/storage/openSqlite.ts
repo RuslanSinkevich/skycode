@@ -7,7 +7,7 @@
  * встроен в Node ≥ 22.5 (в Electron форка — Node 24), ничего собирать не нужно.
  *
  * Обёртка повторяет ту часть API better-sqlite3, которой пользуются
- * IndexStorage и SqliteLockManager: exec / prepare / pragma / transaction / close.
+ * IndexStorage: exec / prepare / pragma / transaction / close.
  */
 
 /** Значение параметра / колонки. BLOB приходит как Uint8Array. */

@@ -2,7 +2,6 @@ import type { Anthropic } from "@anthropic-ai/sdk"
 import { buildApiHandler } from "@core/api"
 import { sanitizeTruncatedPlaceholder } from "@shared/proto-conversions/skycode-message"
 import { getHooksEnabledSafe } from "@core/hooks/hooks-utils"
-import { tryAcquireTaskLockWithRetry } from "@core/task/TaskLockUtils"
 import { detectWorkspaceRoots } from "@core/workspace/detection"
 import { setupWorkspaceManager } from "@core/workspace/setup"
 import type { WorkspaceRootManager } from "@core/workspace/WorkspaceRootManager"
@@ -23,7 +22,6 @@ import fs from "fs/promises"
 import open from "open"
 import pWaitFor from "p-wait-for"
 import * as path from "path"
-import type { FolderLockWithRetryResult } from "src/core/locks/types"
 import * as vscode from "vscode"
 import { SkycodeEnv } from "@/config"
 import { HostProvider } from "@/hosts/host-provider"
@@ -216,24 +214,6 @@ export class Controller {
 
 		const taskId = historyItem?.id || Date.now().toString()
 
-		// Acquire task lock
-		let taskLockAcquired = false
-		const lockResult: FolderLockWithRetryResult = await tryAcquireTaskLockWithRetry(taskId)
-
-		if (!lockResult.acquired && !lockResult.skipped) {
-			const errorMessage = lockResult.conflictingLock
-				? `Task locked by instance (${lockResult.conflictingLock.held_by})`
-				: "Failed to acquire task lock"
-			throw new Error(errorMessage) // Prevents task initialization
-		}
-
-		taskLockAcquired = lockResult.acquired
-		if (lockResult.acquired) {
-			Logger.debug(`[Task ${taskId}] Task lock acquired`)
-		} else {
-			Logger.debug(`[Task ${taskId}] Task lock skipped (VS Code)`)
-		}
-
 		await this.stateManager.loadTaskSettings(taskId)
 		if (taskSettings) {
 			this.stateManager.setTaskSettingsBatch(taskId, taskSettings)
@@ -259,7 +239,6 @@ export class Controller {
 			files,
 			historyItem,
 			taskId,
-			taskLockAcquired,
 		})
 
 		// --- SESSION SYNC: привязываем Task <-> Session двусторонне ---

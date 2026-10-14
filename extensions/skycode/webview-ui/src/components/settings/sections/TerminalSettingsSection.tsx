@@ -1,9 +1,7 @@
 import { UpdateTerminalConnectionTimeoutResponse } from "@shared/proto/index.skycode"
 import { VSCodeCheckbox, VSCodeDropdown, VSCodeOption, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import React, { useState } from "react"
-import { PlatformType } from "@/config/platform.config"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { usePlatform } from "@/context/PlatformContext"
 import { useI18n } from "@/i18n"
 import { StateServiceClient } from "../../../services/grpc-client"
 import AllowedCommandsField from "../common/AllowedCommandsField"
@@ -24,8 +22,6 @@ export const TerminalSettingsSection: React.FC<TerminalSettingsSectionProps> = (
 		availableTerminalProfiles,
 		vscodeTerminalExecutionMode,
 	} = useExtensionState()
-	const platformConfig = usePlatform()
-	const isVsCodePlatform = platformConfig.type === PlatformType.VSCODE
 
 	const [inputValue, setInputValue] = useState((shellIntegrationTimeout / 1000).toString())
 	const [inputError, setInputError] = useState<string | null>(null)
@@ -141,24 +137,22 @@ export const TerminalSettingsSection: React.FC<TerminalSettingsSectionProps> = (
 						</div>
 						<p className="text-xs text-(--vscode-descriptionForeground)">{t("terminal.reuseDescription")}</p>
 					</div>
-					{isVsCodePlatform && (
-						<div className="mb-4">
-							<label className="font-medium block mb-1" htmlFor="terminal-execution-mode">
-								{t("terminal.executionMode")}
-							</label>
-							<VSCodeDropdown
-								className="w-full"
-								id="terminal-execution-mode"
-								onChange={(event) => handleExecutionModeChange(event as Event)}
-								value={vscodeTerminalExecutionMode ?? "vscodeTerminal"}>
-								<VSCodeOption value="vscodeTerminal">{t("terminal.executionMode.vscode")}</VSCodeOption>
-								<VSCodeOption value="backgroundExec">{t("terminal.executionMode.background")}</VSCodeOption>
-							</VSCodeDropdown>
-							<p className="text-xs text-[var(--vscode-descriptionForeground)] mt-1">
-								{t("terminal.executionModeDescription")}
-							</p>
-						</div>
-					)}
+					<div className="mb-4">
+						<label className="font-medium block mb-1" htmlFor="terminal-execution-mode">
+							{t("terminal.executionMode")}
+						</label>
+						<VSCodeDropdown
+							className="w-full"
+							id="terminal-execution-mode"
+							onChange={(event) => handleExecutionModeChange(event as Event)}
+							value={vscodeTerminalExecutionMode ?? "vscodeTerminal"}>
+							<VSCodeOption value="vscodeTerminal">{t("terminal.executionMode.vscode")}</VSCodeOption>
+							<VSCodeOption value="backgroundExec">{t("terminal.executionMode.background")}</VSCodeOption>
+						</VSCodeDropdown>
+						<p className="text-xs text-[var(--vscode-descriptionForeground)] mt-1">
+							{t("terminal.executionModeDescription")}
+						</p>
+					</div>
 					<TerminalOutputLineLimitSlider />
 
 					<AllowedCommandsField className="mt-5" />

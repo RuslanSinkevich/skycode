@@ -7,7 +7,6 @@ import { KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from
 import { useInterval } from "react-use"
 import styled from "styled-components"
 import { normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
-import { PLATFORM_CONFIG, PlatformType } from "@/config/platform.config"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
 import { ModelsServiceClient } from "@/services/grpc-client"
@@ -108,16 +107,7 @@ const ApiOptions = ({ showModelOptions, apiErrorMessage, modelIdErrorMessage, is
 	const itemRefs = useRef<(HTMLDivElement | null)[]>([])
 	const dropdownListRef = useRef<HTMLDivElement>(null)
 
-	const providerOptions = useMemo(() => {
-		let providers = [...PROVIDERS.list]
-		// Filter by platform
-		if (PLATFORM_CONFIG.type !== PlatformType.VSCODE) {
-			// Don't include VS Code LM API for non-VSCode platforms
-			providers = providers.filter((option) => option.value !== "vscode-lm")
-		}
-
-		return providers
-	}, [])
+	const providerOptions = PROVIDERS.list
 
 	const currentProviderLabel = useMemo(() => {
 		return providerOptions.find((option) => option.value === selectedProvider)?.label || selectedProvider

@@ -37,7 +37,6 @@ import {
 	getSavedApiConversationHistory,
 	getSavedSkycodeMessages,
 } from "@core/storage/disk"
-import { releaseTaskLock } from "@core/task/TaskLockUtils"
 import { isMultiRootEnabled } from "@core/workspace/multi-root-utils"
 import { WorkspaceRootManager } from "@core/workspace/WorkspaceRootManager"
 import { DiffViewProvider } from "@integrations/editor/DiffViewProvider"
@@ -132,7 +131,6 @@ type TaskParams = {
 	files?: string[]
 	historyItem?: HistoryItem
 	taskId: string
-	taskLockAcquired: boolean
 }
 
 export class Task {
@@ -268,9 +266,6 @@ export class Task {
 	// Workspace manager
 	workspaceManager?: WorkspaceRootManager
 
-	// Task Locking (Sqlite)
-	private taskLockAcquired: boolean
-
 	// Command executor for running shell commands (extracted from executeCommandTool)
 	private commandExecutor!: CommandExecutor
 
@@ -295,7 +290,6 @@ export class Task {
 			files,
 			historyItem,
 			taskId,
-			taskLockAcquired,
 		} = params
 
 		this.taskInitializationStartTime = performance.now()
@@ -308,7 +302,6 @@ export class Task {
 		this.cancelTask = cancelTask
 		this.skycodeIgnoreController = new SkycodeIgnoreController(cwd)
 		this.commandPermissionController = new CommandPermissionController()
-		this.taskLockAcquired = taskLockAcquired
 		// Determine terminal execution mode and create appropriate terminal manager
 		this.terminalExecutionMode = vscodeTerminalExecutionMode || "vscodeTerminal"
 
@@ -1582,17 +1575,6 @@ export class Task {
 				this.FocusChainManager.dispose()
 			}
 		} finally {
-			// Release task folder lock
-			if (this.taskLockAcquired) {
-				try {
-					await releaseTaskLock(this.taskId)
-					this.taskLockAcquired = false
-					Logger.info(`[Task ${this.taskId}] Task lock released`)
-				} catch (error) {
-					Logger.error(`[Task ${this.taskId}] Failed to release task lock:`, error)
-				}
-			}
-
 			// Final state update to notify UI that abort is complete
 			try {
 				await this.postStateToWebview()

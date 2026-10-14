@@ -4,7 +4,6 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { IndexStorage } from "@/core/indexing/storage/IndexStorage"
-import { SqliteLockManager } from "@/core/locks/SqliteLockManager"
 import { openSqlite } from "../openSqlite"
 
 describe("openSqlite (node:sqlite)", () => {
@@ -153,33 +152,5 @@ describe("IndexStorage на node:sqlite", () => {
 		reloaded.getMetadata("k")!.should.equal("v")
 		reloaded.isFileChanged("a.ts", "h1").should.be.false()
 		await reloaded.clear()
-	})
-})
-
-describe("SqliteLockManager на node:sqlite", () => {
-	let dir: string
-
-	beforeEach(() => {
-		dir = fs.mkdtempSync(path.join(os.tmpdir(), "skycode-locks-"))
-	})
-
-	afterEach(() => {
-		fs.rmSync(dir, { recursive: true, force: true })
-	})
-
-	it("регистрирует инстанс и захватывает / отпускает папку", async () => {
-		const locks = new SqliteLockManager({ dbPath: path.join(dir, "locks.db"), instanceAddress: "127.0.0.1:1234" })
-		try {
-			await locks.registerInstance({ hostAddress: "127.0.0.1:5678" })
-			// Поиск по порту: `LIKE '%:' || ?` — с REAL-параметром вышло бы '%:1234.0'.
-			locks.getInstanceByPort(1234)!.hostAddress.should.equal("127.0.0.1:5678")
-			;((await locks.registerFolderLock("task", "/repo")) === null).should.be.true()
-			// Повторный захват той же папки этим же инстансом — не конфликт.
-			;((await locks.registerFolderLock("task", "/repo")) === null).should.be.true()
-			locks.releaseFolderLockByTarget("task", "/repo")
-			;((await locks.getFolderLockByTarget("/repo")) === null).should.be.true()
-		} finally {
-			locks.close()
-		}
 	})
 })
