@@ -71,7 +71,7 @@ export async function updateApiConfigurationProto(
 
 		// Update the task's API handler if there's an active task
 		if (controller.activeTask) {
-			const currentMode = controller.stateManager.getGlobalSettingsKey("mode")
+			const currentMode = controller.getCurrentMode()
 			controller.activeTask.api = buildApiHandler(
 				{ ...convertedApiConfigurationFromProto, ulid: controller.activeTask.ulid },
 				currentMode,

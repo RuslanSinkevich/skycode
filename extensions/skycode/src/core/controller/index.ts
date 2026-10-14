@@ -270,6 +270,13 @@ export class Controller {
 		}
 	}
 
+	/**
+	 * [SKYCODE] Режим для UI и пересборки api: у открытой задачи свой, иначе последний выбранный глобальный.
+	 */
+	getCurrentMode(): Mode {
+		return this.activeTask?.getMode() ?? this.stateManager.getGlobalSettingsKey("mode")
+	}
+
 	async toggleActModeForYoloMode(): Promise<boolean> {
 		const modeToSwitchTo: Mode = "act"
 
@@ -278,6 +285,7 @@ export class Controller {
 
 		// Update API handler with new mode (buildApiHandler now selects provider based on mode)
 		if (this.activeTask) {
+			this.activeTask.setMode(modeToSwitchTo)
 			const apiConfiguration = this.stateManager.getApiConfiguration()
 			this.activeTask.api = buildApiHandler({ ...apiConfiguration, ulid: this.activeTask.ulid }, modeToSwitchTo)
 		}
@@ -303,6 +311,7 @@ export class Controller {
 
 		// Update API handler with new mode (buildApiHandler now selects provider based on mode)
 		if (this.activeTask) {
+			this.activeTask.setMode(modeToSwitchTo)
 			const apiConfiguration = this.stateManager.getApiConfiguration()
 			this.activeTask.api = buildApiHandler({ ...apiConfiguration, ulid: this.activeTask.ulid }, modeToSwitchTo)
 		}
@@ -494,7 +503,7 @@ export class Controller {
 		}
 
 		const openrouter: ApiProvider = "openrouter"
-		const currentMode = this.stateManager.getGlobalSettingsKey("mode")
+		const currentMode = this.getCurrentMode()
 
 		// Update API configuration through cache service
 		const currentApiConfiguration = this.stateManager.getApiConfiguration()
@@ -724,7 +733,7 @@ export class Controller {
 		}
 		const alwaysThinkInPreferredLanguage = this.stateManager.getGlobalSettingsKey("alwaysThinkInPreferredLanguage")
 		const openaiReasoningEffort = this.stateManager.getGlobalSettingsKey("openaiReasoningEffort")
-		const mode = this.stateManager.getGlobalSettingsKey("mode")
+		const mode = this.getCurrentMode()
 		const strictPlanModeEnabled = this.stateManager.getGlobalSettingsKey("strictPlanModeEnabled")
 		const yoloModeToggled = this.stateManager.getGlobalSettingsKey("yoloModeToggled")
 		const useAutoCondense = this.stateManager.getGlobalSettingsKey("useAutoCondense")
@@ -887,7 +896,7 @@ export class Controller {
 			promptProfile: (() => {
 				try {
 					const apiConfig = this.stateManager.getApiConfiguration()
-					const mode = this.stateManager.getGlobalSettingsKey("mode")
+					const mode = this.getCurrentMode()
 					const isPlan = getApiSettingsMode(mode) === "plan"
 					const providerId = (isPlan ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 					const modeKey = isPlan ? "planMode" : "actMode"

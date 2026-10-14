@@ -20,7 +20,8 @@ import { parseFocusChainListCounts } from "./utils"
 export interface FocusChainDependencies {
 	taskId: string
 	taskState: TaskState
-	mode: Mode
+	/** [SKYCODE] Режим задачи-владельца, читается каждый раз заново (у вкладки свой режим). */
+	getMode: () => Mode
 	stateManager: StateManager
 	postStateToWebview: () => Promise<void>
 	say: (type: SkycodeSay, text?: string, images?: string[], files?: string[], partial?: boolean) => Promise<number | undefined>
@@ -31,6 +32,7 @@ export class FocusChainManager {
 	private taskId: string
 	private taskState: TaskState
 	private stateManager: StateManager
+	private getMode: () => Mode
 	private postStateToWebview: () => Promise<void>
 	private say: (
 		type: SkycodeSay,
@@ -47,6 +49,7 @@ export class FocusChainManager {
 		this.taskId = dependencies.taskId
 		this.taskState = dependencies.taskState
 		this.stateManager = dependencies.stateManager
+		this.getMode = dependencies.getMode
 		this.postStateToWebview = dependencies.postStateToWebview
 		this.say = dependencies.say
 		this.focusChainSettings = dependencies.focusChainSettings
@@ -199,7 +202,7 @@ export class FocusChainManager {
 		}
 
 		// When in plan mode, lists are optional. TODO - May want to improve this soft prompt approach in a future version
-		else if (this.stateManager.getGlobalSettingsKey("mode") === "plan") {
+		else if (this.getMode() === "plan") {
 			return FocusChainPrompts.planModeReminder
 		} else {
 			// Check if we're early in the task
@@ -320,7 +323,7 @@ export class FocusChainManager {
 	 */
 	public shouldIncludeFocusChainInstructions(): boolean {
 		// Always include when in Plan mode
-		const inPlanMode = this.stateManager.getGlobalSettingsKey("mode") === "plan"
+		const inPlanMode = this.getMode() === "plan"
 		// Always include when switching from Plan > Act
 		const justSwitchedFromPlanMode = this.taskState.didRespondToPlanAskBySwitchingMode
 		// Always include when user had edited the list manually

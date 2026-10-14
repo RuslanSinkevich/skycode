@@ -43,7 +43,7 @@ export async function updateApiConfigurationPartial(
 		// Update storage and task API handler
 		controller.stateManager.setApiConfiguration(updatedConfig)
 		if (controller.activeTask) {
-			const currentMode = controller.stateManager.getGlobalSettingsKey("mode")
+			const currentMode = controller.getCurrentMode()
 			controller.activeTask.api = buildApiHandler({ ...updatedConfig, ulid: controller.activeTask.ulid }, currentMode)
 		}
 

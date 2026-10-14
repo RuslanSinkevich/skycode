@@ -13,7 +13,7 @@ import { SkycodeDefaultTool } from "@shared/tools"
 import { SkycodeAskResponse } from "@shared/WebviewMessage"
 import * as vscode from "vscode"
 import { isGPT5ModelFamily, modelDoesntSupportWebp, getModelCapabilityTier, getSessionLimitsForModel } from "@/utils/model-utils"
-import { getApiSettingsMode } from "@shared/storage/types"
+import { getApiSettingsMode, type Mode } from "@shared/storage/types"
 import type { ApiProviderInfo } from "@core/api"
 import { EXPLORATION_ONLY_TOOLS } from "@shared/tools"
 import { ToolUse } from "../assistant-message"
@@ -141,6 +141,9 @@ export class ToolExecutor {
 			userContent: SkycodeContent[],
 			context: "initial_task" | "resume" | "feedback",
 		) => Promise<{ cancel?: boolean; wasCancelled?: boolean; contextModification?: string; errorMessage?: string }>,
+
+		// [SKYCODE] Режим задачи-владельца (у каждой вкладки свой)
+		private getMode: () => Mode,
 	) {
 		this.autoApprover = new AutoApprove(this.stateManager)
 		try {
@@ -161,7 +164,7 @@ export class ToolExecutor {
 			taskId: this.taskId,
 			ulid: this.ulid,
 			context: this.context,
-			mode: this.stateManager.getGlobalSettingsKey("mode"),
+			mode: this.getMode(),
 			strictPlanModeEnabled: this.stateManager.getGlobalSettingsKey("strictPlanModeEnabled"),
 			yoloModeToggled: this.stateManager.getGlobalSettingsKey("yoloModeToggled"),
 			vscodeTerminalExecutionMode: this.vscodeTerminalExecutionMode,
@@ -459,7 +462,7 @@ export class ToolExecutor {
 			}
 
 			// Logic for ask-mode tool call restrictions (always enforced, no strict flag needed)
-			const currentMode = this.stateManager.getGlobalSettingsKey("mode")
+			const currentMode = this.getMode()
 			if (
 				currentMode === "ask" &&
 				block.name &&
@@ -553,7 +556,7 @@ export class ToolExecutor {
 	private getProviderInfo(): ApiProviderInfo {
 		const model = this.api.getModel()
 		const apiConfig = this.stateManager.getApiConfiguration()
-		const mode = this.stateManager.getGlobalSettingsKey("mode")
+		const mode = this.getMode()
 		const providerId = (getApiSettingsMode(mode) === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 		return { model, providerId, mode }
 	}

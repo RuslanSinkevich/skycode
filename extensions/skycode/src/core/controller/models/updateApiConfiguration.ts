@@ -140,7 +140,7 @@ export async function updateApiConfiguration(controller: Controller, request: Up
 
 		// Update the task's API handler if there's an active task
 		if (controller.activeTask) {
-			const currentMode = controller.stateManager.getGlobalSettingsKey("mode")
+			const currentMode = controller.getCurrentMode()
 			// Combine secrets and options for the API handler
 			const apiConfigForHandler = { ...secrets, ...options, ulid: controller.activeTask.ulid }
 			controller.activeTask.api = buildApiHandler(apiConfigForHandler, currentMode)

@@ -992,7 +992,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 	private getModelInfo(config: TaskConfig) {
 		// Extract provider information for telemetry
 		const apiConfig = config.services.stateManager.getApiConfiguration()
-		const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
+		const currentMode = config.mode
 		const providerId = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 		const modelId = config.api.getModel().id
 		return { providerId, modelId }

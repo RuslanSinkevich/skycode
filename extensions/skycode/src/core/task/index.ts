@@ -54,7 +54,7 @@ import { HistoryItem } from "@shared/HistoryItem"
 import { getLanguageKey, LanguageDisplay } from "@shared/Languages"
 import { USER_CONTENT_TAGS } from "@shared/messages/constants"
 import { convertSkycodeMessageToProto } from "@shared/proto-conversions/skycode-message"
-import { getApiSettingsMode, isReadOnlyMode } from "@shared/storage/types"
+import { getApiSettingsMode, isReadOnlyMode, type Mode } from "@shared/storage/types"
 import { SkycodeDefaultTool } from "@shared/tools"
 import { SkycodeAskResponse } from "@shared/WebviewMessage"
 import {
@@ -251,6 +251,10 @@ export class Task {
 	// Focus Chain
 	private FocusChainManager?: FocusChainManager
 
+	// [SKYCODE] Режим агента принадлежит задаче (у каждой вкладки свой). Стартует с последнего выбранного
+	// глобального режима; переключение режима в другой вкладке на эту задачу не влияет.
+	private mode: Mode
+
 	// Callbacks
 	private updateTaskHistory: (historyItem: HistoryItem) => Promise<HistoryItem[]>
 	private postStateToWebview: () => Promise<void>
@@ -292,6 +296,7 @@ export class Task {
 			taskId,
 		} = params
 
+		this.mode = stateManager.getGlobalSettingsKey("mode")
 		this.taskInitializationStartTime = performance.now()
 		this.taskState = new TaskState()
 		this.controller = controller
@@ -372,7 +377,7 @@ export class Task {
 			this.FocusChainManager = new FocusChainManager({
 				taskId: this.taskId,
 				taskState: this.taskState,
-				mode: this.stateManager.getGlobalSettingsKey("mode"),
+				getMode: () => this.getMode(),
 				stateManager: this.stateManager,
 				postStateToWebview: this.postStateToWebview,
 				say: this.say.bind(this),
@@ -464,6 +469,7 @@ export class Task {
 			this.clearActiveHookExecution.bind(this),
 			this.getActiveHookExecution.bind(this),
 			this.runUserPromptSubmitHook.bind(this),
+			() => this.getMode(),
 		)
 	}
 
@@ -745,6 +751,16 @@ export class Task {
 	private isParallelToolCallingEnabled(): boolean {
 		const modelId = this.api.getModel().id
 		return this.stateManager.getGlobalSettingsKey("enableParallelToolCalling") || isGPT5ModelFamily(modelId)
+	}
+
+	/** [SKYCODE] Текущий режим этой задачи (не глобальный). */
+	public getMode(): Mode {
+		return this.mode
+	}
+
+	/** [SKYCODE] Меняет режим только этой задачи; глобальный «последний выбранный» пишет контроллер. */
+	public setMode(mode: Mode): void {
+		this.mode = mode
 	}
 
 	private async switchToActModeCallback(): Promise<boolean> {
@@ -1186,7 +1202,7 @@ export class Task {
 		const pendingContextWarning = await this.fileContextTracker.retrieveAndClearPendingFileContextWarning()
 		const hasPendingFileContextWarnings = pendingContextWarning && pendingContextWarning.length > 0
 
-		const mode = this.stateManager.getGlobalSettingsKey("mode")
+		const mode = this.getMode()
 		const [taskResumptionMessage, userResponseMessage] = formatResponse.taskResumption(
 			isReadOnlyMode(mode) ? "plan" : "act",
 			agoText,
@@ -1689,7 +1705,7 @@ export class Task {
 				}
 			},
 		}
-		const mode = this.stateManager.getGlobalSettingsKey("mode")
+		const mode = this.getMode()
 		const apiMode = getApiSettingsMode(mode)
 		const currentProvider = apiMode === "plan" ? apiConfiguration.planModeApiProvider : apiConfiguration.actModeApiProvider
 
@@ -1708,7 +1724,7 @@ export class Task {
 	private getCurrentProviderInfo(): ApiProviderInfo {
 		const model = this.api.getModel()
 		const apiConfig = this.stateManager.getApiConfiguration()
-		const mode = this.stateManager.getGlobalSettingsKey("mode")
+		const mode = this.getMode()
 		const providerId = (
 			getApiSettingsMode(mode) === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider
 		) as string
@@ -1930,7 +1946,7 @@ export class Task {
 			terminalExecutionMode: this.terminalExecutionMode,
 			useSimplifiedEditTools: this.stateManager.getGlobalSettingsKey("lightweightMode") === true,
 			lightweightMode: this.stateManager.getGlobalSettingsKey("lightweightMode"),
-			mode: this.stateManager.getGlobalSettingsKey("mode") as "plan" | "act" | "ask" | "debug",
+			mode: this.getMode() as "plan" | "act" | "ask" | "debug",
 		}
 
 		// [SKYCODE] Сработавшие условные правила больше не печатаются в чат.
@@ -3311,6 +3327,7 @@ export class Task {
 				taskId: this.taskId,
 				taskState: this.taskState,
 				stateManager: this.stateManager,
+				getMode: () => this.getMode(),
 				terminalManager: this.terminalManager,
 				skycodeIgnoreController: this.skycodeIgnoreController,
 				fileContextTracker: this.fileContextTracker,

@@ -47,7 +47,7 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			controller.stateManager.setApiConfiguration(convertedApiConfigurationFromProto)
 
 			if (controller.activeTask) {
-				const currentMode = controller.stateManager.getGlobalSettingsKey("mode")
+				const currentMode = controller.getCurrentMode()
 				const apiConfigForHandler = {
 					...convertedApiConfigurationFromProto,
 					ulid: controller.activeTask.ulid,
@@ -108,6 +108,8 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 					mode = "act"
 			}
 			controller.stateManager.setGlobalState("mode", mode)
+			// [SKYCODE] Режим у задачи свой: глобальный — «последний выбранный», активной задаче ставим тот же
+			controller.activeTask?.setMode(mode)
 		}
 
 		if (request.openaiReasoningEffort !== undefined) {

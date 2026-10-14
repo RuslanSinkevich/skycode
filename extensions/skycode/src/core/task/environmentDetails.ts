@@ -18,6 +18,7 @@ import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
 import type { SkycodeMessage } from "@shared/ExtensionMessage"
 import type { HistoryItem } from "@shared/HistoryItem"
+import type { Mode } from "@shared/storage/types"
 import { isClaude4PlusModelFamily, isGPT5ModelFamily } from "@utils/model-utils"
 import { arePathsEqual, getDesktopDir } from "@utils/path"
 import { filterExistingFiles } from "@utils/tabFiltering"
@@ -32,6 +33,8 @@ export interface EnvironmentDetailsContext {
 	taskId: string
 	taskState: { didEditFile: boolean }
 	stateManager: StateManager
+	/** [SKYCODE] Режим задачи (у каждой вкладки свой), а не глобальный. */
+	getMode: () => Mode
 	terminalManager: ITerminalManager
 	skycodeIgnoreController: SkycodeIgnoreController
 	fileContextTracker: FileContextTracker
@@ -97,7 +100,7 @@ export async function buildEnvironmentDetails(
 	const host = await HostProvider.env.getHostVersion({})
 	let details = ""
 
-	const currentMode = ctx.stateManager.getGlobalSettingsKey("mode")
+	const currentMode = ctx.getMode()
 	if (currentMode === "chat") {
 		const now = new Date()
 		const formatter = new Intl.DateTimeFormat(undefined, {
@@ -338,7 +341,7 @@ export async function buildEnvironmentDetails(
 	}
 
 	details += "\n\n# Current Mode"
-	const mode = ctx.stateManager.getGlobalSettingsKey("mode")
+	const mode = ctx.getMode()
 	switch (mode) {
 		case "plan":
 			details += "\nPLAN MODE\n" + formatResponse.planModeInstructions()
