@@ -7,6 +7,7 @@
  * - Типы событий — контракт между бэкендом и фронтендом
  */
 
+export { ApiSlotLimiter, MAX_CONCURRENT_API_REQUESTS } from "./ApiSlotLimiter"
 export { ApprovalGate } from "./ApprovalGate"
 export type { AskResult } from "./ApprovalGate"
 export { Pipeline } from "./Pipeline"

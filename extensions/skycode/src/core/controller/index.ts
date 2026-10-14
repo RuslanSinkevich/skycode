@@ -45,7 +45,7 @@ import {
 } from "../storage/disk"
 import { type PersistenceErrorEvent, StateManager } from "../storage/StateManager"
 import { Task } from "../task"
-import { SessionManager } from "../session"
+import { ApiSlotLimiter, type Session, SessionManager } from "../session"
 import { sendMcpMarketplaceCatalogEvent } from "./mcp/subscribeToMcpMarketplaceCatalog"
 import { getSkycodeOnboardingModels } from "./models/getSkycodeOnboardingModels"
 import { appendSkycodeStealthModels } from "./models/refreshOpenRouterModels"
@@ -59,25 +59,24 @@ https://github.com/KumarVariable/vscode-extension-sidebar-html/blob/master/src/c
 */
 
 export class Controller {
-	// [SKYCODE] Хранилище задачи приватное; чтение только через activeTask (единая точка для вкладок).
-	private _task?: Task
-
-	/** Задача активной сессии. */
-	get activeTask(): Task | undefined {
-		return this._task
-	}
-
-	/** Сбрасывает ссылку на задачу без abort (для resetState; запись остаётся внутри Controller). */
-	detachActiveTask(): void {
-		this._task = undefined
-	}
-
 	/**
-	 * SessionManager - управление сессиями (замена controller.task в будущем).
-	 * Шаг 1: работает параллельно с this._task для обратной совместимости.
-	 * Каждый initTask/clearTask синхронизирует текущую сессию с Task.
+	 * SessionManager - управление сессиями. [SKYCODE] Задачи живут в сессиях (одна задача на сессию),
+	 * отдельного поля в контроллере больше нет.
 	 */
 	readonly sessionManager = new SessionManager()
+
+	/** [SKYCODE] Общий лимит параллельных запросов к модели для всех задач. */
+	readonly apiSlotLimiter = new ApiSlotLimiter()
+
+	/** Задача активной сессии (то, что видит UI). */
+	get activeTask(): Task | undefined {
+		return this.sessionManager.currentSession?.task ?? undefined
+	}
+
+	/** Сбрасывает ссылку активной сессии на задачу без abort (для resetState). */
+	detachActiveTask(): void {
+		this.sessionManager.currentSession?.setTask(null)
+	}
 
 	mcpHub: McpHub
 	readonly stateManager: StateManager
@@ -87,8 +86,8 @@ export class Controller {
 	private backgroundCommandRunning = false
 	private backgroundCommandTaskId?: string
 
-	// Flag to prevent duplicate cancellations from spam clicking
-	private cancelInProgress = false
+	// Задачи, для которых отмена уже идёт (защита от повторных кликов); по задаче, не общий флаг
+	private readonly cancelInProgress = new Set<string>()
 
 	// Public getter for workspace manager with lazy initialization - To get workspaces when task isn't initialized (Used by file mentions)
 	async ensureWorkspaceManager(): Promise<WorkspaceRootManager | undefined> {
@@ -174,14 +173,41 @@ export class Controller {
 		this._codexAuthCache = null
 		this._lastDictationSettingsJson = ""
 
+		// [SKYCODE] Закрываем все сессии, не только активную
+		for (const session of this.sessionManager.getAll()) {
+			await this.closeSession(session.id)
+		}
 		await this.clearTask()
 		this.mcpHub.dispose()
 
 		Logger.error("Controller disposed")
 	}
 
-	async initTask(task?: string, images?: string[], files?: string[], historyItem?: HistoryItem) {
-		await this.clearTask() // ensures that an existing task doesn't exist before starting a new one, although this shouldn't be possible since user must clear task before starting a new one
+	/**
+	 * Запускает задачу.
+	 * - без options: закрывает активную сессию (abort) и создаёт новую активную — как раньше;
+	 * - inNewSession: остальные сессии продолжают работать, новая становится активной;
+	 * - sessionId: новая Task встаёт в существующую сессию (старая задача этой сессии останавливается),
+	 *   активность не меняется. Если такой сессии уже нет — создаётся новая.
+	 */
+	async initTask(
+		task?: string,
+		images?: string[],
+		files?: string[],
+		historyItem?: HistoryItem,
+		options?: { inNewSession?: boolean; sessionId?: string },
+	) {
+		const requestedSessionId = options?.sessionId
+		let targetSession = requestedSessionId ? this.sessionManager.get(requestedSessionId) : undefined
+		if (targetSession) {
+			// Заменяем задачу только в этой сессии; чекпоинт завершаем, если она активная (как раньше в clearTask)
+			await targetSession.task?.abortTask()
+			if (this.sessionManager.activeSessionId === targetSession.id) {
+				await this.finishDiffCheckpoint()
+			}
+		} else if (!options?.inNewSession && !requestedSessionId) {
+			await this.clearTask() // ensures that an existing task doesn't exist before starting a new one, although this shouldn't be possible since user must clear task before starting a new one
+		}
 
 		const autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
 		const shellIntegrationTimeout = this.stateManager.getGlobalSettingsKey("shellIntegrationTimeout")
@@ -217,14 +243,20 @@ export class Controller {
 		const cwd = this.workspaceManager?.getPrimaryRoot()?.path || (await getCwd(getDesktopDir()))
 
 		const taskId = historyItem?.id || Date.now().toString()
+		const taskSessionId = targetSession?.id ?? requestedSessionId ?? taskId
+
+		// Та же задача уже открыта в другой сессии — закрываем её, чтобы не было двух копий
+		if (!targetSession && this.sessionManager.get(taskSessionId)) {
+			await this.closeSession(taskSessionId)
+		}
 
 		const newTask = new Task({
 			controller: this,
 			mcpHub: this.mcpHub,
 			updateTaskHistory: (historyItem) => this.updateTaskHistory(historyItem),
 			postStateToWebview: () => this.postStateToWebview(),
-			reinitExistingTaskFromId: (taskId) => this.reinitExistingTaskFromId(taskId),
-			cancelTask: () => this.cancelTask(),
+			reinitExistingTaskFromId: (id) => this.reinitExistingTaskFromId(id, taskSessionId),
+			cancelTask: () => this.cancelTask(taskId),
 			shellIntegrationTimeout,
 			terminalReuseEnabled: terminalReuseEnabled ?? true,
 			terminalOutputLineLimit: terminalOutputLineLimit ?? 500,
@@ -238,20 +270,29 @@ export class Controller {
 			files,
 			historyItem,
 			taskId,
+			apiSlotLimiter: this.apiSlotLimiter,
 		})
-		this._task = newTask
 
 		// --- SESSION SYNC: привязываем Task <-> Session двусторонне ---
-		const session = this.sessionManager.create(taskId)
+		let session = targetSession
+		if (!session) {
+			session = this.sessionManager.create(taskSessionId)
+			if (!requestedSessionId) {
+				// Новая задача из UI всегда становится активной (create делает активной только первую)
+				this.sessionManager.switchTo(session.id)
+			}
+		}
 		session.setTask(newTask)
 		newTask.setSession(session)
 
-		// v4: привязываем DiffSystem к текущей задаче для scoped rollback
-		try {
-			const diffSystem = getDiffSystem()
-			diffSystem.setCurrentTaskId(taskId)
-		} catch {
-			// DiffSystem may not be initialized yet
+		// v4: привязываем DiffSystem к активной задаче (для бара UI и scoped rollback)
+		if (this.sessionManager.activeSessionId === session.id) {
+			try {
+				const diffSystem = getDiffSystem()
+				diffSystem.setCurrentTaskId(taskId)
+			} catch {
+				// DiffSystem may not be initialized yet
+			}
 		}
 
 		if (historyItem) {
@@ -263,10 +304,10 @@ export class Controller {
 		return newTask.taskId
 	}
 
-	async reinitExistingTaskFromId(taskId: string) {
+	async reinitExistingTaskFromId(taskId: string, sessionId?: string) {
 		const history = await this.getTaskWithId(taskId)
 		if (history) {
-			await this.initTask(undefined, undefined, undefined, history.historyItem)
+			await this.initTask(undefined, undefined, undefined, history.historyItem, sessionId ? { sessionId } : undefined)
 		}
 	}
 
@@ -339,35 +380,51 @@ export class Controller {
 		return false
 	}
 
-	async cancelTask() {
+	/** Сессия, в которой лежит задача с этим id. */
+	private findSessionByTaskId(taskId: string): Session | undefined {
+		return this.sessionManager.getAll().find((s) => s.task?.taskId === taskId)
+	}
+
+	/**
+	 * Отмена задачи (по умолчанию — активной). Работает только с сессией этой задачи;
+	 * после abort задача пересоздаётся из истории в той же сессии (остаётся видимой с кнопкой «продолжить»).
+	 */
+	async cancelTask(taskId?: string) {
+		const session = taskId ? this.findSessionByTaskId(taskId) : (this.sessionManager.currentSession ?? undefined)
+		const taskToCancel = session?.task ?? undefined
+		if (!session || !taskToCancel) {
+			return
+		}
+		const cancelledTaskId = taskToCancel.taskId
+		const sessionId = session.id
+
 		// Prevent duplicate cancellations from spam clicking
-		if (this.cancelInProgress) {
+		if (this.cancelInProgress.has(cancelledTaskId)) {
 			Logger.log(`[Controller.cancelTask] Cancellation already in progress, ignoring duplicate request`)
 			return
 		}
 
-		if (!this.activeTask) {
-			return
-		}
-
 		// Set flag to prevent concurrent cancellations
-		this.cancelInProgress = true
+		this.cancelInProgress.add(cancelledTaskId)
 
 		try {
-			this.updateBackgroundCommandState(false)
+			// Фоновая команда одна на контроллер и привязана к активной задаче: сбрасываем, если это она
+			if (this.backgroundCommandTaskId === undefined || this.backgroundCommandTaskId === cancelledTaskId) {
+				this.updateBackgroundCommandState(false)
+			}
 
 			try {
-				await this.activeTask.abortTask()
+				await taskToCancel.abortTask()
 			} catch (error) {
 				Logger.error("Failed to abort task", error)
 			}
 
 			await pWaitFor(
 				() =>
-					this.activeTask === undefined ||
-					this.activeTask.taskState.isStreaming === false ||
-					this.activeTask.taskState.didFinishAbortingStream ||
-					this.activeTask.taskState.isWaitingForFirstChunk,
+					this.sessionManager.get(sessionId)?.task !== taskToCancel ||
+					taskToCancel.taskState.isStreaming === false ||
+					taskToCancel.taskState.didFinishAbortingStream ||
+					taskToCancel.taskState.isWaitingForFirstChunk,
 				{
 					timeout: 800,
 				},
@@ -375,9 +432,9 @@ export class Controller {
 				Logger.warn("[Controller.cancelTask] Timed out waiting for stream abort — force-continuing")
 			})
 
-			if (this.activeTask) {
+			if (this.sessionManager.get(sessionId)?.task === taskToCancel) {
 				// 'abandoned' will prevent this skycode instance from affecting future skycode instance gui. this may happen if its hanging on a streaming request
-				this.activeTask.taskState.abandoned = true
+				taskToCancel.taskState.abandoned = true
 			}
 
 			// Small delay to ensure state manager has persisted the history update
@@ -386,7 +443,7 @@ export class Controller {
 			// NOW try to get history after abort has finished (hook may have saved messages)
 			let historyItem: HistoryItem | undefined
 			try {
-				const result = await this.getTaskWithId(this.activeTask.taskId)
+				const result = await this.getTaskWithId(cancelledTaskId)
 				historyItem = result.historyItem
 			} catch (error) {
 				// Task not in history yet (new task with no messages); catch the
@@ -397,15 +454,15 @@ export class Controller {
 			// Only re-initialize if we found a history item, otherwise just clear
 			if (historyItem) {
 				// Re-initialize task to keep it visible in UI with resume button
-				await this.initTask(undefined, undefined, undefined, historyItem)
+				await this.initTask(undefined, undefined, undefined, historyItem, { sessionId })
 			} else {
-				await this.clearTask()
+				await this.closeSession(sessionId)
 			}
 
 			await this.postStateToWebview()
 		} finally {
 			// Always clear the flag, even if cancellation fails
-			this.cancelInProgress = false
+			this.cancelInProgress.delete(cancelledTaskId)
 		}
 	}
 
@@ -998,23 +1055,76 @@ export class Controller {
 		}
 	}
 
+	/** Закрывает активную сессию (имя сохранено для существующих вызовов). */
 	async clearTask() {
-		await this.activeTask?.abortTask()
-		this._task = undefined // removes reference to it, so once promises end it will be garbage collected
+		const activeId = this.sessionManager.activeSessionId
+		if (activeId) {
+			await this.closeSession(activeId)
+		} else {
+			await this.finishDiffCheckpoint(null)
+		}
+	}
 
-		// v4: завершаем текущий checkpoint при переключении задач
+	/**
+	 * [SKYCODE] Закрывает сессию: останавливает её задачу и удаляет сессию.
+	 * Если сессия была активной, SessionManager выбирает другую, а DiffSystem переключается на её задачу (или null).
+	 * Задача остаётся в истории.
+	 */
+	async closeSession(sessionId: string): Promise<void> {
+		const session = this.sessionManager.get(sessionId)
+		if (!session) {
+			return
+		}
+		const wasActive = this.sessionManager.activeSessionId === sessionId
+
+		await session.task?.abortTask()
+
+		// removes reference to the task, so once promises end it will be garbage collected
+		this.sessionManager.remove(sessionId)
+
+		if (wasActive) {
+			// [SKYCODE] Снимаем привязку к закрытой задаче: иначе правки между задачами (например inline edit) уедут в её бар.
+			await this.finishDiffCheckpoint(this.activeTask?.taskId ?? null)
+		}
+	}
+
+	/** [SKYCODE] Делает сессию активной (вкладку видимой); остальные продолжают работать. */
+	async switchSession(sessionId: string): Promise<void> {
+		const session = this.sessionManager.get(sessionId)
+		if (!session) {
+			return
+		}
+		this.sessionManager.switchTo(sessionId)
 		try {
-			const diffSystem = getDiffSystem()
-			await diffSystem.finishCheckpoint()
-			// [SKYCODE] И снимаем привязку: до этого currentTaskId оставался от закрытой задачи,
-			// так что правки, сделанные между задачами (например inline edit), уезжали в её бар.
-			diffSystem.setCurrentTaskId(null)
+			getDiffSystem().setCurrentTaskId(session.task?.taskId ?? null)
 		} catch {
 			// DiffSystem may not be initialized
 		}
+		await this.postStateToWebview()
+	}
 
-		// --- SESSION SYNC: очищаем текущую сессию ---
-		this.sessionManager.clearCurrent()
+	/** [SKYCODE] Список сессий для будущих вкладок. */
+	getSessions(): Array<{ id: string; taskId: string | undefined; isActive: boolean; session: Session }> {
+		const activeId = this.sessionManager.activeSessionId
+		return this.sessionManager.getAll().map((session) => ({
+			id: session.id,
+			taskId: session.task?.taskId,
+			isActive: session.id === activeId,
+			session,
+		}))
+	}
+
+	/** v4: завершает текущий checkpoint DiffSystem и (если передан taskId) переключает привязку «активной задачи». */
+	private async finishDiffCheckpoint(nextTaskId?: string | null): Promise<void> {
+		try {
+			const diffSystem = getDiffSystem()
+			await diffSystem.finishCheckpoint()
+			if (nextTaskId !== undefined) {
+				diffSystem.setCurrentTaskId(nextTaskId)
+			}
+		} catch {
+			// DiffSystem may not be initialized
+		}
 	}
 
 	// Caching mechanism to keep track of webview messages + API conversation history per provider instance

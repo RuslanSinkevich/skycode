@@ -27,6 +27,7 @@ import { parseMentions } from "@core/mentions"
 import { CommandPermissionController } from "@core/permissions"
 import { summarizeTask } from "@core/prompts/contextManagement"
 import { formatResponse } from "@core/prompts/responses"
+import type { ApiSlotLimiter } from "@core/session/ApiSlotLimiter"
 import { ApprovalGate } from "@core/session/ApprovalGate"
 import type { Session } from "@core/session/Session"
 import { parseSlashCommands } from "@core/slash-commands"
@@ -131,6 +132,8 @@ type TaskParams = {
 	files?: string[]
 	historyItem?: HistoryItem
 	taskId: string
+	// [SKYCODE] Общий на контроллер лимитер параллельных запросов к модели (без него — без ограничений)
+	apiSlotLimiter?: ApiSlotLimiter
 }
 
 export class Task {
@@ -255,6 +258,11 @@ export class Task {
 	// глобального режима; переключение режима в другой вкладке на эту задачу не влияет.
 	private mode: Mode
 
+	// [SKYCODE] Лимит параллельных запросов к модели: слот держим на время одного стрима.
+	private apiSlotLimiter?: ApiSlotLimiter
+	private apiSlotRelease?: () => void
+	private readonly abortController = new AbortController()
+
 	// Callbacks
 	private updateTaskHistory: (historyItem: HistoryItem) => Promise<HistoryItem[]>
 	private postStateToWebview: () => Promise<void>
@@ -294,6 +302,7 @@ export class Task {
 			files,
 			historyItem,
 			taskId,
+			apiSlotLimiter,
 		} = params
 
 		this.mode = stateManager.getGlobalSettingsKey("mode")
@@ -305,6 +314,7 @@ export class Task {
 		this.postStateToWebview = postStateToWebview
 		this.reinitExistingTaskFromId = reinitExistingTaskFromId
 		this.cancelTask = cancelTask
+		this.apiSlotLimiter = apiSlotLimiter
 		this.skycodeIgnoreController = new SkycodeIgnoreController(cwd)
 		this.commandPermissionController = new CommandPermissionController()
 		// Determine terminal execution mode and create appropriate terminal manager
@@ -876,7 +886,7 @@ export class Task {
 		if (messageTs) {
 			try {
 				const diffSystem = getDiffSystem()
-				await diffSystem.startCheckpoint(`Task: ${task?.substring(0, 50)}...`, messageTs)
+				await diffSystem.startCheckpoint(`Task: ${task?.substring(0, 50)}...`, messageTs, this.taskId)
 			} catch (error) {
 				Logger.error("Failed to start checkpoint:", error)
 			}
@@ -1129,7 +1139,7 @@ export class Task {
 			if (feedbackTs) {
 				try {
 					const diffSystem = getDiffSystem()
-					await diffSystem.startCheckpoint(`Feedback: ${text?.substring(0, 50)}...`, feedbackTs)
+					await diffSystem.startCheckpoint(`Feedback: ${text?.substring(0, 50)}...`, feedbackTs, this.taskId)
 					Logger.log(`[Task] Checkpoint started for feedback ts=${feedbackTs}`)
 				} catch (error) {
 					Logger.error("Failed to start checkpoint for feedback:", error)
@@ -1479,6 +1489,10 @@ export class Task {
 			// This is the single biggest source of cancel latency — the HTTP stream
 			// stays open until the next chunk arrives (can be seconds on slow models).
 			this.api.abort?.()
+
+			// [SKYCODE] Выходим из очереди на слот и освобождаем занятый (идемпотентно)
+			this.abortController.abort()
+			this.apiSlotRelease?.()
 
 			// PHASE 1: Check if TaskCancel should run BEFORE any cleanup
 			// We must capture this state now because subsequent cleanup will
@@ -1983,175 +1997,209 @@ export class Task {
 		}
 
 		// Response API requires native tool calls to be enabled
-		const stream = this.api.createMessage(systemPrompt, contextManagementMetadata.truncatedConversationHistory, tools)
-
-		const iterator = stream[Symbol.asyncIterator]()
-
-		try {
-			// awaiting first chunk to see if it will throw an error
-			this.taskState.isWaitingForFirstChunk = true
-			const firstChunk = await iterator.next()
-			yield firstChunk.value
-			this.taskState.isWaitingForFirstChunk = false
-		} catch (error) {
-			const isContextWindowExceededError = checkContextWindowExceededError(error)
-			const { model, providerId } = this.getCurrentProviderInfo()
-			const skycodeError = SkycodeError.transform(error, model.id, providerId)
-			Logger.error(`[Task] API request failed (${providerId}/${model.id}):`, skycodeError.message)
-
-			if (isContextWindowExceededError && !this.taskState.didAutomaticallyRetryFailedApiRequest) {
-				await this.handleContextWindowExceededError()
-			} else {
-				// request failed after retrying automatically once, ask user if they want to retry again
-				// note that this api_req_failed ask is unique in that we only present this option if the api hasn't streamed any content yet (ie it fails on the first chunk due), as it would allow them to hit a retry button. However if the api failed mid-stream, it could be in any arbitrary state where some tools may have executed, so that error is handled differently and requires cancelling the task entirely.
-
-				if (isContextWindowExceededError) {
-					const truncatedConversationHistory = this.contextManager.getTruncatedMessages(
-						this.messageStateHandler.getApiConversationHistory(),
-						this.taskState.conversationHistoryDeletedRange,
-					)
-
-					// If the conversation has more than 3 messages, we can truncate again. If not, then the conversation is bricked.
-					// ToDo: Allow the user to change their input if this is the case.
-					if (truncatedConversationHistory.length > 3) {
-						skycodeError.message = "Context window exceeded. Click retry to truncate the conversation and try again."
-						this.taskState.didAutomaticallyRetryFailedApiRequest = false
+		// [SKYCODE] Слот на запрос к модели: ждём в очереди, если уже идёт максимум стримов.
+		let releaseSlot: () => void = () => {}
+		if (this.apiSlotLimiter) {
+			const acquiring = this.apiSlotLimiter.acquire(this.taskId, this.abortController.signal)
+			if (this.apiSlotLimiter.isQueued(this.taskId)) {
+				this.taskState.isWaitingForApiSlot = true
+				void this.postStateToWebview()
+			}
+			try {
+				const rawRelease = await acquiring
+				releaseSlot = () => {
+					rawRelease()
+					if (this.apiSlotRelease === releaseSlot) {
+						this.apiSlotRelease = undefined
 					}
 				}
-
-				const streamingFailedMessage = skycodeError.serialize()
-
-				// Update the 'api_req_started' message to reflect final failure before asking user to manually retry
-				const lastApiReqStartedIndex = findLastIndex(
-					this.messageStateHandler.getSkycodeMessages(),
-					(m) => m.say === "api_req_started",
-				)
-				if (lastApiReqStartedIndex !== -1) {
-					const skycodeMessages = this.messageStateHandler.getSkycodeMessages()
-					const currentApiReqInfo: SkycodeApiReqInfo = JSON.parse(skycodeMessages[lastApiReqStartedIndex].text || "{}")
-					delete currentApiReqInfo.retryStatus
-
-					await this.messageStateHandler.updateSkycodeMessage(lastApiReqStartedIndex, {
-						text: JSON.stringify({
-							...currentApiReqInfo, // Spread the modified info (with retryStatus removed)
-							// cancelReason: "retries_exhausted", // Indicate that automatic retries failed
-							streamingFailedMessage,
-						} satisfies SkycodeApiReqInfo),
-					})
-					// this.ask will trigger postStateToWebview, so this change should be picked up.
+				this.apiSlotRelease = releaseSlot
+			} catch {
+				// Отмена, пока стояли в очереди: из очереди уже вышли, слота нет
+				throw new Error("Skycode instance aborted")
+			} finally {
+				if (this.taskState.isWaitingForApiSlot) {
+					this.taskState.isWaitingForApiSlot = false
+					void this.postStateToWebview()
 				}
+			}
+		}
 
-				const isAuthError = skycodeError.isErrorType(SkycodeErrorType.Auth)
+		try {
+			const stream = this.api.createMessage(systemPrompt, contextManagementMetadata.truncatedConversationHistory, tools)
 
-				let response: SkycodeAskResponse
-				// Skip auto-retry for auth errors
-				if (!isAuthError && this.taskState.autoRetryAttempts < 3) {
-					// Auto-retry enabled with max 3 attempts: automatically approve the retry
-					this.taskState.autoRetryAttempts++
+			const iterator = stream[Symbol.asyncIterator]()
 
-					// Calculate delay: 2s, 4s, 8s
-					const delay = 2000 * 2 ** (this.taskState.autoRetryAttempts - 1)
+			try {
+				// awaiting first chunk to see if it will throw an error
+				this.taskState.isWaitingForFirstChunk = true
+				const firstChunk = await iterator.next()
+				yield firstChunk.value
+				this.taskState.isWaitingForFirstChunk = false
+			} catch (error) {
+				// [SKYCODE] Не держим слот, пока ждём пользователя/повтор
+				releaseSlot()
+				const isContextWindowExceededError = checkContextWindowExceededError(error)
+				const { model, providerId } = this.getCurrentProviderInfo()
+				const skycodeError = SkycodeError.transform(error, model.id, providerId)
+				Logger.error(`[Task] API request failed (${providerId}/${model.id}):`, skycodeError.message)
 
-					await updateApiReqMsg({
-						messageStateHandler: this.messageStateHandler,
-						lastApiReqIndex: lastApiReqStartedIndex,
-						inputTokens: 0,
-						outputTokens: 0,
-						cacheWriteTokens: 0,
-						cacheReadTokens: 0,
-						totalCost: undefined,
-						api: this.api,
-						cancelReason: "streaming_failed",
-						streamingFailedMessage,
-					})
-					await this.messageStateHandler.saveSkycodeMessagesAndUpdateHistory()
-					await this.postStateToWebview()
+				if (isContextWindowExceededError && !this.taskState.didAutomaticallyRetryFailedApiRequest) {
+					await this.handleContextWindowExceededError()
+				} else {
+					// request failed after retrying automatically once, ask user if they want to retry again
+					// note that this api_req_failed ask is unique in that we only present this option if the api hasn't streamed any content yet (ie it fails on the first chunk due), as it would allow them to hit a retry button. However if the api failed mid-stream, it could be in any arbitrary state where some tools may have executed, so that error is handled differently and requires cancelling the task entirely.
 
-					response = "yesButtonClicked"
-					await this.say(
-						"error_retry",
-						JSON.stringify({
-							attempt: this.taskState.autoRetryAttempts,
-							maxAttempts: 3,
-							delaySeconds: delay / 1000,
-							errorMessage: streamingFailedMessage,
-						}),
-					)
+					if (isContextWindowExceededError) {
+						const truncatedConversationHistory = this.contextManager.getTruncatedMessages(
+							this.messageStateHandler.getApiConversationHistory(),
+							this.taskState.conversationHistoryDeletedRange,
+						)
 
-					// Clear streamingFailedMessage now that error_retry contains it
-					// This prevents showing the error in both ErrorRow and error_retry
-					const autoRetryApiReqIndex = findLastIndex(
+						// If the conversation has more than 3 messages, we can truncate again. If not, then the conversation is bricked.
+						// ToDo: Allow the user to change their input if this is the case.
+						if (truncatedConversationHistory.length > 3) {
+							skycodeError.message = "Context window exceeded. Click retry to truncate the conversation and try again."
+							this.taskState.didAutomaticallyRetryFailedApiRequest = false
+						}
+					}
+
+					const streamingFailedMessage = skycodeError.serialize()
+
+					// Update the 'api_req_started' message to reflect final failure before asking user to manually retry
+					const lastApiReqStartedIndex = findLastIndex(
 						this.messageStateHandler.getSkycodeMessages(),
 						(m) => m.say === "api_req_started",
 					)
-					if (autoRetryApiReqIndex !== -1) {
+					if (lastApiReqStartedIndex !== -1) {
 						const skycodeMessages = this.messageStateHandler.getSkycodeMessages()
-						const currentApiReqInfo: SkycodeApiReqInfo = JSON.parse(
-							skycodeMessages[autoRetryApiReqIndex].text || "{}",
+						const currentApiReqInfo: SkycodeApiReqInfo = JSON.parse(skycodeMessages[lastApiReqStartedIndex].text || "{}")
+						delete currentApiReqInfo.retryStatus
+
+						await this.messageStateHandler.updateSkycodeMessage(lastApiReqStartedIndex, {
+							text: JSON.stringify({
+								...currentApiReqInfo, // Spread the modified info (with retryStatus removed)
+								// cancelReason: "retries_exhausted", // Indicate that automatic retries failed
+								streamingFailedMessage,
+							} satisfies SkycodeApiReqInfo),
+						})
+						// this.ask will trigger postStateToWebview, so this change should be picked up.
+					}
+
+					const isAuthError = skycodeError.isErrorType(SkycodeErrorType.Auth)
+
+					let response: SkycodeAskResponse
+					// Skip auto-retry for auth errors
+					if (!isAuthError && this.taskState.autoRetryAttempts < 3) {
+						// Auto-retry enabled with max 3 attempts: automatically approve the retry
+						this.taskState.autoRetryAttempts++
+
+						// Calculate delay: 2s, 4s, 8s
+						const delay = 2000 * 2 ** (this.taskState.autoRetryAttempts - 1)
+
+						await updateApiReqMsg({
+							messageStateHandler: this.messageStateHandler,
+							lastApiReqIndex: lastApiReqStartedIndex,
+							inputTokens: 0,
+							outputTokens: 0,
+							cacheWriteTokens: 0,
+							cacheReadTokens: 0,
+							totalCost: undefined,
+							api: this.api,
+							cancelReason: "streaming_failed",
+							streamingFailedMessage,
+						})
+						await this.messageStateHandler.saveSkycodeMessagesAndUpdateHistory()
+						await this.postStateToWebview()
+
+						response = "yesButtonClicked"
+						await this.say(
+							"error_retry",
+							JSON.stringify({
+								attempt: this.taskState.autoRetryAttempts,
+								maxAttempts: 3,
+								delaySeconds: delay / 1000,
+								errorMessage: streamingFailedMessage,
+							}),
 						)
+
+						// Clear streamingFailedMessage now that error_retry contains it
+						// This prevents showing the error in both ErrorRow and error_retry
+						const autoRetryApiReqIndex = findLastIndex(
+							this.messageStateHandler.getSkycodeMessages(),
+							(m) => m.say === "api_req_started",
+						)
+						if (autoRetryApiReqIndex !== -1) {
+							const skycodeMessages = this.messageStateHandler.getSkycodeMessages()
+							const currentApiReqInfo: SkycodeApiReqInfo = JSON.parse(
+								skycodeMessages[autoRetryApiReqIndex].text || "{}",
+							)
+							delete currentApiReqInfo.streamingFailedMessage
+							await this.messageStateHandler.updateSkycodeMessage(autoRetryApiReqIndex, {
+								text: JSON.stringify(currentApiReqInfo),
+							})
+						}
+
+						await setTimeoutPromise(delay)
+					} else {
+						// Show error_retry with failed flag to indicate all retries exhausted (but not for auth errors)
+						if (!isAuthError) {
+							await this.say(
+								"error_retry",
+								JSON.stringify({
+									attempt: 3,
+									maxAttempts: 3,
+									delaySeconds: 0,
+									failed: true, // Special flag to indicate retries exhausted
+									errorMessage: streamingFailedMessage,
+								}),
+							)
+						}
+						// Clear large context after exhausting retries to prevent context overflow
+						await this.clearLargeSessionContext()
+						const askResult = await this.ask("api_req_failed", streamingFailedMessage)
+						response = askResult.response
+						if (response === "yesButtonClicked") {
+							this.taskState.autoRetryAttempts = 0
+						}
+					}
+
+					if (response !== "yesButtonClicked") {
+						// this will never happen since if noButtonClicked, we will clear current task, aborting this instance
+						throw new Error("API request failed")
+					}
+
+					// Clear streamingFailedMessage when user manually retries
+					const manualRetryApiReqIndex = findLastIndex(
+						this.messageStateHandler.getSkycodeMessages(),
+						(m) => m.say === "api_req_started",
+					)
+					if (manualRetryApiReqIndex !== -1) {
+						const skycodeMessages = this.messageStateHandler.getSkycodeMessages()
+						const currentApiReqInfo: SkycodeApiReqInfo = JSON.parse(skycodeMessages[manualRetryApiReqIndex].text || "{}")
 						delete currentApiReqInfo.streamingFailedMessage
-						await this.messageStateHandler.updateSkycodeMessage(autoRetryApiReqIndex, {
+						await this.messageStateHandler.updateSkycodeMessage(manualRetryApiReqIndex, {
 							text: JSON.stringify(currentApiReqInfo),
 						})
 					}
 
-					await setTimeoutPromise(delay)
-				} else {
-					// Show error_retry with failed flag to indicate all retries exhausted (but not for auth errors)
-					if (!isAuthError) {
-						await this.say(
-							"error_retry",
-							JSON.stringify({
-								attempt: 3,
-								maxAttempts: 3,
-								delaySeconds: 0,
-								failed: true, // Special flag to indicate retries exhausted
-								errorMessage: streamingFailedMessage,
-							}),
-						)
-					}
-					// Clear large context after exhausting retries to prevent context overflow
-					await this.clearLargeSessionContext()
-					const askResult = await this.ask("api_req_failed", streamingFailedMessage)
-					response = askResult.response
-					if (response === "yesButtonClicked") {
-						this.taskState.autoRetryAttempts = 0
-					}
+					await this.say("api_req_retried")
+
+					// Reset the automatic retry flag so the request can proceed
+					this.taskState.didAutomaticallyRetryFailedApiRequest = false
 				}
-
-				if (response !== "yesButtonClicked") {
-					// this will never happen since if noButtonClicked, we will clear current task, aborting this instance
-					throw new Error("API request failed")
-				}
-
-				// Clear streamingFailedMessage when user manually retries
-				const manualRetryApiReqIndex = findLastIndex(
-					this.messageStateHandler.getSkycodeMessages(),
-					(m) => m.say === "api_req_started",
-				)
-				if (manualRetryApiReqIndex !== -1) {
-					const skycodeMessages = this.messageStateHandler.getSkycodeMessages()
-					const currentApiReqInfo: SkycodeApiReqInfo = JSON.parse(skycodeMessages[manualRetryApiReqIndex].text || "{}")
-					delete currentApiReqInfo.streamingFailedMessage
-					await this.messageStateHandler.updateSkycodeMessage(manualRetryApiReqIndex, {
-						text: JSON.stringify(currentApiReqInfo),
-					})
-				}
-
-				await this.say("api_req_retried")
-
-				// Reset the automatic retry flag so the request can proceed
-				this.taskState.didAutomaticallyRetryFailedApiRequest = false
+				// delegate generator output from the recursive call
+				yield* this.attemptApiRequest(previousApiReqIndex)
+				return
 			}
-			// delegate generator output from the recursive call
-			yield* this.attemptApiRequest(previousApiReqIndex)
-			return
-		}
 
-		// no error, so we can continue to yield all remaining chunks
-		// (needs to be placed outside of try/catch since it we want caller to handle errors not with api_req_failed as that is reserved for first chunk failures only)
-		// this delegates to another generator or iterable object. In this case, it's saying "yield all remaining values from this iterator". This effectively passes along all subsequent chunks from the original stream.
-		yield* iterator
+			// no error, so we can continue to yield all remaining chunks
+			// (needs to be placed outside of try/catch since it we want caller to handle errors not with api_req_failed as that is reserved for first chunk failures only)
+			// this delegates to another generator or iterable object. In this case, it's saying "yield all remaining values from this iterator". This effectively passes along all subsequent chunks from the original stream.
+			yield* iterator
+		} finally {
+			releaseSlot()
+		}
 	}
 
 	async presentAssistantMessage() {

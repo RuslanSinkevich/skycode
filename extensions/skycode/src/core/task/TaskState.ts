@@ -6,6 +6,8 @@ export class TaskState {
 	// Streaming flags
 	isStreaming = false
 	isWaitingForFirstChunk = false
+	// [SKYCODE] Запрос к модели ждёт свободный слот в ApiSlotLimiter (статус «в очереди»)
+	isWaitingForApiSlot = false
 	didCompleteReadingStream = false
 
 	// Content processing

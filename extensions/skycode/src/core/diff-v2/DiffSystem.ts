@@ -351,8 +351,9 @@ export class DiffSystem implements vscode.Disposable {
    * Start a new checkpoint (ResponseGroup) for grouping changes.
    * @param description — what the AI is doing
    * @param messageTs — chat message timestamp for Retry/Delete binding
+   * @param taskId — [SKYCODE] владелец правок (задача, начавшая группу); без него — currentTaskId (активная задача)
    */
-  async startCheckpoint(description?: string, messageTs?: number): Promise<string> {
+  async startCheckpoint(description?: string, messageTs?: number, taskId?: string): Promise<string> {
     this.ensureInitialized();
 
     if (this.currentResponseGroupId) {
@@ -360,9 +361,10 @@ export class DiffSystem implements vscode.Disposable {
     }
 
     const ts = messageTs ?? Date.now();
-    this.currentResponseGroupId = this.store.createResponseGroup(ts, description, this.currentTaskId ?? undefined);
+    const ownerTaskId = taskId ?? this.currentTaskId ?? undefined;
+    this.currentResponseGroupId = this.store.createResponseGroup(ts, description, ownerTaskId);
     this.overlapCycleCount.clear();
-    Logger.log('[DiffSystem] Started ResponseGroup:', this.currentResponseGroupId, 'messageTs:', ts, 'taskId:', this.currentTaskId);
+    Logger.log('[DiffSystem] Started ResponseGroup:', this.currentResponseGroupId, 'messageTs:', ts, 'taskId:', ownerTaskId);
     return this.currentResponseGroupId;
   }
 
