@@ -17,6 +17,9 @@ import { sendOpenRouterModelsEvent } from "../models/subscribeToOpenRouterModels
  */
 export async function initializeWebview(controller: Controller, _request: EmptyRequest): Promise<Empty> {
 	try {
+		// [SKYCODE] Восстанавливаем вкладки прошлого запуска (идемпотентно)
+		await controller.restoreTabs()
+
 		// Post last cached models as soon as possible for immediate availability in the UI
 		const lastCachedModels = await controller.readOpenRouterModels()
 		if (lastCachedModels) {

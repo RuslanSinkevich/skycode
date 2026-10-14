@@ -62,6 +62,10 @@ export interface ExtensionState {
 	skycodeMessages: SkycodeMessage[]
 	/** ID текущей сессии (для подписки через SessionService) */
 	currentSessionId?: string
+	/** [SKYCODE] Открытые вкладки (сессии) со статусами; сообщения (skycodeMessages) — только активной */
+	tabs: TabInfo[]
+	/** ID активной вкладки (= currentSessionId) */
+	activeTabId?: string
 	currentTaskItem?: HistoryItem
 	currentFocusChainChecklist?: string | null
 	mcpDisplayMode: McpDisplayMode
@@ -154,6 +158,18 @@ export interface SkycodeMessage {
 	conversationHistoryIndex?: number
 	conversationHistoryDeletedRange?: [number, number] // for when conversation history is truncated for API requests
 	modelInfo?: SkycodeMessageModelInfo
+}
+
+export type TabStatus = "running" | "awaiting" | "done" | "queued" | "stopped" | "idle"
+
+export interface TabInfo {
+	/** ID сессии */
+	id: string
+	/** ID задачи ("" у пустой вкладки) */
+	taskId: string
+	title: string
+	status: TabStatus
+	ts: number
 }
 
 export type SkycodeAsk =

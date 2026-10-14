@@ -486,6 +486,18 @@ export class Task {
 	// Communicate with webview
 
 	// partial has three valid states true (partial message), false (completion of partial message), undefined (individual complete message)
+	/**
+	 * [SKYCODE] Частичные сообщения идут в вебвью без привязки к задаче и вставляются в видимую ленту,
+	 * поэтому от фоновой (неактивной) вкладки их слать нельзя: её сообщения вебвью получит целиком
+	 * при переключении (через postState).
+	 */
+	private async sendPartialIfActive(protoMessage: Parameters<typeof sendPartialMessageEvent>[0]): Promise<void> {
+		if (this.controller.activeTask !== this) {
+			return
+		}
+		await sendPartialMessageEvent(protoMessage)
+	}
+
 	async ask(
 		type: SkycodeAsk,
 		text?: string,
@@ -530,7 +542,7 @@ export class Task {
 					// await this.saveSkycodeMessagesAndUpdateHistory()
 					// await this.postStateToWebview()
 					const protoMessage = convertSkycodeMessageToProto(lastMessage)
-					await sendPartialMessageEvent(protoMessage)
+					await this.sendPartialIfActive(protoMessage)
 					throw new Error("Current ask promise was ignored 1")
 				} else {
 					// this is a new partial message, so add it with partial state
@@ -570,7 +582,7 @@ export class Task {
 					})
 					// await this.postStateToWebview()
 					const protoMessage = convertSkycodeMessageToProto(lastMessage)
-					await sendPartialMessageEvent(protoMessage)
+					await this.sendPartialIfActive(protoMessage)
 				} else {
 					// this is a new partial=false message, so add it like normal
 					askTs = Date.now()
@@ -662,7 +674,7 @@ export class Task {
 					lastMessage.files = files
 					lastMessage.partial = partial
 					const protoMessage = convertSkycodeMessageToProto(lastMessage)
-					await sendPartialMessageEvent(protoMessage)
+					await this.sendPartialIfActive(protoMessage)
 					return undefined
 				} else {
 					// this is a new partial message, so add it with partial state
@@ -696,7 +708,7 @@ export class Task {
 					await this.messageStateHandler.saveSkycodeMessagesAndUpdateHistory()
 					// await this.postStateToWebview()
 					const protoMessage = convertSkycodeMessageToProto(lastMessage)
-					await sendPartialMessageEvent(protoMessage) // more performant than an entire postStateToWebview
+					await this.sendPartialIfActive(protoMessage) // more performant than an entire postStateToWebview
 					return undefined
 				} else {
 					// this is a new partial=false message, so add it like normal
@@ -2901,7 +2913,10 @@ export class Task {
 					return false // will continue the task loop
 				}
 				// abandoned happens when extension is no longer waiting for the skycode instance to finish aborting (error is thrown here when any function in the for loop throws due to this.abort)
-				if (!this.taskState.abandoned) {
+				// [SKYCODE] Остановку запросили сами (abortTask: закрыли вкладку, «+», отмена): поток падает
+				// раньше, чем abortTask выставит taskState.abort, и без этой проверки задача считала это
+				// сбоем сети и переоткрывала себя из истории поверх новой. Сигнал выставляется синхронно.
+				if (!this.taskState.abandoned && !this.abortController.signal.aborted) {
 					const skycodeError = SkycodeError.transform(error, this.api.getModel().id)
 					Logger.error("[Task] API stream failed:", skycodeError.message)
 					const errorMessage = skycodeError.serialize()

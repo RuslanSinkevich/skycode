@@ -125,6 +125,7 @@ export const ExtensionStateContextProvider: React.FC<{
 	const [state, setState] = useState<ExtensionState>({
 		version: "",
 		skycodeMessages: [],
+		tabs: [],
 		taskHistory: [],
 		shouldShowAnnouncement: false,
 		autoApprovalSettings: DEFAULT_AUTO_APPROVAL_SETTINGS,

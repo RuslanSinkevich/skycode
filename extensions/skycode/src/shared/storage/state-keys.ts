@@ -46,6 +46,9 @@ type FieldDefinitions = Record<string, FieldDefinition<any>>
 const GLOBAL_STATE_FIELDS = {
 	lastShownAnnouncementId: { default: undefined as string | undefined },
 	taskHistory: { default: [] as HistoryItem[], isAsync: true },
+	// [SKYCODE] Открытые вкладки (сессия -> задача) и активная; восстанавливаются при старте в состоянии «остановлена»
+	openTabs: { default: [] as Array<{ sessionId: string; taskId: string }> },
+	activeTabId: { default: undefined as string | undefined },
 	favoritedModelIds: { default: [] as string[] },
 	mcpResponsesCollapsed: { default: false as boolean },
 	terminalReuseEnabled: { default: true as boolean },

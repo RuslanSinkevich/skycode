@@ -31,6 +31,8 @@ export interface SessionEventMap {
 
 export class Session {
 	readonly id: string
+	/** Время создания сессии (для вкладок без задачи) */
+	readonly createdAt = Date.now()
 	private _state: SessionState = "idle"
 	private _messages: SkycodeMessage[] = []
 	private _progress: PipelineProgress | null = null
@@ -52,6 +54,20 @@ export class Session {
 	 * На следующих шагах Task будет вынесен в Pipeline внутри Session.
 	 */
 	private _task: Task | null = null
+
+	/**
+	 * [SKYCODE] Заглушка восстановленной вкладки: известны задача и название, но Task ещё не создан
+	 * (создаётся при переключении на вкладку).
+	 */
+	private _placeholder: { taskId: string; title: string } | null = null
+
+	get placeholder(): { taskId: string; title: string } | null {
+		return this._placeholder
+	}
+
+	setPlaceholder(placeholder: { taskId: string; title: string } | null): void {
+		this._placeholder = placeholder
+	}
 
 	constructor(id: string) {
 		this.id = id
@@ -100,6 +116,7 @@ export class Session {
 	setTask(task: Task | null): void {
 		this._task = task
 		if (task) {
+			this._placeholder = null
 			this.setState("running")
 		} else {
 			this.setState("idle")

@@ -45,6 +45,14 @@ service TaskService {
   rpc retryFromMessage(Int64Request) returns (Empty);
   // Resends from a message with edited text/attachments (atomic delete + send)
   rpc resendFromMessage(ResendFromMessageRequest) returns (Empty);
+  // Tabs: creates an empty session and makes it active
+  rpc newTab(EmptyRequest) returns (Empty);
+  // Tabs: makes the session with the given id active
+  rpc switchTab(StringRequest) returns (Empty);
+  // Tabs: closes the session with the given id (the task stays in history)
+  rpc closeTab(StringRequest) returns (Empty);
+  // Tabs: switches to the tab holding the history task, or opens it in a new tab
+  rpc openTaskInTab(StringRequest) returns (Empty);
 }
 
 // Request for resending a message with edited content

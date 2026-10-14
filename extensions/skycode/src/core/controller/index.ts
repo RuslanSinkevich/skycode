@@ -8,7 +8,7 @@ import type { WorkspaceRootManager } from "@core/workspace/WorkspaceRootManager"
 import { McpHub } from "@services/mcp/McpHub"
 import type { ApiProvider, ModelInfo } from "@shared/api"
 import type { ChatContent } from "@shared/ChatContent"
-import type { ExtensionState, Platform, PendingChangeInfo } from "@shared/ExtensionMessage"
+import type { ExtensionState, PendingChangeInfo, Platform, TabInfo } from "@shared/ExtensionMessage"
 import { getPendingChangesStorage } from "@core/diff-v2/storage/PendingChangesStorage"
 import { getDiffSystem } from "@core/diff-v2"
 import { getBackendLocaleForPreferredLanguage, setBackendLocale, t } from "../../i18n/backend-i18n"
@@ -46,6 +46,7 @@ import {
 import { type PersistenceErrorEvent, StateManager } from "../storage/StateManager"
 import { Task } from "../task"
 import { ApiSlotLimiter, type Session, SessionManager } from "../session"
+import { buildTabs, deriveTabStatus, deriveTabTitle, normalizeTabTitle, planRestoredTabs, toPersistedTabs } from "../session/tabs"
 import { sendMcpMarketplaceCatalogEvent } from "./mcp/subscribeToMcpMarketplaceCatalog"
 import { getSkycodeOnboardingModels } from "./models/getSkycodeOnboardingModels"
 import { appendSkycodeStealthModels } from "./models/refreshOpenRouterModels"
@@ -59,6 +60,14 @@ https://github.com/KumarVariable/vscode-extension-sidebar-html/blob/master/src/c
 */
 
 export class Controller {
+	/** [SKYCODE] Вкладки восстановлены (до этого сохранять список нельзя — затрём сохранённое пустым). */
+	private _tabsRestored = false
+	private _restoreTabsPromise?: Promise<void>
+	private _disposed = false
+	private _lastPersistedTabsJson = ""
+	/** Сессии, у которых прямо сейчас создаётся Task из заглушки */
+	private readonly materializing = new Set<string>()
+
 	/**
 	 * SessionManager - управление сессиями. [SKYCODE] Задачи живут в сессиях (одна задача на сессию),
 	 * отдельного поля в контроллере больше нет.
@@ -152,6 +161,7 @@ export class Controller {
 	- https://github.com/microsoft/vscode-extension-samples/blob/main/webview-sample/src/extension.ts
 	*/
 	async dispose() {
+		this._disposed = true // [SKYCODE] закрытие сессий при выходе не должно ни пересохранять вкладки, ни поднимать заглушки
 		// [SKYCODE-PERF] Clear postState throttle timer + drain any pending resolvers
 		// Otherwise the timer fires after dispose and tries to send state to a dead webview,
 		// and pending promises stay forever in memory.
@@ -197,6 +207,13 @@ export class Controller {
 		historyItem?: HistoryItem,
 		options?: { inNewSession?: boolean; sessionId?: string },
 	) {
+		// [SKYCODE] Активная сессия без задачи (создана через newTab) занимается новой задачей, другие вкладки не трогаем
+		if (!options?.inNewSession && !options?.sessionId) {
+			const active = this.sessionManager.currentSession
+			if (active && !active.task && !active.placeholder) {
+				options = { ...options, sessionId: active.id }
+			}
+		}
 		const requestedSessionId = options?.sessionId
 		let targetSession = requestedSessionId ? this.sessionManager.get(requestedSessionId) : undefined
 		if (targetSession) {
@@ -244,6 +261,12 @@ export class Controller {
 
 		const taskId = historyItem?.id || Date.now().toString()
 		const taskSessionId = targetSession?.id ?? requestedSessionId ?? taskId
+
+		// [SKYCODE] Эта задача из истории уже открыта в другой вкладке — закрываем ту, чтобы не было двух копий
+		const duplicate = historyItem ? this.findSessionByTaskId(taskId) : undefined
+		if (duplicate && duplicate.id !== targetSession?.id) {
+			await this.closeSession(duplicate.id)
+		}
 
 		// Та же задача уже открыта в другой сессии — закрываем её, чтобы не было двух копий
 		if (!targetSession && this.sessionManager.get(taskSessionId)) {
@@ -382,7 +405,7 @@ export class Controller {
 
 	/** Сессия, в которой лежит задача с этим id. */
 	private findSessionByTaskId(taskId: string): Session | undefined {
-		return this.sessionManager.getAll().find((s) => s.task?.taskId === taskId)
+		return this.sessionManager.getAll().find((s) => s.task?.taskId === taskId || s.placeholder?.taskId === taskId)
 	}
 
 	/**
@@ -831,6 +854,8 @@ export class Controller {
 			sanitizeTruncatedPlaceholder,
 		)
 		const currentSessionId = this.sessionManager.activeSessionId ?? undefined
+		const tabs = this.getTabs(taskHistory || [])
+		this.persistTabs(tabs, currentSessionId)
 
 		const processedTaskHistory = (taskHistory || [])
 			.filter((item) => item.ts && item.task)
@@ -879,6 +904,8 @@ export class Controller {
 			apiConfiguration,
 			currentTaskItem,
 			currentSessionId,
+			tabs,
+			activeTabId: currentSessionId,
 			skycodeMessages,
 			currentFocusChainChecklist: this.activeTask?.taskState.currentFocusChainChecklist || null,
 			autoApprovalSettings,
@@ -1085,6 +1112,11 @@ export class Controller {
 		if (wasActive) {
 			// [SKYCODE] Снимаем привязку к закрытой задаче: иначе правки между задачами (например inline edit) уедут в её бар.
 			await this.finishDiffCheckpoint(this.activeTask?.taskId ?? null)
+			// [SKYCODE] Новой активной стала восстановленная вкладка-заглушка — поднимаем её задачу
+			const next = this.sessionManager.currentSession
+			if (next?.placeholder && !this._disposed) {
+				await this.materializePlaceholder(next)
+			}
 		}
 	}
 
@@ -1096,11 +1128,153 @@ export class Controller {
 		}
 		this.sessionManager.switchTo(sessionId)
 		try {
-			getDiffSystem().setCurrentTaskId(session.task?.taskId ?? null)
+			getDiffSystem().setCurrentTaskId(session.task?.taskId ?? session.placeholder?.taskId ?? null)
 		} catch {
 			// DiffSystem may not be initialized
 		}
+		if (session.placeholder) {
+			await this.materializePlaceholder(session)
+		}
 		await this.postStateToWebview()
+	}
+
+	/** [SKYCODE] Создаёт Task восстановленной вкладки из истории (при первом переключении на неё). Нет в истории — вкладка закрывается. */
+	private async materializePlaceholder(session: Session): Promise<void> {
+		const placeholder = session.placeholder
+		if (!placeholder || session.task || this.materializing.has(session.id)) {
+			return
+		}
+		this.materializing.add(session.id)
+		try {
+			let historyItem: HistoryItem | undefined
+			try {
+				historyItem = (await this.getTaskWithId(placeholder.taskId)).historyItem
+			} catch (error) {
+				Logger.log(`[Controller.materializePlaceholder] Task ${placeholder.taskId} is gone from history: ${error}`)
+			}
+			if (!historyItem) {
+				await this.closeSession(session.id)
+				return
+			}
+			await this.initTask(undefined, undefined, undefined, historyItem, { sessionId: session.id })
+		} finally {
+			this.materializing.delete(session.id)
+		}
+	}
+
+	/** [SKYCODE] Список вкладок для вебвью: статус выводится из задачи (см. session/tabs.ts). */
+	getTabs(taskHistory: HistoryItem[]): TabInfo[] {
+		return buildTabs(
+			this.sessionManager.getAll().map((session) => {
+				const task = session.task
+				const taskId = task?.taskId ?? session.placeholder?.taskId
+				const historyItem = taskId ? taskHistory.find((item) => item.id === taskId) : undefined
+				const messages = task?.messageStateHandler.getSkycodeMessages() ?? []
+				return {
+					sessionId: session.id,
+					taskId,
+					placeholderTitle: normalizeTabTitle(session.placeholder?.title),
+					title: deriveTabTitle(messages, historyItem?.task),
+					status: deriveTabStatus({
+						hasTask: !!task,
+						isPlaceholder: !!session.placeholder && !task,
+						isWaitingForApiSlot: task?.taskState.isWaitingForApiSlot,
+						aborted: task ? task.taskState.abort || task.taskState.abandoned : false,
+						messages,
+					}),
+					ts: historyItem?.ts ?? messages[0]?.ts ?? session.createdAt,
+				}
+			}),
+		)
+	}
+
+	/** [SKYCODE] Сохраняет открытые вкладки в global state, если они изменились (вызывается при каждой отправке состояния). */
+	private persistTabs(tabs: TabInfo[], activeTabId: string | undefined): void {
+		if (!this._tabsRestored || this._disposed) {
+			return
+		}
+		const persisted = toPersistedTabs(tabs, activeTabId)
+		const json = JSON.stringify(persisted)
+		if (json === this._lastPersistedTabsJson) {
+			return
+		}
+		this._lastPersistedTabsJson = json
+		this.stateManager.setGlobalState("openTabs", persisted.openTabs)
+		this.stateManager.setGlobalState("activeTabId", persisted.activeTabId)
+	}
+
+	/**
+	 * [SKYCODE] Восстанавливает вкладки прошлого запуска: активная — настоящая задача из истории (в состоянии «остановлена»),
+	 * остальные — заглушки, их Task создаётся при переключении. Задачи, которых нет в истории, пропускаются.
+	 * Идемпотентно; вызывается при инициализации вебвью.
+	 */
+	restoreTabs(): Promise<void> {
+		if (!this._restoreTabsPromise) {
+			this._restoreTabsPromise = this.doRestoreTabs().finally(() => {
+				this._tabsRestored = true
+			})
+		}
+		return this._restoreTabsPromise
+	}
+
+	private async doRestoreTabs(): Promise<void> {
+		try {
+			if (this.sessionManager.size > 0) {
+				return // уже что-то открыто (например задача запущена до инициализации вебвью)
+			}
+			const history = this.stateManager.getGlobalStateKey("taskHistory") || []
+			const plan = planRestoredTabs(
+				this.stateManager.getGlobalStateKey("openTabs"),
+				this.stateManager.getGlobalStateKey("activeTabId"),
+				new Set(history.map((item) => item.id)),
+			)
+			if (plan.tabs.length === 0 || !plan.activeId) {
+				return
+			}
+			for (const tab of plan.tabs) {
+				const session = this.sessionManager.create(tab.sessionId)
+				const item = history.find((h) => h.id === tab.taskId)
+				session.setPlaceholder({ taskId: tab.taskId, title: normalizeTabTitle(item?.task) })
+			}
+			this.sessionManager.switchTo(plan.activeId)
+			const active = this.sessionManager.get(plan.activeId)
+			if (active) {
+				await this.materializePlaceholder(active)
+			}
+		} catch (error) {
+			Logger.error("[Controller] Failed to restore tabs:", error)
+		}
+	}
+
+	/** [SKYCODE] Новая пустая вкладка (активная). Если активная и так пустая — переиспользуем её. */
+	async newTab(): Promise<string> {
+		const active = this.sessionManager.currentSession
+		if (active && !active.task && !active.placeholder) {
+			return active.id
+		}
+		const session = this.sessionManager.create()
+		this.sessionManager.switchTo(session.id)
+		await this.finishDiffCheckpoint(null)
+		return session.id
+	}
+
+	/** [SKYCODE] Открывает задачу из истории во вкладке: уже открыта — переключаемся, иначе новая вкладка (или пустая активная). */
+	async openTaskInTab(historyTaskId: string): Promise<void> {
+		const existing = this.findSessionByTaskId(historyTaskId)
+		if (existing) {
+			await this.switchSession(existing.id)
+			return
+		}
+		const { historyItem } = await this.getTaskWithId(historyTaskId)
+		const active = this.sessionManager.currentSession
+		const reuseEmpty = active && !active.task && !active.placeholder
+		await this.initTask(
+			undefined,
+			undefined,
+			undefined,
+			historyItem,
+			reuseEmpty ? { sessionId: active.id } : { inNewSession: true },
+		)
 	}
 
 	/** [SKYCODE] Список сессий для будущих вкладок. */
