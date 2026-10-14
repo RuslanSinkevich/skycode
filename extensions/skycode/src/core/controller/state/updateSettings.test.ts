@@ -26,7 +26,6 @@ describe("updateSettings platform validation", () => {
 			},
 			postStateToWebview: sinon.stub().resolves({}),
 			task: undefined,
-			updateTelemetrySetting: sinon.stub(),
 		} as unknown as Controller
 
 		// Clear telemetry service mock

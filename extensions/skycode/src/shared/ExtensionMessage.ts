@@ -16,8 +16,6 @@ import { McpDisplayMode } from "./McpDisplayMode"
 import { SkycodeMessageModelInfo } from "./messages"
 import { OnboardingModelGroup } from "./proto/skycode/state"
 import { Mode, OpenaiReasoningEffort } from "./storage/types"
-import { TelemetrySetting } from "./TelemetrySetting"
-import { UserInfo } from "./UserInfo"
 // webview will hold state
 export interface ExtensionMessage {
 	type: "grpc_response" // New type for gRPC responses
@@ -72,7 +70,6 @@ export interface ExtensionState {
 	environment?: Environment
 	shouldShowAnnouncement: boolean
 	taskHistory: HistoryItem[]
-	telemetrySetting: TelemetrySetting
 	shellIntegrationTimeout: number
 	terminalReuseEnabled?: boolean
 	terminalOutputLineLimit: number
@@ -83,7 +80,6 @@ export interface ExtensionState {
 	backgroundCommandRunning?: boolean
 	backgroundCommandTaskId?: string
 	lastCompletedCommandTs?: number
-	userInfo?: UserInfo
 	version: string
 	distinctId: string
 	globalSkycodeRulesToggles: SkycodeRulesToggles

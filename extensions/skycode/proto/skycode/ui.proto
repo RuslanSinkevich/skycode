@@ -276,9 +276,6 @@ service UiService {
   // Opens a URL in the default browser
   rpc openUrl(StringRequest) returns (Empty);
 
-  // Opens the Skycode walkthrough
-  rpc openWalkthrough(EmptyRequest) returns (Empty);
-
   // Accept all pending changes (Skycode AI diff system)
   rpc acceptAllPendingChanges(EmptyRequest) returns (Empty);
 

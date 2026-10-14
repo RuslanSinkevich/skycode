@@ -17,7 +17,6 @@ import type { HistoryItem } from "@shared/HistoryItem"
 import type { McpMarketplaceCatalog, McpMarketplaceItem } from "@shared/mcp"
 import type { Settings } from "@shared/storage/state-keys"
 import { getApiSettingsMode, type Mode } from "@shared/storage/types"
-import type { TelemetrySetting } from "@shared/TelemetrySetting"
 import { fileExistsAtPath } from "@utils/fs"
 import axios from "axios"
 import fs from "fs/promises"
@@ -296,11 +295,6 @@ export class Controller {
 		if (history) {
 			await this.initTask(undefined, undefined, undefined, history.historyItem)
 		}
-	}
-
-	async updateTelemetrySetting(telemetrySetting: TelemetrySetting) {
-		this.stateManager.setGlobalState("telemetrySetting", telemetrySetting)
-		await this.postStateToWebview()
 	}
 
 	async toggleActModeForYoloMode(): Promise<boolean> {
@@ -761,9 +755,7 @@ export class Controller {
 		const strictPlanModeEnabled = this.stateManager.getGlobalSettingsKey("strictPlanModeEnabled")
 		const yoloModeToggled = this.stateManager.getGlobalSettingsKey("yoloModeToggled")
 		const useAutoCondense = this.stateManager.getGlobalSettingsKey("useAutoCondense")
-		const userInfo = this.stateManager.getGlobalStateKey("userInfo")
 		const mcpDisplayMode = this.stateManager.getGlobalStateKey("mcpDisplayMode")
-		const telemetrySetting = this.stateManager.getGlobalSettingsKey("telemetrySetting")
 		const planActSeparateModelsSetting = this.stateManager.getGlobalSettingsKey("planActSeparateModelsSetting")
 		const globalSkycodeRulesToggles = this.stateManager.getGlobalSettingsKey("globalSkycodeRulesToggles")
 		const globalWorkflowToggles = this.stateManager.getGlobalSettingsKey("globalWorkflowToggles")
@@ -860,9 +852,7 @@ export class Controller {
 			strictPlanModeEnabled,
 			yoloModeToggled,
 			useAutoCondense,
-			userInfo,
 			mcpDisplayMode,
-			telemetrySetting,
 			planActSeparateModelsSetting,
 			platform,
 			environment,

@@ -167,7 +167,6 @@ export const workspace = {
 		get: (key: string, defaultValue?: any) => {
 			const fullKey = `${section}.${key}`
 			if (fullKey in _configOverrides) { return _configOverrides[fullKey] }
-			if (section === "skycode" && key === "telemetrySetting") { return "enabled" }
 			if (section === "telemetry" && key === "telemetryLevel") { return "all" }
 			return defaultValue
 		},

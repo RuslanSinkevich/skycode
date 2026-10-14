@@ -14,8 +14,6 @@ import { HistoryItem } from "@shared/HistoryItem"
 import { DEFAULT_MCP_DISPLAY_MODE, McpDisplayMode } from "@shared/McpDisplayMode"
 import { WorkspaceRoot } from "@shared/multi-root/types"
 import { Mode, OpenaiReasoningEffort } from "@shared/storage/types"
-import { TelemetrySetting } from "@shared/TelemetrySetting"
-import { UserInfo } from "@shared/UserInfo"
 import { LanguageModelChatSelector } from "vscode"
 
 // ============================================================================
@@ -48,7 +46,6 @@ type FieldDefinitions = Record<string, FieldDefinition<any>>
 const GLOBAL_STATE_FIELDS = {
 	lastShownAnnouncementId: { default: undefined as string | undefined },
 	taskHistory: { default: [] as HistoryItem[], isAsync: true },
-	userInfo: { default: undefined as UserInfo | undefined },
 	favoritedModelIds: { default: [] as string[] },
 	mcpResponsesCollapsed: { default: false as boolean },
 	terminalReuseEnabled: { default: true as boolean },
@@ -143,7 +140,6 @@ const USER_SETTINGS_FIELDS = {
 		default: DEFAULT_BROWSER_SETTINGS as BrowserSettings,
 		transform: (v: any) => ({ ...DEFAULT_BROWSER_SETTINGS, ...v }),
 	},
-	telemetrySetting: { default: "unset" as TelemetrySetting },
 	planActSeparateModelsSetting: { default: false as boolean, isComputed: true },
 	shellIntegrationTimeout: { default: 4000 as number },
 	defaultTerminalProfile: { default: "default" as string },
@@ -171,7 +167,6 @@ const USER_SETTINGS_FIELDS = {
 	backgroundEditEnabled: { default: true as boolean },
 	skillsEnabled: { default: false as boolean },
 	lightweightMode: { default: false as boolean },
-	confirmDeleteFile: { default: false as boolean },
 
 	// Session Budget settings (user-overridable limits per tier).
 	// "auto" — auto-detect tier from model id (default).
@@ -203,7 +198,6 @@ const SECRETS_KEYS = [
 	"qwenApiKey",
 	"qwenWebToken",
 	"liteLlmApiKey",
-	"authNonce",
 	"gigaChatApiKey",
 	"yandexGptApiKey",
 	"mcpOAuthSecrets",

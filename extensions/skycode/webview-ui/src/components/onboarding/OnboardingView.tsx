@@ -412,25 +412,14 @@ const OnboardingView = ({ onboardingModels }: { onboardingModels: OnboardingMode
 
 	const onUserTypeClick = useCallback((userType: NEW_USER_TYPE) => {
 		setUserType(userType)
-		const action =
-			userType === NEW_USER_TYPE.POWER
-				? "power_user_selected"
-				: userType === NEW_USER_TYPE.FREE
-					? "free_user_selected"
-					: "byok_user_selected"
-		// User selection is available in step 0 only
-		StateServiceClient.captureOnboardingProgress({ step: 0, action })
 	}, [])
 
 	const onProviderClick = useCallback((provider: ApiProvider) => {
 		setSelectedProvider(provider)
-		StateServiceClient.captureOnboardingProgress({ step: 1, action: `provider_${provider}` })
 	}, [])
 
 	const onModelClick = useCallback((modelSelected: string) => {
 		setSelectedModelId(modelSelected)
-		// User selection is available in step 2 only
-		StateServiceClient.captureOnboardingProgress({ step: 2, modelSelected, action: "model_selected" })
 	}, [])
 
 	const finishOnboarding = useCallback(
@@ -451,8 +440,6 @@ const OnboardingView = ({ onboardingModels }: { onboardingModels: OnboardingMode
 			})
 			hideAccount()
 			hideSettings()
-			const action = "onboarding_completed"
-			StateServiceClient.captureOnboardingProgress({ step, modelSelected, action, completed: true })
 		},
 		[hideAccount, hideSettings, handleFieldsChange, selectedModelId, openRouterModels, selectedProvider],
 	)
@@ -472,7 +459,6 @@ const OnboardingView = ({ onboardingModels }: { onboardingModels: OnboardingMode
 					await finishOnboarding(true, 3)
 					break
 				case "next":
-					StateServiceClient.captureOnboardingProgress({ step: stepNumber + 1 })
 					// Для BYOK на шаге 2 (выбор модели) сразу завершаем
 					if (stepNumber === 2 && userType === NEW_USER_TYPE.BYOK) {
 						await StateServiceClient.setWelcomeViewCompleted({ value: true }).catch(() => {})
@@ -483,7 +469,6 @@ const OnboardingView = ({ onboardingModels }: { onboardingModels: OnboardingMode
 					}
 					break
 				case "back":
-					StateServiceClient.captureOnboardingProgress({ step: stepNumber - 1 })
 					setStepNumber(Math.max(0, stepNumber - 1))
 					break
 				case "done":

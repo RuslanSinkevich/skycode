@@ -10,7 +10,6 @@ import {
 import { getBackendLocaleForPreferredLanguage, setBackendLocale } from "../../../i18n/backend-i18n"
 import { convertProtoToApiProvider } from "@shared/proto-conversions/models/api-configuration-conversion"
 import { OpenaiReasoningEffort } from "@shared/storage/types"
-import { TelemetrySetting } from "@shared/TelemetrySetting"
 import { SkycodeEnv } from "@/config"
 import { HostProvider } from "@/hosts/host-provider"
 import { McpDisplayMode } from "@/shared/McpDisplayMode"
@@ -55,11 +54,6 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 				}
 				controller.task.api = buildApiHandler(apiConfigForHandler, currentMode)
 			}
-		}
-
-		// Update telemetry setting
-		if (request.telemetrySetting) {
-			await controller.updateTelemetrySetting(request.telemetrySetting as TelemetrySetting)
 		}
 
 		// Update plan/act separate models setting

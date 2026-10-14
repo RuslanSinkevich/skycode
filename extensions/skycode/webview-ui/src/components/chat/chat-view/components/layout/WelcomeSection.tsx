@@ -4,7 +4,6 @@ import BannerCarousel from "@/components/common/BannerCarousel"
 import HistoryPreview from "@/components/history/HistoryPreview"
 import { useApiConfigurationHandlers } from "@/components/settings/utils/useApiConfigurationHandlers"
 import HomeHeader from "@/components/welcome/HomeHeader"
-import { SuggestedTasks } from "@/components/welcome/SuggestedTasks"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
 import { StateServiceClient, UiServiceClient } from "@/services/grpc-client"
@@ -22,7 +21,6 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 	showHistoryView,
 	version,
 	taskHistory,
-	shouldShowQuickWins,
 }) => {
 	const { t } = useI18n()
 	const {
@@ -191,11 +189,10 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 	return (
 		<div className="flex flex-col flex-1 w-full h-full p-0 m-0">
 			<div className="overflow-y-auto flex flex-col pb-2.5">
-				<HomeHeader shouldShowQuickWins={shouldShowQuickWins} />
+				<HomeHeader />
 				<BannerCarousel banners={activeBanners} />
-				{!shouldShowQuickWins && taskHistory.length > 0 && <HistoryPreview showHistoryView={showHistoryView} />}
+				{taskHistory.length > 0 && <HistoryPreview showHistoryView={showHistoryView} />}
 			</div>
-			<SuggestedTasks shouldShowQuickWins={shouldShowQuickWins} />
 		</div>
 	)
 }
