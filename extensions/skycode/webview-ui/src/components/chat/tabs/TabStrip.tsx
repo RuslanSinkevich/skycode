@@ -157,8 +157,10 @@ export function TabStrip({
 				<PanelLeftIcon size={14} />
 			</button>
 			<div className="flex flex-1 min-w-0 items-stretch h-full gap-px" role="tablist">
-				{visibleTabs.map((tab) => {
+				{visibleTabs.map((tab, index) => {
 					const isActive = tab.id === activeTabId
+					// Разделитель только между двумя неактивными: у активной своя боковая рамка
+					const nextIsActive = visibleTabs[index + 1]?.id === activeTabId
 					const title = getTitle(tab)
 					return (
 						<div
@@ -167,7 +169,10 @@ export function TabStrip({
 								"group relative flex items-center gap-1.5 flex-1 min-w-0 px-2.5 cursor-pointer select-none rounded-t-md border border-b-0 border-transparent border-t-[1.5px]",
 								isActive
 									? "-mb-px border-x-(--vscode-panel-border) border-t-(--vscode-focusBorder) bg-(--vscode-sideBar-background) text-(--vscode-foreground)"
-									: "border-r-(--vscode-panel-border) text-(--vscode-descriptionForeground) hover:bg-(--vscode-toolbar-hoverBackground)",
+									: "text-(--vscode-descriptionForeground) hover:bg-(--vscode-toolbar-hoverBackground)",
+								!isActive &&
+									!nextIsActive &&
+									"after:absolute after:right-0 after:top-1/2 after:-translate-y-1/2 after:h-3.5 after:w-px after:bg-(--vscode-panel-border)",
 							)}
 							key={tab.id}
 							onAuxClick={(e) => {
