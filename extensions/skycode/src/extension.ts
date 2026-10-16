@@ -260,8 +260,10 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand(commands.PlusButton, async () => {
 			Logger.log("[DEBUG] plusButtonClicked")
 
+			// [SKYCODE] «+» — новая пустая вкладка; текущая задача остаётся открытой рядом, а не закрывается
+			// (раньше закрытие переключало на следующую открытую вкладку, и «+» выглядел как возврат старой задачи)
 			const sidebarInstance = WebviewProvider.getInstance()
-			await sidebarInstance.controller.clearTask()
+			await sidebarInstance.controller.newTab()
 			await sidebarInstance.controller.postStateToWebview()
 			await sendChatButtonClickedEvent()
 		}),
