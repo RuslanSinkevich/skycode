@@ -1,6 +1,10 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import { formatResponse } from "@core/prompts/responses"
 
+// [SKYCODE] Маркеры частичных результатов read_file / правок (см. ReadFileToolHandler, responses.ts)
+const PARTIAL_READ_MARKER = /\[File has \d+ lines; showing |\[File unchanged since you read it|^File has \d+ lines; (start|end)_line/m
+const PARTIAL_EDIT_MARKER = "only the changed parts are shown"
+
 enum EditType {
 	UNDEFINED = 0,
 	NO_FILE_READ = 1,
@@ -235,7 +239,10 @@ export class FileReadOptimizer {
 						const [toolName, filePath, contentBlockIndex, headerText] = result
 
 						if (toolName === "read_file") {
-							this.handleReadFileToolCall(i, filePath, fileReadIndices, contentBlockIndex, headerText)
+							// [SKYCODE] Частичные чтения (диапазон/лимит) и заглушки не заменяют полное чтение как «дубликат»
+							if (!PARTIAL_READ_MARKER.test(firstBlockText)) {
+								this.handleReadFileToolCall(i, filePath, fileReadIndices, contentBlockIndex, headerText)
+							}
 							foundNormalFileRead = true
 						} else if (toolName === "replace_in_file" || toolName === "write_to_file") {
 							let blockText: string | undefined
@@ -373,7 +380,8 @@ export class FileReadOptimizer {
 	) {
 		const pattern = /(<final_file_content path="[^"]*">)[\s\S]*?(<\/final_file_content>)/
 
-		if (pattern.test(blockText)) {
+		// [SKYCODE] Результат правки со сниппетом (не весь файл) не считается полным чтением
+		if (pattern.test(blockText) && !blockText.includes(PARTIAL_EDIT_MARKER)) {
 			const replacementText = blockText.replace(pattern, `$1 ${formatResponse.duplicateFileReadNotice()} $2`)
 			const indices = fileReadIndices.get(filePath) || []
 			indices.push([i, EditType.ALTER_FILE_TOOL, "", replacementText, contentBlockIndex])

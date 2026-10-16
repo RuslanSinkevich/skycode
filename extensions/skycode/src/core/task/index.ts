@@ -57,6 +57,7 @@ import { USER_CONTENT_TAGS } from "@shared/messages/constants"
 import { convertSkycodeMessageToProto } from "@shared/proto-conversions/skycode-message"
 import { getApiSettingsMode, isReadOnlyMode, type Mode } from "@shared/storage/types"
 import { SkycodeDefaultTool } from "@shared/tools"
+import { isTextOnlyAnswer } from "./textOnlyReply"
 import { SkycodeAskResponse } from "@shared/WebviewMessage"
 import {
 	getModelCapabilityTier,
@@ -1329,6 +1330,7 @@ export class Task {
 
 		// Reset session budget counters for the new user turn
 		this.taskState.turnToolCallCount = 0
+		this.taskState.recentToolCallSignatures = []
 		this.taskState.consecutiveReadOnlyToolCalls = 0
 		this.taskState.sessionBudgetExhausted = false
 
@@ -3133,12 +3135,22 @@ export class Task {
 						return true
 					}
 
-					// normal request where tool use is required
-					this.taskState.userMessageContent.push({
-						type: "text",
-						text: formatResponse.noToolsUsed(this.useNativeToolCalls),
-					})
-					this.taskState.consecutiveMistakeCount++
+					// [SKYCODE] Текстовый ответ без инструмента — ответ пользователю: ждём его сообщения
+					if (isTextOnlyAnswer(assistantTextOnly)) {
+						const reply = await this.waitForReplyAfterTextAnswer()
+						if (!reply) {
+							return true
+						}
+						this.taskState.userMessageContent = reply
+						this.taskState.consecutiveMistakeCount = 0
+					} else {
+						// normal request where tool use is required
+						this.taskState.userMessageContent.push({
+							type: "text",
+							text: formatResponse.noToolsUsed(this.useNativeToolCalls),
+						})
+						this.taskState.consecutiveMistakeCount++
+					}
 				}
 
 				// Reset auto-retry counter for each new API request
@@ -3368,6 +3380,41 @@ export class Task {
 		}
 
 		return [processedUserContent, environmentDetails, skycoderulesError]
+	}
+
+	/**
+	 * [SKYCODE] После текстового ответа без инструмента ждём сообщения пользователя так же,
+	 * как после attempt_completion. undefined — пользователь ничего не написал (цикл завершается).
+	 */
+	private async waitForReplyAfterTextAnswer(): Promise<TaskState["userMessageContent"] | undefined> {
+		const { text, images, files } = await this.ask("completion_result", "", false)
+		const hasContent = !!text?.trim() || !!images?.length || !!files?.length
+		if (!hasContent || this.taskState.abort) {
+			return undefined
+		}
+		// Ответ пользователя — новый ход: бюджет и память повторов начинаются заново
+		this.taskState.turnToolCallCount = 0
+		this.taskState.consecutiveReadOnlyToolCalls = 0
+		this.taskState.recentToolCallSignatures = []
+		const feedbackTs = await this.say("user_feedback", text ?? "", images, files)
+		if (feedbackTs) {
+			try {
+				await getDiffSystem().startCheckpoint(`Feedback: ${text?.substring(0, 50)}...`, feedbackTs, this.taskId)
+			} catch (error) {
+				Logger.error("[Task] Failed to start checkpoint for feedback:", error)
+			}
+		}
+		const content: TaskState["userMessageContent"] = [{ type: "text", text: `<feedback>\n${text ?? ""}\n</feedback>` }]
+		if (files?.length) {
+			const fileContentString = await processFilesIntoText(files)
+			if (fileContentString) {
+				content.push({ type: "text", text: fileContentString })
+			}
+		}
+		if (images?.length) {
+			content.push(...formatResponse.imageBlocks(images))
+		}
+		return content
 	}
 
 	processNativeToolCalls(assistantTextOnly: string, toolBlocks: ToolUse[]) {

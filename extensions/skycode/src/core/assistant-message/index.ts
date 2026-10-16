@@ -26,6 +26,8 @@ export const toolParamNames = [
 	"query",
 	"replace",
 	"startLine",
+	"start_line",
+	"end_line",
 	"allowed_domains",
 	"blocked_domains",
 	"prompt",

@@ -399,7 +399,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
         config.services.fileContextTracker.markFileAsEditedBySkycode(resolvedPath);
         await config.services.fileContextTracker.trackFileContext(resolvedPath, "skycode_edited");
 
-        return formatResponse.fileEditWithoutUserChanges(resolvedPath, "", newContent, "");
+        return formatResponse.fileEditWithoutUserChanges(resolvedPath, "", newContent, "", originalContent);
     }
 
     /**

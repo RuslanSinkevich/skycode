@@ -1,5 +1,6 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import { AssistantMessageContent } from "@core/assistant-message"
+import type { ReadFileCacheEntry } from "./tools/handlers/readFileSlicing"
 import type { HookExecution } from "./types/HookExecution"
 
 export class TaskState {
@@ -75,8 +76,14 @@ export class TaskState {
 	consecutiveReadOnlyToolCalls: number = 0
 	sessionBudgetExhausted: boolean = false
 
+	// [SKYCODE] Сигнатуры последних вызовов инструментов для мягкой детекции повторов
+	recentToolCallSignatures: string[] = []
+
 	// Multi-step workflow
 	isWorkflowStep = false
 	stepCompleted = false
 	isSilentStep = false
+
+	// [SKYCODE] Последнее полное чтение файла по пути: для заглушки «файл не изменился» в read_file
+	readFileCache: Map<string, ReadFileCacheEntry> = new Map()
 }

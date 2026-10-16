@@ -90,7 +90,7 @@ You have access to a set of tools that you are expected to use to resolve the ta
 
 const XS_TOOLS_SIMPLIFIED = (_context: SystemPromptContext) => `TOOLS
 
-**read_file** - Read file. Param: path.
+**read_file** - Read file. Param: path. Optional: start_line, end_line (1-based) to read large files in parts.
 *Example:* <read_file><path>src/App.tsx</path></read_file>
 
 **write_to_file** - Create a NEW file. Params: path, content (complete).
@@ -139,7 +139,7 @@ Key: If output doesn't stream, assume success unless critical; else ask user to 
 <command>npm run build</command>
 </execute_command>
 
-**read_file** - Read file. Param: path.
+**read_file** - Read file. Param: path. Optional: start_line, end_line (1-based) to read large files in parts.
 *Example:* <read_file><path>src/App.tsx</path></read_file>
 
 **write_to_file** - Create/overwrite file. Params: path, content (complete).

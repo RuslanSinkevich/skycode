@@ -21,6 +21,7 @@ import { ContextManager } from "../context/context-management/ContextManager"
 import { formatResponse } from "../prompts/responses"
 import { StateManager } from "../storage/StateManager"
 import { WorkspaceRootManager } from "../workspace"
+import { registerToolCall, repeatNote } from "./toolCallSignature"
 import { ToolResponse } from "."
 import { MessageStateHandler } from "./message-state"
 import { TaskState } from "./TaskState"
@@ -542,6 +543,11 @@ export class ToolExecutor {
 
 			// Handle complete blocks
 			await this.handleCompleteBlock(block, config)
+
+			// [SKYCODE] Мягкая заметка при точном повторе вызова (инструмент всё равно выполнен)
+			if (registerToolCall(this.taskState.recentToolCallSignatures, block.name, block.params)) {
+				this.taskState.userMessageContent.push({ type: "text", text: repeatNote(block.name) })
+			}
 
 			// Session budget & anti-loop tracking for weak/medium models
 			this.trackToolCallForSessionBudget(block)

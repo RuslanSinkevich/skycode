@@ -40,14 +40,35 @@ interface SearchResult {
 const MAX_RESULTS = 300
 const RG_MAX_COUNT = 500
 const RG_THREADS = 4
-const RG_TIMEOUT_MS = 15_000
+const RG_TIMEOUT_MS = 45_000
 
 function isLikelyLiteralPattern(pattern: string): boolean {
 	// Treat patterns without common regex metacharacters as literals
 	return !/[\\^$.|?*+()[\]{}]/.test(pattern)
 }
 
-async function execRipgrep(args: string[]): Promise<string> {
+interface RipgrepRun {
+	output: string
+	timedOut: boolean
+}
+
+/**
+ * [SKYCODE] Чистая логика итога запуска rg: частичные результаты не выбрасываем.
+ * Ошибка — только если вывода нет совсем И есть ошибка процесса или stderr.
+ */
+export function resolveRipgrepRun(run: { output: string; errorOutput: string; processError?: string; timedOut: boolean }): RipgrepRun {
+	const { output, errorOutput, processError, timedOut } = run
+	if (!output && (processError || errorOutput)) {
+		throw new Error(`ripgrep process error: ${processError || errorOutput}`)
+	}
+	return { output, timedOut }
+}
+
+export function timeoutNote(): string {
+	return `(Search stopped after ${RG_TIMEOUT_MS / 1000}s — results may be incomplete. The folder may be slow to read the first time; repeating the same search is usually fast, or narrow the path / file_pattern.)`
+}
+
+async function execRipgrep(args: string[]): Promise<RipgrepRun> {
 	const binPath: string = await getBinaryLocation("rg")
 
 	return new Promise((resolve, reject) => {
@@ -77,28 +98,32 @@ async function execRipgrep(args: string[]): Promise<string> {
 		rgProcess.stderr.on("data", (data) => {
 			errorOutput += data.toString()
 		})
+		const finish = (timedOut: boolean, processError?: string) => {
+			try {
+				resolve(resolveRipgrepRun({ output, errorOutput, processError, timedOut }))
+			} catch (e) {
+				reject(e)
+			}
+		}
 		const timeout = setTimeout(() => {
 			if (settled) { return }
 			settled = true
 			rl.close()
 			rgProcess.kill()
-			reject(new Error(`ripgrep timed out after ${RG_TIMEOUT_MS}ms`))
+			// [SKYCODE] По таймауту отдаём то, что успели собрать, с флагом
+			finish(true)
 		}, RG_TIMEOUT_MS)
 		rl.on("close", () => {
 			if (settled) { return }
 			settled = true
 			clearTimeout(timeout)
-			if (errorOutput) {
-				reject(new Error(`ripgrep process error: ${errorOutput}`))
-			} else {
-				resolve(output)
-			}
+			finish(false)
 		})
 		rgProcess.on("error", (error) => {
 			if (settled) { return }
 			settled = true
 			clearTimeout(timeout)
-			reject(new Error(`ripgrep process error: ${error.message}`))
+			finish(false, error.message)
 		})
 	})
 }
@@ -129,10 +154,12 @@ export async function regexSearchFiles(
 	}
 
 	let output: string
+	let timedOut = false
 	try {
-		output = await execRipgrep(args)
+		;({ output, timedOut } = await execRipgrep(args))
 	} catch (error) {
-		throw Error("Error calling ripgrep", { cause: error })
+		const cause = error instanceof Error ? error.message : String(error)
+		throw Error(`Error calling ripgrep: ${cause}`, { cause: error })
 	}
 	const results: SearchResult[] = []
 	let currentResult: Partial<SearchResult> | null = null
@@ -175,7 +202,8 @@ export async function regexSearchFiles(
 		? results.filter((result) => skycodeIgnoreController.validateAccess(result.filePath))
 		: results
 
-	return formatResults(filteredResults, cwd)
+	const formatted = formatResults(filteredResults, cwd)
+	return timedOut ? `${formatted}\n\n${timeoutNote()}` : formatted
 }
 
 const MAX_RIPGREP_MB = 0.25
