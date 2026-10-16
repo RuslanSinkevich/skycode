@@ -1051,6 +1051,21 @@ export class Task {
 			}
 		}
 
+		// [SKYCODE] Частичные сообщения от оборванного потока (например «Думает» после закрытия вкладки)
+		// дописать уже некому: пустые выбрасываем, остальные считаем завершёнными. Иначе после
+		// восстановления в ленте вечно крутился спиннер «Думает» с пустым содержимым.
+		for (let i = savedSkycodeMessages.length - 1; i >= 0; i--) {
+			const message = savedSkycodeMessages[i]
+			if (!message.partial) {
+				continue
+			}
+			if (!message.text?.trim() && !message.reasoning?.trim()) {
+				savedSkycodeMessages.splice(i, 1)
+			} else {
+				message.partial = false
+			}
+		}
+
 		await this.messageStateHandler.overwriteSkycodeMessages(savedSkycodeMessages)
 		this.messageStateHandler.setSkycodeMessages(await getSavedSkycodeMessages(this.taskId))
 
@@ -2968,6 +2983,11 @@ export class Task {
 
 					await abortStream("streaming_failed", errorMessage)
 					await this.reinitExistingTaskFromId(this.taskId)
+				} else if (!this.taskState.abandoned) {
+					// [SKYCODE] Остановка по нашему запросу: делаем то же, что обычная отмена внутри цикла —
+					// закрываем частичное сообщение («Думает») и сохраняем переписку, но без перезапуска.
+					// Иначе в истории оставалось незакрытое «Думает», и восстановленная задача крутила его вечно.
+					await abortStream("user_cancelled")
 				}
 			} finally {
 				this.taskState.isStreaming = false
