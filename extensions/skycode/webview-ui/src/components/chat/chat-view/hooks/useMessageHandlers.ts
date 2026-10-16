@@ -277,15 +277,9 @@ export function useMessageHandlers(messages: SkycodeMessage[], chatState: ChatSt
 		],
 	)
 
-	// Handle task close button click
-	const handleTaskCloseButtonClick = useCallback(() => {
-		startNewTask()
-	}, [startNewTask])
-
 	return {
 		handleSendMessage,
 		executeButtonAction,
-		handleTaskCloseButtonClick,
 		startNewTask,
 	}
 }

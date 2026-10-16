@@ -1,10 +1,8 @@
-import { findLast } from "@shared/array"
 import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
 import { combineErrorRetryMessages } from "@shared/combineErrorRetryMessages"
 import { combineHookSequences } from "@shared/combineHookSequences"
-import type { SkycodeApiReqInfo, SkycodeMessage } from "@shared/ExtensionMessage"
-import { getApiMetrics } from "@shared/getApiMetrics"
+import type { SkycodeMessage } from "@shared/ExtensionMessage"
 import { BannerAction, BannerActionType } from "@shared/skycode/banner"
 import { BooleanRequest, StringRequest } from "@shared/proto/skycode/common"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
@@ -39,6 +37,7 @@ import {
 import { useMessageQueue } from "./chat-view/hooks/useMessageQueue"
 import { MessageQueue } from "./chat-view/MessageQueue"
 import PendingChangesBar from "./pending-changes/PendingChangesBar"
+import { TabStrip } from "./tabs/TabStrip"
 
 interface ChatViewProps {
 	isHidden: boolean
@@ -100,28 +99,6 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		const withHooks = hooksEnabled ? combineHookSequences(slicedMessages) : slicedMessages
 		return combineErrorRetryMessages(combineApiRequests(combineCommandSequences(withHooks)))
 	}, [messages, hooksEnabled])
-	// has to be after api_req_finished are all reduced into api_req_started messages
-	const apiMetrics = useMemo(() => getApiMetrics(modifiedMessages), [modifiedMessages])
-
-	const lastApiReqTotalTokens = useMemo(() => {
-		const getTotalTokensFromApiReqMessage = (msg: SkycodeMessage) => {
-			if (!msg.text) {
-				return 0
-			}
-			const { tokensIn, tokensOut, cacheWrites, cacheReads }: SkycodeApiReqInfo = JSON.parse(msg.text)
-			return (tokensIn || 0) + (tokensOut || 0) + (cacheWrites || 0) + (cacheReads || 0)
-		}
-		const lastApiReqMessage = findLast(modifiedMessages, (msg) => {
-			if (msg.say !== "api_req_started") {
-				return false
-			}
-			return getTotalTokensFromApiReqMessage(msg) > 0
-		})
-		if (!lastApiReqMessage) {
-			return undefined
-		}
-		return getTotalTokensFromApiReqMessage(lastApiReqMessage)
-	}, [modifiedMessages])
 
 	// Use custom hooks for state management
 	const chatState = useChatState(messages)
@@ -467,18 +444,9 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		<ChatLayout isHidden={isHidden}>
 			<div className="flex flex-col flex-1 overflow-hidden">
 				{showNavbar && <Navbar />}
+				<TabStrip />
 				{task ? (
-					<TaskSection
-						apiMetrics={apiMetrics}
-						lastApiReqTotalTokens={lastApiReqTotalTokens}
-						lastProgressMessageText={lastProgressMessageText}
-						messageHandlers={messageHandlers}
-						selectedModelInfo={{
-							supportsPromptCache: selectedModelInfo.supportsPromptCache,
-							supportsImages: selectedModelInfo.supportsImages || false,
-						}}
-						task={task}
-					/>
+					<TaskSection lastProgressMessageText={lastProgressMessageText} />
 				) : (
 					<WelcomeSection
 						hideAnnouncement={hideAnnouncement}

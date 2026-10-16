@@ -1,45 +1,20 @@
-import { SkycodeMessage } from "@shared/ExtensionMessage"
 import React from "react"
-import TaskHeader from "@/components/chat/task-header/TaskHeader"
-import { MessageHandlers } from "../../types/chatTypes"
+import { FocusChain } from "@/components/chat/task-header/FocusChain"
+import { useExtensionState } from "@/context/ExtensionStateContext"
 
 interface TaskSectionProps {
-	task: SkycodeMessage
-	apiMetrics: {
-		totalTokensIn: number
-		totalTokensOut: number
-		totalCacheWrites?: number
-		totalCacheReads?: number
-		totalCost: number
-	}
-	lastApiReqTotalTokens?: number
-	selectedModelInfo: {
-		supportsPromptCache: boolean
-		supportsImages: boolean
-	}
-	messageHandlers: MessageHandlers
 	lastProgressMessageText?: string
 }
 
 /**
- * Task section shown when there's an active task
- * Includes the task header and manages task-specific UI
+ * Task section shown when there's an active task.
+ * [SKYCODE] Строки задачи (TaskHeader) больше нет — её заменила полоса вкладок; здесь остался только чек-лист шагов.
  */
-export const TaskSection: React.FC<TaskSectionProps> = ({
-	task,
-	apiMetrics,
-	lastApiReqTotalTokens,
-	selectedModelInfo,
-	messageHandlers,
-	lastProgressMessageText,
-}) => {
+export const TaskSection: React.FC<TaskSectionProps> = ({ lastProgressMessageText }) => {
+	const { currentTaskItem } = useExtensionState()
 	return (
-		<TaskHeader
-			lastApiReqTotalTokens={lastApiReqTotalTokens}
-			lastProgressMessageText={lastProgressMessageText}
-			onClose={messageHandlers.handleTaskCloseButtonClick}
-			task={task}
-			totalCost={apiMetrics.totalCost}
-		/>
+		<div className="py-2 px-4 flex flex-col gap-2">
+			<FocusChain currentTaskItemId={currentTaskItem?.id} lastProgressMessageText={lastProgressMessageText} />
+		</div>
 	)
 }

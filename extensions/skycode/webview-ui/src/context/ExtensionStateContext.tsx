@@ -41,7 +41,6 @@ export interface ExtensionStateContextType extends ExtensionState {
 	showAccount: boolean
 	showAnnouncement: boolean
 	showChatModelSelector: boolean
-	expandTaskHeader: boolean
 
 	// Setters
 	setDictationSettings: (value: DictationSettings) => void
@@ -60,7 +59,6 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setLocalSkillsToggles: (toggles: Record<string, boolean>) => void
 	setMcpMarketplaceCatalog: (value: McpMarketplaceCatalog) => void
 	setTotalTasksSize: (value: number | null) => void
-	setExpandTaskHeader: (value: boolean) => void
 	setShowWelcome: (value: boolean) => void
 	setOnboardingModels: (value: OnboardingModelGroup | undefined) => void
 
@@ -198,7 +196,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		validateSyntaxBeforeApply: false,
 		blockOnSyntaxErrors: false,
 	})
-	const [expandTaskHeader, setExpandTaskHeader] = useState(false)
 	const [didHydrateState, setDidHydrateState] = useState(false)
 
 	const [showWelcome, setShowWelcome] = useState(false)
@@ -687,11 +684,9 @@ export const ExtensionStateContextProvider: React.FC<{
 		closeMcpView,
 		setMcpTab,
 		setTotalTasksSize,
-		setExpandTaskHeader,
 		refreshOpenRouterModels,
 		refreshLiteLlmModels,
 		onRelinquishControl,
-		expandTaskHeader,
 		...stableSetters,
 	}), [
 		state, didHydrateState, showWelcome, onboardingModels,
@@ -699,7 +694,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		mcpServers, mcpMarketplaceCatalog, totalTasksSize,
 		availableTerminalProfiles, showMcp, mcpTab, showSettings,
 		settingsTargetSection, showHistory, showAccount,
-		showAnnouncement, showChatModelSelector, expandTaskHeader,
+		showAnnouncement, showChatModelSelector,
 		navigateToMcp, navigateToSettings, navigateToHistory,
 		navigateToAccount, navigateToChat,
 		hideSettings, hideHistory, hideAccount,
