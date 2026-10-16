@@ -49,6 +49,13 @@ describe("deriveTabTitle", () => {
 	it("uses the first task message, single line", () => {
 		deriveTabTitle([say("task", "  fix\n  the   bug \n"), say("task", "second")], "hist").should.equal("fix the bug")
 	})
+	it("uses the first say text message (Skycode writes the task as text)", () => {
+		deriveTabTitle([say("text", "Проверка установки"), say("api_req_started", "{}")]).should.equal("Проверка установки")
+	})
+	it("never uses service JSON as a title", () => {
+		deriveTabTitle([say("api_req_started", "{\"tokensIn\":1}")], "{\"tokensIn\":29375}").should.equal("")
+		deriveTabTitle([], "{\"tokensIn\":29375}").should.equal("")
+	})
 	it("falls back to history text and truncates", () => {
 		deriveTabTitle([], "from history").should.equal("from history")
 		deriveTabTitle([say("task", "x".repeat(500))]).length.should.equal(200)

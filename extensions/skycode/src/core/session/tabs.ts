@@ -66,13 +66,23 @@ export function normalizeTabTitle(text: string | undefined): string {
 	return oneLine.length > MAX_TITLE_LENGTH ? `${oneLine.slice(0, MAX_TITLE_LENGTH - 1)}…` : oneLine
 }
 
-/** Название вкладки: первый запрос пользователя (say "task"), иначе текст задачи из истории. */
+/**
+ * Название вкладки: первая реплика задачи, иначе текст задачи из истории.
+ * [SKYCODE] Skycode пишет первую реплику как say "text" (в Cline было say "task") — принимаем оба.
+ * Служебный JSON (например статистика запроса {"tokensIn":…}) названием не бывает.
+ */
 export function deriveTabTitle(
 	messages: ReadonlyArray<Pick<SkycodeMessage, "type" | "say" | "text">>,
 	historyTaskText?: string,
 ): string {
-	const first = messages.find((m) => m.type === "say" && m.say === "task")
-	return normalizeTabTitle(first?.text) || normalizeTabTitle(historyTaskText)
+	const first = messages[0]
+	const firstText = first?.type === "say" && (first.say === "text" || first.say === "task") ? first.text : undefined
+	return cleanTitle(firstText) || cleanTitle(historyTaskText)
+}
+
+function cleanTitle(text: string | undefined): string {
+	const title = normalizeTabTitle(text)
+	return title.startsWith("{\"") ? "" : title
 }
 
 /** Описание одной сессии для построения списка. */
