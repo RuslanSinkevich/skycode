@@ -326,12 +326,18 @@ export class DiffSystem implements vscode.Disposable {
     const baseUri = vscode.Uri.from({ scheme: DiffSystem.BASELINE_SCHEME, path: `/${name}`, query: fsPath });
     const fileUri = vscode.Uri.file(fsPath);
     const exists = await vscode.workspace.fs.stat(fileUri).then(() => true, () => false);
-    const hasBaseline = !!this.snapshotStorage.getBaselineSnapshot(fsPath);
-    if (!hasBaseline || (exists && !this.store.hasPendingChangesForFile(fsPath))) {
+    const baseline = this.snapshotStorage.getBaselineSnapshot(fsPath);
+    if (!baseline || (exists && !this.store.hasPendingChangesForFile(fsPath))) {
       return false;
     }
     if (!exists) {
       await vscode.window.showTextDocument(baseUri, { preview: true });
+      return true;
+    }
+    // Новый файл (до агента его не было): сравнивать не с чем — VS Code рисует пустую
+    // «удалённую» строку слева. Открываем сам файл, правки подсвечены декорациями.
+    if (baseline.content.length === 0) {
+      await vscode.window.showTextDocument(fileUri, { preview: true });
       return true;
     }
     await vscode.commands.executeCommand('vscode.diff', baseUri, fileUri, t('diff.baselineDiffTitle', { file: name }), {
