@@ -1262,7 +1262,13 @@ export class Controller {
 	async openTaskInTab(historyTaskId: string): Promise<void> {
 		const existing = this.findSessionByTaskId(historyTaskId)
 		if (existing) {
+			// Пустую вкладку, с которой уходим (например после «+»), закрываем — иначе копятся пустые вкладки
+			const previous = this.sessionManager.currentSession
 			await this.switchSession(existing.id)
+			if (previous && previous.id !== existing.id && !previous.task && !previous.placeholder) {
+				this.sessionManager.remove(previous.id)
+				await this.postStateToWebview()
+			}
 			return
 		}
 		const { historyItem } = await this.getTaskWithId(historyTaskId)

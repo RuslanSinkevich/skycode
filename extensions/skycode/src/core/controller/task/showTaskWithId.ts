@@ -21,7 +21,7 @@ export async function showTaskWithId(controller: Controller, request: StringRequ
 		// We need to initialize the task before returning data
 		if (historyItem) {
 			// Always initialize the task with the history item
-			await controller.initTask(undefined, undefined, undefined, historyItem)
+			await controller.openTaskInTab(historyItem.id)
 
 			// Send UI update to show the chat view
 			await sendChatButtonClickedEvent()
@@ -45,7 +45,7 @@ export async function showTaskWithId(controller: Controller, request: StringRequ
 		const { historyItem: fetchedItem } = await controller.getTaskWithId(id)
 
 		// Initialize the task with the fetched item
-		await controller.initTask(undefined, undefined, undefined, fetchedItem)
+		await controller.openTaskInTab(fetchedItem.id)
 
 		// Send UI update to show the chat view
 		await sendChatButtonClickedEvent()
