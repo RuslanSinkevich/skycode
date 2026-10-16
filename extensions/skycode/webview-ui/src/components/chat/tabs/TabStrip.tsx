@@ -53,7 +53,7 @@ function StatusIcon({ status }: { status: TabInfo["status"] }) {
 }
 
 const iconButtonClass =
-	"shrink-0 flex items-center justify-center size-6 rounded-sm bg-transparent border-0 cursor-pointer text-(--vscode-foreground) opacity-70 hover:opacity-100 hover:bg-(--vscode-toolbar-hoverBackground)"
+	"shrink-0 self-center flex items-center justify-center size-6 rounded-sm bg-transparent border-0 cursor-pointer text-(--vscode-foreground) opacity-70 hover:opacity-100 hover:bg-(--vscode-toolbar-hoverBackground)"
 
 /**
  * Полоса вкладок над лентой чата: история, вкладки сессий, «+», переполнение «▾ +N».
@@ -146,7 +146,7 @@ export function TabStrip({
 
 	return (
 		<div
-			className="relative flex items-center gap-0.5 shrink-0 h-7 px-1 border-b border-(--vscode-panel-border) bg-(--vscode-editorGroupHeader-tabsBackground,var(--vscode-sideBar-background)) text-[11px]"
+			className="relative flex items-end gap-0.5 shrink-0 h-[34px] px-1 pt-1 border-b border-(--vscode-panel-border) bg-(--vscode-editorGroupHeader-tabsBackground,var(--vscode-sideBar-background)) text-[12px]"
 			ref={stripRef}>
 			<button
 				aria-label={t("tabs.history")}
@@ -164,10 +164,10 @@ export function TabStrip({
 						<div
 							aria-selected={isActive}
 							className={cn(
-								"group relative flex items-center gap-1 flex-1 min-w-0 px-1.5 cursor-pointer select-none border-t-[1.5px] border-t-transparent",
+								"group relative flex items-center gap-1.5 flex-1 min-w-0 px-2.5 cursor-pointer select-none rounded-t-md border border-b-0 border-transparent border-t-[1.5px]",
 								isActive
-									? "-mb-px border-t-(--vscode-focusBorder) bg-(--vscode-sideBar-background) text-(--vscode-foreground)"
-									: "text-(--vscode-descriptionForeground) hover:bg-(--vscode-toolbar-hoverBackground)",
+									? "-mb-px border-x-(--vscode-panel-border) border-t-(--vscode-focusBorder) bg-(--vscode-sideBar-background) text-(--vscode-foreground)"
+									: "border-r-(--vscode-panel-border) text-(--vscode-descriptionForeground) hover:bg-(--vscode-toolbar-hoverBackground)",
 							)}
 							key={tab.id}
 							onAuxClick={(e) => {
@@ -219,7 +219,7 @@ export function TabStrip({
 				<button
 					aria-expanded={menuOpen}
 					aria-label={t("tabs.more")}
-					className="shrink-0 flex items-center gap-0.5 h-6 px-1 rounded-sm bg-transparent border-0 cursor-pointer text-(--vscode-foreground) opacity-80 hover:opacity-100 hover:bg-(--vscode-toolbar-hoverBackground)"
+					className="shrink-0 self-center flex items-center gap-0.5 h-6 px-1 rounded-sm bg-transparent border-0 cursor-pointer text-(--vscode-foreground) opacity-80 hover:opacity-100 hover:bg-(--vscode-toolbar-hoverBackground)"
 					onClick={() => setMenuOpen((open) => !open)}
 					title={t("tabs.more")}
 					type="button">
