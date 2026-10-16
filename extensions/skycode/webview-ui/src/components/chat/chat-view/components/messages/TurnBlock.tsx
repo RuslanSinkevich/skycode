@@ -48,8 +48,8 @@ export const TurnBlock: React.FC<TurnBlockProps> = memo(({
 
 	return (
 		<div data-turn-ts={turn.userMessage.ts}>
-			{/* Sticky header - user message. Skipped for task-turns (TaskSection renders it). */}
-			{!turn.isTaskTurn && (
+			{/* Sticky header - user message. [SKYCODE] Показываем и для первой реплики задачи: строки задачи (TaskHeader) больше нет. */}
+			{(
 				<div
 					className="bg-background"
 					data-message-ts={turn.userMessage.ts}
