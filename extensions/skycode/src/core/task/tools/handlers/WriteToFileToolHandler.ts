@@ -248,7 +248,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
                 // replace_in_file: newContent already computed by constructNewFileContent.
                 // Write file ONCE and visualize all diffs (fixes multi-replacement position corruption).
                 if (originalContent !== newContent) {
-                    appliedBlocks = await this.writeFileAndVisualizeDiff(diffSystem, absolutePath, originalContent, newContent);
+                    appliedBlocks = await this.writeFileAndVisualizeDiff(diffSystem, absolutePath, originalContent, newContent, config.taskId);
                 }
             } else if (block.name === "delete_block" && rawQuery) {
                 // delete_block: найти блок по query и удалить его
@@ -274,7 +274,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
                     await vscode.workspace.fs.writeFile(vscode.Uri.file(absolutePath), Buffer.from(""));
 
                     const newLines = newContent.split('\n');
-                    await diffSystem.addLines(absolutePath, 0, newLines);
+                    await diffSystem.addLines(absolutePath, 0, newLines, config.taskId);
 
                     appliedBlocks = [{
                         type: 'addition',
@@ -285,7 +285,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
                     }];
                 } else if (originalContent !== newContent) {
                     // Existing file — normal diff
-                    appliedBlocks = await this.writeFileAndVisualizeDiff(diffSystem, absolutePath, originalContent, newContent);
+                    appliedBlocks = await this.writeFileAndVisualizeDiff(diffSystem, absolutePath, originalContent, newContent, config.taskId);
                 } else {
                     Logger.log('[WriteToFile] No changes detected');
                 }
@@ -415,6 +415,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
         absolutePath: string,
         originalContent: string,
         newContent: string,
+        taskId?: string,
     ): Promise<WriteDiffBlock[]> {
         // 0. Pre-reject existing pending hunks to avoid position corruption.
         // When applying multiple diff blocks, overlap-rejecting old hunks mid-loop
@@ -514,13 +515,14 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
                         adjustedLine,
                         block.removedLines,
                         block.addedLines,
+                        taskId,
                     );
                     cumulativeOffset += block.addedLines.length - block.removedLines.length;
                 } else if (block.type === 'deletion') {
-                    hunkId = await diffSystem.deleteLines(absolutePath, adjustedLine, block.removedLines.length);
+                    hunkId = await diffSystem.deleteLines(absolutePath, adjustedLine, block.removedLines.length, taskId);
                     cumulativeOffset -= block.removedLines.length;
                 } else if (block.type === 'addition') {
-                    hunkId = await diffSystem.addLines(absolutePath, adjustedLine - 1, block.addedLines);
+                    hunkId = await diffSystem.addLines(absolutePath, adjustedLine - 1, block.addedLines, taskId);
                     cumulativeOffset += block.addedLines.length;
                 }
 
@@ -773,7 +775,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 	 * Uses indentation-based block detection for reliable deletion
 	 */
 	private async executeDeleteBlock(
-		_config: TaskConfig,
+		config: TaskConfig,
 		absolutePath: string,
 		originalContent: string,
 		query: string,
@@ -814,7 +816,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 		// Use DiffSystem to show deletion with View Zone
 		try {
 			const diffSystem = getDiffSystem();
-			await diffSystem.deleteLines(absolutePath, startLine + 1, deletedLines.length);
+			await diffSystem.deleteLines(absolutePath, startLine + 1, deletedLines.length, config.taskId);
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error);
 			if (errorMessage.includes('Syntax validation failed')) {
@@ -832,7 +834,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 	 * Supports whitespace normalization and line number removal from copy-paste
 	 */
 	private async executeReplaceText(
-		_config: TaskConfig,
+		config: TaskConfig,
 		absolutePath: string,
 		originalContent: string,
 		query: string,
@@ -924,10 +926,10 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 
 			if (cleanReplaceLines.length === 0) {
 				// Deletion
-				await diffSystem.deleteLines(absolutePath, startLine, cleanQueryLines.length);
+				await diffSystem.deleteLines(absolutePath, startLine, cleanQueryLines.length, config.taskId);
 			} else {
 				// Replacement
-				await diffSystem.replaceLines(absolutePath, startLine, cleanQueryLines, cleanReplaceLines);
+				await diffSystem.replaceLines(absolutePath, startLine, cleanQueryLines, cleanReplaceLines, config.taskId);
 			}
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error);

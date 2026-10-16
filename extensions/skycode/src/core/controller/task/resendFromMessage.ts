@@ -26,7 +26,7 @@ export async function resendFromMessage(controller: Controller, request: ResendF
 	try {
 		const { getDiffSystem } = await import("@core/diff-v2")
 		const diffSystem = getDiffSystem()
-		const reverted = await diffSystem.rollbackFromMessage(messageTs)
+		const reverted = await diffSystem.rollbackFromMessage(messageTs, controller.activeTask?.taskId)
 		Logger.log(`[resendFromMessage] Reverted ${reverted.length} checkpoints`)
 	} catch (error) {
 		Logger.error("[resendFromMessage] DiffSystem rollback failed (continuing):", error)

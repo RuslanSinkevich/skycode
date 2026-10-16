@@ -52,7 +52,8 @@ export class DiffSystem implements vscode.Disposable {
   // State
   private initialized = false;
   private disposables: vscode.Disposable[] = [];
-  private currentResponseGroupId: string | null = null;
+  /** [SKYCODE] Текущая ResponseGroup по задачам (ключ — taskId, "" — правки без задачи). Задач параллельно может быть несколько (вкладки). */
+  private readonly currentResponseGroups = new Map<string, string>();
   private currentTaskId: string | null = null;
   private readonly context: vscode.ExtensionContext;
 
@@ -356,27 +357,38 @@ export class DiffSystem implements vscode.Disposable {
   async startCheckpoint(description?: string, messageTs?: number, taskId?: string): Promise<string> {
     this.ensureInitialized();
 
-    if (this.currentResponseGroupId) {
-      await this.finishCheckpoint();
+    // [SKYCODE] Закрываем только группу этой же задачи — чужие не трогаем
+    const key = this.groupKey(taskId);
+    if (this.currentResponseGroups.has(key)) {
+      await this.finishCheckpoint(taskId);
     }
 
     const ts = messageTs ?? Date.now();
-    const ownerTaskId = taskId ?? this.currentTaskId ?? undefined;
-    this.currentResponseGroupId = this.store.createResponseGroup(ts, description, ownerTaskId);
+    const ownerTaskId = key || undefined;
+    const groupId = this.store.createResponseGroup(ts, description, ownerTaskId);
+    this.currentResponseGroups.set(key, groupId);
     this.overlapCycleCount.clear();
-    Logger.log('[DiffSystem] Started ResponseGroup:', this.currentResponseGroupId, 'messageTs:', ts, 'taskId:', ownerTaskId);
-    return this.currentResponseGroupId;
+    Logger.log('[DiffSystem] Started ResponseGroup:', groupId, 'messageTs:', ts, 'taskId:', ownerTaskId);
+    return groupId;
   }
 
   /**
-   * Finish the current checkpoint (no-op in v3, ResponseGroup stays active until hunks resolve).
+   * [SKYCODE] Ключ текущей группы: явный taskId, иначе активная задача, иначе "" (правки без задачи).
    */
-  async finishCheckpoint(): Promise<string | undefined> {
-    this.ensureInitialized();
-    if (!this.currentResponseGroupId) { return undefined; }
+  private groupKey(taskId?: string): string {
+    return taskId ?? this.currentTaskId ?? '';
+  }
 
-    const id = this.currentResponseGroupId;
-    this.currentResponseGroupId = null;
+  /**
+   * Finish the current checkpoint of the given task (no-op in v3, ResponseGroup stays active until hunks resolve).
+   */
+  async finishCheckpoint(taskId?: string): Promise<string | undefined> {
+    this.ensureInitialized();
+    const key = this.groupKey(taskId);
+    const id = this.currentResponseGroups.get(key);
+    if (!id) { return undefined; }
+
+    this.currentResponseGroups.delete(key);
     return id;
   }
 
@@ -516,9 +528,10 @@ export class DiffSystem implements vscode.Disposable {
   /**
    * Get the messageTs for the current ResponseGroup (for snapshot binding).
    */
-  private getCurrentMessageTs(): number {
-    if (!this.currentResponseGroupId) { return Date.now(); }
-    const rg = this.store.getResponseGroup(this.currentResponseGroupId);
+  private getCurrentMessageTs(taskId?: string): number {
+    const groupId = this.currentResponseGroups.get(this.groupKey(taskId));
+    if (!groupId) { return Date.now(); }
+    const rg = this.store.getResponseGroup(groupId);
     return rg?.chatMessageTs ?? Date.now();
   }
 
@@ -604,16 +617,19 @@ export class DiffSystem implements vscode.Disposable {
     this._loadedDocs.add(key);
   }
 
-  private ensureResponseGroup(): string {
-    if (!this.currentResponseGroupId) {
-      this.currentResponseGroupId = this.store.createResponseGroup(
+  private ensureResponseGroup(taskId?: string): string {
+    const key = this.groupKey(taskId);
+    let groupId = this.currentResponseGroups.get(key);
+    if (!groupId) {
+      groupId = this.store.createResponseGroup(
         Date.now(),
         'Auto-started checkpoint',
-        this.currentTaskId ?? undefined,
+        key || undefined,
       );
-      Logger.log('[DiffSystem] Auto-started ResponseGroup:', this.currentResponseGroupId, 'taskId:', this.currentTaskId);
+      this.currentResponseGroups.set(key, groupId);
+      Logger.log('[DiffSystem] Auto-started ResponseGroup:', groupId, 'taskId:', key || undefined);
     }
-    return this.currentResponseGroupId;
+    return groupId;
   }
 
   /**
@@ -627,10 +643,11 @@ export class DiffSystem implements vscode.Disposable {
     startLine: number,
     originalLines: string[],
     newLines: string[],
+    taskId?: string,
   ): Promise<string> {
     this.ensureInitialized();
-    const rgId = this.ensureResponseGroup();
-    const messageTs = this.getCurrentMessageTs();
+    const rgId = this.ensureResponseGroup(taskId);
+    const messageTs = this.getCurrentMessageTs(taskId);
     await this.ensureDocumentLoaded(fsPath);
 
     // v4: Pre-save and snapshot before first AI edit
@@ -653,10 +670,10 @@ export class DiffSystem implements vscode.Disposable {
    *
    * v4: Pre-saves dirty files, takes snapshot, checks for overlaps.
    */
-  async deleteLines(fsPath: string, startLine: number, count: number): Promise<string> {
+  async deleteLines(fsPath: string, startLine: number, count: number, taskId?: string): Promise<string> {
     this.ensureInitialized();
-    const rgId = this.ensureResponseGroup();
-    const messageTs = this.getCurrentMessageTs();
+    const rgId = this.ensureResponseGroup(taskId);
+    const messageTs = this.getCurrentMessageTs(taskId);
     await this.ensureDocumentLoaded(fsPath);
 
     // v4: Pre-save and snapshot before first AI edit
@@ -682,10 +699,10 @@ export class DiffSystem implements vscode.Disposable {
    *
    * v4: Pre-saves dirty files, takes snapshot, checks for overlaps.
    */
-  async addLines(fsPath: string, afterLine: number, newLines: string[]): Promise<string> {
+  async addLines(fsPath: string, afterLine: number, newLines: string[], taskId?: string): Promise<string> {
     this.ensureInitialized();
-    const rgId = this.ensureResponseGroup();
-    const messageTs = this.getCurrentMessageTs();
+    const rgId = this.ensureResponseGroup(taskId);
+    const messageTs = this.getCurrentMessageTs(taskId);
     await this.ensureDocumentLoaded(fsPath);
 
     // v4: Pre-save and snapshot before first AI edit
@@ -874,14 +891,15 @@ export class DiffSystem implements vscode.Disposable {
    * 3. Clear ALL pending hunks for affected files (from ALL tasks)
    * 4. Delete invalidated ResponseGroups and snapshots
    */
-  async rollbackFromMessage(messageTs: number): Promise<string[]> {
+  async rollbackFromMessage(messageTs: number, taskId?: string): Promise<string[]> {
     this.ensureInitialized();
-    Logger.log(`[DiffSystem] ===== rollbackFromMessage START ===== messageTs=${messageTs}, taskId=${this.currentTaskId}`);
+    const scopeTaskId = taskId ?? this.currentTaskId ?? undefined;
+    Logger.log(`[DiffSystem] ===== rollbackFromMessage START ===== messageTs=${messageTs}, taskId=${scopeTaskId}`);
 
-    // Find groups for current task only — never touch other tasks' data
-    const groups = this.store.getResponseGroupsFromMessageTs(messageTs, this.currentTaskId ?? undefined);
+    // Find groups for the given task only — never touch other tasks' data
+    const groups = this.store.getResponseGroupsFromMessageTs(messageTs, scopeTaskId);
     if (groups.length === 0) {
-      Logger.log(`[DiffSystem] No ResponseGroups found for messageTs=${messageTs}, taskId=${this.currentTaskId}`);
+      Logger.log(`[DiffSystem] No ResponseGroups found for messageTs=${messageTs}, taskId=${scopeTaskId}`);
       return [];
     }
 
@@ -981,9 +999,11 @@ export class DiffSystem implements vscode.Disposable {
       this.snapshotStorage.deleteSnapshotsFromMessageTs(fsPath, earliestTs);
     }
 
-    // Clear current ResponseGroup if it was reverted
-    if (this.currentResponseGroupId && revertedIds.includes(this.currentResponseGroupId)) {
-      this.currentResponseGroupId = null;
+    // Clear current ResponseGroups that were reverted
+    for (const [key, groupId] of [...this.currentResponseGroups]) {
+      if (revertedIds.includes(groupId)) {
+        this.currentResponseGroups.delete(key);
+      }
     }
 
     Logger.log(`[DiffSystem] ===== rollbackFromMessage END ===== reverted: ${revertedIds.length} groups, ${affectedFiles.size} files`);
@@ -1043,7 +1063,7 @@ export class DiffSystem implements vscode.Disposable {
     this.ensureInitialized();
     this.renderer.clearAll();
     this.store.clearAll();
-    this.currentResponseGroupId = null;
+    this.currentResponseGroups.clear();
   }
 
   // ==================== Queries ====================
@@ -1322,8 +1342,8 @@ export class DiffSystem implements vscode.Disposable {
     return this.store;
   }
 
-  getCurrentResponseGroupId(): string | null {
-    return this.currentResponseGroupId;
+  getCurrentResponseGroupId(taskId?: string): string | null {
+    return this.currentResponseGroups.get(this.groupKey(taskId)) ?? null;
   }
 
   /**

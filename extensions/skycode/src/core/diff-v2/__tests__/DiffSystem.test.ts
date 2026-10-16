@@ -80,7 +80,7 @@ describe('DiffSystem (integration)', () => {
       rgId.should.be.a.String()
     })
 
-    it('finishCheckpoint should clear currentResponseGroupId', async () => {
+    it('finishCheckpoint should clear the current group', async () => {
       await system.startCheckpoint('test', 1000)
       const id = await system.finishCheckpoint()
       id!.should.be.a.String()
@@ -599,6 +599,93 @@ describe('DiffSystem (integration)', () => {
 
       system.getStore().getHunk(h1)!.status.should.equal('rejected')
       system.getStore().getHunk(h2)!.status.should.equal('rejected')
+    })
+  })
+
+  // ==================== Per-task ResponseGroups ====================
+
+  describe('Per-task ResponseGroups', () => {
+    const ownerOf = (hunkId: string): string | undefined => {
+      const hunk = system.getStore().getHunk(hunkId)!
+      return system.getStore().getResponseGroup(hunk.responseGroupId)?.taskId
+    }
+
+    it('interleaved writes of two tasks keep their own groups and owners', async () => {
+      _addDocument(FILE_A, 'a1\na2')
+      _addDocument(FILE_B, 'b1\nb2')
+      const rgA = await system.startCheckpoint('A', 1000, 'task-A')
+      const rgB = await system.startCheckpoint('B', 2000, 'task-B')
+      rgA.should.not.equal(rgB)
+
+      const hA1 = await system.replaceLines(FILE_A, 1, ['a1'], ['A-1'], 'task-A')
+      const hB1 = await system.replaceLines(FILE_B, 1, ['b1'], ['B-1'], 'task-B')
+      const hA2 = await system.replaceLines(FILE_A, 2, ['a2'], ['A-2'], 'task-A')
+
+      ownerOf(hA1)!.should.equal('task-A')
+      ownerOf(hA2)!.should.equal('task-A')
+      ownerOf(hB1)!.should.equal('task-B')
+      system.getStore().getHunk(hA1)!.responseGroupId.should.equal(rgA)
+      system.getStore().getHunk(hB1)!.responseGroupId.should.equal(rgB)
+      system.getCurrentResponseGroupId('task-A')!.should.equal(rgA)
+      system.getCurrentResponseGroupId('task-B')!.should.equal(rgB)
+    })
+
+    it('starting a checkpoint for one task does not close another task group', async () => {
+      const rgA = await system.startCheckpoint('A', 1000, 'task-A')
+      await system.startCheckpoint('B', 2000, 'task-B')
+      system.getCurrentResponseGroupId('task-A')!.should.equal(rgA)
+    })
+
+    it('finishCheckpoint(A) does not touch B', async () => {
+      const rgA = await system.startCheckpoint('A', 1000, 'task-A')
+      const rgB = await system.startCheckpoint('B', 2000, 'task-B')
+
+      const finished = await system.finishCheckpoint('task-A')
+      finished!.should.equal(rgA)
+      ;(system.getCurrentResponseGroupId('task-A') === null).should.be.true()
+      system.getCurrentResponseGroupId('task-B')!.should.equal(rgB)
+      ;(await system.finishCheckpoint('task-A') === undefined).should.be.true()
+    })
+
+    it('write after newTab (currentTaskId null) with explicit taskId is owned by that task', async () => {
+      system.setCurrentTaskId('task-A')
+      await system.startCheckpoint('A', 1000, 'task-A')
+      // newTab: активная задача сбрасывается, группа задачи A остаётся
+      system.setCurrentTaskId(null)
+
+      _addDocument(FILE_A, 'a1')
+      const hunkId = await system.replaceLines(FILE_A, 1, ['a1'], ['A-1'], 'task-A')
+      ownerOf(hunkId)!.should.equal('task-A')
+    })
+
+    it('auto-created group is owned by the passed taskId, not by the active one', async () => {
+      system.setCurrentTaskId('task-B')
+      _addDocument(FILE_A, 'a1')
+      const hunkId = await system.replaceLines(FILE_A, 1, ['a1'], ['A-1'], 'task-A')
+      ownerOf(hunkId)!.should.equal('task-A')
+    })
+
+    it('task-less write without active task has no owner', async () => {
+      system.setCurrentTaskId(null)
+      _addDocument(FILE_A, 'a1')
+      const hunkId = await system.replaceLines(FILE_A, 1, ['a1'], ['A-1'])
+      ;(ownerOf(hunkId) === undefined).should.be.true()
+    })
+
+    it('rollbackFromMessage with taskId is scoped to that task regardless of the active one', async () => {
+      _addDocument(FILE_A, 'a1')
+      _addDocument(FILE_B, 'b1')
+      await system.startCheckpoint('A', 1000, 'task-A')
+      await system.replaceLines(FILE_A, 1, ['a1'], ['A-1'], 'task-A')
+      await system.startCheckpoint('B', 1000, 'task-B')
+      await system.replaceLines(FILE_B, 1, ['b1'], ['B-1'], 'task-B')
+
+      system.setCurrentTaskId(null)
+      await system.rollbackFromMessage(1000, 'task-A')
+
+      _getDocumentContent(FILE_B)!.should.containEql('B-1')
+      ;(system.getCurrentResponseGroupId('task-A') === null).should.be.true()
+      ;(system.getCurrentResponseGroupId('task-B') !== null).should.be.true()
     })
   })
 })

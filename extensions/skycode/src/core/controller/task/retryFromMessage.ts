@@ -52,7 +52,7 @@ export async function retryFromMessage(controller: Controller, request: Int64Req
 	try {
 		const { getDiffSystem } = await import("@core/diff-v2")
 		const diffSystem = getDiffSystem()
-		const revertedCheckpoints = await diffSystem.rollbackFromMessage(messageTs)
+		const revertedCheckpoints = await diffSystem.rollbackFromMessage(messageTs, controller.activeTask?.taskId)
 		Logger.log(`[retryFromMessage] Reverted ${revertedCheckpoints.length} checkpoints`)
 	} catch (error) {
 		Logger.error("[retryFromMessage] DiffSystem rollback failed (continuing):", error)

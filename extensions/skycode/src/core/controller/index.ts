@@ -218,9 +218,11 @@ export class Controller {
 		let targetSession = requestedSessionId ? this.sessionManager.get(requestedSessionId) : undefined
 		if (targetSession) {
 			// Заменяем задачу только в этой сессии; чекпоинт завершаем, если она активная (как раньше в clearTask)
+			// [SKYCODE] Завершаем группу правок только заменяемой задачи — группы остальных вкладок не трогаем
+			const replacedTaskId = targetSession.task?.taskId
 			await targetSession.task?.abortTask()
-			if (this.sessionManager.activeSessionId === targetSession.id) {
-				await this.finishDiffCheckpoint()
+			if (replacedTaskId) {
+				await this.finishDiffCheckpoint(undefined, replacedTaskId)
 			}
 		} else if (!options?.inNewSession && !requestedSessionId) {
 			await this.clearTask() // ensures that an existing task doesn't exist before starting a new one, although this shouldn't be possible since user must clear task before starting a new one
@@ -1104,7 +1106,12 @@ export class Controller {
 		}
 		const wasActive = this.sessionManager.activeSessionId === sessionId
 
+		const closedTaskId = session.task?.taskId
 		await session.task?.abortTask()
+		// [SKYCODE] Завершаем группу правок закрываемой задачи (и только её)
+		if (closedTaskId) {
+			await this.finishDiffCheckpoint(undefined, closedTaskId)
+		}
 
 		// removes reference to the task, so once promises end it will be garbage collected
 		this.sessionManager.remove(sessionId)
@@ -1254,6 +1261,7 @@ export class Controller {
 		}
 		const session = this.sessionManager.create()
 		this.sessionManager.switchTo(session.id)
+		// [SKYCODE] Только отвязываем активную задачу: группа правок фоновой задачи остаётся её собственной
 		await this.finishDiffCheckpoint(null)
 		return session.id
 	}
@@ -1294,11 +1302,16 @@ export class Controller {
 		}))
 	}
 
-	/** v4: завершает текущий checkpoint DiffSystem и (если передан taskId) переключает привязку «активной задачи». */
-	private async finishDiffCheckpoint(nextTaskId?: string | null): Promise<void> {
+	/**
+	 * v4: переключает привязку «активной задачи» DiffSystem (nextTaskId) и завершает checkpoint
+	 * закрываемой задачи (closedTaskId). Группы остальных задач не затрагиваются.
+	 */
+	private async finishDiffCheckpoint(nextTaskId?: string | null, closedTaskId?: string): Promise<void> {
 		try {
 			const diffSystem = getDiffSystem()
-			await diffSystem.finishCheckpoint()
+			if (closedTaskId) {
+				await diffSystem.finishCheckpoint(closedTaskId)
+			}
 			if (nextTaskId !== undefined) {
 				diffSystem.setCurrentTaskId(nextTaskId)
 			}

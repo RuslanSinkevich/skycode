@@ -187,7 +187,7 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 				}
 
 								// [SKYCODE-SKYCODE] Apply changes + show inline diffs (Cursor-style)
-				await this.prepareFileChangeWithNativeDiff(change, operationPath)
+				await this.prepareFileChangeWithNativeDiff(change, operationPath, config.taskId)
 				await this.handleApproval(config, block, message, rawInput)
 				// Changes stay pending — user accepts/rejects via inline buttons
 
@@ -257,7 +257,7 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 		 *
 		 * For ADD/DELETE file operations: direct file system operations (not chunk-level diffs).
 		 */
-		private async prepareFileChangeWithNativeDiff(change: FileChange, path: string): Promise<void> {
+		private async prepareFileChangeWithNativeDiff(change: FileChange, path: string, taskId?: string): Promise<void> {
 				const uri = vscode.Uri.file(path);
 
 				switch (change.type) {
@@ -307,11 +307,12 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 														startLine,
 														chunk.delLines,
 														chunk.insLines,
+														taskId,
 												);
 										} else if (chunk.delLines.length > 0) {
-												await this.diffSystem.deleteLines(targetPath, startLine, chunk.delLines.length);
+												await this.diffSystem.deleteLines(targetPath, startLine, chunk.delLines.length, taskId);
 										} else if (chunk.insLines.length > 0) {
-												await this.diffSystem.addLines(targetPath, startLine - 1, chunk.insLines);
+												await this.diffSystem.addLines(targetPath, startLine - 1, chunk.insLines, taskId);
 										}
 
 										cumulativeOffset += chunk.insLines.length - chunk.delLines.length;
