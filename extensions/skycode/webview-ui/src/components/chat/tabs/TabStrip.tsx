@@ -146,7 +146,7 @@ export function TabStrip({
 
 	return (
 		<div
-			className="relative flex items-center gap-0.5 shrink-0 h-7 px-1 border-b border-(--vscode-panel-border) bg-(--vscode-sideBar-background) text-[11px]"
+			className="relative flex items-center gap-0.5 shrink-0 h-7 px-1 border-b border-(--vscode-panel-border) bg-(--vscode-editorGroupHeader-tabsBackground,var(--vscode-sideBar-background)) text-[11px]"
 			ref={stripRef}>
 			<button
 				aria-label={t("tabs.history")}
@@ -166,7 +166,7 @@ export function TabStrip({
 							className={cn(
 								"group relative flex items-center gap-1 flex-1 min-w-0 px-1.5 cursor-pointer select-none border-t-[1.5px] border-t-transparent",
 								isActive
-									? "border-t-(--vscode-focusBorder) bg-(--vscode-tab-activeBackground,var(--vscode-editor-background)) text-(--vscode-foreground)"
+									? "-mb-px border-t-(--vscode-focusBorder) bg-(--vscode-sideBar-background) text-(--vscode-foreground)"
 									: "text-(--vscode-descriptionForeground) hover:bg-(--vscode-toolbar-hoverBackground)",
 							)}
 							key={tab.id}
