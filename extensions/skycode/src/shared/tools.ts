@@ -43,6 +43,8 @@ export enum SkycodeDefaultTool {
 	FILE_DELETE = "delete_file",
 	// Background command checking
 	CHECK_BACKGROUND = "check_background_command",
+	// [SKYCODE] Статичная HTML/SVG-визуализация в чате
+	SHOW_VISUAL = "show_visual",
 }
 
 // Array of all tool names for compatibility
@@ -58,6 +60,7 @@ export const READ_ONLY_TOOLS = [
 	SkycodeDefaultTool.LIST_CODE_DEF,
 	SkycodeDefaultTool.BROWSER,
 	SkycodeDefaultTool.ASK,
+	SkycodeDefaultTool.SHOW_VISUAL,
 	SkycodeDefaultTool.WEB_SEARCH,
 	SkycodeDefaultTool.WEB_FETCH,
 	SkycodeDefaultTool.USE_SKILL,

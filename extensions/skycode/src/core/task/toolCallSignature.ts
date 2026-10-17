@@ -16,6 +16,7 @@ const MODIFYING_TOOLS = new Set([
 const REPEAT_EXEMPT_TOOLS = new Set([
 	"attempt_completion",
 	"ask_followup_question",
+	"show_visual",
 	"plan_mode_respond",
 	"act_mode_respond",
 	"check_background_command",

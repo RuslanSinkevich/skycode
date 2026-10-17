@@ -72,6 +72,7 @@ enum SkycodeSay {
   COMMAND_PERMISSION_DENIED = 32;
   CONDITIONAL_RULES_APPLIED = 33;
   WORKFLOW_STEP_START = 34;
+  VISUAL = 35;
 }
 
 // Enum for SkycodeSayTool tool types

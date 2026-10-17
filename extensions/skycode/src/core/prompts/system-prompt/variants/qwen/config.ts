@@ -44,6 +44,7 @@ export const config = createVariant(ModelFamily.QWEN)
 		SkycodeDefaultTool.CHECK_BACKGROUND,
 		SkycodeDefaultTool.ATTEMPT,
 		SkycodeDefaultTool.ASK,
+		SkycodeDefaultTool.SHOW_VISUAL,
 		SkycodeDefaultTool.PLAN_MODE,
 		// Search tools
 		SkycodeDefaultTool.CODEBASE_SEARCH,

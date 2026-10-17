@@ -179,6 +179,7 @@ const HERMES_RULES_TEMPLATE = (context: SystemPromptContext) => `RULES
 - For replace_in_file, SEARCH blocks must contain complete, exact lines (no partial matches).
 - With multiple SEARCH/REPLACE blocks, order them as they appear in the file (earlier lines first).
 - For replace_in_file markers, do not alter the format; include the closing +++++++ REPLACE.
+- When a diagram helps the user understand (architecture, flow, sequence, data model), include it as a \`\`\`mermaid code block in your response text. Keep it small (<= 20 nodes), use simple node ids, and quote labels with special characters.
 - After each tool use, wait for the user's response to confirm success before proceeding.{{BROWSER_WAIT_RULES}}
 `
 

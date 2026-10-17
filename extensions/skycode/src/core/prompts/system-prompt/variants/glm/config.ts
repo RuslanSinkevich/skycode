@@ -58,6 +58,7 @@ export const config = createVariant(ModelFamily.GLM)
 		SkycodeDefaultTool.ATTEMPT,
 		SkycodeDefaultTool.PLAN_MODE,
 		SkycodeDefaultTool.ASK,
+		SkycodeDefaultTool.SHOW_VISUAL,
 	)
 	.placeholders({
 		MODEL_FAMILY: ModelFamily.GLM,

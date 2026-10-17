@@ -24,6 +24,7 @@ import { read_diagnostics_variants } from "./read_diagnostics"
 import { replace_in_file_variants } from "./replace_in_file"
 import { replace_text_variants } from "./replace_text"
 import { search_files_variants } from "./search_files"
+import { show_visual_variants } from "./show_visual"
 import { use_mcp_tool_variants } from "./use_mcp_tool"
 import { use_skill_variants } from "./use_skill"
 import { web_fetch_variants } from "./web_fetch"
@@ -61,6 +62,7 @@ export function registerSkycodeToolSets(): void {
 		...replace_in_file_variants,
 		...replace_text_variants,
 		...search_files_variants,
+		...show_visual_variants,
 		...use_mcp_tool_variants,
 		...use_skill_variants,
 		...web_fetch_variants,

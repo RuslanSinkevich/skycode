@@ -142,6 +142,7 @@ Example:
 - For replace_in_file, SEARCH blocks must contain complete, exact lines (no partial matches).
 - With multiple SEARCH/REPLACE blocks, order them as they appear in the file (earlier lines first).
 - For replace_in_file markers, do not alter the format; include the closing +++++++ REPLACE. Malformed XML breaks editing.
+- When a diagram helps the user understand (architecture, flow, sequence, data model), include it as a ```mermaid code block in your response text. Keep it small (<= 20 nodes), use simple node ids, and quote labels with special characters.
 - After each tool use, wait for the user's response to confirm success before proceeding. Then if you want to test your work, you might use browser_action to launch the site, wait for the user's response confirming the site was launched along with a screenshot, then perhaps e.g., click a button to test functionality if needed, wait for the user's response confirming the button was clicked along with a screenshot of the new state, before finally closing the browser.
 
 ## ACT MODE V.S. PLAN MODE

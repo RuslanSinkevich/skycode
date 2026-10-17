@@ -60,6 +60,7 @@ export const config = createVariant(ModelFamily.DEVSTRAL)
 		SkycodeDefaultTool.ATTEMPT,
 		SkycodeDefaultTool.PLAN_MODE,
 		SkycodeDefaultTool.ASK,
+		SkycodeDefaultTool.SHOW_VISUAL,
 	)
 	.placeholders({
 		MODEL_FAMILY: "devstral",

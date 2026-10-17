@@ -28,6 +28,7 @@ import { TaskState } from "./TaskState"
 import { AutoApprove } from "./tools/autoApprove"
 import { AccessMcpResourceHandler } from "./tools/handlers/AccessMcpResourceHandler"
 import { ActModeRespondHandler } from "./tools/handlers/ActModeRespondHandler"
+import { ShowVisualToolHandler } from "./tools/handlers/ShowVisualToolHandler"
 import { ApplyPatchHandler } from "./tools/handlers/ApplyPatchHandler"
 import { AskFollowupQuestionToolHandler } from "./tools/handlers/AskFollowupQuestionToolHandler"
 import { AttemptCompletionHandler } from "./tools/handlers/AttemptCompletionHandler"
@@ -232,6 +233,7 @@ export class ToolExecutor {
 		this.coordinator.register(new ReadFileToolHandler(validator))
 		this.coordinator.register(new BrowserToolHandler())
 		this.coordinator.register(new AskFollowupQuestionToolHandler())
+		this.coordinator.register(new ShowVisualToolHandler())
 		this.coordinator.register(new CodebaseSearchToolHandler())
 		this.coordinator.register(new WebFetchToolHandler())
 		this.coordinator.register(new WebSearchToolHandler())

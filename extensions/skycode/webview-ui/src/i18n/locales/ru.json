@@ -405,6 +405,8 @@
 	"chat.copyFormattedAria": "Копировать с форматированием",
 	"chat.copyMarkdownAria": "Копировать как Markdown",
 	"chat.copied": "Скопировано",
+	"chat.visual.title": "Визуализация",
+	"chat.visual.copyHtml": "Копировать HTML",
 	"chat.manageMcpServers": "Управление MCP серверами",
 	"chat.hideMcpServers": "Скрыть MCP серверы",
 	"chat.showMcpServers": "Показать MCP серверы",

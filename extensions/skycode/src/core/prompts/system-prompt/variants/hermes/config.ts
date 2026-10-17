@@ -59,6 +59,7 @@ export const config = createVariant(ModelFamily.HERMES)
 		SkycodeDefaultTool.ATTEMPT,
 		SkycodeDefaultTool.PLAN_MODE,
 		SkycodeDefaultTool.ASK,
+		SkycodeDefaultTool.SHOW_VISUAL,
 	)
 	.placeholders({
 		MODEL_FAMILY: "hermes",

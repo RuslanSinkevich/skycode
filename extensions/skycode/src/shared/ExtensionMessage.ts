@@ -232,6 +232,7 @@ export type SkycodeSay =
 	| "hook_output_stream"
 	| "conditional_rules_applied"
 	| "workflow_step_start"
+	| "visual"
 
 export interface SkycodeSayTool {
 	tool:

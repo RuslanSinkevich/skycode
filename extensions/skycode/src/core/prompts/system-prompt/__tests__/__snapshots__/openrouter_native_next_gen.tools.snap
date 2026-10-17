@@ -537,6 +537,36 @@
   {
     "type": "function",
     "function": {
+      "name": "show_visual",
+      "description": "Show the user a small static visual right in the chat: comparison tables, cards, simple charts drawn as SVG, UI/layout mockups, diagrams that Mermaid cannot express. Scripts do not run and external resources (except https images) are blocked. Do NOT use for plain answers or code (use text/code blocks) or for ordinary diagrams (prefer a ```mermaid block).",
+      "strict": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Short title of the visual."
+          },
+          "content": {
+            "type": "string",
+            "description": "A self-contained HTML fragment or an <svg>. Inline CSS only; no scripts."
+          },
+          "task_progress": {
+            "type": "string",
+            "description": "A checklist showing task progress after this tool use is completed. The task_progress parameter must be included as a separate parameter inside of the parent tool call, it must be separate from other parameters such as content, arguments, etc. (See 'UPDATING TASK PROGRESS' section for more details)"
+          }
+        },
+        "required": [
+          "title",
+          "content"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
       "name": "attempt_completion",
       "description": "Once you've completed the user's task, use this tool to present the final result to the user, including a brief and very short (1-2 paragraph) summary of the task and what was done to resolve it. Provide the basics, hitting the highlights, but do delve into the specifics. You should only call this tool when you have completed all tasks in the task_progress list, and completed all changes that are necessary to satisfy the user's request. You should not provide the contents of the task_progress list in the result parameter, it must be included in the task_progress parameter.",
       "strict": false,

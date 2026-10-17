@@ -50,6 +50,7 @@ import { RequestStartRow } from "./RequestStartRow"
 import { ThinkingRow } from "./ThinkingRow"
 import { ToolRow } from "./ToolRow"
 import UserMessage from "./UserMessage"
+import { VisualCard } from "./VisualCard"
 
 const HEADER_CLASSNAMES = "flex items-center gap-2.5 mb-3"
 
@@ -693,6 +694,8 @@ export const ChatRowContent = memo(
 						)
 					case "task_progress":
 						return <InvisibleSpacer />
+					case "visual":
+						return <VisualCard message={message} />
 					case "workflow_step_start": {
 						try {
 							const stepData = JSON.parse(message.text || "{}")

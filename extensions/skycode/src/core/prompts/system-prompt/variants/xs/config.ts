@@ -53,6 +53,7 @@ export const config = createVariant(ModelFamily.XS)
 		SkycodeDefaultTool.GLOB,
 		SkycodeDefaultTool.LIST_CODE_DEF,
 		SkycodeDefaultTool.ASK,
+		SkycodeDefaultTool.SHOW_VISUAL,
 		SkycodeDefaultTool.ATTEMPT,
 		SkycodeDefaultTool.PLAN_MODE,
 		SkycodeDefaultTool.READ_DIAGNOSTICS,

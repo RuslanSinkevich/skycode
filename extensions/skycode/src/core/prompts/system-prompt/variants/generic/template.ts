@@ -99,6 +99,7 @@ const GENERIC_RULES = (context: SystemPromptContext) => {
 - Do NOT flatter the user. No "You're so smart!", "Great catch!", "You saved the project!" - just state facts.
 - Use backticks when mentioning file names, directory names, function names, class names, and variable names in your responses.
 - Communicate results concisely. When a task is done, say what was done without excessive explanation.
+- When a diagram helps the user understand (architecture, flow, sequence, data model), include it as a \`\`\`mermaid code block in your response text. Keep it small (<= 20 nodes), use simple node ids, and quote labels with special characters.
 </tone_and_style>
 
 <progress_feedback>
