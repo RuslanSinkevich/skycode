@@ -209,7 +209,7 @@ export async function regexSearchFiles(
 const MAX_RIPGREP_MB = 0.25
 const MAX_BYTE_SIZE = MAX_RIPGREP_MB * 1024 * 1024 // 0./25MB in bytes
 
-function formatResults(results: SearchResult[], cwd: string): string {
+export function formatResults(results: SearchResult[], cwd: string): string {
 	const groupedResults: { [key: string]: SearchResult[] } = {}
 
 	let output = ""
@@ -248,14 +248,16 @@ function formatResults(results: SearchResult[], cwd: string): string {
 		for (let resultIndex = 0; resultIndex < fileResults.length; resultIndex++) {
 			const result = fileResults[resultIndex]
 			const allLines = [...result.beforeContext, result.match, ...result.afterContext]
+			// [SKYCODE] \u041d\u043e\u043c\u0435\u0440\u0430 \u0441\u0442\u0440\u043e\u043a, \u043a\u0430\u043a \u0432 read_file: \u043c\u043e\u0434\u0435\u043b\u044c \u0441\u0440\u0430\u0437\u0443 \u0447\u0438\u0442\u0430\u0435\u0442 \u043d\u0443\u0436\u043d\u044b\u0439 \u0434\u0438\u0430\u043f\u0430\u0437\u043e\u043d, \u0430 \u043d\u0435 \u0443\u0433\u0430\u0434\u044b\u0432\u0430\u0435\u0442
+			const firstLine = result.line - result.beforeContext.length
 
 			// Calculate bytes in all lines for this result
 			let resultBytes = 0
 			const resultLines: string[] = []
 
-			for (const line of allLines) {
+			for (const [lineIndex, line] of allLines.entries()) {
 				const trimmedLine = line?.trimEnd() ?? ""
-				const lineString = `\u2502${trimmedLine}\n`
+				const lineString = `\u2502${String(firstLine + lineIndex).padStart(6)}|${trimmedLine}\n`
 				const lineBytes = Buffer.byteLength(lineString, "utf8")
 
 				// Check if adding this line would exceed the byte limit

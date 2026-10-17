@@ -1,6 +1,7 @@
 import { describe, it } from "mocha"
 import "should"
-import { resolveRipgrepRun, timeoutNote } from "../index"
+import * as path from "path"
+import { formatResults, resolveRipgrepRun, timeoutNote } from "../index"
 
 describe("resolveRipgrepRun", () => {
 	it("keeps matches even when stderr is non-empty", () => {
@@ -23,5 +24,16 @@ describe("resolveRipgrepRun", () => {
 	})
 	it("timeout note mentions 45s", () => {
 		timeoutNote().should.containEql("45s")
+	})
+})
+
+describe("formatResults", () => {
+	it("prefixes every line with its real line number", () => {
+		const cwd = path.resolve("/repo")
+		const output = formatResults(
+			[{ filePath: path.join(cwd, "a.cs"), line: 253, column: 0, match: "x = 1\n", beforeContext: ["{\n"], afterContext: ["}\n"] }],
+			cwd,
+		)
+		output.should.equal("Found 1 result.\n\na.cs\n│----\n│   252|{\n│   253|x = 1\n│   254|}\n")
 	})
 })
