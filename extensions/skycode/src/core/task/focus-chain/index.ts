@@ -17,6 +17,9 @@ import {
 import { FocusChainPrompts } from "./prompts"
 import { parseFocusChainListCounts } from "./utils"
 
+/** [SKYCODE] Минимальный разрыв (в API-запросах) между напоминаниями, когда списка нет или режим plan */
+const FOCUS_CHAIN_MIN_REQUEST_GAP = 6
+
 export interface FocusChainDependencies {
 	taskId: string
 	taskState: TaskState
@@ -141,6 +144,44 @@ export class FocusChainManager {
 	 * @returns string - Formatted markdown instructions for focus chain list management, varies by context
 	 */
 	public generateFocusChainInstructions(): string {
+		// [SKYCODE] Полный текст — один раз за задачу, дальше короткие напоминания
+		const full = !this.taskState.focusChainFullInstructionsSent
+		this.taskState.focusChainFullInstructionsSent = true
+		this.taskState.focusChainLastReminderRequest = this.taskState.apiRequestCount
+		return full ? this.generateFullInstructions() : this.generateShortReminder()
+	}
+
+	private generateShortReminder(): string {
+		const s = FocusChainPrompts.short
+		const checklist = this.taskState.currentFocusChainChecklist
+		if (checklist) {
+			const { totalItems, completedItems } = parseFocusChainListCounts(checklist)
+			const fill = (t: string) =>
+				t
+					.replace("{{done}}", String(completedItems))
+					.replace("{{total}}", String(totalItems))
+					.replace("{{list}}", checklist)
+			if (this.taskState.todoListWasUpdatedByUser) {
+				return fill(s.userEdited)
+			}
+			if (totalItems > 0 && completedItems === totalItems) {
+				return fill(s.allDone)
+			}
+			return fill(s.progress)
+		}
+		if (this.taskState.didRespondToPlanAskBySwitchingMode) {
+			return s.switched
+		}
+		if (this.getMode() === "plan") {
+			return s.plan
+		}
+		if (this.taskState.apiRequestCount < 10) {
+			return s.noList
+		}
+		return s.noListLate.replace("{{count}}", String(this.taskState.apiRequestCount))
+	}
+
+	private generateFullInstructions(): string {
 		// If list exists already exists, we need to remind it to update rather than demand initialization
 		if (this.taskState.currentFocusChainChecklist) {
 			// Parse the current list for counts/stats
@@ -337,13 +378,16 @@ export class FocusChainManager {
 		const hasNoTodoListAfterMultipleRequests =
 			!this.taskState.currentFocusChainChecklist && this.taskState.apiRequestCount >= 2
 
+		// [SKYCODE] Без списка и в плане напоминание раньше шло на КАЖДОМ запросе; теперь не чаще раза в N запросов
+		const sinceLast = this.taskState.apiRequestCount - this.taskState.focusChainLastReminderRequest
+		const throttleOk = this.taskState.focusChainLastReminderRequest < 0 || sinceLast >= FOCUS_CHAIN_MIN_REQUEST_GAP
+
 		const shouldInclude =
 			reachedReminderInterval ||
 			justSwitchedFromPlanMode ||
 			userUpdatedList ||
-			inPlanMode ||
 			isFirstApiRequest ||
-			hasNoTodoListAfterMultipleRequests
+			((inPlanMode || hasNoTodoListAfterMultipleRequests) && throttleOk)
 
 		return shouldInclude
 	}

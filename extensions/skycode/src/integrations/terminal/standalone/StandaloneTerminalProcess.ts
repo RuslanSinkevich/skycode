@@ -220,6 +220,9 @@ export class StandaloneTerminalProcess extends EventEmitter<TerminalProcessEvent
 
 		if (this.isListening) {
 			this.emitLines(data)
+			// [SKYCODE] Эмитнутые строки уже ушли в результат инструмента — не считаем их "непрочитанными"
+			// (иначе environment_details повторяет вывод команды). В буфере остаётся только неполная строка.
+			this.lastRetrievedIndex = this.fullOutput.length - this.buffer.length
 		}
 	}
 

@@ -19,6 +19,7 @@ import {
 	DEFAULT_TERMINAL_OUTPUT_LINE_LIMIT,
 } from "../constants"
 import type { BackgroundCommand, ITerminalManager, TerminalInfo, TerminalProcessResultPromise } from "../types"
+import { outputLimitOptions, truncateOutput } from "../truncateOutput"
 import { StandaloneTerminalProcess } from "./StandaloneTerminalProcess"
 import { StandaloneTerminalRegistry } from "./StandaloneTerminalRegistry"
 
@@ -228,13 +229,8 @@ export class StandaloneTerminalManager implements ITerminalManager {
 	 */
 	processOutput(outputLines: string[], overrideLimit?: number): string {
 		const limit = overrideLimit !== undefined ? overrideLimit : this.terminalOutputLineLimit
-		if (outputLines.length > limit) {
-			const halfLimit = Math.floor(limit / 2)
-			const start = outputLines.slice(0, halfLimit)
-			const end = outputLines.slice(outputLines.length - halfLimit)
-			return `${start.join("\n")}\n... (output truncated) ...\n${end.join("\n")}`.trim()
-		}
-		return outputLines.join("\n").trim()
+		// [SKYCODE] голова + хвост, лимит строк не выше 200 и 12k символов
+		return truncateOutput(outputLines.join("\n").trim(), outputLimitOptions(limit))
 	}
 
 	/**

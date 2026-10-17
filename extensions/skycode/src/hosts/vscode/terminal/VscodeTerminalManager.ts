@@ -5,6 +5,7 @@ import pWaitFor from "p-wait-for"
 import * as fs from "fs"
 import * as vscode from "vscode"
 import { BACKGROUND_COMMAND_TIMEOUT_MS } from "@/integrations/terminal/constants"
+import { outputLimitOptions, truncateOutput } from "@/integrations/terminal/truncateOutput"
 import {
 	BackgroundCommand,
 	TerminalInfo as ITerminalInfo,
@@ -588,13 +589,8 @@ export class VscodeTerminalManager implements ITerminalManager {
 
 	public processOutput(outputLines: string[], overrideLimit?: number): string {
 		const limit = overrideLimit !== undefined ? overrideLimit : this.terminalOutputLineLimit
-		if (outputLines.length > limit) {
-			const halfLimit = Math.floor(limit / 2)
-			const start = outputLines.slice(0, halfLimit)
-			const end = outputLines.slice(outputLines.length - halfLimit)
-			return `${start.join("\n")}\n... (output truncated) ...\n${end.join("\n")}`.trim()
-		}
-		return outputLines.join("\n").trim()
+		// [SKYCODE] голова + хвост, лимит строк не выше 200 и 12k символов
+		return truncateOutput(outputLines.join("\n").trim(), outputLimitOptions(limit))
 	}
 
 	setDefaultTerminalProfile(profileId: string): { closedCount: number; busyTerminals: TerminalInfo[] } {

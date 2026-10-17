@@ -16,6 +16,7 @@ import { Logger } from "@/shared/services/Logger"
 import { orchestrateCommandExecution } from "./CommandOrchestrator"
 import { resolveCommandTiming } from "./constants"
 import { StandaloneTerminalManager } from "./standalone/StandaloneTerminalManager"
+import { truncateOutput } from "./truncateOutput"
 import { VscodeTerminalManager } from "@/hosts/vscode/terminal/VscodeTerminalManager"
 import type {
 	CommandExecutorCallbacks,
@@ -329,7 +330,8 @@ export class CommandExecutor {
 			return `Background command '${id}' not found. It may have been cleaned up.`
 		}
 		const exit = status.exitCode !== undefined ? `, exit code ${status.exitCode}` : ""
-		const output = status.output ? status.output : "(no output yet)"
+		// [SKYCODE] ограничиваем вывод для модели (голова + хвост)
+		const output = status.output ? truncateOutput(status.output) : "(no output yet)"
 		return `Command '${status.command}' [${status.status}] (${status.elapsedSeconds}s${exit})\n\nRecent output:\n${output}`
 	}
 

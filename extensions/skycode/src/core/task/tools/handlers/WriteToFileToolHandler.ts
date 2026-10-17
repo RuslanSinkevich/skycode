@@ -2,6 +2,7 @@ import path from "node:path"
 import * as vscode from "vscode"
 import * as diff from "diff"
 import type { ToolUse } from "@core/assistant-message"
+import { closestMatchHint } from "@core/assistant-message/closestMatch"
 import { constructNewFileContent, getLineNumberFromCharIndex } from "@core/assistant-message/diff"
 import { formatResponse } from "@core/prompts/responses"
 import { resolveWorkspacePath } from "@core/workspace"
@@ -889,6 +890,8 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 				}
 			}
 			errorMsg += `\nMake sure query is copied exactly from the file.`;
+			// [SKYCODE] ближайший участок файла с номерами строк
+			errorMsg += `\n\n${closestMatchHint(originalContent, cleanQuery)}`;
 			return { error: errorMsg };
 		}
 

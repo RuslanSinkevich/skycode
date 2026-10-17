@@ -102,7 +102,20 @@ You've made {{apiRequestCount}} API requests without a task_progress parameter. 
 ${reminder}
 `
 
+// [SKYCODE] Короткие напоминания: полный текст выше уходит один раз за задачу
+const short = {
+	progress: "Reminder: keep task_progress updated ({{done}}/{{total}} done). Send the full updated checklist in your next tool call.",
+	userEdited: "The user edited the task_progress list ({{done}}/{{total}} done). Review it and continue:\n{{list}}",
+	allDone:
+		"All {{total}} task_progress items are done. If the task is finished, use attempt_completion; if there is more work, send a new task_progress list.",
+	noList: "No task_progress list yet — add one in your next tool call if the task has several steps.",
+	noListLate: "{{count}} requests without task_progress — add a checklist of the remaining work in your next tool call.",
+	plan: "Plan mode: you may include a preliminary task_progress list if you have concrete steps.",
+	switched: "Now in ACT MODE: create a task_progress checklist in your next tool call.",
+}
+
 export const FocusChainPrompts = {
+	short,
 	initial,
 	reminder,
 	recommended,

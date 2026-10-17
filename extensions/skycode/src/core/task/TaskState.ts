@@ -86,4 +86,11 @@ export class TaskState {
 
 	// [SKYCODE] Последнее полное чтение файла по пути: для заглушки «файл не изменился» в read_file
 	readFileCache: Map<string, ReadFileCacheEntry> = new Map()
+
+	// [SKYCODE] Что уже отправлено в environment_details (чтобы не слать неизменившиеся секции)
+	envDetailsCache?: import("./environmentDetailsDiff").EnvSectionCache
+
+	// [SKYCODE] Напоминания todo-списка: когда последний раз слали (номер запроса) и слали ли полную инструкцию
+	focusChainLastReminderRequest: number = -1
+	focusChainFullInstructionsSent: boolean = false
 }

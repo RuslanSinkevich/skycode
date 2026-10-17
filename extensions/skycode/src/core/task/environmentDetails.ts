@@ -27,11 +27,24 @@ import type { ApiHandler } from "@core/api"
 import type { StateManager } from "@core/storage/StateManager"
 import type { MessageStateHandler } from "./message-state"
 import { detectAvailableCliTools } from "./utils"
+import {
+	capTerminalOutput,
+	deletedRangeToKey,
+	ENV_TIME_INTERVAL_MS,
+	type EnvSectionCache,
+	type EnvSectionInput,
+	selectEnvSections,
+} from "./environmentDetailsDiff"
 
 export interface EnvironmentDetailsContext {
 	cwd: string
 	taskId: string
-	taskState: { didEditFile: boolean }
+	taskState: {
+		didEditFile: boolean
+		conversationHistoryDeletedRange?: [number, number]
+		/** [SKYCODE] Кэш отправленных секций (см. environmentDetailsDiff). */
+		envDetailsCache?: EnvSectionCache
+	}
 	stateManager: StateManager
 	/** [SKYCODE] Режим задачи (у каждой вкладки свой), а не глобальный. */
 	getMode: () => Mode
@@ -121,9 +134,18 @@ export async function buildEnvironmentDetails(
 		return `<environment_details>\n${details.trim()}\n</environment_details>`
 	}
 
-	details += formatWorkspaceRootsSection(ctx)
+	// [SKYCODE] Секции собираем списком: неизменившиеся с прошлого раза пропускаем (selectEnvSections).
+	const items: EnvSectionInput[] = []
+	const addCached = (key: string, body: string, opts: Partial<EnvSectionInput> = {}) => {
+		items.push({ key, body, ...opts })
+	}
+	const addAlways = (body: string) => {
+		items.push({ key: `dyn${items.length}`, body, always: true })
+	}
 
-	details += `\n\n# ${host.platform} Visible Files`
+	addCached("roots", formatWorkspaceRootsSection(ctx))
+
+	details = `\n\n# ${host.platform} Visible Files`
 	const rawVisiblePaths = (await HostProvider.window.getVisibleTabs({})).paths
 	const filteredVisiblePaths = await filterExistingFiles(rawVisiblePaths)
 	const visibleFilePaths = filteredVisiblePaths.map((absolutePath) => path.relative(ctx.cwd, absolutePath))
@@ -132,8 +154,9 @@ export async function buildEnvironmentDetails(
 		.map((p) => p.toPosix())
 		.join("\n")
 	details += allowedVisibleFiles ? `\n${allowedVisibleFiles}` : "\n(No visible files)"
+	addCached("visible", details)
 
-	details += `\n\n# ${host.platform} Open Tabs`
+	details = `\n\n# ${host.platform} Open Tabs`
 	const rawOpenTabPaths = (await HostProvider.window.getOpenTabs({})).paths
 	const filteredOpenTabPaths = await filterExistingFiles(rawOpenTabPaths)
 	const openTabPaths = filteredOpenTabPaths.map((absolutePath) => path.relative(ctx.cwd, absolutePath))
@@ -142,6 +165,7 @@ export async function buildEnvironmentDetails(
 		.map((p) => p.toPosix())
 		.join("\n")
 	details += allowedOpenTabs ? `\n${allowedOpenTabs}` : "\n(No open tabs)"
+	addCached("tabs", details)
 
 	const busyTerminals = ctx.terminalManager.getTerminals(true)
 	const inactiveTerminals = ctx.terminalManager.getTerminals(false)
@@ -167,7 +191,7 @@ export async function buildEnvironmentDetails(
 			terminalDetails += `\n## Original command: \`${busyTerminal.lastCommand}\``
 			const newOutput = ctx.terminalManager.getUnretrievedOutput(busyTerminal.id)
 			if (newOutput) {
-				terminalDetails += `\n### New Output\n${newOutput}`
+				terminalDetails += `\n### New Output\n${capTerminalOutput(newOutput)}`
 			}
 		}
 	}
@@ -185,12 +209,14 @@ export async function buildEnvironmentDetails(
 				const inactiveTerminal = inactiveTerminals.find((t) => t.id === terminalId)
 				if (inactiveTerminal) {
 					terminalDetails += `\n## ${inactiveTerminal.lastCommand}`
-					terminalDetails += `\n### New Output\n${newOutput}`
+					terminalDetails += `\n### New Output\n${capTerminalOutput(newOutput)}`
 				}
 			}
 		}
 	}
+	addAlways(terminalDetails)
 
+	let userTerminalsDetails = ""
 	try {
 		const allVscodeTerminals = vscode.window.terminals
 		const userTerminals = allVscodeTerminals.filter((t) => {
@@ -198,33 +224,31 @@ export async function buildEnvironmentDetails(
 			return !creationOptions?.env?.SKYCODE_ACTIVE
 		})
 		if (userTerminals.length > 0) {
-			terminalDetails += "\n\n# User Terminals"
+			userTerminalsDetails += "\n\n# User Terminals"
 			for (const terminal of userTerminals) {
 				const name = terminal.name || "Terminal"
 				const cwd = (terminal as any).shellIntegration?.cwd?.fsPath
 				const cwdInfo = cwd ? ` (cwd: ${path.relative(ctx.cwd, cwd) || "."})` : ""
-				terminalDetails += `\n- ${name}${cwdInfo}`
+				userTerminalsDetails += `\n- ${name}${cwdInfo}`
 			}
 		}
 	} catch {
 		// Silently ignore errors accessing user terminals
 	}
-
-	if (terminalDetails) {
-		details += terminalDetails
-	}
+	addCached("userTerminals", userTerminalsDetails)
 
 	if (ctx.backgroundCommandSummary) {
-		details += `\n\n# Background Commands\n${ctx.backgroundCommandSummary}`
+		addAlways(`\n\n# Background Commands\n${ctx.backgroundCommandSummary}`)
 	}
 
 	const recentlyModifiedFiles = ctx.fileContextTracker.getAndClearRecentlyModifiedFiles()
 	if (recentlyModifiedFiles.length > 0) {
-		details +=
+		let modified =
 			"\n\n# Recently Modified Files\nThese files have been modified since you last accessed them (file was just edited so you may need to re-read it before editing):"
 		for (const filePath of recentlyModifiedFiles) {
-			details += `\n${filePath}`
+			modified += `\n${filePath}`
 		}
+		addAlways(modified)
 	}
 
 	const now = new Date()
@@ -240,8 +264,12 @@ export async function buildEnvironmentDetails(
 	const timeZone = formatter.resolvedOptions().timeZone
 	const timeZoneOffset = -now.getTimezoneOffset() / 60
 	const timeZoneOffsetStr = `${timeZoneOffset >= 0 ? "+" : ""}${timeZoneOffset}:00`
-	details += `\n\n# Current Time\n${formatter.format(now)} (${timeZone}, UTC${timeZoneOffsetStr})`
+	// [SKYCODE] Время — на первом ходу и затем не чаще раза в 10 минут
+	addCached("time", `\n\n# Current Time\n${formatter.format(now)} (${timeZone}, UTC${timeZoneOffsetStr})`, {
+		minIntervalMs: ENV_TIME_INTERVAL_MS,
+	})
 
+	details = ""
 	if (includeFileDetails) {
 		try {
 			const taskHistory = ctx.stateManager.getGlobalStateKey("taskHistory")
@@ -301,6 +329,9 @@ export async function buildEnvironmentDetails(
 		}
 	}
 
+	addAlways(details)
+	details = ""
+
 	const { contextWindow } = getContextWindowInfo(ctx.api)
 
 	const getTotalTokensFromApiReqMessage = (msg: SkycodeMessage) => {
@@ -340,7 +371,9 @@ export async function buildEnvironmentDetails(
 		details += `\n${lastApiReqTotalTokens.toLocaleString()} / ${(contextWindow / 1000).toLocaleString()}K tokens used (${usagePercentage}%)`
 	}
 
-	details += "\n\n# Current Mode"
+	// Контекст и режим короткие и важные — шлём на каждом ходу
+	addAlways(details)
+	details = "\n\n# Current Mode"
 	const mode = ctx.getMode()
 	switch (mode) {
 		case "plan":
@@ -366,5 +399,17 @@ export async function buildEnvironmentDetails(
 		details += `\n\n# User's Critical Rules (always apply, including in the mode above)\n${ctx.criticalRulesReminder}`
 	}
 
-	return `<environment_details>\n${details.trim()}\n</environment_details>`
+	addAlways(details)
+
+	const { texts, cache } = selectEnvSections(
+		items,
+		ctx.taskState.envDetailsCache,
+		deletedRangeToKey(ctx.taskState.conversationHistoryDeletedRange),
+		Date.now(),
+		includeFileDetails,
+	)
+	ctx.taskState.envDetailsCache = cache
+	const body = items.map((i) => texts.get(i.key) ?? "").join("")
+
+	return `<environment_details>\n${body.trim()}\n</environment_details>`
 }

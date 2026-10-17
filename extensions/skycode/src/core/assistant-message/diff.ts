@@ -1,3 +1,5 @@
+import { closestMatchHint } from "./closestMatch"
+
 const SEARCH_BLOCK_START = "------- SEARCH"
 const SEARCH_BLOCK_END = "======="
 const REPLACE_BLOCK_END = "+++++++ REPLACE"
@@ -372,7 +374,7 @@ async function constructNewFileContentV1(
 								}
 							} else {
 								throw new Error(
-									`The SEARCH block:\n${currentSearchContent.trimEnd()}\n...does not match anything in the file.`,
+									`The SEARCH block:\n${currentSearchContent.trimEnd()}\n...does not match anything in the file.\n\n${closestMatchHint(originalContent, currentSearchContent)}`,
 								)
 							}
 						}
@@ -708,7 +710,7 @@ class NewFileContentConstructor {
 						;[this.searchMatchIndex, this.searchEndIndex] = blockMatch
 					} else {
 						throw new Error(
-							`The SEARCH block:\n${this.currentSearchContent.trimEnd()}\n...does not match anything in the file.`,
+							`The SEARCH block:\n${this.currentSearchContent.trimEnd()}\n...does not match anything in the file.\n\n${closestMatchHint(this.originalContent, this.currentSearchContent)}`,
 						)
 					}
 				}
