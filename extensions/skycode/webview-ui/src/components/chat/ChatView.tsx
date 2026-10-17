@@ -4,7 +4,7 @@ import { combineErrorRetryMessages } from "@shared/combineErrorRetryMessages"
 import { combineHookSequences } from "@shared/combineHookSequences"
 import type { SkycodeMessage } from "@shared/ExtensionMessage"
 import { BannerAction, BannerActionType } from "@shared/skycode/banner"
-import { BooleanRequest, StringRequest } from "@shared/proto/skycode/common"
+import { BooleanRequest } from "@shared/proto/skycode/common"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useMount } from "react-use"
 import PromoBannerModal from "@/components/common/PromoBannerModal"
@@ -20,7 +20,6 @@ import {
 	ApprovalBar,
 	CHAT_CONSTANTS,
 	ChatLayout,
-	convertHtmlToMarkdown,
 	filterVisibleMessages,
 	groupByTurns,
 	groupLowStakesTools,
@@ -150,84 +149,18 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement }: ChatViewProp
 		return false
 	}, [messages, chatState.skycodeAsk])
 
+	// [SKYCODE] Копируется ровно видимый текст, без перевода в Markdown (раньше в буфер
+	// попадали __жирный__, обратные кавычки и прочая разметка, которой на экране нет)
 	useEffect(() => {
-		const handleCopy = async (e: ClipboardEvent) => {
-			const targetElement = e.target as HTMLElement | null
-			// If the copy event originated from an input or textarea,
-			// let the default browser behavior handle it.
-			if (
-				targetElement &&
-				(targetElement.tagName === "INPUT" || targetElement.tagName === "TEXTAREA" || targetElement.isContentEditable)
-			) {
+		const handleCopy = (e: ClipboardEvent) => {
+			const target = e.target as HTMLElement | null
+			if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
 				return
 			}
-
-			if (window.getSelection) {
-				const selection = window.getSelection()
-				if (selection && selection.rangeCount > 0) {
-					const range = selection.getRangeAt(0)
-					const commonAncestor = range.commonAncestorContainer
-					let textToCopy: string | null = null
-
-					// Check if the selection is inside an element where plain text copy is preferred
-					let currentElement =
-						commonAncestor.nodeType === Node.ELEMENT_NODE
-							? (commonAncestor as HTMLElement)
-							: commonAncestor.parentElement
-					let preferPlainTextCopy = false
-					while (currentElement) {
-						if (currentElement.tagName === "PRE" && currentElement.querySelector("code")) {
-							preferPlainTextCopy = true
-							break
-						}
-						// Check computed white-space style
-						const computedStyle = window.getComputedStyle(currentElement)
-						if (
-							computedStyle.whiteSpace === "pre" ||
-							computedStyle.whiteSpace === "pre-wrap" ||
-							computedStyle.whiteSpace === "pre-line"
-						) {
-							// If the element itself or an ancestor has pre-like white-space,
-							// and the selection is likely contained within it, prefer plain text.
-							// This helps with elements like the TaskHeader's text display.
-							preferPlainTextCopy = true
-							break
-						}
-
-						// Stop searching if we reach a known chat message boundary or body
-						if (
-							currentElement.classList.contains("chat-row-assistant-message-container") ||
-							currentElement.classList.contains("chat-row-user-message-container") ||
-							currentElement.tagName === "BODY"
-						) {
-							break
-						}
-						currentElement = currentElement.parentElement
-					}
-
-					if (preferPlainTextCopy) {
-						// For code blocks or elements with pre-formatted white-space, get plain text.
-						textToCopy = selection.toString()
-					} else {
-						// For other content, use the existing HTML-to-Markdown conversion
-						const clonedSelection = range.cloneContents()
-						const div = document.createElement("div")
-						div.appendChild(clonedSelection)
-						const selectedHtml = div.innerHTML
-						textToCopy = await convertHtmlToMarkdown(selectedHtml)
-					}
-
-					if (textToCopy !== null) {
-						try {
-							FileServiceClient.copyToClipboard(StringRequest.create({ value: textToCopy })).catch((err) => {
-								console.error("Error copying to clipboard:", err)
-							})
-							e.preventDefault()
-						} catch (error) {
-							console.error("Error copying to clipboard:", error)
-						}
-					}
-				}
+			const text = window.getSelection()?.toString()
+			if (text && e.clipboardData) {
+				e.clipboardData.setData("text/plain", text)
+				e.preventDefault()
 			}
 		}
 		document.addEventListener("copy", handleCopy)

@@ -13,5 +13,4 @@ export * from "./hooks"
 // Export types and constants
 export * from "./types/chatTypes"
 // Export utilities
-export * from "./utils/markdownUtils"
 export * from "./utils/messageUtils"
