@@ -63,3 +63,14 @@ export function parseVisualPayload(text: string | undefined): VisualPayload | nu
 		return null
 	}
 }
+
+/**
+ * [SKYCODE] HTML для буфера обмена «как документ» (Word, Outlook, Excel): стилей из <style>
+ * эти программы не видят, поэтому рамки таблиц задаём атрибутами прямо в тегах.
+ */
+export function buildRichClipboardHtml(content: string): string {
+	const html = sanitizeVisualContent(content)
+		.replace(/<table(?![^>]*\bborder=)/gi, '<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse"')
+		.replace(/<(td|th)(?![^>]*\bstyle=)/gi, '<$1 style="border:1px solid #999;padding:4px 8px;vertical-align:top"')
+	return `<html><body>${html}</body></html>`
+}

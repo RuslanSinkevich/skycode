@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { buildVisualShadowHtml, parseVisualPayload } from "./visualSrcDoc"
+import { buildRichClipboardHtml, buildVisualShadowHtml, parseVisualPayload } from "./visualSrcDoc"
 
 describe("buildVisualShadowHtml", () => {
 	it("strips script tags and on* attributes", () => {
@@ -27,5 +27,14 @@ describe("parseVisualPayload", () => {
 	it("returns null for invalid or empty payload", () => {
 		expect(parseVisualPayload("nope")).toBeNull()
 		expect(parseVisualPayload('{"title":"T"}')).toBeNull()
+	})
+})
+
+describe("buildRichClipboardHtml", () => {
+	it("adds table borders as attributes for Word/Excel and strips scripts", () => {
+		const html = buildRichClipboardHtml("<table><tr><td>1</td></tr></table><script>x()</script>")
+		expect(html).toContain('<table border="1"')
+		expect(html).toContain('<td style="border:1px solid #999')
+		expect(html).not.toMatch(/<script/i)
 	})
 })
