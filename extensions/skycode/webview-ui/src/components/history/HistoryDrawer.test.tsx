@@ -51,7 +51,11 @@ describe("HistoryDrawer", () => {
 		vi.clearAllMocks()
 		mocks.state.tabs = [{ id: "s1", taskId: "t1", title: "Open chat", status: "running", ts: 1 }]
 		mocks.state.activeTabId = "s1"
-		mocks.state.taskHistory = [historyItem("t1", "Open chat"), historyItem("t2", "Old chat"), historyItem("t3", "Fav chat", true)]
+		mocks.state.taskHistory = [
+			historyItem("t1", "Open chat"),
+			historyItem("t2", "Old chat"),
+			historyItem("t3", "Fav chat", true),
+		]
 	})
 
 	it("renders nothing when closed", () => {

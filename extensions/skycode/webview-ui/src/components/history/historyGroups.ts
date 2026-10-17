@@ -47,11 +47,20 @@ export function groupHistoryByDate(items: HistoryItem[], now: number): HistoryGr
 export function filterHistoryForDrawer(items: HistoryItem[], openTaskIds: ReadonlySet<string>, query: string): HistoryItem[] {
 	const needle = query.trim().toLowerCase()
 	return items.filter((item) => {
-		if (!item.ts || !item.task || openTaskIds.has(item.id)) {
+		if (!item.ts || openTaskIds.has(item.id)) {
 			return false
 		}
-		return !needle || item.task.toLowerCase().includes(needle)
+		return !needle || (item.task ?? "").toLowerCase().includes(needle)
 	})
+}
+
+/**
+ * [SKYCODE] Название задачи для списка: у старых задач вместо названия сохранилась
+ * служебная статистика запроса ({"tokensIn":…}) — её не показываем.
+ */
+export function displayTaskTitle(task: string | undefined, fallback: string): string {
+	const text = task?.trim() ?? ""
+	return !text || text.startsWith('{"') ? fallback : text
 }
 
 /** Короткое относительное время («5 мин. назад», «вчера»), на языке интерфейса. */

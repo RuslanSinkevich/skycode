@@ -88,7 +88,16 @@ export class MessageStateHandler {
 
 			// combined as they are in ChatView
 			const apiMetrics = getApiMetrics(combineApiRequests(combineCommandSequences(this.skycodeMessages.slice(1))))
-			const taskMessage = this.skycodeMessages[0] // first message is always the task say
+			// [SKYCODE] Первая реплика пользователя, а не служебная статистика запроса ({"tokensIn":…}):
+			// задача может начаться без say("text"), и тогда первым стоит api_req_started
+			const taskMessage =
+				this.skycodeMessages.find(
+					(m) =>
+						m.type === "say" &&
+						(m.say === "text" || m.say === "task" || m.say === "user_feedback") &&
+						!!m.text?.trim() &&
+						!m.text.trimStart().startsWith('{"'),
+				) ?? this.skycodeMessages[0]
 			const lastRelevantMessage =
 				this.skycodeMessages[
 					findLastIndex(
@@ -103,7 +112,7 @@ export class MessageStateHandler {
 				id: this.taskId,
 				ulid: this.ulid,
 				ts: lastRelevantMessage.ts,
-				task: taskMessage.text ?? "",
+				task: taskMessage.text?.trimStart().startsWith('{"') ? "" : (taskMessage.text ?? ""),
 				tokensIn: apiMetrics.totalTokensIn,
 				tokensOut: apiMetrics.totalTokensOut,
 				cacheWrites: apiMetrics.totalCacheWrites,

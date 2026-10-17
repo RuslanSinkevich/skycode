@@ -1034,6 +1034,7 @@
 	"historyDrawer.group.older": "Earlier",
 	"historyDrawer.empty": "No chats yet",
 	"historyDrawer.noResults": "Nothing found",
+	"historyDrawer.untitled": "Untitled",
 	"contextRing.tooltip": "Context {{percent}}%",
 	"contextRing.usage": "Context {{used}} / {{total}} ({{percent}}%)",
 	"contextRing.untilCompaction": "{{tokens}} until auto-compaction",

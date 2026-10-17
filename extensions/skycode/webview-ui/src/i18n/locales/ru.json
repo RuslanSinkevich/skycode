@@ -1034,6 +1034,7 @@
 	"historyDrawer.group.older": "Ранее",
 	"historyDrawer.empty": "Чатов пока нет",
 	"historyDrawer.noResults": "Ничего не найдено",
+	"historyDrawer.untitled": "Без названия",
 	"contextRing.tooltip": "Контекст {{percent}}%",
 	"contextRing.usage": "Контекст {{used}} / {{total}} ({{percent}}%)",
 	"contextRing.untilCompaction": "{{tokens}} до автосжатия",

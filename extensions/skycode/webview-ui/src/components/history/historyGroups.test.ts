@@ -1,6 +1,6 @@
 import type { HistoryItem } from "@shared/HistoryItem"
 import { describe, expect, it } from "vitest"
-import { filterHistoryForDrawer, getHistoryGroupKey, groupHistoryByDate } from "./historyGroups"
+import { displayTaskTitle, filterHistoryForDrawer, getHistoryGroupKey, groupHistoryByDate } from "./historyGroups"
 
 const HOUR = 60 * 60 * 1000
 const DAY = 24 * HOUR
@@ -46,8 +46,13 @@ describe("groupHistoryByDate", () => {
 describe("filterHistoryForDrawer", () => {
 	const items = [item("1", NOW, "Fix the Login bug"), item("2", NOW, "Write docs"), item("3", NOW, "")]
 
-	it("drops tasks already open in tabs and empty tasks", () => {
-		expect(filterHistoryForDrawer(items, new Set(["1"]), "").map((i) => i.id)).toEqual(["2"])
+	it("drops tasks already open in tabs, keeps untitled ones", () => {
+		expect(filterHistoryForDrawer(items, new Set(["1"]), "").map((i) => i.id)).toEqual(["2", "3"])
+	})
+
+	it("hides service JSON instead of a title", () => {
+		expect(displayTaskTitle('{"tokensIn":1}', "Без названия")).toBe("Без названия")
+		expect(displayTaskTitle("Fix bug", "Без названия")).toBe("Fix bug")
 	})
 
 	it("filters by text ignoring case", () => {

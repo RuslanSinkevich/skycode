@@ -8,9 +8,10 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
 import { cn } from "@/lib/utils"
 import { TaskServiceClient } from "@/services/grpc-client"
-import { filterHistoryForDrawer, formatRelativeTime, groupHistoryByDate } from "./historyGroups"
+import { displayTaskTitle, filterHistoryForDrawer, formatRelativeTime, groupHistoryByDate } from "./historyGroups"
 
-const rowClass = "group flex items-center gap-1.5 h-6 px-2 cursor-pointer select-none text-[12px] hover:bg-(--vscode-list-hoverBackground)"
+const rowClass =
+	"group flex items-center gap-1.5 h-6 px-2 cursor-pointer select-none text-[12px] hover:bg-(--vscode-list-hoverBackground)"
 const groupHeaderClass = "px-2 pt-2 pb-0.5 text-[11px] font-medium uppercase tracking-wide text-(--vscode-descriptionForeground)"
 
 /**
@@ -81,7 +82,7 @@ export function HistoryDrawer({ open, onClose }: { open: boolean; onClose: () =>
 		<div className="fixed inset-0 z-50 flex" data-testid="history-drawer">
 			<aside
 				aria-label={t("tabs.history")}
-				className="flex flex-col h-full w-[75%] min-w-[260px] max-w-[420px] border-r border-(--vscode-panel-border) bg-(--vscode-sideBar-background) text-(--vscode-foreground) shadow-lg">
+				className="flex flex-col h-full w-1/2 min-w-[240px] max-w-[420px] border-r border-(--vscode-panel-border) bg-(--vscode-sideBar-background) text-(--vscode-foreground) shadow-lg">
 				<div className="flex items-center gap-1 p-2">
 					<div className="flex flex-1 min-w-0 items-center gap-1.5 h-6 px-1.5 rounded-sm border border-(--vscode-input-border,transparent) bg-(--vscode-input-background) focus-within:border-(--vscode-focusBorder)">
 						<SearchIcon className="shrink-0 opacity-60" size={12} />
@@ -120,7 +121,10 @@ export function HistoryDrawer({ open, onClose }: { open: boolean; onClose: () =>
 								const title = getTitle(tab)
 								return (
 									<div
-										className={cn(rowClass, tab.id === activeTabId && "bg-(--vscode-list-activeSelectionBackground)")}
+										className={cn(
+											rowClass,
+											tab.id === activeTabId && "bg-(--vscode-list-activeSelectionBackground)",
+										)}
 										key={tab.id}
 										onClick={() => switchTab(tab.id)}
 										onKeyDown={(e) => {
@@ -156,11 +160,16 @@ export function HistoryDrawer({ open, onClose }: { open: boolean; onClose: () =>
 									}}
 									role="button"
 									tabIndex={0}
-									title={item.task}>
+									title={displayTaskTitle(item.task, t("historyDrawer.untitled"))}>
 									{item.isFavorited && (
-										<StarIcon className="shrink-0 fill-(--vscode-button-background) text-(--vscode-button-background)" size={11} />
+										<StarIcon
+											className="shrink-0 fill-(--vscode-button-background) text-(--vscode-button-background)"
+											size={11}
+										/>
 									)}
-									<span className="flex-1 min-w-0 truncate ph-no-capture">{item.task}</span>
+									<span className="flex-1 min-w-0 truncate ph-no-capture">
+										{displayTaskTitle(item.task, t("historyDrawer.untitled"))}
+									</span>
 									<span className="shrink-0 text-[11px] text-(--vscode-descriptionForeground) group-hover:hidden">
 										{formatRelativeTime(item.ts, now, locale)}
 									</span>

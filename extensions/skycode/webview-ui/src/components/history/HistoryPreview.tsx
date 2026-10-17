@@ -3,6 +3,7 @@ import { memo } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
 import { TaskServiceClient } from "@/services/grpc-client"
+import { displayTaskTitle } from "./historyGroups"
 
 type HistoryPreviewProps = {
 	showHistoryView: () => void
@@ -161,13 +162,19 @@ const HistoryPreview = ({ showHistoryView }: HistoryPreviewProps) => {
 												}}
 											/>
 										)}
-										<div className="history-task-description ph-no-capture">{item.task}</div>
+										<div className="history-task-description ph-no-capture">
+											{displayTaskTitle(item.task, t("historyDrawer.untitled"))}
+										</div>
 									</div>
 									<div className="history-meta-stack">
 										<span className="history-date">{formatDate(item.ts)}</span>
-									{item.totalCost != null && item.totalCost > 0 && (
-										<span className="history-cost-chip">{t("common.currencyPrefix")}{item.totalCost.toFixed(2)}{t("common.currencySuffix")}</span>
-									)}
+										{item.totalCost != null && item.totalCost > 0 && (
+											<span className="history-cost-chip">
+												{t("common.currencyPrefix")}
+												{item.totalCost.toFixed(2)}
+												{t("common.currencySuffix")}
+											</span>
+										)}
 									</div>
 								</div>
 							))
