@@ -34,6 +34,6 @@ describe("formatResults", () => {
 			[{ filePath: path.join(cwd, "a.cs"), line: 253, column: 0, match: "x = 1\n", beforeContext: ["{\n"], afterContext: ["}\n"] }],
 			cwd,
 		)
-		output.should.equal("Found 1 result.\n\na.cs\n│----\n│   252|{\n│   253|x = 1\n│   254|}\n")
+		output.should.equal("Found 1 result.\n\na.cs\n│----\n│   252|{\n│   253|x = 1\n│   254|}\n│----")
 	})
 })
