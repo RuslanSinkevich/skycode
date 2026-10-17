@@ -21,8 +21,6 @@ export interface ChatState {
 	// State values
 	inputValue: string
 	setInputValue: React.Dispatch<React.SetStateAction<string>>
-	activeQuote: string | null
-	setActiveQuote: React.Dispatch<React.SetStateAction<string | null>>
 	isTextAreaFocused: boolean
 	setIsTextAreaFocused: React.Dispatch<React.SetStateAction<boolean>>
 	selectedImages: string[]
@@ -119,7 +117,6 @@ export interface InputState {
 	inputValue: string
 	selectedImages: string[]
 	selectedFiles: string[]
-	activeQuote: string | null
 	isTextAreaFocused: boolean
 }
 
@@ -170,7 +167,6 @@ export interface InputSectionProps {
 	textAreaRef: React.RefObject<HTMLTextAreaElement>
 	onFocusChange: (isFocused: boolean) => void
 	onInputChange: (value: string) => void
-	onQuoteChange: (quote: string | null) => void
 	onImagesChange: (images: string[]) => void
 	onFilesChange: (files: string[]) => void
 	placeholderText: string

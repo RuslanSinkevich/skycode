@@ -1,7 +1,7 @@
 import React, { useRef } from "react"
 import ChatTextArea from "@/components/chat/ChatTextArea"
-import QuotedMessagePreview from "@/components/chat/QuotedMessagePreview"
 import type { MessageQueueActions } from "../../hooks/useMessageQueue"
+import { decideEnterAction } from "../../shared/enterAction"
 import { ChatState, MessageHandlers, ScrollBehavior } from "../../types/chatTypes"
 
 interface InputSectionProps {
@@ -20,7 +20,7 @@ interface InputSectionProps {
 }
 
 /**
- * Input section including quoted message preview and chat text area
+ * Input section including chat text area
  */
 export const InputSection: React.FC<InputSectionProps> = ({
 	chatState,
@@ -34,9 +34,6 @@ export const InputSection: React.FC<InputSectionProps> = ({
 	onCancel,
 }) => {
 	const {
-		activeQuote,
-		setActiveQuote,
-		isTextAreaFocused,
 		inputValue,
 		setInputValue,
 		sendingDisabled,
@@ -58,17 +55,29 @@ export const InputSection: React.FC<InputSectionProps> = ({
 		const text = inputValue.trim()
 		const imagesSnapshot = selectedImages.slice()
 		const filesSnapshot = selectedFiles.slice()
-		if (!text && imagesSnapshot.length === 0 && filesSnapshot.length === 0) {
+		// [SKYCODE] Меню слеш-команд/@ обрабатывает Enter раньше (useInputHandlers), сюда он доходит только без меню
+		const action = decideEnterAction({
+			text,
+			hasAttachments: imagesSnapshot.length > 0 || filesSnapshot.length > 0,
+			queueLength: messageQueue?.queue.length ?? 0,
+			isAgentWorking: !!isAiWorking && !!messageQueue,
+			menuOpen: false,
+		})
+		if (action === "none") {
+			return
+		}
+		if (action === "sendQueued") {
+			// [SKYCODE] Пустой ввод + непустая очередь: отправить самое старое сообщение (как кнопка «→»)
+			void messageQueue?.sendNow()
 			return
 		}
 
-		if (isAiWorking && messageQueue) {
+		if (action === "enqueue" && messageQueue) {
 			// AI is working - add to queue instead of sending
 			messageQueue.addToQueue(text, imagesSnapshot, filesSnapshot)
 			setInputValue("")
 			setSelectedImages([])
 			setSelectedFiles([])
-			setActiveQuote(null)
 			return
 		}
 
@@ -87,18 +96,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
 
 	return (
 		<>
-			{activeQuote && (
-				<div style={{ marginBottom: "-12px", marginTop: "10px" }}>
-					<QuotedMessagePreview
-						isFocused={isTextAreaFocused}
-						onDismiss={() => setActiveQuote(null)}
-						text={activeQuote}
-					/>
-				</div>
-			)}
-
 			<ChatTextArea
-				activeQuote={activeQuote}
 				inputValue={inputValue}
 				isAiWorking={isAiWorking}
 				onCancel={onCancel}

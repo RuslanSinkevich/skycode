@@ -20,7 +20,6 @@ interface BrowserSessionRowProps {
 	onToggleExpand: (messageTs: number) => void
 	lastModifiedMessage?: SkycodeMessage
 	isLast: boolean
-	onSetQuote: (text: string) => void
 }
 
 const browserSessionRowContainerInnerStyle: CSSProperties = {
@@ -105,7 +104,7 @@ const headerStyle: CSSProperties = {
 
 const BrowserSessionRow = memo((props: BrowserSessionRowProps) => {
 	const { t } = useI18n()
-	const { messages, isLast, lastModifiedMessage, onSetQuote } = props
+	const { messages, isLast, lastModifiedMessage } = props
 	const { browserSettings } = useExtensionState()
 	const [maxActionHeight, setMaxActionHeight] = useState(0)
 	const [consoleLogsExpanded, setConsoleLogsExpanded] = useState(false)
@@ -287,7 +286,6 @@ const BrowserSessionRow = memo((props: BrowserSessionRowProps) => {
 					key={message.ts}
 					lastModifiedMessage={props.lastModifiedMessage}
 					message={message}
-					onSetQuote={onSetQuote}
 					onToggleExpand={props.onToggleExpand}
 					setMaxActionHeight={setMaxActionHeight}
 				/>
@@ -469,7 +467,6 @@ const BrowserSessionRow = memo((props: BrowserSessionRowProps) => {
 interface BrowserSessionRowContentProps extends Omit<BrowserSessionRowProps, "messages"> {
 	message: SkycodeMessage
 	setMaxActionHeight: (height: number) => void
-	onSetQuote: (text: string) => void
 }
 
 const BrowserSessionRowContent = memo(
@@ -480,7 +477,6 @@ const BrowserSessionRowContent = memo(
 		lastModifiedMessage,
 		isLast,
 		setMaxActionHeight,
-		onSetQuote,
 	}: BrowserSessionRowContentProps) => {
 		const { t } = useI18n()
 		const handleToggle = useCallback(() => {
@@ -517,7 +513,6 @@ const BrowserSessionRowContent = memo(
 									isLast={isLast}
 									lastModifiedMessage={lastModifiedMessage}
 									message={message}
-									onSetQuote={onSetQuote}
 									onToggleExpand={handleToggle}
 								/>
 							</div>

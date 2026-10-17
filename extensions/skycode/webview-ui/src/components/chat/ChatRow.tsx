@@ -45,13 +45,11 @@ import HookMessage from "./HookMessage"
 import { MarkdownRow } from "./MarkdownRow"
 import NewTaskPreview from "./NewTaskPreview"
 import PlanCompletionOutputRow from "./PlanCompletionOutputRow"
-import QuoteButton from "./QuoteButton"
 import ReportBugPreview from "./ReportBugPreview"
 import { RequestStartRow } from "./RequestStartRow"
 import { ThinkingRow } from "./ThinkingRow"
 import { ToolRow } from "./ToolRow"
 import UserMessage from "./UserMessage"
-import { useQuoteButton } from "./useQuoteButton"
 
 const HEADER_CLASSNAMES = "flex items-center gap-2.5 mb-3"
 
@@ -63,15 +61,12 @@ interface ChatRowProps {
 	isLast: boolean
 	inputValue?: string
 	sendMessageFromChatRow?: (text: string, images: string[], files: string[]) => void
-	onSetQuote: (text: string) => void
 	onCancelCommand?: () => void
 	mode?: Mode
 	reasoningContent?: string
 	responseStarted?: boolean
 	isRequestInProgress?: boolean
 }
-
-export type { QuoteButtonState } from "./useQuoteButton"
 
 interface ChatRowContentProps extends ChatRowProps {}
 
@@ -104,7 +99,6 @@ export const ChatRowContent = memo(
 		isLast,
 		inputValue,
 		sendMessageFromChatRow,
-		onSetQuote,
 		onCancelCommand,
 		mode,
 		isRequestInProgress,
@@ -119,9 +113,7 @@ export const ChatRowContent = memo(
 			vscodeTerminalExecutionMode,
 			skycodeMessages,
 		} = useExtensionState()
-		const contentRef = useRef<HTMLDivElement>(null)
 		const markdownRenderedRef = useRef<HTMLDivElement>(null)
-		const { quoteButtonState, handleQuoteClick, handleMouseUp } = useQuoteButton(contentRef, onSetQuote)
 
 		// Command output expansion state (for all messages, but only used by command messages)
 		const [isOutputFullyExpanded, setIsOutputFullyExpanded] = useState(false)
@@ -446,21 +438,12 @@ export const ChatRowContent = memo(
 									markdownSource: message.text || "",
 									renderedRef: markdownRenderedRef,
 								}}
-								onMouseUp={handleMouseUp}
-								position="bottom-right"
-								ref={contentRef}>
+								position="bottom-right">
 								<div className="flex items-center">
 									<div className={cn("flex-1 min-w-0 pl-1")} ref={markdownRenderedRef}>
 										<MarkdownRow markdown={message.text} showCursor={false} />
 									</div>
 								</div>
-								{quoteButtonState.visible && (
-									<QuoteButton
-										left={quoteButtonState.left}
-										onClick={handleQuoteClick}
-										top={quoteButtonState.top}
-									/>
-								)}
 							</WithCopyButton>
 						)
 					}
@@ -596,21 +579,12 @@ export const ChatRowContent = memo(
 									markdownSource: completionText || "",
 									renderedRef: markdownRenderedRef,
 								}}
-								onMouseUp={handleMouseUp}
-								position="bottom-right"
-								ref={contentRef}>
+								position="bottom-right">
 								<div className="flex items-center">
 									<div className={cn("flex-1 min-w-0 pl-1")} ref={markdownRenderedRef}>
 										<MarkdownRow markdown={completionText || ""} showCursor={false} />
 									</div>
 								</div>
-								{quoteButtonState.visible && (
-									<QuoteButton
-										left={quoteButtonState.left}
-										onClick={handleQuoteClick}
-										top={quoteButtonState.top}
-									/>
-								)}
 							</WithCopyButton>
 						)
 					}
@@ -769,22 +743,13 @@ export const ChatRowContent = memo(
 										markdownSource: askCompletionText || "",
 										renderedRef: markdownRenderedRef,
 									}}
-									onMouseUp={handleMouseUp}
-									position="bottom-right"
-									ref={contentRef}>
+									position="bottom-right">
 									<div className="flex items-center">
 										<div className={cn("flex-1 min-w-0 pl-1")} ref={markdownRenderedRef}>
 											<MarkdownRow markdown={askCompletionText || ""} showCursor={false} />
 										</div>
 									</div>
-									{quoteButtonState.visible && (
-										<QuoteButton
-											left={quoteButtonState.left}
-											onClick={handleQuoteClick}
-											top={quoteButtonState.top}
-										/>
-									)}
-								</WithCopyButton>
+</WithCopyButton>
 							)
 						} else {
 							// Virtuoso cannot handle zero-height items; render a spacer instead of null
@@ -818,21 +783,10 @@ export const ChatRowContent = memo(
 										markdownSource: question ?? message.text ?? "",
 										renderedRef: markdownRenderedRef,
 									}}
-									onMouseUp={handleMouseUp}
-									position="bottom-right"
-									ref={contentRef}>
+									position="bottom-right">
 									<div ref={markdownRenderedRef}>
 										<MarkdownRow markdown={question} />
 									</div>
-									{quoteButtonState.visible && (
-										<QuoteButton
-											left={quoteButtonState.left}
-											onClick={() => {
-												handleQuoteClick()
-											}}
-											top={quoteButtonState.top}
-										/>
-									)}
 								</WithCopyButton>
 								<OptionsButtons
 									inputValue={inputValue}

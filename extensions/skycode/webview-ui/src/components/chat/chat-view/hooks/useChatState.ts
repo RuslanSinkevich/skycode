@@ -9,7 +9,6 @@ import { ChatState } from "../types/chatTypes"
 export function useChatState(messages: SkycodeMessage[]): ChatState {
 	// Input and selection state
 	const [inputValue, setInputValue] = useState("")
-	const [activeQuote, setActiveQuote] = useState<string | null>(null)
 	const [isTextAreaFocused, setIsTextAreaFocused] = useState(false)
 	const [selectedImages, setSelectedImages] = useState<string[]>([])
 	const [selectedFiles, setSelectedFiles] = useState<string[]>([])
@@ -38,7 +37,6 @@ export function useChatState(messages: SkycodeMessage[]): ChatState {
 	// Reset state when starting new conversation
 	const resetState = useCallback(() => {
 		setInputValue("")
-		setActiveQuote(null)
 		setSelectedImages([])
 		setSelectedFiles([])
 	}, [])
@@ -57,8 +55,6 @@ export function useChatState(messages: SkycodeMessage[]): ChatState {
 		// State values
 		inputValue,
 		setInputValue,
-		activeQuote,
-		setActiveQuote,
 		isTextAreaFocused,
 		setIsTextAreaFocused,
 		selectedImages,

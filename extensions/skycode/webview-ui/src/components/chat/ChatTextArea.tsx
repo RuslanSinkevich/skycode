@@ -38,7 +38,6 @@ import VoiceRecorder from "./VoiceRecorder"
 
 interface ChatTextAreaProps {
 	inputValue: string
-	activeQuote: string | null
 	setInputValue: (value: string) => void
 	sendingDisabled: boolean
 	placeholderText: string

@@ -15,7 +15,6 @@ interface TurnBlockProps {
 	modifiedMessages: SkycodeMessage[]
 	expandedRows: Record<number, boolean>
 	onToggleExpand: ToggleRowExpansion
-	onSetQuote: (quote: string | null) => void
 	inputValue: string
 	messageHandlers: MessageHandlers
 }
@@ -34,7 +33,6 @@ export const TurnBlock: React.FC<TurnBlockProps> = memo(({
 	modifiedMessages,
 	expandedRows,
 	onToggleExpand,
-	onSetQuote,
 	inputValue,
 	messageHandlers,
 }) => {
@@ -116,7 +114,6 @@ export const TurnBlock: React.FC<TurnBlockProps> = memo(({
 					messageHandlers={messageHandlers}
 					messageOrGroup={item}
 					modifiedMessages={modifiedMessages}
-					onSetQuote={onSetQuote}
 					onToggleExpand={onToggleExpand}
 				/>
 			))}

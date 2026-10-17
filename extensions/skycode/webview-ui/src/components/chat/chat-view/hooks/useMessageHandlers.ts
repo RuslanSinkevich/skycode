@@ -15,8 +15,6 @@ export function useMessageHandlers(messages: SkycodeMessage[], chatState: ChatSt
 	const { backgroundCommandRunning } = useExtensionState()
 	const {
 		setInputValue,
-		activeQuote,
-		setActiveQuote,
 		setSelectedImages,
 		setSelectedFiles,
 		setSendingDisabled,
@@ -28,16 +26,8 @@ export function useMessageHandlers(messages: SkycodeMessage[], chatState: ChatSt
 	// Handle sending a message
 	const handleSendMessage = useCallback(
 		async (text: string, images: string[], files: string[]) => {
-			let messageToSend = text.trim()
+			const messageToSend = text.trim()
 			const hasContent = messageToSend || images.length > 0 || files.length > 0
-
-			// Prepend the active quote if it exists
-			if (activeQuote && hasContent) {
-				const prefix = "[context] \n> "
-				const formattedQuote = activeQuote
-				const suffix = "\n[/context] \n\n"
-				messageToSend = `${prefix} ${formattedQuote} ${suffix} ${messageToSend}`
-			}
 
 			if (hasContent) {
 				let messageSent = false
@@ -112,7 +102,6 @@ export function useMessageHandlers(messages: SkycodeMessage[], chatState: ChatSt
 				// sendingDisabled is managed by buttonConfig in ActionButtons, not here.
 				if (messageSent) {
 					setInputValue("")
-					setActiveQuote(null)
 					setSelectedImages([])
 					setSelectedFiles([])
 
@@ -123,24 +112,22 @@ export function useMessageHandlers(messages: SkycodeMessage[], chatState: ChatSt
 				}
 			}
 		},
-		[messages.length, skycodeAsk, activeQuote, setInputValue, setActiveQuote, setSelectedImages, setSelectedFiles, chatState],
+		[messages.length, skycodeAsk, setInputValue, setSelectedImages, setSelectedFiles, chatState],
 	)
 
 	// Start a new task
 	const startNewTask = useCallback(async () => {
-		setActiveQuote(null)
 		await TaskServiceClient.clearTask(EmptyRequest.create({}))
 		// Focus textarea after UI resets
 		setTimeout(() => chatState.textAreaRef.current?.focus(), 100)
-	}, [setActiveQuote, chatState.textAreaRef])
+	}, [chatState.textAreaRef])
 
 	// Clear input state helper
 	const clearInputState = useCallback(() => {
 		setInputValue("")
-		setActiveQuote(null)
 		setSelectedImages([])
 		setSelectedFiles([])
-	}, [setInputValue, setActiveQuote, setSelectedImages, setSelectedFiles])
+	}, [setInputValue, setSelectedImages, setSelectedFiles])
 
 	// Execute button action based on type
 	const executeButtonAction = useCallback(

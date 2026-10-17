@@ -423,6 +423,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement }: ChatViewProp
 					task={task}
 				/>
 				<MessageQueue
+					inputEmpty={chatState.inputValue.trim().length === 0}
 					onClearQueue={messageQueue.clearQueue}
 					onRemoveSelected={messageQueue.removeSelected}
 					onSelectItem={messageQueue.selectItem}

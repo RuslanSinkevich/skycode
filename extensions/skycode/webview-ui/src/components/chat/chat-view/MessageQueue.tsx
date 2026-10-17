@@ -10,6 +10,8 @@ interface MessageQueueProps {
 	onRemoveSelected: () => void
 	onClearQueue: () => void
 	onSelectItem: (index: number) => void
+	/** [SKYCODE] Поле ввода пусто — Enter отправит первое сообщение из очереди */
+	inputEmpty?: boolean
 }
 
 export const MessageQueue: React.FC<MessageQueueProps> = ({
@@ -19,6 +21,7 @@ export const MessageQueue: React.FC<MessageQueueProps> = ({
 	onRemoveSelected,
 	onClearQueue,
 	onSelectItem,
+	inputEmpty,
 }) => {
 	const { t } = useI18n()
 	if (queue.length === 0) {
@@ -32,6 +35,11 @@ export const MessageQueue: React.FC<MessageQueueProps> = ({
 				<span className="message-queue-title">
 					{t("queue.inQueue")} ({queue.length})
 				</span>
+				{inputEmpty && (
+					<span className="text-xs flex-1 min-w-0 truncate px-2" style={{ color: "var(--vscode-descriptionForeground)" }}>
+						{t("queue.enterHint")}
+					</span>
+				)}
 				<div className="message-queue-actions">
 					<button className="message-queue-btn" onClick={onSendNow} title={t("queue.sendNow")}>
 						<ArrowRight size={14} />

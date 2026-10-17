@@ -17,7 +17,6 @@ interface MessageRendererProps {
 	modifiedMessages: SkycodeMessage[]
 	expandedRows: Record<number, boolean>
 	onToggleExpand: ToggleRowExpansion
-	onSetQuote: (quote: string | null) => void
 	inputValue: string
 	messageHandlers: MessageHandlers
 }
@@ -32,7 +31,6 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
 	modifiedMessages,
 	expandedRows,
 	onToggleExpand,
-	onSetQuote,
 	inputValue,
 	messageHandlers,
 }) => {
@@ -81,7 +79,6 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
 				key={messageOrGroup[0]?.ts}
 				lastModifiedMessage={modifiedMessages.at(-1)}
 				messages={messageOrGroup}
-				onSetQuote={onSetQuote}
 				onToggleExpand={onToggleExpand}
 			/>
 		)
@@ -106,7 +103,6 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
 				message={messageOrGroup}
 				mode={rowMode}
 				onCancelCommand={() => messageHandlers.executeButtonAction("cancel")}
-				onSetQuote={onSetQuote}
 				onToggleExpand={onToggleExpand}
 				reasoningContent={reasoningData.reasoning}
 				responseStarted={reasoningData.responseStarted}

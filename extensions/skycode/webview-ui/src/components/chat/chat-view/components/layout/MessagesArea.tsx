@@ -45,7 +45,7 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 
 	const { t } = useI18n()
 
-	const { expandedRows, inputValue, setActiveQuote } = chatState
+	const { expandedRows, inputValue } = chatState
 
 	const scrollerCallbackRef = useCallback(
 		(node: HTMLDivElement | null) => {
@@ -80,7 +80,6 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 									inputValue={inputValue}
 									messageHandlers={messageHandlers}
 									modifiedMessages={modifiedMessages}
-									onSetQuote={setActiveQuote}
 									onToggleExpand={toggleRowExpansion}
 									totalTurns={turns.length}
 									turn={turn}
