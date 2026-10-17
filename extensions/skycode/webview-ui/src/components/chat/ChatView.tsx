@@ -37,19 +37,19 @@ import {
 import { useMessageQueue } from "./chat-view/hooks/useMessageQueue"
 import { MessageQueue } from "./chat-view/MessageQueue"
 import PendingChangesBar from "./pending-changes/PendingChangesBar"
+import { HistoryDrawer } from "../history/HistoryDrawer"
 import { TabStrip } from "./tabs/TabStrip"
 
 interface ChatViewProps {
 	isHidden: boolean
 	showAnnouncement: boolean
 	hideAnnouncement: () => void
-	showHistoryView: () => void
 }
 
 // Use constants from the imported module
 const MAX_IMAGES_AND_FILES_PER_MESSAGE = CHAT_CONSTANTS.MAX_IMAGES_AND_FILES_PER_MESSAGE
 
-const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryView }: ChatViewProps) => {
+const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement }: ChatViewProps) => {
 	const { t } = useI18n()
 	const showNavbar = useShowNavbar()
 	const {
@@ -64,6 +64,9 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		banners,
 	} = useExtensionState()
 
+	// Шторка истории: открывается кнопкой в полосе вкладок и ссылкой «Показать все» на стартовом экране
+	const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false)
+	const closeHistoryDrawer = useCallback(() => setHistoryDrawerOpen(false), [])
 	const [promoModalBannerId, setPromoModalBannerId] = useState<string | null>(null)
 	const [dismissedModalId, setDismissedModalId] = useState<string | null>(null)
 
@@ -444,14 +447,14 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		<ChatLayout isHidden={isHidden}>
 			<div className="flex flex-col flex-1 overflow-hidden">
 				{showNavbar && <Navbar />}
-				<TabStrip />
+				<TabStrip onToggleHistory={() => setHistoryDrawerOpen((open) => !open)} />
 				{task ? (
 					<TaskSection lastProgressMessageText={lastProgressMessageText} />
 				) : (
 					<WelcomeSection
 						hideAnnouncement={hideAnnouncement}
 						showAnnouncement={showAnnouncement}
-						showHistoryView={showHistoryView}
+						showHistoryView={() => setHistoryDrawerOpen(true)}
 						taskHistory={taskHistory}
 						version={version}
 					/>
@@ -507,6 +510,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 				/>
 			</footer>
 		</ChatLayout>
+		{!isHidden && <HistoryDrawer onClose={closeHistoryDrawer} open={historyDrawerOpen} />}
 		{promoModalBannerId && modalBanner && (
 			<PromoBannerModal
 				banner={modalBanner}

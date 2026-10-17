@@ -28,6 +28,7 @@ import {
 	ModelButtonContent,
 } from "./chat-text-area/ChatTextArea.styles"
 import ModeSwitcher from "./chat-text-area/ModeSwitcher"
+import { ContextRing } from "./context-ring/ContextRing"
 import { useChatAttachments } from "./chat-text-area/useChatAttachments"
 import { useInputHandlers } from "./chat-text-area/useInputHandlers"
 import { useModelSelector } from "./chat-text-area/useModelSelector"
@@ -644,6 +645,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 									</ModelButtonWrapper>
 								</ModelPickerModal>
 							</ModelContainer>
+							<ContextRing isAiWorking={isAiWorking} />
 						</ButtonGroup>
 					</div>
 					{/* Mode selector (Plan / Act / Ask / Debug) */}

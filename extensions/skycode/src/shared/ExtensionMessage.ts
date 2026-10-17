@@ -66,6 +66,10 @@ export interface ExtensionState {
 	tabs: TabInfo[]
 	/** ID активной вкладки (= currentSessionId) */
 	activeTabId?: string
+	/** [SKYCODE] Окно контекста модели активной задачи (токены), для кольца контекста */
+	contextWindowTokens?: number
+	/** [SKYCODE] Порог автосжатия активной задачи в токенах (единый источник — getAutoCompactThresholdTokens) */
+	autoCompactThresholdTokens?: number
 	currentTaskItem?: HistoryItem
 	currentFocusChainChecklist?: string | null
 	mcpDisplayMode: McpDisplayMode

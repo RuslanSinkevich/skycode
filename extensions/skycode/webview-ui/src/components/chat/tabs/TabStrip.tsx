@@ -1,11 +1,12 @@
 import type { TabInfo } from "@shared/ExtensionMessage"
 import { EmptyRequest, StringRequest } from "@shared/proto/skycode/common"
-import { CheckIcon, ChevronDownIcon, ClockIcon, Loader2Icon, PanelLeftIcon, PauseIcon, PlusIcon, XIcon } from "lucide-react"
+import { ChevronDownIcon, PanelLeftIcon, PlusIcon, XIcon } from "lucide-react"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
 import { cn } from "@/lib/utils"
 import { TaskServiceClient } from "@/services/grpc-client"
+import { StatusIcon } from "./StatusIcon"
 
 // Минимальная ширина вкладки: по ней считаем, сколько вкладок помещается; сами вкладки растягиваются до 150px.
 const TAB_MIN_WIDTH = 96
@@ -19,39 +20,6 @@ const defaultObserverFactory: ResizeObserverFactory = (callback) =>
 
 const defaultMeasureWidth = (el: HTMLElement) => el.getBoundingClientRect().width
 
-function StatusIcon({ status }: { status: TabInfo["status"] }) {
-	const { t } = useI18n()
-	if (status === "idle") {
-		return null
-	}
-	const label = t(`tabs.status.${status}`)
-	let icon: React.ReactNode
-	switch (status) {
-		case "running":
-			icon = <Loader2Icon className="animate-spin text-(--vscode-focusBorder)" size={12} />
-			break
-		case "awaiting":
-			icon = <span className="inline-block size-2 m-[2px] rounded-full bg-(--vscode-editorWarning-foreground)" />
-			break
-		case "done":
-			icon = <CheckIcon className="text-(--vscode-testing-iconPassed)" size={12} />
-			break
-		case "queued":
-			icon = <ClockIcon className="text-(--vscode-descriptionForeground)" size={12} />
-			break
-		case "stopped":
-			icon = <PauseIcon className="text-(--vscode-descriptionForeground)" size={12} />
-			break
-		default:
-			return null
-	}
-	return (
-		<span aria-label={label} className="shrink-0 flex" role="img" title={label}>
-			{icon}
-		</span>
-	)
-}
-
 const iconButtonClass =
 	"shrink-0 self-center flex items-center justify-center size-6 rounded-sm bg-transparent border-0 cursor-pointer text-(--vscode-foreground) opacity-70 hover:opacity-100 hover:bg-(--vscode-toolbar-hoverBackground)"
 
@@ -61,12 +29,15 @@ const iconButtonClass =
 export function TabStrip({
 	createObserver = defaultObserverFactory,
 	measureWidth = defaultMeasureWidth,
+	onToggleHistory,
 }: {
+	/** Открывает/закрывает шторку истории */
+	onToggleHistory?: () => void
 	createObserver?: ResizeObserverFactory
 	measureWidth?: (el: HTMLElement) => number
 }) {
 	const { t } = useI18n()
-	const { tabs, activeTabId, navigateToHistory } = useExtensionState()
+	const { tabs, activeTabId } = useExtensionState()
 	const stripRef = useRef<HTMLDivElement>(null)
 	const [width, setWidth] = useState<number>(Number.POSITIVE_INFINITY)
 	const [menuOpen, setMenuOpen] = useState(false)
@@ -151,7 +122,7 @@ export function TabStrip({
 			<button
 				aria-label={t("tabs.history")}
 				className={iconButtonClass}
-				onClick={navigateToHistory}
+				onClick={onToggleHistory}
 				title={t("tabs.history")}
 				type="button">
 				<PanelLeftIcon size={14} />

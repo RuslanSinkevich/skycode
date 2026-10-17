@@ -3,7 +3,7 @@ import Fuse from "fuse.js"
 import React, { KeyboardEvent, memo, useEffect, useMemo, useRef, useState } from "react"
 import styled from "styled-components"
 import { useI18n } from "@/i18n"
-import { highlight } from "../history/HistoryView"
+import { highlight } from "@/utils/highlight"
 
 export const OLLAMA_MODEL_PICKER_Z_INDEX = 1_000
 

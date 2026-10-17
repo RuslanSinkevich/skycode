@@ -103,7 +103,6 @@ const ModelPickerModal: React.FC<ModelPickerModalProps> = ({ isOpen, onOpenChang
 		planActSeparateModelsSetting,
 		showSettings,
 		showMcp,
-		showHistory,
 		showAccount,
 		favoritedModelIds,
 		liteLlmModels,
@@ -454,10 +453,10 @@ const ModelPickerModal: React.FC<ModelPickerModalProps> = ({ isOpen, onOpenChang
 
 	// Close modal when navigating to other views (settings, MCP, history, account)
 	useEffect(() => {
-		if (isOpen && (showSettings || showMcp || showHistory || showAccount)) {
+		if (isOpen && (showSettings || showMcp || showAccount)) {
 			onOpenChange(false)
 		}
-	}, [isOpen, showSettings, showMcp, showHistory, showAccount, onOpenChange])
+	}, [isOpen, showSettings, showMcp, showAccount, onOpenChange])
 
 	// Check if current model actually belongs to current provider (not auto-selected fallback)
 	const modelBelongsToProvider = useMemo(() => {

@@ -11,7 +11,6 @@ import { Logger } from "@/shared/services/Logger"
 import { cleanupOrphanedTempFiles } from "@core/storage/disk"
 import { sendAccountButtonClickedEvent } from "./core/controller/ui/subscribeToAccountButtonClicked"
 import { sendChatButtonClickedEvent } from "./core/controller/ui/subscribeToChatButtonClicked"
-import { sendHistoryButtonClickedEvent } from "./core/controller/ui/subscribeToHistoryButtonClicked"
 import { sendMcpButtonClickedEvent } from "./core/controller/ui/subscribeToMcpButtonClicked"
 import { sendSettingsButtonClickedEvent } from "./core/controller/ui/subscribeToSettingsButtonClicked"
 import { WebviewProvider } from "./core/webview"
@@ -278,13 +277,6 @@ export async function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		vscode.commands.registerCommand(commands.SettingsButton, () => {
 			sendSettingsButtonClickedEvent()
-		}),
-	)
-
-	context.subscriptions.push(
-		vscode.commands.registerCommand(commands.HistoryButton, async () => {
-			// Send event to all subscribers using the gRPC streaming method
-			await sendHistoryButtonClickedEvent()
 		}),
 	)
 

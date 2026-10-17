@@ -2,7 +2,6 @@ import type { Boolean, EmptyRequest } from "@shared/proto/skycode/common"
 import { useEffect } from "react"
 import AccountView from "./components/account/AccountView"
 import ChatView from "./components/chat/ChatView"
-import HistoryView from "./components/history/HistoryView"
 import McpView from "./components/mcp/configuration/McpConfigurationView"
 import OnboardingView from "./components/onboarding/OnboardingView"
 import SettingsView from "./components/settings/SettingsView"
@@ -20,16 +19,13 @@ const AppContent = () => {
 		mcpTab,
 		showSettings,
 		settingsTargetSection,
-		showHistory,
 		showAccount,
 		showAnnouncement,
 		onboardingModels,
 		setShowAnnouncement,
 		setShouldShowAnnouncement,
 		closeMcpView,
-		navigateToHistory,
 		hideSettings,
-		hideHistory,
 		hideAccount,
 		hideAnnouncement,
 	} = useExtensionState()
@@ -60,15 +56,13 @@ const AppContent = () => {
 	return (
 		<div className="flex h-screen w-full flex-col">
 			{showSettings && <SettingsView onDone={hideSettings} targetSection={settingsTargetSection} />}
-			{showHistory && <HistoryView onDone={hideHistory} />}
 			{showMcp && <McpView initialTab={mcpTab} onDone={closeMcpView} />}
 			{showAccount && <AccountView onDone={hideAccount} />}
 			{/* Do not conditionally load ChatView, it's expensive and there's state we don't want to lose (user input, disableInput, askResponse promise, etc.) */}
 			<ChatView
 				hideAnnouncement={hideAnnouncement}
-				isHidden={showSettings || showHistory || showMcp || showAccount}
+				isHidden={showSettings || showMcp || showAccount}
 				showAnnouncement={showAnnouncement}
-				showHistoryView={navigateToHistory}
 			/>
 		</div>
 	)

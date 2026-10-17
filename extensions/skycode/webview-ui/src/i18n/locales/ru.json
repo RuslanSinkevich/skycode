@@ -1023,5 +1023,20 @@
 	"tabs.status.done": "Завершена",
 	"tabs.status.queued": "В очереди",
 	"tabs.status.stopped": "Остановлена",
-	"tabs.status.idle": "Ожидает"
+	"tabs.status.idle": "Ожидает",
+	"historyDrawer.search": "Поиск по чатам",
+	"historyDrawer.close": "Закрыть историю",
+	"historyDrawer.newChat": "Новый чат",
+	"historyDrawer.openTabs": "Открыты во вкладках",
+	"historyDrawer.group.today": "Сегодня",
+	"historyDrawer.group.yesterday": "Вчера",
+	"historyDrawer.group.thisWeek": "На этой неделе",
+	"historyDrawer.group.older": "Ранее",
+	"historyDrawer.empty": "Чатов пока нет",
+	"historyDrawer.noResults": "Ничего не найдено",
+	"contextRing.tooltip": "Контекст {{percent}}%",
+	"contextRing.usage": "Контекст {{used}} / {{total}} ({{percent}}%)",
+	"contextRing.untilCompaction": "{{tokens}} до автосжатия",
+	"contextRing.compactionNext": "Сжатие при следующем запросе",
+	"contextRing.compact": "Сжать сессию"
 }

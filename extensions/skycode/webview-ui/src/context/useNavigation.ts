@@ -8,7 +8,6 @@ export interface NavigationState {
 	mcpTab: McpViewTab | undefined
 	showSettings: boolean
 	settingsTargetSection: string | undefined
-	showHistory: boolean
 	showAccount: boolean
 	showAnnouncement: boolean
 	showChatModelSelector: boolean
@@ -20,14 +19,12 @@ export interface NavigationActions {
 	closeMcpView: () => void
 
 	hideSettings: () => void
-	hideHistory: () => void
 	hideAccount: () => void
 	hideAnnouncement: () => void
 	hideChatModelSelector: () => void
 
 	navigateToMcp: (tab?: McpViewTab) => void
 	navigateToSettings: (targetSection?: string) => void
-	navigateToHistory: () => void
 	navigateToAccount: () => void
 	navigateToChat: () => void
 
@@ -40,7 +37,6 @@ export function useNavigation(): NavigationState & NavigationActions {
 	const [mcpTab, setMcpTab] = useState<McpViewTab | undefined>(undefined)
 	const [showSettings, setShowSettings] = useState(false)
 	const [settingsTargetSection, setSettingsTargetSection] = useState<string | undefined>(undefined)
-	const [showHistory, setShowHistory] = useState(false)
 	const [showAccount, setShowAccount] = useState(false)
 	const [showAnnouncement, setShowAnnouncement] = useState(false)
 	const [showChatModelSelector, setShowChatModelSelector] = useState(false)
@@ -55,7 +51,6 @@ export function useNavigation(): NavigationState & NavigationActions {
 		setSettingsTargetSection(undefined)
 		StateServiceClient.refreshBanners(EmptyRequest.create({})).catch((err) => console.error("Failed to refresh banners:", err))
 	}, [])
-	const hideHistory = useCallback(() => setShowHistory(false), [])
 	const hideAccount = useCallback(() => setShowAccount(false), [])
 	const hideAnnouncement = useCallback(() => setShowAnnouncement(false), [])
 	const hideChatModelSelector = useCallback(() => setShowChatModelSelector(false), [])
@@ -63,7 +58,6 @@ export function useNavigation(): NavigationState & NavigationActions {
 	const navigateToMcp = useCallback(
 		(tab?: McpViewTab) => {
 			setShowSettings(false)
-			setShowHistory(false)
 			setShowAccount(false)
 			if (tab) { setMcpTab(tab) }
 			setShowMcp(true)
@@ -73,7 +67,6 @@ export function useNavigation(): NavigationState & NavigationActions {
 
 	const navigateToSettings = useCallback(
 		(targetSection?: string) => {
-			setShowHistory(false)
 			closeMcpView()
 			setShowAccount(false)
 			setSettingsTargetSection(targetSection)
@@ -82,24 +75,15 @@ export function useNavigation(): NavigationState & NavigationActions {
 		[closeMcpView],
 	)
 
-	const navigateToHistory = useCallback(() => {
-		setShowSettings(false)
-		closeMcpView()
-		setShowAccount(false)
-		setShowHistory(true)
-	}, [closeMcpView])
-
 	const navigateToAccount = useCallback(() => {
 		setShowSettings(false)
 		closeMcpView()
-		setShowHistory(false)
 		setShowAccount(true)
 	}, [closeMcpView])
 
 	const navigateToChat = useCallback(() => {
 		setShowSettings(false)
 		closeMcpView()
-		setShowHistory(false)
 		setShowAccount(false)
 	}, [closeMcpView])
 
@@ -108,7 +92,6 @@ export function useNavigation(): NavigationState & NavigationActions {
 		mcpTab,
 		showSettings,
 		settingsTargetSection,
-		showHistory,
 		showAccount,
 		showAnnouncement,
 		showChatModelSelector,
@@ -117,14 +100,12 @@ export function useNavigation(): NavigationState & NavigationActions {
 		setMcpTab,
 		closeMcpView,
 		hideSettings,
-		hideHistory,
 		hideAccount,
 		hideAnnouncement,
 		hideChatModelSelector,
 
 		navigateToMcp,
 		navigateToSettings,
-		navigateToHistory,
 		navigateToAccount,
 		navigateToChat,
 

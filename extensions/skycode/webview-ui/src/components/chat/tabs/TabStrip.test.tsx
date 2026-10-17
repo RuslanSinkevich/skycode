@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
 	switchTab: vi.fn(() => Promise.resolve({})),
 	closeTab: vi.fn(() => Promise.resolve({})),
 	newTab: vi.fn(() => Promise.resolve({})),
-	navigateToHistory: vi.fn(),
+	onToggleHistory: vi.fn(),
 	state: { tabs: [] as TabInfo[], activeTabId: undefined as string | undefined },
 }))
 
@@ -18,7 +18,7 @@ vi.mock("@/services/grpc-client", () => ({
 }))
 
 vi.mock("@/context/ExtensionStateContext", () => ({
-	useExtensionState: () => ({ ...mocks.state, navigateToHistory: mocks.navigateToHistory }),
+	useExtensionState: () => mocks.state,
 }))
 
 // The interface language defaults to Russian; the assertions below use the English strings.
@@ -74,12 +74,12 @@ describe("TabStrip", () => {
 		expect(mocks.closeTab).toHaveBeenCalledWith(expect.objectContaining({ value: "c" }))
 	})
 
-	it("opens a new tab and the history view", () => {
-		render(<TabStrip />)
+	it("opens a new tab and toggles the history drawer", () => {
+		render(<TabStrip onToggleHistory={mocks.onToggleHistory} />)
 		fireEvent.click(screen.getByRole("button", { name: "New tab" }))
 		expect(mocks.newTab).toHaveBeenCalledTimes(1)
 		fireEvent.click(screen.getByRole("button", { name: "History" }))
-		expect(mocks.navigateToHistory).toHaveBeenCalledTimes(1)
+		expect(mocks.onToggleHistory).toHaveBeenCalledTimes(1)
 	})
 
 	it("shows the overflow list when tabs do not fit and switches from it", () => {

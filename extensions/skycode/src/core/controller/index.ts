@@ -44,6 +44,7 @@ import {
 	writeMcpMarketplaceCatalogToCache,
 } from "../storage/disk"
 import { type PersistenceErrorEvent, StateManager } from "../storage/StateManager"
+import { getContextUsageLimits } from "../context/context-management/context-window-utils"
 import { Task } from "../task"
 import { ApiSlotLimiter, type Session, SessionManager } from "../session"
 import { buildTabs, deriveTabStatus, deriveTabTitle, normalizeTabTitle, planRestoredTabs, toPersistedTabs } from "../session/tabs"
@@ -856,6 +857,14 @@ export class Controller {
 			sanitizeTruncatedPlaceholder,
 		)
 		const currentSessionId = this.sessionManager.activeSessionId ?? undefined
+		// [SKYCODE] Окно контекста и порог автосжатия активной задачи — для кольца контекста
+		let contextLimits: { contextWindow: number; autoCompactThresholdTokens: number } | undefined
+		try {
+			const activeApi = this.activeTask?.api
+			contextLimits = activeApi ? getContextUsageLimits(activeApi, autoCondenseThreshold) : undefined
+		} catch {
+			contextLimits = undefined
+		}
 		const tabs = this.getTabs(taskHistory || [])
 		this.persistTabs(tabs, currentSessionId)
 
@@ -908,6 +917,8 @@ export class Controller {
 			currentSessionId,
 			tabs,
 			activeTabId: currentSessionId,
+			contextWindowTokens: contextLimits?.contextWindow,
+			autoCompactThresholdTokens: contextLimits?.autoCompactThresholdTokens,
 			skycodeMessages,
 			currentFocusChainChecklist: this.activeTask?.taskState.currentFocusChainChecklist || null,
 			autoApprovalSettings,

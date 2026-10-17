@@ -1023,5 +1023,20 @@
 	"tabs.status.done": "Done",
 	"tabs.status.queued": "Queued",
 	"tabs.status.stopped": "Stopped",
-	"tabs.status.idle": "Idle"
+	"tabs.status.idle": "Idle",
+	"historyDrawer.search": "Search chats",
+	"historyDrawer.close": "Close history",
+	"historyDrawer.newChat": "New chat",
+	"historyDrawer.openTabs": "Open in tabs",
+	"historyDrawer.group.today": "Today",
+	"historyDrawer.group.yesterday": "Yesterday",
+	"historyDrawer.group.thisWeek": "This week",
+	"historyDrawer.group.older": "Earlier",
+	"historyDrawer.empty": "No chats yet",
+	"historyDrawer.noResults": "Nothing found",
+	"contextRing.tooltip": "Context {{percent}}%",
+	"contextRing.usage": "Context {{used}} / {{total}} ({{percent}}%)",
+	"contextRing.untilCompaction": "{{tokens}} until auto-compaction",
+	"contextRing.compactionNext": "Compaction on the next request",
+	"contextRing.compact": "Compact session"
 }

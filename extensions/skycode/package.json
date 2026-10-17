@@ -137,11 +137,6 @@
 				"icon": "$(server)"
 			},
 			{
-				"command": "skycode.historyButtonClicked",
-				"title": "История",
-				"icon": "$(history)"
-			},
-			{
 				"command": "skycode.accountButtonClicked",
 				"title": "Аккаунт",
 				"icon": "$(account)"
@@ -423,11 +418,6 @@
 				{
 					"command": "skycode.mcpButtonClicked",
 					"group": "navigation@2",
-					"when": "view == skycode.SidebarProvider"
-				},
-				{
-					"command": "skycode.historyButtonClicked",
-					"group": "navigation@3",
 					"when": "view == skycode.SidebarProvider"
 				},
 				{

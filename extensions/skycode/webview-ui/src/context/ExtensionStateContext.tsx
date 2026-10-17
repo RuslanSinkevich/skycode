@@ -37,7 +37,6 @@ export interface ExtensionStateContextType extends ExtensionState {
 	mcpTab?: McpViewTab
 	showSettings: boolean
 	settingsTargetSection?: string
-	showHistory: boolean
 	showAccount: boolean
 	showAnnouncement: boolean
 	showChatModelSelector: boolean
@@ -73,13 +72,11 @@ export interface ExtensionStateContextType extends ExtensionState {
 	// Navigation functions
 	navigateToMcp: (tab?: McpViewTab) => void
 	navigateToSettings: (targetSection?: string) => void
-	navigateToHistory: () => void
 	navigateToAccount: () => void
 	navigateToChat: () => void
 
 	// Hide functions
 	hideSettings: () => void
-	hideHistory: () => void
 	hideAccount: () => void
 	hideAnnouncement: () => void
 	hideChatModelSelector: () => void
@@ -99,7 +96,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		mcpTab,
 		showSettings,
 		settingsTargetSection,
-		showHistory,
 		showAccount,
 		showAnnouncement,
 		showChatModelSelector,
@@ -107,13 +103,11 @@ export const ExtensionStateContextProvider: React.FC<{
 		setMcpTab,
 		closeMcpView,
 		hideSettings,
-		hideHistory,
 		hideAccount,
 		hideAnnouncement,
 		hideChatModelSelector,
 		navigateToMcp,
 		navigateToSettings,
-		navigateToHistory,
 		navigateToAccount,
 		navigateToChat,
 		setShowAnnouncement,
@@ -216,7 +210,6 @@ export const ExtensionStateContextProvider: React.FC<{
 	const stateSubscriptionRef = useRef<(() => void) | null>(null)
 
 	const mcpButtonUnsubscribeRef = useRef<(() => void) | null>(null)
-	const historyButtonClickedSubscriptionRef = useRef<(() => void) | null>(null)
 	const chatButtonUnsubscribeRef = useRef<(() => void) | null>(null)
 	const accountButtonClickedSubscriptionRef = useRef<(() => void) | null>(null)
 	const settingsButtonClickedSubscriptionRef = useRef<(() => void) | null>(null)
@@ -312,21 +305,6 @@ export const ExtensionStateContextProvider: React.FC<{
 				},
 				onError: (error) => {
 					console.error("Error in mcpButtonClicked subscription:", error)
-				},
-			onComplete: () => {},
-			},
-		)
-
-		// Set up history button clicked subscription with webview type
-		historyButtonClickedSubscriptionRef.current = UiServiceClient.subscribeToHistoryButtonClicked(
-			{},
-			{
-				onResponse: () => {
-					// When history button is clicked, navigate to history view
-				navigateToHistory()
-				},
-				onError: (error) => {
-					console.error("Error in history button clicked subscription:", error)
 				},
 			onComplete: () => {},
 			},
@@ -525,10 +503,6 @@ export const ExtensionStateContextProvider: React.FC<{
 				mcpButtonUnsubscribeRef.current()
 				mcpButtonUnsubscribeRef.current = null
 			}
-			if (historyButtonClickedSubscriptionRef.current) {
-				historyButtonClickedSubscriptionRef.current()
-				historyButtonClickedSubscriptionRef.current = null
-			}
 			if (chatButtonUnsubscribeRef.current) {
 				chatButtonUnsubscribeRef.current()
 				chatButtonUnsubscribeRef.current = null
@@ -648,7 +622,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		mcpTab,
 		showSettings,
 		settingsTargetSection,
-		showHistory,
 		showAccount,
 		showAnnouncement,
 		showChatModelSelector,
@@ -664,13 +637,11 @@ export const ExtensionStateContextProvider: React.FC<{
 		// Navigation functions
 		navigateToMcp,
 		navigateToSettings,
-		navigateToHistory,
 		navigateToAccount,
 		navigateToChat,
 
 		// Hide functions
 		hideSettings,
-		hideHistory,
 		hideAccount,
 		hideAnnouncement,
 		setShowAnnouncement,
@@ -693,11 +664,11 @@ export const ExtensionStateContextProvider: React.FC<{
 		openRouterModels, liteLlmModels, openAiModels,
 		mcpServers, mcpMarketplaceCatalog, totalTasksSize,
 		availableTerminalProfiles, showMcp, mcpTab, showSettings,
-		settingsTargetSection, showHistory, showAccount,
+		settingsTargetSection, showAccount,
 		showAnnouncement, showChatModelSelector,
-		navigateToMcp, navigateToSettings, navigateToHistory,
+		navigateToMcp, navigateToSettings,
 		navigateToAccount, navigateToChat,
-		hideSettings, hideHistory, hideAccount,
+		hideSettings, hideAccount,
 		hideAnnouncement, hideChatModelSelector, closeMcpView,
 		setShowAnnouncement, setShowChatModelSelector,
 		refreshOpenRouterModels, refreshLiteLlmModels, onRelinquishControl,
