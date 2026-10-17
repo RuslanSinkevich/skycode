@@ -1,33 +1,6 @@
 import DOMPurify from "dompurify"
 
-// [SKYCODE] Сборка srcDoc для статичной визуализации (say "visual").
-// Скрипты в iframe не исполняются (sandbox без allow-scripts + CSP), здесь — вторая линия защиты.
-
-/** Переменные темы VS Code, которые пробрасываются внутрь iframe */
-export const VISUAL_THEME_VARS = [
-	"--vscode-foreground",
-	"--vscode-editor-background",
-	"--vscode-sideBar-background",
-	"--vscode-font-family",
-	"--vscode-font-size",
-	"--vscode-panel-border",
-	"--vscode-textLink-foreground",
-] as const
-
-export type VisualThemeVars = Partial<Record<(typeof VISUAL_THEME_VARS)[number], string>>
-
-/** Читает вычисленные значения переменных темы с корневого элемента документа */
-export function readVisualThemeVars(root: HTMLElement = document.documentElement): VisualThemeVars {
-	const style = getComputedStyle(root)
-	const result: VisualThemeVars = {}
-	for (const name of VISUAL_THEME_VARS) {
-		const value = style.getPropertyValue(name).trim()
-		if (value) {
-			result[name] = value
-		}
-	}
-	return result
-}
+// [SKYCODE] Подготовка статичной визуализации (say "visual") к показу в Shadow DOM.
 
 /** Убирает скрипты, обработчики on*, формы и встраиваемые объекты; SVG разрешён */
 export function sanitizeVisualContent(content: string): string {
@@ -35,22 +8,17 @@ export function sanitizeVisualContent(content: string): string {
 	const stripped = content.replace(/<script[\s\S]*?(<\/script\s*>|$)/gi, "").replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
 	return DOMPurify.sanitize(stripped, {
 		USE_PROFILES: { html: true, svg: true, svgFilters: true },
+		ADD_TAGS: ["style"],
 		FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "base", "meta", "link"],
 		FORBID_ATTR: ["srcdoc"],
 	})
 }
 
-const escapeCssValue = (value: string) => value.replace(/[<>{};]/g, "")
-
-export function buildVisualSrcDoc(content: string, theme: VisualThemeVars = {}): string {
-	const vars = Object.entries(theme)
-		.filter((entry): entry is [string, string] => !!entry[1])
-		.map(([name, value]) => `${name}: ${escapeCssValue(value)};`)
-		.join(" ")
-	const css = `
-:root { ${vars} }
-html, body { margin: 0; padding: 0; background: transparent; }
-body {
+const VISUAL_CSS = `
+:host { display: block; }
+.visual-root {
+	position: relative;
+	contain: paint;
 	padding: 8px;
 	color: var(--vscode-foreground, #ccc);
 	font-family: var(--vscode-font-family, sans-serif);
@@ -61,10 +29,21 @@ body {
 a { color: var(--vscode-textLink-foreground, #3794ff); }
 table { border-collapse: collapse; }
 th, td { border: 1px solid var(--vscode-panel-border, #555); padding: 4px 8px; text-align: left; }
+/* Таблицы — всегда в цветах темы: модели любят светлый фон с серым текстом, в тёмной теме нечитаемо */
+table, thead, tbody, tr, th, td { background: transparent !important; color: inherit !important; }
+th { font-weight: 600; }
 svg { max-width: 100%; height: auto; }
 img { max-width: 100%; }
 `
-	return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src https: data:"><style>${css}</style></head><body>${sanitizeVisualContent(content)}</body></html>`
+
+/**
+ * Разметка для Shadow DOM: стили модели не протекают в интерфейс и наоборот, переменные темы
+ * VS Code наследуются сами, высота — естественная. Скрипты не выполнятся: CSP вебвью пускает
+ * только скрипты с nonce, а DOMPurify вырезает script и обработчики on*.
+ * contain: paint — даже position: fixed из разметки модели не вылезет за карточку.
+ */
+export function buildVisualShadowHtml(content: string): string {
+	return `<style>${VISUAL_CSS}</style><div class="visual-root">${sanitizeVisualContent(content)}</div>`
 }
 
 export interface VisualPayload {

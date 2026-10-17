@@ -7,7 +7,7 @@ import { TASK_PROGRESS_PARAMETER } from "../types"
 const id = SkycodeDefaultTool.SHOW_VISUAL
 
 const DESCRIPTION =
-	"Show the user a small static visual right in the chat: comparison tables, cards, simple charts drawn as SVG, UI/layout mockups, diagrams that Mermaid cannot express. Scripts do not run and external resources (except https images) are blocked. Do NOT use for plain answers or code (use text/code blocks) or for ordinary diagrams (prefer a ```mermaid block)."
+	"Show the user a small static visual right in the chat: comparison tables, cards, simple charts drawn as SVG, UI/layout mockups, diagrams that Mermaid cannot express. Scripts do not run and external resources (except https images) are blocked. Do NOT use for plain answers or code (use text/code blocks) or for any diagram, flowchart or architecture/relationship scheme — ALWAYS use a ```mermaid block for those. Do not set text or background colors: the chat theme (light or dark) is applied automatically."
 
 const generic: SkycodeToolSpec = {
 	variant: ModelFamily.GENERIC,

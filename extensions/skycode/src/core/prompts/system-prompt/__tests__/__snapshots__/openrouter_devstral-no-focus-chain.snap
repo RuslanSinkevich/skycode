@@ -343,7 +343,7 @@ Usage:
 </ask_followup_question>
 
 ## show_visual
-Description: Show the user a small static visual right in the chat: comparison tables, cards, simple charts drawn as SVG, UI/layout mockups, diagrams that Mermaid cannot express. Scripts do not run and external resources (except https images) are blocked. Do NOT use for plain answers or code (use text/code blocks) or for ordinary diagrams (prefer a ```mermaid block).
+Description: Show the user a small static visual right in the chat: comparison tables, cards, simple charts drawn as SVG, UI/layout mockups, diagrams that Mermaid cannot express. Scripts do not run and external resources (except https images) are blocked. Do NOT use for plain answers or code (use text/code blocks) or for any diagram, flowchart or architecture/relationship scheme — ALWAYS use a ```mermaid block for those. Do not set text or background colors: the chat theme (light or dark) is applied automatically.
 Parameters:
 - title: (required) Short title of the visual.
 - content: (required) A self-contained HTML fragment or an <svg>. Inline CSS only; no scripts.

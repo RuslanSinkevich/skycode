@@ -626,7 +626,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								</TooltipTrigger>
 							</Tooltip>
 
-							<ModelContainer ref={modelSelectorRef}>
+							<ModelContainer className="items-center gap-1.5" ref={modelSelectorRef}>
 								<ModelPickerModal
 									currentMode={mode}
 									isOpen={showModelSelector}
@@ -643,8 +643,9 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 										</ModelDisplayButton>
 									</ModelButtonWrapper>
 								</ModelPickerModal>
+								{/* [SKYCODE] Кольцо — сразу за названием модели, а не у переключателя режимов */}
+								<ContextRing isAiWorking={isAiWorking} />
 							</ModelContainer>
-							<ContextRing isAiWorking={isAiWorking} />
 						</ButtonGroup>
 					</div>
 					{/* Mode selector (Plan / Act / Ask / Debug) */}

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest"
-import { buildVisualSrcDoc, parseVisualPayload } from "./visualSrcDoc"
+import { buildVisualShadowHtml, parseVisualPayload } from "./visualSrcDoc"
 
-describe("buildVisualSrcDoc", () => {
+describe("buildVisualShadowHtml", () => {
 	it("strips script tags and on* attributes", () => {
-		const html = buildVisualSrcDoc(
+		const html = buildVisualShadowHtml(
 			'<p onclick="alert(1)">hi</p><script>alert(2)</script><svg onload="x()"><circle r="5"/></svg><img src="https://a/b.png" onerror=\'x()\'>',
 		)
 		expect(html).not.toMatch(/<script/i)
@@ -12,12 +12,11 @@ describe("buildVisualSrcDoc", () => {
 		expect(html).toContain("<circle")
 	})
 
-	it("includes theme variables and base styles", () => {
-		const html = buildVisualSrcDoc("<b>x</b>", { "--vscode-foreground": "#abcdef", "--vscode-font-size": "13px" })
-		expect(html).toContain("--vscode-foreground: #abcdef;")
-		expect(html).toContain("--vscode-font-size: 13px;")
-		expect(html).toContain("border-collapse")
-		expect(html).toContain("<b>x</b>")
+	it("wraps content with base styles that use theme variables", () => {
+		const html = buildVisualShadowHtml("<b>x</b>")
+		expect(html).toContain("var(--vscode-foreground")
+		expect(html).toContain("contain: paint")
+		expect(html).toContain('<div class="visual-root"><b>x</b></div>')
 	})
 })
 

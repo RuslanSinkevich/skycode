@@ -407,6 +407,8 @@
 	"chat.copied": "Скопировано",
 	"chat.visual.title": "Визуализация",
 	"chat.visual.copyHtml": "Копировать HTML",
+	"chat.visual.expand": "Развернуть",
+	"chat.visual.close": "Закрыть",
 	"chat.manageMcpServers": "Управление MCP серверами",
 	"chat.hideMcpServers": "Скрыть MCP серверы",
 	"chat.showMcpServers": "Показать MCP серверы",

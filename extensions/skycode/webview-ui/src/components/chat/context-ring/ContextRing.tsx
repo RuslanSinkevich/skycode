@@ -107,7 +107,7 @@ export function ContextRing({ isAiWorking }: ContextRingProps) {
 				aria-expanded={open}
 				aria-haspopup="dialog"
 				aria-label={title}
-				className="flex items-center justify-center p-0 m-0 bg-transparent border-0 cursor-pointer"
+				className="shrink-0 flex items-center justify-center p-0 m-0 bg-transparent border-0 cursor-pointer"
 				data-testid="context-ring-button"
 				onClick={toggle}
 				ref={buttonRef}

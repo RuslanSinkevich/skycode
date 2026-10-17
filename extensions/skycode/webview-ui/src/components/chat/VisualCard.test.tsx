@@ -5,7 +5,7 @@ import { I18nProvider } from "@/i18n"
 import { VisualCard } from "./VisualCard"
 
 describe("VisualCard", () => {
-	it("renders a sandboxed iframe with the title", () => {
+	it("renders the title and the content in a shadow root", () => {
 		localStorage.setItem("skycode.interfaceLanguage", "en")
 		const message: SkycodeMessage = {
 			ts: 1,
@@ -19,9 +19,7 @@ describe("VisualCard", () => {
 			</I18nProvider>,
 		)
 		expect(getByText("My table")).toBeInTheDocument()
-		const iframe = container.querySelector("iframe")
-		expect(iframe).not.toBeNull()
-		expect(iframe?.getAttribute("sandbox")).toBe("allow-same-origin")
-		expect(iframe?.getAttribute("srcdoc")).toContain("<table>")
+		const host = container.querySelector('[data-testid="visual-content"]')
+		expect(host?.shadowRoot?.innerHTML).toContain("<table>")
 	})
 })
