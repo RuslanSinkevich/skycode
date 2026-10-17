@@ -32,6 +32,18 @@ export async function resendFromMessage(controller: Controller, request: ResendF
 		Logger.error("[resendFromMessage] DiffSystem rollback failed (continuing):", error)
 	}
 
+	// [SKYCODE] Правка самого первого сообщения — это та же задача с другим текстом. Раньше история
+	// обрезалась целиком, и первой строкой оставалась статистика удалённых запросов ({"tokensIn":…}),
+	// которую интерфейс показывал вместо задачи. Теперь в этой же вкладке запускается новая задача
+	// с исправленным текстом, а прежняя остаётся в истории как была.
+	const firstMessage = controller.activeTask?.messageStateHandler.getSkycodeMessages()[0]
+	const currentSession = controller.sessionManager.currentSession
+	if (firstMessage?.ts === messageTs && currentSession) {
+		await controller.initTask(newText, newImages, newFiles, undefined, { sessionId: currentSession.id })
+		Logger.log(`[resendFromMessage] First message edited — restarted the task in the same tab`)
+		return Empty.create({})
+	}
+
 	// 2. Truncate skycodeMessages and API history
 	if (controller.activeTask) {
 		const messageStateHandler = controller.activeTask.messageStateHandler

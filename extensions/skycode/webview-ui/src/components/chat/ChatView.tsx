@@ -93,6 +93,9 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement }: ChatViewProp
 
 	//const task = messages.length > 0 ? (messages[0].say === "task" ? messages[0] : undefined) : undefined) : undefined
 	const task = useMemo(() => messages.at(0), [messages]) // leaving this less safe version here since if the first message is not a task, then the extension is in a bad state and needs to be debugged (see Skycode.abort)
+	// [SKYCODE] Шапка первого хода — только настоящая первая реплика пользователя: служебная строка
+	// (статистика удалённых запросов и т.п.) не должна показываться вместо текста задачи
+	const taskTurnMessage = task?.type === "say" && (task.say === "text" || task.say === "task") ? task : undefined
 
 	// isAiWorking defined below after chatState is created
 	const modifiedMessages = useMemo(() => {
@@ -359,8 +362,8 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement }: ChatViewProp
 	}, [visibleMessages])
 
 	const turns = useMemo(() => {
-		return groupByTurns(groupedMessages, task)
-	}, [groupedMessages, task])
+		return groupByTurns(groupedMessages, taskTurnMessage)
+	}, [groupedMessages, taskTurnMessage])
 
 	// Use scroll behavior hook
 	const scrollBehavior = useScrollBehavior(messages, visibleMessages, turns, expandedRows, setExpandedRows)
