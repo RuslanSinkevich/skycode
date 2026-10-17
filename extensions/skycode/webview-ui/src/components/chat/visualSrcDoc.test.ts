@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { buildRichClipboardHtml, buildVisualShadowHtml, parseVisualPayload } from "./visualSrcDoc"
+import { buildRichClipboardHtml, buildVisualDocument, buildVisualShadowHtml, parseVisualPayload } from "./visualSrcDoc"
 
 describe("buildVisualShadowHtml", () => {
 	it("strips script tags and on* attributes", () => {
@@ -44,5 +44,15 @@ describe("buildRichClipboardHtml", () => {
 		)
 		expect(html).not.toMatch(/>\s+</)
 		expect(html).toContain("b c")
+	})
+})
+
+describe("buildVisualDocument", () => {
+	it("builds a full sanitized document for the editor tab", () => {
+		const html = buildVisualDocument("<p onclick='x()'>hi</p><script>x()</script>", "Menu <b>")
+		expect(html).toMatch(/^<!DOCTYPE html>/)
+		expect(html).toContain("<title>Menu b</title>")
+		expect(html).toContain("<p>hi</p>")
+		expect(html).not.toMatch(/<script|onclick/i)
 	})
 })

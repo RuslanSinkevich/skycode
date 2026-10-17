@@ -46,6 +46,17 @@ export function buildVisualShadowHtml(content: string): string {
 	return `<style>${VISUAL_CSS}</style><div class="visual-root">${sanitizeVisualContent(content)}</div>`
 }
 
+/**
+ * [SKYCODE] Полный документ для вкладки редактора («Развернуть»): те же базовые стили,
+ * что в чате, но на всю ширину редактора. Скрипты там выключены самой панелью.
+ */
+export function buildVisualDocument(content: string, title: string): string {
+	const css = VISUAL_CSS.replace(":host { display: block; }", "html, body { margin: 0; background: var(--vscode-editor-background); }")
+	const safeTitle = title.replace(/[<>&]/g, "")
+	return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${safeTitle}</title><style>${css}
+.visual-root { padding: 16px 24px; }</style></head><body><div class="visual-root">${sanitizeVisualContent(content)}</div></body></html>`
+}
+
 export interface VisualPayload {
 	title: string
 	content: string

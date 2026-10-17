@@ -18,6 +18,8 @@ service FileService {
 
   // Opens an image in the system viewer
   rpc openImage(StringRequest) returns (Empty);
+  // [SKYCODE] Открыть визуализацию (say "visual") во вкладке редактора; value — JSON { title, html }
+  rpc openVisual(StringRequest) returns (Empty);
 
   // Opens a mention (file, path, git commit, problem, terminal, or URL)
   rpc openMention(StringRequest) returns (Empty);
