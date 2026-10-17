@@ -40,6 +40,9 @@ describe("registerToolCall", () => {
 			"plan_mode_respond",
 			"act_mode_respond",
 			"check_background_command",
+			"browser_action",
+			"use_mcp_tool",
+			"access_mcp_resource",
 		]) {
 			const recent: string[] = []
 			registerToolCall(recent, tool, { x: "1" })

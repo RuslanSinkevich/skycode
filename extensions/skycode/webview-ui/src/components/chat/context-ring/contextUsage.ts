@@ -70,3 +70,34 @@ export function getContextLevel(tokens: number, thresholdTokens: number | undefi
 	}
 	return "normal"
 }
+
+export interface BreakdownSegment {
+	category: string
+	tokens: number
+	/** Доля от суммы категорий, целые проценты (для подписей) */
+	percent: number
+	/** Доля от суммы категорий, точная (для ширины сегмента полосы), 0..100 */
+	width: number
+}
+
+/** [SKYCODE] Бэкенд-разбивка контекста -> сегменты полосы: доли от суммы, категории < 1% скрыты. */
+export function buildBreakdownSegments(breakdown: { category: string; tokens: number }[] | undefined): BreakdownSegment[] {
+	const items = (breakdown ?? []).filter((item) => item.tokens > 0)
+	const sum = items.reduce((total, item) => total + item.tokens, 0)
+	if (sum <= 0) {
+		return []
+	}
+	return items
+		.map((item) => ({
+			category: item.category,
+			tokens: item.tokens,
+			percent: Math.round((item.tokens / sum) * 100),
+			width: (item.tokens / sum) * 100,
+		}))
+		.filter((segment) => segment.width >= 1)
+}
+
+/** Категория, занимающая больше 45% контекста (кроме системной — её не сократить), иначе undefined. */
+export function getDominantCategory(segments: BreakdownSegment[]): string | undefined {
+	return segments.find((segment) => segment.category !== "system" && segment.width > 45)?.category
+}

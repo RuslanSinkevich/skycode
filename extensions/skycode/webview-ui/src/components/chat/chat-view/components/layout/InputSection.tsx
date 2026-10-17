@@ -51,7 +51,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
 	// Handle send - queue if AI is working, send directly otherwise.
 	// Snapshot input state up-front so any later state churn (e.g. webview re-render
 	// while sending) can't silently swallow the user's message.
-	const handleSend = () => {
+	const handleSend = (info?: { repeat?: boolean }) => {
 		const text = inputValue.trim()
 		const imagesSnapshot = selectedImages.slice()
 		const filesSnapshot = selectedFiles.slice()
@@ -67,7 +67,11 @@ export const InputSection: React.FC<InputSectionProps> = ({
 			return
 		}
 		if (action === "sendQueued") {
-			// [SKYCODE] Пустой ввод + непустая очередь: отправить самое старое сообщение (как кнопка «→»)
+			// [SKYCODE] Пустой ввод + непустая очередь: отправить самое старое сообщение (как кнопка «→»).
+			// Автоповтор клавиши игнорируем (дебаунс и защита от двойной отправки — в sendNow).
+			if (info?.repeat) {
+				return
+			}
 			void messageQueue?.sendNow()
 			return
 		}

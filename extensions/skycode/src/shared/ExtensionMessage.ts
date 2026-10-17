@@ -70,6 +70,8 @@ export interface ExtensionState {
 	contextWindowTokens?: number
 	/** [SKYCODE] Порог автосжатия активной задачи в токенах (единый источник — getAutoCompactThresholdTokens) */
 	autoCompactThresholdTokens?: number
+	/** [SKYCODE] Оценка структуры контекста активной задачи по категориям (токены, масштабированы к реальному итогу) */
+	contextBreakdown?: { category: string; tokens: number }[]
 	currentTaskItem?: HistoryItem
 	currentFocusChainChecklist?: string | null
 	mcpDisplayMode: McpDisplayMode
@@ -233,6 +235,7 @@ export type SkycodeSay =
 	| "conditional_rules_applied"
 	| "workflow_step_start"
 	| "visual"
+	| "chart"
 
 export interface SkycodeSayTool {
 	tool:

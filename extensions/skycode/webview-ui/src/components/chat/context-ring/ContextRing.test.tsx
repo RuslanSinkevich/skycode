@@ -32,6 +32,7 @@ describe("ContextRing", () => {
 		mocks.state = {
 			skycodeMessages: [
 				{ ts: 1, type: "say", say: "api_req_started", text: JSON.stringify({ tokensIn: 43000, tokensOut: 500 }) },
+				{ ts: 2, type: "ask", ask: "completion_result", text: "" },
 			],
 			contextWindowTokens: 128000,
 			autoCompactThresholdTokens: 90500,
@@ -72,6 +73,44 @@ describe("ContextRing", () => {
 				<ContextRing isAiWorking />
 			</I18nProvider>,
 		)
+		fireEvent.click(screen.getByTestId("context-ring-button"))
+		expect((screen.getByText("Compact session") as HTMLButtonElement).disabled).toBe(true)
+	})
+
+	it("renders the breakdown list and a hint for a dominant category", () => {
+		mocks.state = {
+			...mocks.state,
+			contextBreakdown: [
+				{ category: "system", tokens: 5000 },
+				{ category: "files", tokens: 35000 },
+				{ category: "conversation", tokens: 3500 },
+			],
+		}
+		render(<ContextRing />)
+		fireEvent.click(screen.getByTestId("context-ring-button"))
+		expect(screen.getByText("System prompt and tools")).toBeTruthy()
+		expect(screen.getByText("Files and search")).toBeTruthy()
+		expect(screen.getByText("35k · 80%")).toBeTruthy()
+		expect(screen.getByTestId("context-ring-segment-files")).toBeTruthy()
+		expect(screen.getByTestId("context-ring-hint").textContent).toContain("File reads")
+	})
+
+	it("keeps the single bar when there is no breakdown", () => {
+		render(<ContextRing />)
+		fireEvent.click(screen.getByTestId("context-ring-button"))
+		expect(screen.queryByTestId("context-ring-breakdown")).toBeNull()
+		expect(screen.queryByTestId("context-ring-hint")).toBeNull()
+	})
+
+	it("disables compaction while a tool/command approval is pending", () => {
+		mocks.state = {
+			...mocks.state,
+			skycodeMessages: [
+				{ ts: 1, type: "say", say: "api_req_started", text: JSON.stringify({ tokensIn: 100 }) },
+				{ ts: 2, type: "ask", ask: "command", text: "ls" },
+			],
+		}
+		render(<ContextRing />)
 		fireEvent.click(screen.getByTestId("context-ring-button"))
 		expect((screen.getByText("Compact session") as HTMLButtonElement).disabled).toBe(true)
 	})

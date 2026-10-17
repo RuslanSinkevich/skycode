@@ -17,9 +17,14 @@ const REPEAT_EXEMPT_TOOLS = new Set([
 	"attempt_completion",
 	"ask_followup_question",
 	"show_visual",
+	"show_chart",
 	"plan_mode_respond",
 	"act_mode_respond",
 	"check_background_command",
+	// состояние страницы/MCP-сервера между вызовами может меняться
+	"browser_action",
+	"use_mcp_tool",
+	"access_mcp_resource",
 	// read_file сам сверяет содержимое файла и отвечает «не менялся» точно
 	"read_file",
 ])

@@ -39,7 +39,7 @@ interface UseInputHandlersParams {
 	cursorPosition: number
 	setCursorPosition: React.Dispatch<React.SetStateAction<number>>
 	sendingDisabled: boolean
-	onSend: () => void
+	onSend: (info?: { repeat?: boolean }) => void
 	textAreaRef: React.MutableRefObject<HTMLTextAreaElement | null>
 	localWorkflowToggles: Record<string, boolean> | undefined
 	globalWorkflowToggles: Record<string, boolean> | undefined
@@ -358,7 +358,7 @@ export function useInputHandlers({
 			if (event.key === "Enter" && !event.shiftKey && !isComposing) {
 				event.preventDefault()
 				if (!sendingDisabled) {
-					onSend()
+					onSend({ repeat: event.repeat })
 				}
 			}
 

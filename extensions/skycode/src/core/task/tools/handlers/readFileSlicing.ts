@@ -12,6 +12,8 @@ export interface ReadFileCacheEntry {
 	/** Ключ conversationHistoryDeletedRange в момент чтения */
 	deletedRangeKey: string
 	totalLines: number
+	/** TaskState.historyGeneration в момент чтения: история переписана — заглушка недействительна */
+	generation?: number
 }
 
 export function hashContent(text: string): string {
@@ -91,8 +93,12 @@ export function canStubReread(
 	hash: string,
 	deletedRange: [number, number] | undefined,
 	historyLength = Number.POSITIVE_INFINITY,
+	generation = 0,
 ): boolean {
 	if (!entry || entry.hash !== hash) {
+		return false
+	}
+	if ((entry.generation ?? 0) !== generation) {
 		return false
 	}
 	if (entry.deletedRangeKey !== deletedRangeKey(deletedRange)) {

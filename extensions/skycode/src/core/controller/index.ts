@@ -45,6 +45,7 @@ import {
 } from "../storage/disk"
 import { type PersistenceErrorEvent, StateManager } from "../storage/StateManager"
 import { getContextUsageLimits } from "../context/context-management/context-window-utils"
+import { type ContextBreakdownItem, estimateContextBreakdown } from "../context/context-management/contextBreakdown"
 import { Task } from "../task"
 import { ApiSlotLimiter, type Session, SessionManager } from "../session"
 import { buildTabs, deriveTabStatus, deriveTabTitle, normalizeTabTitle, planRestoredTabs, toPersistedTabs } from "../session/tabs"
@@ -354,7 +355,9 @@ export class Controller {
 		if (this.activeTask) {
 			this.activeTask.setMode(modeToSwitchTo)
 			const apiConfiguration = this.stateManager.getApiConfiguration()
-			this.activeTask.api = buildApiHandler({ ...apiConfiguration, ulid: this.activeTask.ulid }, modeToSwitchTo)
+			this.activeTask.replaceApiHandler(
+				buildApiHandler({ ...apiConfiguration, ulid: this.activeTask.ulid }, modeToSwitchTo),
+			)
 		}
 
 		await this.postStateToWebview()
@@ -380,7 +383,9 @@ export class Controller {
 		if (this.activeTask) {
 			this.activeTask.setMode(modeToSwitchTo)
 			const apiConfiguration = this.stateManager.getApiConfiguration()
-			this.activeTask.api = buildApiHandler({ ...apiConfiguration, ulid: this.activeTask.ulid }, modeToSwitchTo)
+			this.activeTask.replaceApiHandler(
+				buildApiHandler({ ...apiConfiguration, ulid: this.activeTask.ulid }, modeToSwitchTo),
+			)
 		}
 
 		await this.postStateToWebview()
@@ -601,7 +606,7 @@ export class Controller {
 
 		await this.postStateToWebview()
 		if (this.activeTask) {
-			this.activeTask.api = buildApiHandler({ ...updatedConfig, ulid: this.activeTask.ulid }, currentMode)
+			this.activeTask.replaceApiHandler(buildApiHandler({ ...updatedConfig, ulid: this.activeTask.ulid }, currentMode))
 		}
 		// Dont send settingsButtonClicked because its bad ux if user is on welcome
 	}
@@ -787,6 +792,59 @@ export class Controller {
 		}
 	}
 
+	private contextBreakdownCache?: { key: string; value: ContextBreakdownItem[] }
+
+	/**
+	 * [SKYCODE] Разбивка контекста активной задачи по категориям. Кэш по (taskId, длина истории,
+	 * удалённый диапазон, реальный итог, размер промпта) — state постится часто, пересчёт нужен редко.
+	 */
+	private getContextBreakdown(skycodeMessages: { say?: string; text?: string }[]): ContextBreakdownItem[] | undefined {
+		const task = this.activeTask
+		if (!task) {
+			return undefined
+		}
+		try {
+			let realTotal = 0
+			for (let i = skycodeMessages.length - 1; i >= 0 && !realTotal; i--) {
+				const msg = skycodeMessages[i]
+				if (msg.say !== "api_req_started" || !msg.text) {
+					continue
+				}
+				try {
+					const info = JSON.parse(msg.text)
+					realTotal = (info.tokensIn || 0) + (info.tokensOut || 0) + (info.cacheWrites || 0) + (info.cacheReads || 0)
+				} catch {
+					// битое сообщение — смотрим предыдущее
+				}
+			}
+			const history = task.messageStateHandler.getApiConversationHistory()
+			const range = task.taskState.conversationHistoryDeletedRange
+			const key = [
+				task.taskId,
+				history.length,
+				range ? `${range[0]}-${range[1]}` : "none",
+				realTotal,
+				task.lastSystemPromptChars,
+				task.lastToolsChars,
+			].join("|")
+			if (this.contextBreakdownCache?.key === key) {
+				return this.contextBreakdownCache.value
+			}
+			// Модели уходят первые два сообщения и всё после удалённого диапазона
+			const sent = range ? [...history.slice(0, range[0]), ...history.slice(range[1] + 1)] : history
+			const value = estimateContextBreakdown({
+				messages: sent,
+				systemPromptChars: task.lastSystemPromptChars,
+				toolsChars: task.lastToolsChars,
+				realTotalTokens: realTotal || undefined,
+			})
+			this.contextBreakdownCache = { key, value }
+			return value
+		} catch {
+			return undefined
+		}
+	}
+
 	async getStateToPostToWebview(): Promise<ExtensionState> {
 		// [SKYCODE-SKYCODE] Capture indexing progress IMMEDIATELY before any awaits.
 		// getStateToPostToWebview has multiple awaits (getBanners, openAiCodex, etc.)
@@ -866,6 +924,7 @@ export class Controller {
 		} catch {
 			contextLimits = undefined
 		}
+		const contextBreakdown = this.getContextBreakdown(skycodeMessages)
 		const tabs = this.getTabs(taskHistory || [])
 		this.persistTabs(tabs, currentSessionId)
 
@@ -920,6 +979,7 @@ export class Controller {
 			activeTabId: currentSessionId,
 			contextWindowTokens: contextLimits?.contextWindow,
 			autoCompactThresholdTokens: contextLimits?.autoCompactThresholdTokens,
+			contextBreakdown,
 			skycodeMessages,
 			currentFocusChainChecklist: this.activeTask?.taskState.currentFocusChainChecklist || null,
 			autoApprovalSettings,

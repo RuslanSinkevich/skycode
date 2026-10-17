@@ -202,7 +202,7 @@ export function useScrollBehavior(
 			let turnIndex = -1
 			for (let t = 0; t < turns.length; t++) {
 				const turn = turns[t]
-				if (turn.userMessage.ts === targetMessage.ts) {
+				if (turn.userMessage?.ts === targetMessage.ts) {
 					turnIndex = t
 					break
 				}
@@ -444,7 +444,7 @@ export function useScrollBehavior(
 	// same amount → scrollHeight is invariant → pinned scrollTop stays
 	// glued to lastTurn.offsetTop without any explicit re-scroll.
 
-	const lastTurnTs = turns.length ? turns[turns.length - 1].userMessage.ts : 0
+	const lastTurnTs = turns.length ? (turns[turns.length - 1].userMessage?.ts ?? turns.length) : 0
 
 	useEffect(() => {
 		const scroller = scrollerEl

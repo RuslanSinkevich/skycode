@@ -11,6 +11,7 @@ export enum SkycodeDefaultTool {
 	BASH = "execute_command",
 	FILE_EDIT = "replace_in_file",
 	FILE_READ = "read_file",
+	READ_SYMBOL = "read_symbol",
 	FILE_NEW = "write_to_file",
 	SEARCH = "search_files",
 	LIST_FILES = "list_files",
@@ -45,6 +46,7 @@ export enum SkycodeDefaultTool {
 	CHECK_BACKGROUND = "check_background_command",
 	// [SKYCODE] Статичная HTML/SVG-визуализация в чате
 	SHOW_VISUAL = "show_visual",
+	SHOW_CHART = "show_chart",
 }
 
 // Array of all tool names for compatibility
@@ -56,11 +58,13 @@ export const toolUseNames = Object.values(SkycodeDefaultTool) as SkycodeDefaultT
 export const READ_ONLY_TOOLS = [
 	SkycodeDefaultTool.LIST_FILES,
 	SkycodeDefaultTool.FILE_READ,
+	SkycodeDefaultTool.READ_SYMBOL,
 	SkycodeDefaultTool.SEARCH,
 	SkycodeDefaultTool.LIST_CODE_DEF,
 	SkycodeDefaultTool.BROWSER,
 	SkycodeDefaultTool.ASK,
 	SkycodeDefaultTool.SHOW_VISUAL,
+	SkycodeDefaultTool.SHOW_CHART,
 	SkycodeDefaultTool.WEB_SEARCH,
 	SkycodeDefaultTool.WEB_FETCH,
 	SkycodeDefaultTool.USE_SKILL,
@@ -74,6 +78,7 @@ export const READ_ONLY_TOOLS = [
 export const EXPLORATION_ONLY_TOOLS: readonly string[] = [
 	SkycodeDefaultTool.LIST_FILES,
 	SkycodeDefaultTool.FILE_READ,
+	SkycodeDefaultTool.READ_SYMBOL,
 	SkycodeDefaultTool.SEARCH,
 	SkycodeDefaultTool.LIST_CODE_DEF,
 	SkycodeDefaultTool.CODEBASE_SEARCH,

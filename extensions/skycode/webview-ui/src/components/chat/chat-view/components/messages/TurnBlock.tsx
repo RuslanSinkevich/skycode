@@ -37,7 +37,7 @@ export const TurnBlock: React.FC<TurnBlockProps> = memo(({
 	messageHandlers,
 }) => {
 	const isLastTurn = turnIndex === totalTurns - 1
-	const isLong = (turn.userMessage.text?.length ?? 0) > LONG_MESSAGE_THRESHOLD
+	const isLong = (turn.userMessage?.text?.length ?? 0) > LONG_MESSAGE_THRESHOLD
 	const [isExpanded, setIsExpanded] = useState(false)
 
 	const toggleExpanded = useCallback(() => {
@@ -45,9 +45,9 @@ export const TurnBlock: React.FC<TurnBlockProps> = memo(({
 	}, [])
 
 	return (
-		<div data-turn-ts={turn.userMessage.ts}>
+		<div data-turn-ts={turn.userMessage?.ts}>
 			{/* Sticky header - user message. [SKYCODE] Показываем и для первой реплики задачи: строки задачи (TaskHeader) больше нет. */}
-			{(
+			{turn.userMessage && (
 				<div
 					className="bg-background"
 					data-message-ts={turn.userMessage.ts}

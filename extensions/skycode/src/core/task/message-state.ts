@@ -171,6 +171,8 @@ export class MessageStateHandler {
 		// Protect with mutex to prevent concurrent modifications from corrupting data (RC-4)
 		return await this.withStateLock(async () => {
 			this.apiConversationHistory = newHistory
+			// [SKYCODE] История переписана — кэши, завязанные на прежний контекст, недействительны
+			this.taskState.historyGeneration++
 			await saveApiConversationHistory(this.taskId, this.apiConversationHistory)
 		})
 	}

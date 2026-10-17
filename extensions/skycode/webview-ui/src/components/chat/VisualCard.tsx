@@ -20,7 +20,8 @@ function ShadowContent({ html, hostRef: externalRef }: { html: string; hostRef?:
 		const root = host.shadowRoot ?? host.attachShadow({ mode: "open" })
 		root.innerHTML = html
 	}, [html])
-	return <div data-testid="visual-content" ref={hostRef} />
+	// [SKYCODE] Containment на самом хосте (вне shadow root): что бы ни написал CSS модели, наружу не вылезет
+		return <div data-testid="visual-content" ref={hostRef} style={{ position: "relative", contain: "content", isolation: "isolate" }} />
 }
 
 const iconButtonClass =
@@ -32,6 +33,16 @@ export const VisualCard = memo(({ message }: { message: SkycodeMessage }) => {
 	const { t } = useI18n()
 	const [copied, setCopied] = useState<"rich" | "html" | null>(null)
 	const inlineHostRef = useRef<HTMLDivElement>(null)
+	const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+	// [SKYCODE] Таймер подсветки не должен жить дольше карточки
+	useEffect(
+		() => () => {
+			if (copiedTimerRef.current) {
+				clearTimeout(copiedTimerRef.current)
+			}
+		},
+		[],
+	)
 	const payload = useMemo(() => parseVisualPayload(message.text), [message.text])
 	const html = useMemo(() => (payload ? buildVisualShadowHtml(payload.content) : ""), [payload])
 
@@ -43,7 +54,10 @@ export const VisualCard = memo(({ message }: { message: SkycodeMessage }) => {
 
 	const flashCopied = (kind: "rich" | "html") => {
 		setCopied(kind)
-		setTimeout(() => setCopied(null), 1500)
+		if (copiedTimerRef.current) {
+			clearTimeout(copiedTimerRef.current)
+		}
+		copiedTimerRef.current = setTimeout(() => setCopied(null), 1500)
 	}
 	// Обычное копирование: оформленный HTML для Word/Excel/почты и чистый текст для остального —
 	// программа, куда вставляют, сама выбирает формат. Таблица в тексте — через табуляцию (для Excel).
@@ -68,8 +82,12 @@ export const VisualCard = memo(({ message }: { message: SkycodeMessage }) => {
 		).catch((err) => console.error("[VisualCard] openVisual failed:", err))
 	}
 	const copyHtml = async () => {
-		await navigator.clipboard.writeText(payload.content)
-		flashCopied("html")
+		try {
+			await navigator.clipboard.writeText(payload.content)
+			flashCopied("html")
+		} catch (err) {
+			console.error("[VisualCard] copyHtml failed:", err)
+		}
 	}
 
 	return (

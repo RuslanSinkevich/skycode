@@ -38,6 +38,7 @@ export const config = createVariant(ModelFamily.QWEN)
 	.tools(
 		// Essential tools
 		SkycodeDefaultTool.FILE_READ,
+		SkycodeDefaultTool.READ_SYMBOL,
 		SkycodeDefaultTool.FILE_NEW,
 		SkycodeDefaultTool.FILE_EDIT,
 		SkycodeDefaultTool.BASH,
@@ -45,6 +46,7 @@ export const config = createVariant(ModelFamily.QWEN)
 		SkycodeDefaultTool.ATTEMPT,
 		SkycodeDefaultTool.ASK,
 		SkycodeDefaultTool.SHOW_VISUAL,
+		SkycodeDefaultTool.SHOW_CHART,
 		SkycodeDefaultTool.PLAN_MODE,
 		// Search tools
 		SkycodeDefaultTool.CODEBASE_SEARCH,

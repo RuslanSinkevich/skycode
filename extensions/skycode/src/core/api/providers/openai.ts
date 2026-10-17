@@ -11,7 +11,12 @@ import { convertToR1Format } from "../transform/r1-format"
 import { ApiStream } from "../transform/stream"
 import { getOpenAIToolParams, ToolCallProcessor } from "../transform/tool-call-processor"
 import { ThinkTagStreamParser } from "../transform/think-tag-parser"
-import { qwenSampling } from "./qwenSampling"
+import {
+	isExtraSamplingRejection,
+	isExtraSamplingUnsupported,
+	markExtraSamplingUnsupported,
+	qwenSampling,
+} from "./qwenSampling"
 
 interface OpenAiHandlerOptions extends CommonApiHandlerOptions {
 	openAiApiKey?: string
@@ -168,17 +173,31 @@ export class OpenAiHandler implements ApiHandler {
 			temperature = qwen.temperature
 		}
 
-		const stream = await client.chat.completions.create({
-			model: modelId,
-			messages: openAiMessages,
-			temperature,
-			max_tokens: maxTokens,
-			reasoning_effort: reasoningEffort,
-			stream: true,
-			stream_options: { include_usage: true },
-			...(qwen ? { top_p: qwen.top_p, top_k: qwen.top_k } : {}),
-			...getOpenAIToolParams(tools),
-		} as OpenAI.Chat.ChatCompletionCreateParamsStreaming)
+		const buildParams = (withExtraSampling: boolean) =>
+			({
+				model: modelId,
+				messages: openAiMessages,
+				temperature,
+				max_tokens: maxTokens,
+				reasoning_effort: reasoningEffort,
+				stream: true,
+				stream_options: { include_usage: true },
+				...(qwen && withExtraSampling ? { top_p: qwen.top_p, top_k: qwen.top_k } : {}),
+				...getOpenAIToolParams(tools),
+			}) as OpenAI.Chat.ChatCompletionCreateParamsStreaming
+		const baseUrl = this.options.openAiBaseUrl
+		const sendExtraSampling = !!qwen && !isExtraSamplingUnsupported(baseUrl)
+		let stream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk>
+		try {
+			stream = await client.chat.completions.create(buildParams(sendExtraSampling))
+		} catch (error) {
+			// [SKYCODE] Шлюз не принял top_k/top_p — повторяем один раз без них и запоминаем для этого baseUrl
+			if (!sendExtraSampling || !isExtraSamplingRejection(error)) {
+				throw error
+			}
+			markExtraSamplingUnsupported(baseUrl)
+			stream = await client.chat.completions.create(buildParams(false))
+		}
 		this.currentStream = stream as any
 
 		const toolCallProcessor = new ToolCallProcessor()

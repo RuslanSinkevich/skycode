@@ -145,6 +145,12 @@ export class FocusChainManager {
 	 */
 	public generateFocusChainInstructions(): string {
 		// [SKYCODE] Полный текст — один раз за задачу, дальше короткие напоминания
+		// История урезана/пересобрана (сжатие, откат) — полная инструкция могла выпасть из контекста, шлём заново
+		const historyKey = `${this.taskState.historyGeneration}|${this.taskState.conversationHistoryDeletedRange?.join("-") ?? ""}`
+		if (this.taskState.focusChainHistoryKey !== undefined && this.taskState.focusChainHistoryKey !== historyKey) {
+			this.taskState.focusChainFullInstructionsSent = false
+		}
+		this.taskState.focusChainHistoryKey = historyKey
 		const full = !this.taskState.focusChainFullInstructionsSent
 		this.taskState.focusChainFullInstructionsSent = true
 		this.taskState.focusChainLastReminderRequest = this.taskState.apiRequestCount
@@ -160,7 +166,7 @@ export class FocusChainManager {
 				t
 					.replace("{{done}}", String(completedItems))
 					.replace("{{total}}", String(totalItems))
-					.replace("{{list}}", checklist)
+					.replace("{{list}}", () => checklist)
 			if (this.taskState.todoListWasUpdatedByUser) {
 				return fill(s.userEdited)
 			}
@@ -223,7 +229,7 @@ export class FocusChainManager {
 				else if (completedItems === totalItems && totalItems > 0) {
 					progressBasedMessageStub = FocusChainPrompts.completed
 						.replace("{{totalItems}}", totalItems.toString())
-						.replace("{{currentFocusChainChecklist}}", this.taskState.currentFocusChainChecklist)
+						.replace("{{currentFocusChainChecklist}}", () => this.taskState.currentFocusChainChecklist ?? "")
 				}
 
 				// Return with progress-based stub

@@ -2,16 +2,45 @@ import DOMPurify from "dompurify"
 
 // [SKYCODE] Подготовка статичной визуализации (say "visual") к показу в Shadow DOM.
 
+/**
+ * [SKYCODE] Чистит CSS модели (текст <style> и атрибут style): без :host-правил, @import, @font-face,
+ * внешних url(), position: fixed/sticky и contain — чтобы разметка не вылезла за карточку.
+ */
+export function sanitizeVisualCss(css: string): string {
+	return (
+		css
+			.replace(/\/\*[\s\S]*?\*\//g, "")
+			.replace(/@import[^;{}]*;?/gi, "")
+			.replace(/@font-face\s*\{[^{}]*\}/gi, "")
+			// Правила, затрагивающие хост (:host, :host(...), :host-context, ::slotted), — целиком
+			.replace(/[^{};]*:host[^{}]*\{[^{}]*\}/gi, "")
+			.replace(/position\s*:\s*(?:-webkit-)?(?:fixed|sticky)/gi, "position: absolute")
+			.replace(/(^|[;{\s])contain\s*:[^;}]*;?/gi, "$1")
+			// Внешние ресурсы: оставляем только data: и ссылки на фрагменты (#grad у SVG)
+			.replace(/url\(\s*(['"]?)(?!\s*data:|\s*#)[^)]*\)/gi, 'url("")')
+	)
+}
+
 /** Убирает скрипты, обработчики on*, формы и встраиваемые объекты; SVG разрешён */
 export function sanitizeVisualContent(content: string): string {
-	// Простая подстраховка до DOMPurify: теги script и атрибуты on*
-	const stripped = content.replace(/<script[\s\S]*?(<\/script\s*>|$)/gi, "").replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
-	return DOMPurify.sanitize(stripped, {
+	// Скрипты и on* убирает DOMPurify; регулярки по сырой строке портили обычный текст ("online = yes")
+	const fragment = DOMPurify.sanitize(content, {
 		USE_PROFILES: { html: true, svg: true, svgFilters: true },
 		ADD_TAGS: ["style"],
 		FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "base", "meta", "link"],
 		FORBID_ATTR: ["srcdoc"],
+		FORCE_BODY: true,
+		RETURN_DOM_FRAGMENT: true,
 	})
+	for (const style of Array.from(fragment.querySelectorAll("style"))) {
+		style.textContent = sanitizeVisualCss(style.textContent ?? "")
+	}
+	for (const el of Array.from(fragment.querySelectorAll("[style]"))) {
+		el.setAttribute("style", sanitizeVisualCss(el.getAttribute("style") ?? ""))
+	}
+	const holder = document.createElement("div")
+	holder.appendChild(fragment)
+	return holder.innerHTML
 }
 
 const VISUAL_CSS = `

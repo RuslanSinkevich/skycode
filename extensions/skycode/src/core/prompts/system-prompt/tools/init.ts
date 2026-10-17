@@ -20,10 +20,12 @@ import { load_mcp_documentation_variants } from "./load_mcp_documentation"
 import { new_task_variants } from "./new_task"
 import { plan_mode_respond_variants } from "./plan_mode_respond"
 import { read_file_variants } from "./read_file"
+import { read_symbol_variants } from "./read_symbol"
 import { read_diagnostics_variants } from "./read_diagnostics"
 import { replace_in_file_variants } from "./replace_in_file"
 import { replace_text_variants } from "./replace_text"
 import { search_files_variants } from "./search_files"
+import { show_chart_variants } from "./show_chart"
 import { show_visual_variants } from "./show_visual"
 import { use_mcp_tool_variants } from "./use_mcp_tool"
 import { use_skill_variants } from "./use_skill"
@@ -58,11 +60,13 @@ export function registerSkycodeToolSets(): void {
 		...new_task_variants,
 		...plan_mode_respond_variants,
 		...read_file_variants,
+		...read_symbol_variants,
 		...read_diagnostics_variants,
 		...replace_in_file_variants,
 		...replace_text_variants,
 		...search_files_variants,
 		...show_visual_variants,
+		...show_chart_variants,
 		...use_mcp_tool_variants,
 		...use_skill_variants,
 		...web_fetch_variants,

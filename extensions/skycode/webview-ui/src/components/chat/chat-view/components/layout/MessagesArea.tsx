@@ -74,7 +74,7 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 				<div data-chat-content-wrapper>
 					<div data-chat-turns>
 						{turns.map((turn, index) => (
-							<div data-turn-index={index} key={turn.userMessage.ts}>
+							<div data-turn-index={index} key={turn.userMessage?.ts ?? "implicit-turn"}>
 								<TurnBlock
 									expandedRows={expandedRows}
 									inputValue={inputValue}

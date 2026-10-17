@@ -65,6 +65,26 @@ function initMermaidForTheme() {
 	})
 }
 
+// [SKYCODE] Счётчик смен темы VS Code: меняется при смене класса body / data-vscode-theme-*,
+// чтобы схемы перерисовались в новых цветах
+function useThemeVersion(): number {
+	const [version, setVersion] = useState(0)
+	useEffect(() => {
+		if (typeof MutationObserver === "undefined") {
+			return
+		}
+		const observer = new MutationObserver(() => setVersion((v) => v + 1))
+		observer.observe(document.body, {
+			attributes: true,
+			attributeFilter: ["class", "data-vscode-theme-kind", "data-vscode-theme-id"],
+		})
+		// CSS-переменные темы VS Code ставит в style корневого элемента
+		observer.observe(document.documentElement, { attributes: true, attributeFilter: ["style"] })
+		return () => observer.disconnect()
+	}, [])
+	return version
+}
+
 interface MermaidBlockProps {
 	code: string
 }
@@ -73,11 +93,12 @@ export default function MermaidBlock({ code }: MermaidBlockProps) {
 	const { t } = useI18n()
 	const containerRef = useRef<HTMLDivElement>(null)
 	const [isLoading, setIsLoading] = useState(false)
+	const themeVersion = useThemeVersion()
 
 	// 1) Whenever `code` changes, mark that we need to re-render a new chart
 	useEffect(() => {
 		setIsLoading(true)
-	}, [code])
+	}, [code, themeVersion])
 
 	// 2) Debounce the actual parse/render
 	useDebounceEffect(
@@ -123,7 +144,7 @@ export default function MermaidBlock({ code }: MermaidBlockProps) {
 				})
 		},
 		500, // Delay 500ms
-		[code], // Dependencies for scheduling
+		[code, themeVersion], // Dependencies for scheduling
 	)
 
 	/**

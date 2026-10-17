@@ -856,8 +856,9 @@ export function groupLowStakesTools(groupedMessages: (SkycodeMessage | SkycodeMe
  * A turn = one user message + all AI responses until the next user message.
  */
 export interface TurnData {
-	/** The message that started this turn (user_feedback or task) */
-	userMessage: SkycodeMessage
+	/** The message that started this turn (user_feedback or task).
+	 *  [SKYCODE] undefined для неявного первого хода, если первое сообщение — не пользовательское: заголовка нет. */
+	userMessage?: SkycodeMessage
 	/** All grouped items (ProcessBlocks, EditCards, text, etc.) within this turn */
 	items: (SkycodeMessage | SkycodeMessage[])[]
 	/** True when the header comes from the task message (already shown in TaskSection).
@@ -880,16 +881,16 @@ export function groupByTurns(
 	const turns: TurnData[] = []
 
 	// Start with the task as the implicit first turn.
-	let currentTurn: TurnData | null = task
-		? { userMessage: task, items: [], isTaskTurn: true }
-		: null
+	// [SKYCODE] Первое сообщение не пользовательское (task нет, но ответы есть) — неявный ход без заголовка,
+	// иначе всё до первого user_feedback терялось.
+	let currentTurn: TurnData | null = { userMessage: task, items: [], isTaskTurn: true }
 
 	for (const item of groupedMessages) {
 		const msg = Array.isArray(item) ? null : item
 
 		if (msg?.say === "user_feedback") {
 			// Commit the previous turn (task-turn or earlier user_feedback turn)
-			if (currentTurn) { turns.push(currentTurn) }
+			if (currentTurn && (currentTurn.userMessage || currentTurn.items.length > 0)) { turns.push(currentTurn) }
 			// Start a new turn from this user message
 			currentTurn = { userMessage: msg, items: [], isTaskTurn: false }
 		} else if (currentTurn) {
@@ -897,8 +898,8 @@ export function groupByTurns(
 		}
 	}
 
-	// Commit the last turn
-	if (currentTurn) { turns.push(currentTurn) }
+	// Commit the last turn (пустой неявный ход без заголовка не нужен)
+	if (currentTurn && (currentTurn.userMessage || currentTurn.items.length > 0)) { turns.push(currentTurn) }
 
 	return turns
 }

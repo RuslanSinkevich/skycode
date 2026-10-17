@@ -110,6 +110,7 @@ function convertSkycodeSayToProtoEnum(say: AppSkycodeSay | undefined): SkycodeSa
 		generate_explanation: SkycodeSay.GENERATE_EXPLANATION,
 		workflow_step_start: SkycodeSay.WORKFLOW_STEP_START,
 		visual: SkycodeSay.VISUAL,
+		chart: SkycodeSay.CHART,
 	}
 
 	const result = mapping[say]
@@ -160,6 +161,7 @@ function convertProtoEnumToSkycodeSay(say: SkycodeSay): AppSkycodeSay | undefine
 		[SkycodeSay.CONDITIONAL_RULES_APPLIED]: "conditional_rules_applied",
 		[SkycodeSay.WORKFLOW_STEP_START]: "workflow_step_start",
 		[SkycodeSay.VISUAL]: "visual",
+		[SkycodeSay.CHART]: "chart",
 	}
 
 	return mapping[say]

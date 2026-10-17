@@ -63,6 +63,13 @@ export class StandaloneTerminalProcess extends EventEmitter<TerminalProcessEvent
 	/** Index of last retrieved output position */
 	private lastRetrievedIndex: number = 0
 
+	/**
+	 * [SKYCODE] true, пока вывод собирается в результат инструмента (до continue()). Только тогда эмитнутые
+	 * строки считаем уже полученными моделью; после «Proceed While Running» вывод фоновой команды должен
+	 * попадать в environment_details через getUnretrievedOutput().
+	 */
+	private collectingForeground: boolean = true
+
 	/** Whether the process is actively outputting */
 	isHot: boolean = false
 
@@ -222,7 +229,9 @@ export class StandaloneTerminalProcess extends EventEmitter<TerminalProcessEvent
 			this.emitLines(data)
 			// [SKYCODE] Эмитнутые строки уже ушли в результат инструмента — не считаем их "непрочитанными"
 			// (иначе environment_details повторяет вывод команды). В буфере остаётся только неполная строка.
-			this.lastRetrievedIndex = this.fullOutput.length - this.buffer.length
+			if (this.collectingForeground) {
+				this.lastRetrievedIndex = this.fullOutput.length - this.buffer.length
+			}
 		}
 	}
 
@@ -250,7 +259,9 @@ export class StandaloneTerminalProcess extends EventEmitter<TerminalProcessEvent
 				this.emit("line", remainingBuffer)
 			}
 			this.buffer = ""
-			this.lastRetrievedIndex = this.fullOutput.length
+			if (this.collectingForeground) {
+				this.lastRetrievedIndex = this.fullOutput.length
+			}
 		}
 	}
 
@@ -264,6 +275,8 @@ export class StandaloneTerminalProcess extends EventEmitter<TerminalProcessEvent
 	 */
 	continue(): void {
 		this.emitRemainingBuffer()
+		// Дальше вывод идёт в фон: не помечаем его полученным (см. collectingForeground)
+		this.collectingForeground = false
 		// Keep isListening = true so we continue emitting "line" events
 		// This is needed for background command tracking to log output to file
 		this.emit("continue")

@@ -7,14 +7,44 @@ const CHECK_EVERY = 1500
 const TAIL_LENGTH = 200
 const WINDOW = 8000
 const MIN_REPEATS = 6
+const MIN_DISTINCT_CHARS = 20
+const MIN_DISTINCT_WORDS = 4
 
-/** true — хвост текста встречается в последнем окне не меньше MIN_REPEATS раз */
+/** Хвост — повтор короткого узора (таблица, ASCII-арт, «0, 0, 0,», одинаковые короткие строки), а не абзаца */
+function isShortPeriodic(tail: string): boolean {
+	const maxPeriod = Math.floor(TAIL_LENGTH / 3)
+	for (let period = 1; period <= maxPeriod; period++) {
+		let periodic = true
+		for (let i = 0; i + period < tail.length; i++) {
+			if (tail[i] !== tail[i + period]) {
+				periodic = false
+				break
+			}
+		}
+		if (periodic) {
+			return true
+		}
+	}
+	return false
+}
+
+/** true — хвост текста встречается в последнем окне (без пересечений) не меньше MIN_REPEATS раз */
 export function hasRepetitionLoop(text: string): boolean {
 	if (text.length < TAIL_LENGTH * MIN_REPEATS) {
 		return false
 	}
 	const tail = text.slice(-TAIL_LENGTH)
 	if (!tail.trim()) {
+		return false
+	}
+	// Однообразный хвост (мало разных символов/слов или короткий период) — форматирование/данные, не зацикливание
+	if (new Set(tail).size < MIN_DISTINCT_CHARS) {
+		return false
+	}
+	if (new Set(tail.split(/\s+/).filter(Boolean)).size < MIN_DISTINCT_WORDS) {
+		return false
+	}
+	if (isShortPeriodic(tail)) {
 		return false
 	}
 	const window = text.slice(-WINDOW)
@@ -25,7 +55,8 @@ export function hasRepetitionLoop(text: string): boolean {
 		if (count >= MIN_REPEATS) {
 			return true
 		}
-		index = window.indexOf(tail, index + 1)
+		// Без пересечений: иначе короткий период засчитывается много раз подряд
+		index = window.indexOf(tail, index + TAIL_LENGTH)
 	}
 	return false
 }

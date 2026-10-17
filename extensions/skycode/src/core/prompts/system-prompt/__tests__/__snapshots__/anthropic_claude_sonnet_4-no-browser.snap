@@ -44,7 +44,7 @@ Usage:
 </check_background_command>
 
 ## read_file
-Description: Request to read the contents of a file at the specified path. Use this when you need to examine the contents of an existing file you do not know the contents of, for example to analyze code, review text files, or extract information from configuration files. Automatically extracts raw text from PDF and DOCX files. May not be suitable for other types of binary files, as it returns the raw content as a string. Do NOT use this tool to list the contents of a directory. Only use this tool on files. For large files read in parts with start_line/end_line.
+Description: Request to read the contents of a file at the specified path. Use this when you need to examine the contents of an existing file you do not know the contents of, for example to analyze code, review text files, or extract information from configuration files. Automatically extracts raw text from PDF and DOCX files. May not be suitable for other types of binary files, as it returns the raw content as a string. Do NOT use this tool to list the contents of a directory. Only use this tool on files. For large files read in parts with start_line/end_line. For a specific function in a large file use read_symbol.
 Parameters:
 - path: (required) The path of the file to read (relative to the current working directory /test/project)
 - start_line: (optional) First line to read (1-based, inclusive). Without start_line/end_line, files longer than 2000 lines are cut at line 2000.
@@ -57,6 +57,19 @@ Usage:
 <end_line>Line number (optional)</end_line>
 <task_progress>Checklist here (optional)</task_progress>
 </read_file>
+
+## read_symbol
+Description: Read one or more functions/methods/classes from a file by name, with line numbers. Prefer this over read_file when you need a specific symbol from a large file. Use list_code_definition_names to see available symbols.
+Parameters:
+- path: (required) The path of the file (relative to the current working directory /test/project)
+- symbol: (required) Name of the function, method or class, e.g. SaveDocument or ClassName.MethodName. Several names may be given comma-separated (up to 5).
+- task_progress: (optional) A checklist showing task progress after this tool use is completed. The task_progress parameter must be included as a separate parameter inside of the parent tool call, it must be separate from other parameters such as content, arguments, etc. (See 'UPDATING TASK PROGRESS' section for more details)
+Usage:
+<read_symbol>
+<path>File path here</path>
+<symbol>Symbol name here</symbol>
+<task_progress>Checklist here (optional)</task_progress>
+</read_symbol>
 
 ## write_to_file
 Description: Request to write content to a file at the specified path. If the file exists, it will be overwritten with the provided content. If the file doesn't exist, it will be created. This tool will automatically create any directories needed to write the file.
@@ -314,6 +327,21 @@ Usage:
 <content><table>...</table> or <svg>...</svg></content>
 <task_progress>Checklist here (optional)</task_progress>
 </show_visual>
+
+## show_chart
+Description: Show the user a chart or table built from structured data (bar, line, pie, table). Use it for numbers, comparisons and tables; prefer it over show_visual for any chart or table. The data must be valid JSON. Keep it to at most 30 labels/rows.
+Parameters:
+- title: (required) Short title of the chart or table.
+- type: (required) One of: bar, line, pie, table.
+- data: (required) JSON string. bar/line: {"labels": ["Jan","Feb"], "series": [{"name": "Errors", "values": [3, 5]}], "unit": "ms"}. pie: {"labels": ["A","B"], "values": [60, 40]}. table: {"columns": ["File","Lines"], "rows": [["a.cs", 3346]]}.
+- task_progress: (optional) A checklist showing task progress after this tool use is completed. The task_progress parameter must be included as a separate parameter inside of the parent tool call, it must be separate from other parameters such as content, arguments, etc. (See 'UPDATING TASK PROGRESS' section for more details)
+Usage:
+<show_chart>
+<title>Title here</title>
+<type>bar</type>
+<data>{"labels": ["Jan", "Feb"], "series": [{"name": "Errors", "values": [3, 5]}]}</data>
+<task_progress>Checklist here (optional)</task_progress>
+</show_chart>
 
 ## attempt_completion
 Description: After each tool use, the user will respond with the result of that tool use, i.e. if it succeeded or failed, along with any reasons for failure. Once you've received the results of tool uses and can confirm that the task is complete, use this tool to present the result of your work to the user. Optionally you may provide a CLI command to showcase the result of your work. The user may respond with feedback if they are not satisfied with the result, which you can use to make improvements and try again.

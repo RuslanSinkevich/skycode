@@ -16,6 +16,15 @@ describe("repetition loop", () => {
 		hasRepetitionLoop(varied + paragraph.repeat(3)).should.be.false()
 	})
 
+	it("does not fire on repetitive code, tables and data", () => {
+		hasRepetitionLoop("const a = 1\n".repeat(60)).should.be.false()
+		hasRepetitionLoop("0, ".repeat(400)).should.be.false()
+		hasRepetitionLoop("| --- | --- | --- |\n".repeat(60)).should.be.false()
+		hasRepetitionLoop("*-*-*-*-".repeat(100)).should.be.false()
+		hasRepetitionLoop("A".repeat(3000)).should.be.false()
+		hasRepetitionLoop("The quick brown fox jumps. ".repeat(80)).should.be.false()
+	})
+
 	it("detector fires while streaming a loop", () => {
 		const detector = new RepetitionLoopDetector()
 		let fired = false

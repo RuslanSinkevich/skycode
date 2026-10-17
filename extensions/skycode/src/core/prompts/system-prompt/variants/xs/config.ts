@@ -44,6 +44,7 @@ export const config = createVariant(ModelFamily.XS)
 	)
 	.tools(
 		SkycodeDefaultTool.FILE_READ,
+		SkycodeDefaultTool.READ_SYMBOL,
 		SkycodeDefaultTool.FILE_NEW, // only for creating new files
 		SkycodeDefaultTool.DELETE_BLOCK, // simplified edit: delete by query
 		SkycodeDefaultTool.REPLACE_TEXT, // simplified edit: find & replace
@@ -54,6 +55,7 @@ export const config = createVariant(ModelFamily.XS)
 		SkycodeDefaultTool.LIST_CODE_DEF,
 		SkycodeDefaultTool.ASK,
 		SkycodeDefaultTool.SHOW_VISUAL,
+		SkycodeDefaultTool.SHOW_CHART,
 		SkycodeDefaultTool.ATTEMPT,
 		SkycodeDefaultTool.PLAN_MODE,
 		SkycodeDefaultTool.READ_DIAGNOSTICS,

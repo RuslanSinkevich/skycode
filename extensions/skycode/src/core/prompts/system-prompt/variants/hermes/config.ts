@@ -38,6 +38,7 @@ export const config = createVariant(ModelFamily.HERMES)
 	)
 	.tools(
 		SkycodeDefaultTool.FILE_READ,
+		SkycodeDefaultTool.READ_SYMBOL,
 		SkycodeDefaultTool.FILE_NEW,
 		SkycodeDefaultTool.FILE_EDIT,
 		SkycodeDefaultTool.CODEBASE_SEARCH,
@@ -60,6 +61,7 @@ export const config = createVariant(ModelFamily.HERMES)
 		SkycodeDefaultTool.PLAN_MODE,
 		SkycodeDefaultTool.ASK,
 		SkycodeDefaultTool.SHOW_VISUAL,
+		SkycodeDefaultTool.SHOW_CHART,
 	)
 	.placeholders({
 		MODEL_FAMILY: "hermes",

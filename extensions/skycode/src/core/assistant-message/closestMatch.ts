@@ -1,6 +1,6 @@
 // [SKYCODE] Поиск наиболее похожего участка файла для подсказки при промахе SEARCH-блока.
 
-const MAX_FILE_LINES = 20000
+const MAX_FILE_LINES = 5000
 const MAX_SEARCH_LINES = 100
 const MAX_SHOWN_LINES = 30
 const MIN_SIMILARITY = 0.4
@@ -26,7 +26,12 @@ function tokens(line: string): Set<string> {
 	return set
 }
 
-function lineSimilarity(a: string, ta: Set<string>, b: string, tb: Set<string>): number {
+/** Строка без пробелов и в нижнем регистре: считается один раз на строку, а не на каждую пару */
+function squash(line: string): string {
+	return line.toLowerCase().replace(/\s+/g, "")
+}
+
+function lineSimilarity(a: string, ta: Set<string>, sa: string, b: string, tb: Set<string>, sb: string): number {
 	if (a === b) {
 		return a === "" ? 0.3 : 1
 	}
@@ -44,7 +49,7 @@ function lineSimilarity(a: string, ta: Set<string>, b: string, tb: Set<string>):
 	}
 	const jaccard = inter / (ta.size + tb.size - inter)
 	// Совпадение только по пробелам/регистру считаем почти точным
-	return a.toLowerCase().replace(/\s+/g, "") === b.toLowerCase().replace(/\s+/g, "") ? 0.95 : jaccard * 0.9
+	return sa === sb ? 0.95 : jaccard * 0.9
 }
 
 /**
@@ -69,13 +74,53 @@ export function findClosestMatch(fileContent: string, searchContent: string): Cl
 	const fileTok = fileNorm.map(tokens)
 	const searchNorm = searchLines.map(normalizeLine)
 	const searchTok = searchNorm.map(tokens)
+	const fileSquash = fileNorm.map(squash)
+	const searchSquash = searchNorm.map(squash)
 
-	// sim[j][i] — похожесть j-й строки блока и i-й строки файла
+	// Индексы файла: по токену и по «сжатой» строке. Пары без общих токенов и не равные по «сжатой» строке
+	// дают 0 и не считаются вовсе.
+	const byToken = new Map<string, number[]>()
+	const bySquash = new Map<string, number[]>()
+	const emptyLines: number[] = []
+	for (let i = 0; i < fileNorm.length; i++) {
+		if (fileNorm[i] === "") {
+			emptyLines.push(i)
+			continue
+		}
+		for (const t of fileTok[i]) {
+			const list = byToken.get(t)
+			if (list) {
+				list.push(i)
+			} else {
+				byToken.set(t, [i])
+			}
+		}
+		const sameSquash = bySquash.get(fileSquash[i])
+		if (sameSquash) {
+			sameSquash.push(i)
+		} else {
+			bySquash.set(fileSquash[i], [i])
+		}
+	}
+
+	// sim[j][i] — похожесть j-й строки блока и i-й строки файла (по умолчанию 0)
 	const sim: Float32Array[] = []
 	for (let j = 0; j < n; j++) {
 		const row = new Float32Array(fileLines.length)
-		for (let i = 0; i < fileLines.length; i++) {
-			row[i] = lineSimilarity(searchNorm[j], searchTok[j], fileNorm[i], fileTok[i])
+		if (searchNorm[j] === "") {
+			for (const i of emptyLines) {
+				row[i] = 0.3
+			}
+		} else {
+			const candidates = new Set<number>(bySquash.get(searchSquash[j]) ?? [])
+			for (const t of searchTok[j]) {
+				for (const i of byToken.get(t) ?? []) {
+					candidates.add(i)
+				}
+			}
+			for (const i of candidates) {
+				row[i] = lineSimilarity(searchNorm[j], searchTok[j], searchSquash[j], fileNorm[i], fileTok[i], fileSquash[i])
+			}
 		}
 		sim.push(row)
 	}

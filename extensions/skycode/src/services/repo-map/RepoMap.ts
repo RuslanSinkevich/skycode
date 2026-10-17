@@ -107,7 +107,7 @@ async function listSourceFiles(cwd: string): Promise<string[]> {
 	})
 }
 
-function extendCSharpQuery(parsers: LanguageParser): void {
+export function extendCSharpQuery(parsers: LanguageParser): void {
 	const cs = parsers.cs
 	if (!cs) {
 		return

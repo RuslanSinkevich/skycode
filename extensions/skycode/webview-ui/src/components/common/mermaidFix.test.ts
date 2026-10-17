@@ -10,6 +10,11 @@ describe("quoteMermaidLabels", () => {
 		)
 	})
 
+	it("does not touch special node shapes", () => {
+		const code = "graph TD\n    A[(database)] --> B[[sub: x]]\n    C{{hex: y}} --> D([stadium: z])\n    E[/par: x/] --> F[\\alt: y\\]"
+		expect(quoteMermaidLabels(code)).toBe(code)
+	})
+
 	it("leaves plain labels, quoted labels and non-flowchart diagrams alone", () => {
 		const plain = 'graph TD\n    A[Program.cs] -->|создаёт| B["already (quoted)"]'
 		expect(quoteMermaidLabels(plain)).toBe(plain)

@@ -409,6 +409,9 @@
 	"chat.visual.copy": "Копировать (для Word, Excel, почты)",
 	"chat.visual.copyHtml": "Копировать HTML-код",
 	"chat.visual.expand": "Открыть во вкладке редактора",
+	"chat.chart.title": "График",
+	"chat.chart.copy": "Копировать (данные таблицей для Word, Excel)",
+	"chat.chart.expand": "Открыть во вкладке редактора",
 	"chat.manageMcpServers": "Управление MCP серверами",
 	"chat.hideMcpServers": "Скрыть MCP серверы",
 	"chat.showMcpServers": "Показать MCP серверы",
@@ -1041,5 +1044,17 @@
 	"contextRing.usage": "Контекст {{used}} / {{total}} ({{percent}}%)",
 	"contextRing.untilCompaction": "{{tokens}} до автосжатия",
 	"contextRing.compactionNext": "Сжатие при следующем запросе",
-	"contextRing.compact": "Сжать сессию"
+	"contextRing.compact": "Сжать сессию",
+	"contextRing.compactUnavailable": "Доступно, когда агент ждёт вашего ответа",
+	"contextRing.cat.system": "Системный промпт и инструменты",
+	"contextRing.cat.files": "Файлы и поиск",
+	"contextRing.cat.commands": "Команды",
+	"contextRing.cat.edits": "Правки",
+	"contextRing.cat.conversation": "Диалог",
+	"contextRing.cat.environment": "Служебное",
+	"contextRing.cat.other": "Прочее",
+	"contextRing.hint.files": "Больше всего места занимают прочитанные файлы — сожмите сессию или начните новую вкладку",
+	"contextRing.hint.commands": "Больше всего места занимает вывод команд — сожмите сессию или начните новую вкладку",
+	"contextRing.hint.edits": "Больше всего места занимают правки файлов — сожмите сессию или начните новую вкладку",
+	"contextRing.hint.conversation": "Больше всего места занимает диалог — сожмите сессию или начните новую вкладку"
 }

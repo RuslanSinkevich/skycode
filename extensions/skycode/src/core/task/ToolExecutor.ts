@@ -28,6 +28,7 @@ import { TaskState } from "./TaskState"
 import { AutoApprove } from "./tools/autoApprove"
 import { AccessMcpResourceHandler } from "./tools/handlers/AccessMcpResourceHandler"
 import { ActModeRespondHandler } from "./tools/handlers/ActModeRespondHandler"
+import { ShowChartToolHandler } from "./tools/handlers/ShowChartToolHandler"
 import { ShowVisualToolHandler } from "./tools/handlers/ShowVisualToolHandler"
 import { ApplyPatchHandler } from "./tools/handlers/ApplyPatchHandler"
 import { AskFollowupQuestionToolHandler } from "./tools/handlers/AskFollowupQuestionToolHandler"
@@ -45,6 +46,7 @@ import { LoadMcpDocumentationHandler } from "./tools/handlers/LoadMcpDocumentati
 import { NewTaskHandler } from "./tools/handlers/NewTaskHandler"
 import { PlanModeRespondHandler } from "./tools/handlers/PlanModeRespondHandler"
 import { ReadFileToolHandler } from "./tools/handlers/ReadFileToolHandler"
+import { ReadSymbolToolHandler } from "./tools/handlers/ReadSymbolToolHandler"
 import { ReportBugHandler } from "./tools/handlers/ReportBugHandler"
 import { SearchFilesToolHandler } from "./tools/handlers/SearchFilesToolHandler"
 import { SummarizeTaskHandler } from "./tools/handlers/SummarizeTaskHandler"
@@ -231,9 +233,11 @@ export class ToolExecutor {
 		// Register all tool handlers
 		this.coordinator.register(new ListFilesToolHandler(validator))
 		this.coordinator.register(new ReadFileToolHandler(validator))
+		this.coordinator.register(new ReadSymbolToolHandler(validator))
 		this.coordinator.register(new BrowserToolHandler())
 		this.coordinator.register(new AskFollowupQuestionToolHandler())
 		this.coordinator.register(new ShowVisualToolHandler())
+		this.coordinator.register(new ShowChartToolHandler())
 		this.coordinator.register(new CodebaseSearchToolHandler())
 		this.coordinator.register(new WebFetchToolHandler())
 		this.coordinator.register(new WebSearchToolHandler())

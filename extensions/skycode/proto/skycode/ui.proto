@@ -73,6 +73,7 @@ enum SkycodeSay {
   CONDITIONAL_RULES_APPLIED = 33;
   WORKFLOW_STEP_START = 34;
   VISUAL = 35;
+  CHART = 36;
 }
 
 // Enum for SkycodeSayTool tool types

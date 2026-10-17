@@ -145,6 +145,7 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 					hash,
 					config.taskState.conversationHistoryDeletedRange,
 					config.messageState.getApiConversationHistory().length,
+					config.taskState.historyGeneration,
 				)
 			) {
 				return unchangedStub(prev!.totalLines)
@@ -152,12 +153,14 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 		}
 
 		const slice = sliceForRead(text, startLine, endLine)
-		if (!hasRange) {
+		// Кэшируем только если модель увидела файл целиком: при обрезке по 2000 строк заглушка «не менялся» была бы ложью
+		if (!hasRange && !slice.partial) {
 			cache.set(cacheKey, {
 				hash,
 				historyLength: config.messageState.getApiConversationHistory().length,
 				deletedRangeKey: deletedRangeKey(config.taskState.conversationHistoryDeletedRange),
 				totalLines: slice.totalLines,
+				generation: config.taskState.historyGeneration,
 			})
 		}
 		return slice.output

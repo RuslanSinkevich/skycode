@@ -12,6 +12,24 @@ describe("buildVisualShadowHtml", () => {
 		expect(html).toContain("<circle")
 	})
 
+	it("keeps plain text like 'online = yes' while still removing on* attributes", () => {
+		const html = buildVisualShadowHtml('<table><tr><td>online = yes</td><td>once = true</td></tr></table><p onclick="x()">a</p>')
+		expect(html).toContain("online = yes")
+		expect(html).toContain("once = true")
+		expect(html).not.toMatch(/onclick/i)
+	})
+
+	it("neutralizes model CSS that could escape the card", () => {
+		const html = buildVisualShadowHtml(
+			'<style>@import url("https://evil/x.css");:host{position:fixed;inset:0;z-index:99999}.a{position: sticky;contain:none;background:url(https://evil/p.png)}.b{fill:url(#g)}</style><div class="a" style="position:fixed;top:0">x</div>',
+		)
+		const modelPart = html.slice(html.indexOf('<div class="visual-root">'))
+		expect(modelPart).not.toMatch(/:host|@import|evil|contain\s*:/i)
+		expect(modelPart).not.toMatch(/position\s*:\s*(fixed|sticky)/i)
+		expect(modelPart).toContain("position: absolute")
+		expect(modelPart).toContain("url(#g)")
+	})
+
 	it("wraps content with base styles that use theme variables", () => {
 		const html = buildVisualShadowHtml("<b>x</b>")
 		expect(html).toContain("var(--vscode-foreground")

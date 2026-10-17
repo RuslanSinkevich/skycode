@@ -1,3 +1,4 @@
+import type { SkycodeMessage } from "@shared/ExtensionMessage"
 import { AskResponseRequest } from "@shared/proto/skycode/task"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
@@ -5,8 +6,10 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
 import { TaskServiceClient } from "@/services/grpc-client"
 import {
+	buildBreakdownSegments,
 	type ContextLevel,
 	formatTokens,
+	getDominantCategory,
 	getContextLevel,
 	getContextTokens,
 	getFillRatio,
@@ -17,7 +20,22 @@ const SIZE = 14
 const STROKE = 2
 const RADIUS = (SIZE - STROKE) / 2
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS
-const POPOVER_WIDTH = 240
+const POPOVER_WIDTH = 260
+
+// [SKYCODE] Цвета категорий разбивки контекста (с запасными значениями вне VS Code)
+const CATEGORY_COLOR: Record<string, string> = {
+	system: "var(--vscode-charts-blue, #3794ff)",
+	files: "var(--vscode-charts-green, #89d185)",
+	commands: "var(--vscode-charts-yellow, #cca700)",
+	edits: "var(--vscode-charts-orange, #d18616)",
+	conversation: "var(--vscode-charts-purple, #b180d7)",
+	environment: "var(--vscode-charts-red, #f14c4c)",
+	other: "var(--vscode-descriptionForeground)",
+}
+const categoryColor = (category: string) => CATEGORY_COLOR[category] ?? CATEGORY_COLOR.other
+// [SKYCODE] Сжатие безопасно слать только когда агент ждёт обычного ответа; на tool/command это был бы отказ с «/compact» как фидбэком
+const COMPACT_ASKS = new Set(["completion_result", "resume_completed_task", "followup", "plan_mode_respond", "resume_task"])
+const HINT_CATEGORIES = new Set(["files", "commands", "edits", "conversation"])
 
 const LEVEL_COLOR: Record<ContextLevel, string> = {
 	normal: "var(--vscode-focusBorder)",
@@ -37,14 +55,28 @@ interface ContextRingProps {
  */
 export function ContextRing({ isAiWorking }: ContextRingProps) {
 	const { t } = useI18n()
-	const { skycodeMessages, apiConfiguration, mode, contextWindowTokens, autoCompactThresholdTokens } = useExtensionState()
+	const { skycodeMessages, apiConfiguration, mode, contextWindowTokens, autoCompactThresholdTokens, contextBreakdown } =
+		useExtensionState()
 	const [open, setOpen] = useState(false)
 	const [anchor, setAnchor] = useState<{ left: number; bottom: number } | null>(null)
 	const buttonRef = useRef<HTMLButtonElement>(null)
 	const popoverRef = useRef<HTMLDivElement>(null)
 
 	const hasTask = (skycodeMessages?.length ?? 0) > 0
-	const tokens = useMemo(() => getContextTokens(skycodeMessages ?? []), [skycodeMessages])
+	// [SKYCODE] Парсим api_req_started только при смене последнего такого сообщения, а не на каждый чанк стрима
+	let lastReq: SkycodeMessage | undefined
+	for (let i = (skycodeMessages?.length ?? 0) - 1; i >= 0; i--) {
+		if (skycodeMessages[i].say === "api_req_started") {
+			lastReq = skycodeMessages[i]
+			break
+		}
+	}
+	const reqTs = lastReq?.ts
+	const reqTextLength = lastReq?.text?.length ?? 0
+	// biome-ignore lint/correctness/useExhaustiveDependencies: ключ мемоизации — ts и длина текста последнего запроса
+	const tokens = useMemo(() => getContextTokens(skycodeMessages ?? []), [reqTs, reqTextLength])
+	const lastMessage = skycodeMessages?.at(-1)
+	const pendingAsk = lastMessage?.type === "ask" && !lastMessage.partial ? lastMessage.ask : undefined
 	const contextWindow = useMemo(
 		() => contextWindowTokens ?? normalizeApiConfiguration(apiConfiguration, mode).selectedModelInfo?.contextWindow ?? 0,
 		[contextWindowTokens, apiConfiguration, mode],
@@ -54,6 +86,9 @@ export function ContextRing({ isAiWorking }: ContextRingProps) {
 	const level = getContextLevel(tokens, autoCompactThresholdTokens, contextWindow)
 	const remaining = getTokensUntilCompaction(tokens, autoCompactThresholdTokens)
 	const color = LEVEL_COLOR[level]
+	const segments = useMemo(() => buildBreakdownSegments(contextBreakdown), [contextBreakdown])
+	const dominant = getDominantCategory(segments)
+	const hintKey = dominant && HINT_CATEGORIES.has(dominant) ? `contextRing.hint.${dominant}` : undefined
 
 	const toggle = useCallback(() => {
 		const rect = buttonRef.current?.getBoundingClientRect()
@@ -92,14 +127,19 @@ export function ContextRing({ isAiWorking }: ContextRingProps) {
 	const compact = useCallback(async () => {
 		setOpen(false)
 		try {
-			await TaskServiceClient.askResponse(AskResponseRequest.create({ responseType: "messageResponse", text: "/compact" }))
+			await TaskServiceClient.askResponse(
+				AskResponseRequest.create({
+					responseType: pendingAsk === "resume_task" ? "yesButtonClicked" : "messageResponse",
+					text: "/compact",
+				}),
+			)
 		} catch (error) {
 			console.error("[ContextRing] compact failed:", error)
 		}
-	}, [])
+	}, [pendingAsk])
 
 	const title = t("contextRing.tooltip", { percent })
-	const compactDisabled = !hasTask || !!isAiWorking
+	const compactDisabled = !hasTask || !!isAiWorking || !pendingAsk || !COMPACT_ASKS.has(pendingAsk)
 
 	return (
 		<>
@@ -159,10 +199,45 @@ export function ContextRing({ isAiWorking }: ContextRingProps) {
 						})}
 					</div>
 					<div
-						className="h-1 w-full rounded-full overflow-hidden"
+						className="h-1 w-full rounded-full overflow-hidden flex"
 						style={{ background: "color-mix(in srgb, var(--vscode-descriptionForeground) 30%, transparent)" }}>
-						<div className="h-full" style={{ width: `${percent}%`, background: color }} />
+						{segments.length > 0 ? (
+							<div className="h-full flex" data-testid="context-ring-segments" style={{ width: `${percent}%` }}>
+								{segments.map((segment) => (
+									<div
+										className="h-full"
+										data-testid={`context-ring-segment-${segment.category}`}
+										key={segment.category}
+										style={{ width: `${segment.width}%`, background: categoryColor(segment.category) }}
+									/>
+								))}
+							</div>
+						) : (
+							<div className="h-full" style={{ width: `${percent}%`, background: color }} />
+						)}
 					</div>
+					{segments.length > 0 && (
+						<div className="flex flex-col gap-1" data-testid="context-ring-breakdown">
+							{segments.map((segment) => (
+								<div className="flex items-center gap-1.5" key={segment.category}>
+									<span
+										aria-hidden="true"
+										className="shrink-0 rounded-full"
+										style={{ width: 8, height: 8, background: categoryColor(segment.category) }}
+									/>
+									<span className="flex-1 min-w-0 truncate">{t(`contextRing.cat.${segment.category}`)}</span>
+									<span style={{ color: "var(--vscode-descriptionForeground)" }}>
+										{`${formatTokens(segment.tokens)} · ${segment.percent}%`}
+									</span>
+								</div>
+							))}
+						</div>
+					)}
+					{hintKey && (
+						<div data-testid="context-ring-hint" style={{ color: "var(--vscode-editorWarning-foreground)" }}>
+							{t(hintKey)}
+						</div>
+					)}
 					{remaining !== undefined && (
 						<div style={{ color: "var(--vscode-descriptionForeground)" }}>
 							{remaining > 0
@@ -173,6 +248,7 @@ export function ContextRing({ isAiWorking }: ContextRingProps) {
 					<button
 						className="mt-1 px-2 py-1 rounded-sm border-0 cursor-pointer disabled:opacity-50 disabled:cursor-default"
 						disabled={compactDisabled}
+						title={compactDisabled && hasTask ? t("contextRing.compactUnavailable") : undefined}
 						onClick={compact}
 						style={{
 							background: "var(--vscode-button-secondaryBackground)",

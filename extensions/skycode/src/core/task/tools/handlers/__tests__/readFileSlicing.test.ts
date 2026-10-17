@@ -79,6 +79,11 @@ describe("canStubReread", () => {
 		canStubReread(entry(), hashContent("x"), undefined, 25).should.be.true()
 		canStubReread(entry(), hashContent("x"), undefined, 10).should.be.false()
 	})
+	it("does not stub after the history was rewritten (generation changed)", () => {
+		canStubReread(entry({ generation: 1 }), hashContent("x"), undefined, 25, 1).should.be.true()
+		canStubReread(entry({ generation: 1 }), hashContent("x"), undefined, 25, 2).should.be.false()
+		canStubReread(entry(), hashContent("x"), undefined, 25, 1).should.be.false()
+	})
 	it("does not stub when content changed or no entry", () => {
 		canStubReread(entry(), hashContent("y"), undefined).should.be.false()
 		canStubReread(undefined, hashContent("x"), undefined).should.be.false()

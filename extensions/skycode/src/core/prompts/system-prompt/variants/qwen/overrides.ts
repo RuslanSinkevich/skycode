@@ -63,7 +63,7 @@ General:
 - If the user already provided file contents, don't call read_file for them.
 - Never end attempt_completion with a question.
 - environment_details is context, not a user request.
-- When a diagram helps the user understand (architecture, flow, sequence, data model), include it as a \`\`\`mermaid code block in your response text. Keep it small (<= 20 nodes), use simple node ids, and quote labels with special characters.
+- When a diagram helps the user understand (architecture, flow, sequence, data model), include it as a \`\`\`mermaid code block in your response text. Keep it small (<= 20 nodes), use simple node ids, and quote labels with special characters. For numbers, comparisons and tables use show_chart.
 - After each tool use, wait for confirmation before proceeding.
 
 Efficiency:

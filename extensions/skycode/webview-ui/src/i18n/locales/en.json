@@ -409,6 +409,9 @@
 	"chat.visual.copy": "Copy (for Word, Excel, email)",
 	"chat.visual.copyHtml": "Copy HTML code",
 	"chat.visual.expand": "Open in an editor tab",
+	"chat.chart.title": "Chart",
+	"chat.chart.copy": "Copy (data as a table for Word, Excel)",
+	"chat.chart.expand": "Open in an editor tab",
 	"chat.manageMcpServers": "Manage MCP Servers",
 	"chat.hideMcpServers": "Hide MCP Servers",
 	"chat.showMcpServers": "Show MCP Servers",
@@ -1041,5 +1044,17 @@
 	"contextRing.usage": "Context {{used}} / {{total}} ({{percent}}%)",
 	"contextRing.untilCompaction": "{{tokens}} until auto-compaction",
 	"contextRing.compactionNext": "Compaction on the next request",
-	"contextRing.compact": "Compact session"
+	"contextRing.compact": "Compact session",
+	"contextRing.compactUnavailable": "Available when the agent is waiting for your reply",
+	"contextRing.cat.system": "System prompt and tools",
+	"contextRing.cat.files": "Files and search",
+	"contextRing.cat.commands": "Commands",
+	"contextRing.cat.edits": "Edits",
+	"contextRing.cat.conversation": "Conversation",
+	"contextRing.cat.environment": "Environment",
+	"contextRing.cat.other": "Other",
+	"contextRing.hint.files": "File reads take most of the context. Compact the session or start a new tab",
+	"contextRing.hint.commands": "Command output takes most of the context. Compact the session or start a new tab",
+	"contextRing.hint.edits": "File edits take most of the context. Compact the session or start a new tab",
+	"contextRing.hint.conversation": "The conversation takes most of the context. Compact the session or start a new tab"
 }

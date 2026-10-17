@@ -44,6 +44,8 @@ export interface EnvironmentDetailsContext {
 		conversationHistoryDeletedRange?: [number, number]
 		/** [SKYCODE] Кэш отправленных секций (см. environmentDetailsDiff). */
 		envDetailsCache?: EnvSectionCache
+		/** [SKYCODE] Счётчик перезаписей истории (TaskState.historyGeneration). */
+		historyGeneration?: number
 	}
 	stateManager: StateManager
 	/** [SKYCODE] Режим задачи (у каждой вкладки свой), а не глобальный. */
@@ -404,7 +406,8 @@ export async function buildEnvironmentDetails(
 	const { texts, cache } = selectEnvSections(
 		items,
 		ctx.taskState.envDetailsCache,
-		deletedRangeToKey(ctx.taskState.conversationHistoryDeletedRange),
+		// [SKYCODE] generation: история переписана (откат/правка) — прежние секции в контексте могли пропасть
+		`${deletedRangeToKey(ctx.taskState.conversationHistoryDeletedRange)}|g${ctx.taskState.historyGeneration ?? 0}`,
 		Date.now(),
 		includeFileDetails,
 	)

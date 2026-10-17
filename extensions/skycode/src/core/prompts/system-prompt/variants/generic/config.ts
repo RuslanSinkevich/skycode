@@ -55,6 +55,7 @@ export const config = createVariant(ModelFamily.GENERIC)
 	.tools(
 		// Priority 1: File operations (main work)
 		SkycodeDefaultTool.FILE_READ,
+		SkycodeDefaultTool.READ_SYMBOL,
 		SkycodeDefaultTool.FILE_NEW,
 		SkycodeDefaultTool.FILE_EDIT,
 		// Priority 2: Search & exploration
@@ -82,6 +83,7 @@ export const config = createVariant(ModelFamily.GENERIC)
 		SkycodeDefaultTool.PLAN_MODE,
 		SkycodeDefaultTool.ASK,
 		SkycodeDefaultTool.SHOW_VISUAL,
+		SkycodeDefaultTool.SHOW_CHART,
 	)
 	.placeholders({
 		MODEL_FAMILY: "generic",

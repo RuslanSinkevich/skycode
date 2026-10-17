@@ -155,6 +155,9 @@ export class Task {
 	 * Нужен, чтобы «Применены условные правила» не повторялось на каждый запрос.
 	 */
 	private lastReportedConditionalRules?: string
+	// [SKYCODE] Размеры последнего системного промпта и описаний инструментов (символы) — для разбивки контекста
+	lastSystemPromptChars = 0
+	lastToolsChars = 0
 
 	taskState: TaskState
 
@@ -1546,6 +1549,14 @@ export class Task {
 			// stays open until the next chunk arrives (can be seconds on slow models).
 			this.api.abort?.()
 
+			// [SKYCODE] Сбрасываем отложенный сброс частичного сообщения и отложенную подмену api-обработчика
+			if (this.partialFlushTimer) {
+				clearTimeout(this.partialFlushTimer)
+				this.partialFlushTimer = undefined
+			}
+			this.pendingPartial = undefined
+			this.pendingApi = undefined
+
 			// [SKYCODE] Выходим из очереди на слот и освобождаем занятый (идемпотентно)
 			this.abortController.abort()
 			this.apiSlotRelease?.()
@@ -1788,8 +1799,24 @@ export class Task {
 			}
 		}
 
+		this.pendingApi = undefined // новый обработчик и так собран по актуальным настройкам
 		this.api = buildApiHandler(effectiveApiConfiguration, mode)
 	}
+
+	/**
+	 * [SKYCODE] Подмена api-обработчика при смене режима/ключа снаружи (контроллер). Пока идёт запрос к модели,
+	 * подмена откладывается до его конца: иначе abort() попадал в новый обработчик (старый HTTP-поток жил дальше),
+	 * а стоимость/модель запроса считались по чужому обработчику.
+	 */
+	replaceApiHandler(handler: ApiHandler): void {
+		if (this.taskState.isStreaming || this.taskState.isWaitingForFirstChunk || this.taskState.isWaitingForApiSlot) {
+			this.pendingApi = handler
+			return
+		}
+		this.api = handler
+	}
+
+	private pendingApi: ApiHandler | undefined
 
 	private getCurrentProviderInfo(): ApiProviderInfo {
 		const model = this.api.getModel()
@@ -2035,6 +2062,8 @@ export class Task {
 
 		const { systemPrompt, tools } = await getSystemPrompt(promptContext)
 		this.useNativeToolCalls = !!tools?.length
+		this.lastSystemPromptChars = systemPrompt.length
+		this.lastToolsChars = tools?.length ? JSON.stringify(tools).length : 0
 
 		const contextManagementMetadata = await this.contextManager.getNewContextMessagesAndMetadata(
 			this.messageStateHandler.getApiConversationHistory(),
@@ -2630,7 +2659,8 @@ export class Task {
 		// Step-based forced compaction for weak/medium models:
 		// If the model has used many API requests, force context compaction even if
 		// token-based threshold hasn't been reached (weak models degrade before filling context).
-		if (!shouldCompact) {
+		// [SKYCODE] Только при включённом авто-сжатии, и не сразу после предыдущего сжатия
+		if (!shouldCompact && useAutoCondense) {
 			const currentProviderInfo = this.getCurrentProviderInfo()
 			const _modelTier = getModelCapabilityTier(currentProviderInfo.model.id, currentProviderInfo)
 			const customSettings = {
@@ -2650,6 +2680,8 @@ export class Task {
 			if (
 				this.taskState.apiRequestCount > 0 &&
 				this.taskState.apiRequestCount % limits.forceCompactAfterSteps === 0 &&
+				(this.taskState.lastCompactApiRequestCount === undefined ||
+					this.taskState.apiRequestCount - this.taskState.lastCompactApiRequestCount >= limits.forceCompactAfterSteps) &&
 				usedTokens >= thresholdTokens / 2
 			) {
 				shouldCompact = true
@@ -2668,6 +2700,7 @@ export class Task {
 			environmentDetails = ""
 			skycoderulesError = false
 			this.taskState.lastAutoCompactTriggerIndex = previousApiReqIndex
+			this.taskState.lastCompactApiRequestCount = this.taskState.apiRequestCount
 		} else {
 			// When NOT compacting, load full context with mentions parsing and slash commands
 			;[parsedUserContent, environmentDetails, skycoderulesError] = await this.loadContext(
@@ -2832,10 +2865,10 @@ export class Task {
 			this.taskState.isStreaming = true
 			let didReceiveUsageChunk = false
 
+			// [SKYCODE] Страховка от зацикливания: один и тот же кусок текста много раз подряд
+			let loopDetected = false
 			try {
-				// [SKYCODE] Страховка от зацикливания: один и тот же кусок текста много раз подряд
 				const loopDetector = new RepetitionLoopDetector()
-				let loopDetected = false
 				for await (const chunk of stream) {
 					switch (chunk.type) {
 						case "usage":
@@ -2926,9 +2959,15 @@ export class Task {
 						}
 					}
 
+					// Текст внутри вызова инструмента (содержимое write_to_file, diff и т.п.) в детектор не отдаём:
+					// легитимно повторяющийся код/таблицы дали бы ложное срабатывание
+					const lastContentBlock = this.taskState.assistantMessageContent.at(-1)
+					const insideToolCall = chunk.type === "text" && lastContentBlock?.type === "tool_use"
 					if (
 						!loopDetected &&
-						loopDetector.push(chunk.type === "reasoning" ? chunk.reasoning : chunk.type === "text" ? chunk.text : undefined)
+						loopDetector.push(
+							chunk.type === "reasoning" ? chunk.reasoning : chunk.type === "text" && !insideToolCall ? chunk.text : undefined,
+						)
 					) {
 						loopDetected = true
 						Logger.warn("[Task] Model output started repeating itself — stopping the response")
@@ -3079,6 +3118,12 @@ export class Task {
 			await this.messageStateHandler.saveSkycodeMessagesAndUpdateHistory()
 			await this.postStateToWebview()
 
+			// [SKYCODE] Запрос закончен — применяем отложенную подмену обработчика (смена режима во время стрима)
+			if (this.pendingApi) {
+				this.api = this.pendingApi
+				this.pendingApi = undefined
+			}
+
 			// need to call here in case the stream was aborted
 			if (this.taskState.abort) {
 				throw new Error("Skycode instance aborted")
@@ -3120,11 +3165,14 @@ export class Task {
 				}
 
 				// Get finalized tool use blocks from the handler
-				const toolUseBlocks = toolUseHandler.getAllFinalizedToolUses(
-					// NOTE: If there is no assistant text but there is a thinking block, we attach the summary to the tool use blocks
-					// for providers that required reasoning traces included with assistant content.
-					hasAssistantText ? undefined : thinkingBlock?.summary,
-				)
+				// [SKYCODE] Ответ оборван из-за зацикливания: недописанные нативные вызовы в историю не кладём
+				const toolUseBlocks = loopDetected
+					? []
+					: toolUseHandler.getAllFinalizedToolUses(
+							// NOTE: If there is no assistant text but there is a thinking block, we attach the summary to the tool use blocks
+							// for providers that required reasoning traces included with assistant content.
+							hasAssistantText ? undefined : thinkingBlock?.summary,
+						)
 				// Append tool use blocks if any exist
 				if (toolUseBlocks.length > 0) {
 					assistantContent.push(...toolUseBlocks)
@@ -3153,15 +3201,36 @@ export class Task {
 
 			// set any blocks to be complete to allow presentAssistantMessage to finish and set userMessageContentReady to true
 			// (could be a text block that had no subsequent tool uses, or a text block at the very end, or an invalid tool use, etc. whatever the case, presentAssistantMessage relies on these blocks either to be completed or the user to reject a block in order to proceed and eventually set userMessageContentReady to true)
+			// [SKYCODE] Ответ оборван зацикливанием: недописанные вызовы инструментов (XML и нативные) НЕ исполняем —
+			// полузаписанный write_to_file/replace_in_file обрезал бы файл. Текстовые блоки сохраняем.
+			let droppedUnfinishedTools = false
+			if (loopDetected) {
+				const before = this.taskState.assistantMessageContent
+				const kept = before.filter((block) => !(block.type === "tool_use" && block.partial))
+				droppedUnfinishedTools = kept.length !== before.length || toolUseHandler.getPartialToolUsesAsContent().length > 0
+				this.taskState.assistantMessageContent = kept
+				if (droppedUnfinishedTools) {
+					if (this.diffViewProvider.isEditing) {
+						await this.diffViewProvider.revertChanges()
+					}
+					// закрываем висящее «частичное» сообщение инструмента в UI
+					const lastUiMessage = this.messageStateHandler.getSkycodeMessages().at(-1)
+					if (lastUiMessage?.partial) {
+						lastUiMessage.partial = false
+					}
+				}
+			}
 			const partialBlocks = this.taskState.assistantMessageContent.filter((block) => block.partial)
 			partialBlocks.forEach((block) => {
 				block.partial = false
 			})
-			// in case there are native tool calls pending
-			const partialToolBlocks = toolUseHandler.getPartialToolUsesAsContent()?.map((block) => ({ ...block, partial: false }))
-			this.processNativeToolCalls(assistantTextOnly, partialToolBlocks)
+			if (!loopDetected) {
+				// in case there are native tool calls pending
+				const partialToolBlocks = toolUseHandler.getPartialToolUsesAsContent()?.map((block) => ({ ...block, partial: false }))
+				this.processNativeToolCalls(assistantTextOnly, partialToolBlocks)
+			}
 
-			if (partialBlocks.length > 0) {
+			if (partialBlocks.length > 0 || droppedUnfinishedTools) {
 				await this.presentAssistantMessage() // if there is content to update then it will complete and update this.userMessageContentReady to true, which we pwaitfor before making the next request. all this is really doing is presenting the last partial message that we just set to complete
 			}
 
@@ -3196,7 +3265,8 @@ export class Task {
 					if (stoppedForLoop) {
 						// Ответ оборван из-за зацикливания — подсказка уже добавлена, повторяем запрос с ней
 						this.taskState.consecutiveMistakeCount++
-					} else if (isTextOnlyAnswer(assistantTextOnly)) {
+					} else if (!shouldCompact && isTextOnlyAnswer(assistantTextOnly)) {
+						// (на запрос сжатия контекста текстовый ответ ответом не считаем: нужен вызов summarize_task)
 						const reply = await this.waitForReplyAfterTextAnswer()
 						if (!reply) {
 							return true

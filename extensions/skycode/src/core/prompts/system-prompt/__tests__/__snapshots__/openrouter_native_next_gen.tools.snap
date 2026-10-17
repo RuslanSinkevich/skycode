@@ -47,7 +47,7 @@
     "type": "function",
     "function": {
       "name": "read_file",
-      "description": "Request to read the contents of a file at the specified path. Use this when you need to examine the contents of an existing file you do not know the contents of, for example to analyze code, review text files, or extract information from configuration files. Automatically extracts raw text from PDF and DOCX files. May not be suitable for other types of binary files, as it returns the raw content as a string. Do NOT use this tool to list the contents of a directory. Only use this tool on files. For large files read in parts with start_line/end_line.",
+      "description": "Request to read the contents of a file at the specified path. Use this when you need to examine the contents of an existing file you do not know the contents of, for example to analyze code, review text files, or extract information from configuration files. Automatically extracts raw text from PDF and DOCX files. May not be suitable for other types of binary files, as it returns the raw content as a string. Do NOT use this tool to list the contents of a directory. Only use this tool on files. For large files read in parts with start_line/end_line. For a specific function in a large file use read_symbol.",
       "strict": false,
       "parameters": {
         "type": "object",
@@ -71,6 +71,36 @@
         },
         "required": [
           "path"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "read_symbol",
+      "description": "Read one or more functions/methods/classes from a file by name, with line numbers. Prefer this over read_file when you need a specific symbol from a large file. Use list_code_definition_names to see available symbols.",
+      "strict": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "The path of the file (relative to the current working directory {{CWD}}){{MULTI_ROOT_HINT}}"
+          },
+          "symbol": {
+            "type": "string",
+            "description": "Name of the function, method or class, e.g. SaveDocument or ClassName.MethodName. Several names may be given comma-separated (up to 5)."
+          },
+          "task_progress": {
+            "type": "string",
+            "description": "A checklist showing task progress after this tool use is completed. The task_progress parameter must be included as a separate parameter inside of the parent tool call, it must be separate from other parameters such as content, arguments, etc. (See 'UPDATING TASK PROGRESS' section for more details)"
+          }
+        },
+        "required": [
+          "path",
+          "symbol"
         ],
         "additionalProperties": false
       }
@@ -559,6 +589,41 @@
         "required": [
           "title",
           "content"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "show_chart",
+      "description": "Show the user a chart or table built from structured data (bar, line, pie, table). Use it for numbers, comparisons and tables; prefer it over show_visual for any chart or table. The data must be valid JSON. Keep it to at most 30 labels/rows.",
+      "strict": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Short title of the chart or table."
+          },
+          "type": {
+            "type": "string",
+            "description": "One of: bar, line, pie, table."
+          },
+          "data": {
+            "type": "string",
+            "description": "JSON string. bar/line: {\"labels\": [\"Jan\",\"Feb\"], \"series\": [{\"name\": \"Errors\", \"values\": [3, 5]}], \"unit\": \"ms\"}. pie: {\"labels\": [\"A\",\"B\"], \"values\": [60, 40]}. table: {\"columns\": [\"File\",\"Lines\"], \"rows\": [[\"a.cs\", 3346]]}."
+          },
+          "task_progress": {
+            "type": "string",
+            "description": "A checklist showing task progress after this tool use is completed. The task_progress parameter must be included as a separate parameter inside of the parent tool call, it must be separate from other parameters such as content, arguments, etc. (See 'UPDATING TASK PROGRESS' section for more details)"
+          }
+        },
+        "required": [
+          "title",
+          "type",
+          "data"
         ],
         "additionalProperties": false
       }

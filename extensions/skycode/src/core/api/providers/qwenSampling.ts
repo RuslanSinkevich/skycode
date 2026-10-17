@@ -29,3 +29,34 @@ export function qwenSampling(modelId: string, configuredTemperature: number | un
 			: QWEN_RECOMMENDED_TEMPERATURE
 	return { temperature, top_p: 0.95, top_k: 20 }
 }
+
+// [SKYCODE] Строгие прокси/шлюзы отвечают 400 на неизвестные поля (top_k). Запоминаем такие baseUrl на процесс
+// и дальше не шлём top_k/top_p.
+const baseUrlsWithoutExtraSampling = new Set<string>()
+
+function samplingKey(baseUrl: string | undefined): string {
+	return (baseUrl ?? "").trim().toLowerCase().replace(/\/+$/, "")
+}
+
+export function isExtraSamplingUnsupported(baseUrl: string | undefined): boolean {
+	return baseUrlsWithoutExtraSampling.has(samplingKey(baseUrl))
+}
+
+export function markExtraSamplingUnsupported(baseUrl: string | undefined): void {
+	baseUrlsWithoutExtraSampling.add(samplingKey(baseUrl))
+}
+
+/** Сбрасывает запомненное (для тестов) */
+export function resetExtraSamplingSupport(): void {
+	baseUrlsWithoutExtraSampling.clear()
+}
+
+/** 400 с жалобой на top_k / неизвестные поля запроса */
+export function isExtraSamplingRejection(error: unknown): boolean {
+	const e = error as { status?: number; message?: unknown } | undefined
+	if (!e || e.status !== 400) {
+		return false
+	}
+	const message = String(e.message ?? "")
+	return /top_k|unrecognized request argument|extra (fields|inputs)|unknown (field|parameter)|additional ?properties/i.test(message)
+}

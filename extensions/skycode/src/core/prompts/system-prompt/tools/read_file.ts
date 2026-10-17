@@ -10,7 +10,7 @@ const generic: SkycodeToolSpec = {
 	id,
 	name: "read_file",
 	description:
-		"Request to read the contents of a file at the specified path. Use this when you need to examine the contents of an existing file you do not know the contents of, for example to analyze code, review text files, or extract information from configuration files. Automatically extracts raw text from PDF and DOCX files. May not be suitable for other types of binary files, as it returns the raw content as a string. Do NOT use this tool to list the contents of a directory. Only use this tool on files. For large files read in parts with start_line/end_line.",
+		"Request to read the contents of a file at the specified path. Use this when you need to examine the contents of an existing file you do not know the contents of, for example to analyze code, review text files, or extract information from configuration files. Automatically extracts raw text from PDF and DOCX files. May not be suitable for other types of binary files, as it returns the raw content as a string. Do NOT use this tool to list the contents of a directory. Only use this tool on files. For large files read in parts with start_line/end_line. For a specific function in a large file use read_symbol.",
 	parameters: [
 		{
 			name: "path",
@@ -39,7 +39,7 @@ const NATIVE_GPT_5: SkycodeToolSpec = {
 	id,
 	name: "read_file",
 	description:
-		"Request to read the contents of a file at the specified path. Use this when you need to examine the contents of an existing file you do not know the contents of, for example to analyze code, review text files, or extract information from configuration files. Automatically extracts raw text from PDF and DOCX files. May not be suitable for other types of binary files, as it returns the raw content as a string. Do NOT use this tool to list the contents of a directory. Only use this tool on files. For large files read in parts with start_line/end_line.",
+		"Request to read the contents of a file at the specified path. Use this when you need to examine the contents of an existing file you do not know the contents of, for example to analyze code, review text files, or extract information from configuration files. Automatically extracts raw text from PDF and DOCX files. May not be suitable for other types of binary files, as it returns the raw content as a string. Do NOT use this tool to list the contents of a directory. Only use this tool on files. For large files read in parts with start_line/end_line. For a specific function in a large file use read_symbol.",
 	parameters: [
 		{
 			name: "path",

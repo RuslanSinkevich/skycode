@@ -93,4 +93,13 @@ export class TaskState {
 	// [SKYCODE] Напоминания todo-списка: когда последний раз слали (номер запроса) и слали ли полную инструкцию
 	focusChainLastReminderRequest: number = -1
 	focusChainFullInstructionsSent: boolean = false
+	/** Ключ состояния истории (generation + deletedRange), при котором слали инструкции: сменился — шлём полные заново */
+	focusChainHistoryKey?: string
+
+	// [SKYCODE] Счётчик перезаписей apiConversationHistory (откат, правка, сжатие): кэши read_file/environment_details
+	// и «полные инструкции todo» привязаны к нему и сбрасываются при смене
+	historyGeneration: number = 0
+
+	// [SKYCODE] Номер запроса (apiRequestCount), на котором последний раз запускали сжатие контекста
+	lastCompactApiRequestCount?: number
 }

@@ -27,6 +27,7 @@ export const toolParamNames = [
 	"replace",
 	"startLine",
 	"start_line",
+	"symbol",
 	"end_line",
 	"allowed_domains",
 	"blocked_domains",
@@ -62,6 +63,8 @@ export const toolParamNames = [
 	"pattern",
 	"max_results",
 	"id",
+	"type",
+	"data",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]

@@ -39,6 +39,7 @@ export const config = createVariant(ModelFamily.DEVSTRAL)
 		SkycodeDefaultTool.BASH,
 		SkycodeDefaultTool.CHECK_BACKGROUND,
 		SkycodeDefaultTool.FILE_READ,
+		SkycodeDefaultTool.READ_SYMBOL,
 		SkycodeDefaultTool.FILE_NEW,
 		SkycodeDefaultTool.FILE_EDIT,
 		SkycodeDefaultTool.EDIT_NOTEBOOK,
@@ -61,6 +62,7 @@ export const config = createVariant(ModelFamily.DEVSTRAL)
 		SkycodeDefaultTool.PLAN_MODE,
 		SkycodeDefaultTool.ASK,
 		SkycodeDefaultTool.SHOW_VISUAL,
+		SkycodeDefaultTool.SHOW_CHART,
 	)
 	.placeholders({
 		MODEL_FAMILY: "devstral",

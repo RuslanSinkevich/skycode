@@ -78,6 +78,7 @@ export const TASK_CALLBACKS_KEYS = [
  */
 export const PATH_REQUIRED_TOOLS = [
 	"read_file",
+	"read_symbol",
 	"write_to_file",
 	"replace_in_file",
 	"new_rule",
