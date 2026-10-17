@@ -41,3 +41,27 @@ export function getContextWindowInfo(api: ApiHandler) {
 
 	return { contextWindow, maxAllowedSize }
 }
+
+/**
+ * [SKYCODE] Порог автосжатия в токенах — единый для решения о сжатии и для показа в интерфейсе.
+ * thresholdPercentage — настройка autoCondenseThreshold (0–1), если задана; не выше maxAllowedSize.
+ */
+export function getAutoCompactThresholdTokens(api: ApiHandler, thresholdPercentage?: number): number {
+	const { contextWindow, maxAllowedSize } = getContextWindowInfo(api)
+	const roundedThreshold = thresholdPercentage ? Math.floor(contextWindow * thresholdPercentage) : maxAllowedSize
+	return Math.min(roundedThreshold, maxAllowedSize)
+}
+
+/**
+ * [SKYCODE] Окно контекста и порог автосжатия для кольца контекста в интерфейсе.
+ * Числа те же, что использует решение о сжатии (getAutoCompactThresholdTokens).
+ */
+export function getContextUsageLimits(
+	api: ApiHandler,
+	thresholdPercentage?: number,
+): { contextWindow: number; autoCompactThresholdTokens: number } {
+	return {
+		contextWindow: getContextWindowInfo(api).contextWindow,
+		autoCompactThresholdTokens: getAutoCompactThresholdTokens(api, thresholdPercentage),
+	}
+}

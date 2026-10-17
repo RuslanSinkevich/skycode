@@ -8,7 +8,7 @@ import cloneDeep from "clone-deep"
 import fs from "fs/promises"
 import * as path from "path"
 import { Logger } from "@/shared/services/Logger"
-import { getContextWindowInfo } from "./context-window-utils"
+import { getAutoCompactThresholdTokens, getContextWindowInfo } from "./context-window-utils"
 import { FileReadOptimizer } from "./FileReadOptimizer"
 
 enum EditType {
@@ -149,6 +149,20 @@ export class ContextManager {
 		}
 	}
 
+	/** [SKYCODE] Токены прошлого запроса (вход + выход + кэш) — текущая заполненность контекста */
+	getPreviousRequestTokens(skycodeMessages: SkycodeMessage[], previousApiReqIndex: number): number {
+		const text = previousApiReqIndex >= 0 ? skycodeMessages[previousApiReqIndex]?.text : undefined
+		if (!text) {
+			return 0
+		}
+		try {
+			const { tokensIn, tokensOut, cacheWrites, cacheReads }: SkycodeApiReqInfo = JSON.parse(text)
+			return (tokensIn || 0) + (tokensOut || 0) + (cacheWrites || 0) + (cacheReads || 0)
+		} catch {
+			return 0
+		}
+	}
+
 	/**
 	 * Determine whether we should compact context window, based on token counts
 	 */
@@ -164,9 +178,7 @@ export class ContextManager {
 				const { tokensIn, tokensOut, cacheWrites, cacheReads }: SkycodeApiReqInfo = JSON.parse(previousRequest.text)
 				const totalTokens = (tokensIn || 0) + (tokensOut || 0) + (cacheWrites || 0) + (cacheReads || 0)
 
-				const { contextWindow, maxAllowedSize } = getContextWindowInfo(api)
-				const roundedThreshold = thresholdPercentage ? Math.floor(contextWindow * thresholdPercentage) : maxAllowedSize
-				const thresholdTokens = Math.min(roundedThreshold, maxAllowedSize)
+				const thresholdTokens = getAutoCompactThresholdTokens(api, thresholdPercentage)
 				return totalTokens >= thresholdTokens
 			}
 		}

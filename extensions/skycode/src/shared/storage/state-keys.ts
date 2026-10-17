@@ -149,7 +149,7 @@ const USER_SETTINGS_FIELDS = {
 	maxConsecutiveMistakes: { default: 3 as number },
 	strictPlanModeEnabled: { default: true as boolean },
 	yoloModeToggled: { default: false as boolean },
-	useAutoCondense: { default: false as boolean },
+	useAutoCondense: { default: true as boolean },
 	skycodeWebToolsEnabled: { default: false as boolean },
 	// allow-any-unicode-next-line
 	preferredLanguage: { default: "Russian - Русский" as string },

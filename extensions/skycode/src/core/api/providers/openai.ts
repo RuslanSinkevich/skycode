@@ -11,6 +11,7 @@ import { convertToR1Format } from "../transform/r1-format"
 import { ApiStream } from "../transform/stream"
 import { getOpenAIToolParams, ToolCallProcessor } from "../transform/tool-call-processor"
 import { ThinkTagStreamParser } from "../transform/think-tag-parser"
+import { qwenSampling } from "./qwenSampling"
 
 interface OpenAiHandlerOptions extends CommonApiHandlerOptions {
 	openAiApiKey?: string
@@ -161,6 +162,12 @@ export class OpenAiHandler implements ApiHandler {
 			}
 		}
 
+		// [SKYCODE] Qwen3 с температурой 0 зацикливается — подставляем рекомендованную выборку
+		const qwen = isReasoningModelFamily ? undefined : qwenSampling(modelId, temperature)
+		if (qwen) {
+			temperature = qwen.temperature
+		}
+
 		const stream = await client.chat.completions.create({
 			model: modelId,
 			messages: openAiMessages,
@@ -169,8 +176,9 @@ export class OpenAiHandler implements ApiHandler {
 			reasoning_effort: reasoningEffort,
 			stream: true,
 			stream_options: { include_usage: true },
+			...(qwen ? { top_p: qwen.top_p, top_k: qwen.top_k } : {}),
 			...getOpenAIToolParams(tools),
-		})
+		} as OpenAI.Chat.ChatCompletionCreateParamsStreaming)
 		this.currentStream = stream as any
 
 		const toolCallProcessor = new ToolCallProcessor()

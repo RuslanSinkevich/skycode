@@ -58,13 +58,14 @@ import { convertSkycodeMessageToProto } from "@shared/proto-conversions/skycode-
 import { getApiSettingsMode, isReadOnlyMode, type Mode } from "@shared/storage/types"
 import { SkycodeDefaultTool } from "@shared/tools"
 import { isTextOnlyAnswer } from "./textOnlyReply"
+import { REPETITION_LOOP_NOTE, RepetitionLoopDetector } from "./repetitionLoop"
+import { getAutoCompactThresholdTokens } from "@core/context/context-management/context-window-utils"
 import { SkycodeAskResponse } from "@shared/WebviewMessage"
 import {
 	getModelCapabilityTier,
 	getSessionLimitsForModel,
 	isGPT5ModelFamily,
 	isLocalModel,
-	isNextGenModelFamily,
 } from "@utils/model-utils"
 import cloneDeep from "clone-deep"
 import Mutex from "p-mutex"
@@ -2016,7 +2017,8 @@ export class Task {
 			this.taskState.conversationHistoryDeletedRange,
 			previousApiReqIndex,
 			await ensureTaskDirectoryExists(this.taskId),
-			this.stateManager.getGlobalSettingsKey("useAutoCondense") && isNextGenModelFamily(this.api.getModel().id),
+			// [SKYCODE] Сводка вместо обрезки половины истории — для всех моделей, не только «новых»
+			this.stateManager.getGlobalSettingsKey("useAutoCondense"),
 		)
 
 		if (contextManagementMetadata.updatedConversationHistoryDeletedRange) {
@@ -2543,7 +2545,7 @@ export class Task {
 		let shouldCompact = false
 		const useAutoCondense = this.stateManager.getGlobalSettingsKey("useAutoCondense")
 
-		if (useAutoCondense && isNextGenModelFamily(this.api.getModel().id)) {
+		if (useAutoCondense) {
 			// When we initially trigger context cleanup, we increase the context window size, so we need state `currentlySummarizing`
 			// to track if we've already started the context summarization flow. After summarizing, we increment
 			// conversationHistoryDeletedRange to mask out the summarization-trigger user & assistant response messages
@@ -2612,7 +2614,18 @@ export class Task {
 				customForceCompactAfterSteps: this.stateManager.getGlobalSettingsKey("customForceCompactAfterSteps"),
 			}
 			const limits = getSessionLimitsForModel(currentProviderInfo.model.id, currentProviderInfo, customSettings)
-			if (this.taskState.apiRequestCount > 0 && this.taskState.apiRequestCount % limits.forceCompactAfterSteps === 0) {
+			// [SKYCODE] Принудительно — только если контекст уже заполнен хотя бы наполовину до порога:
+			// сводка почти пустого контекста теряет детали и ничего не освобождает
+			const usedTokens = this.contextManager.getPreviousRequestTokens(this.messageStateHandler.getSkycodeMessages(), previousApiReqIndex)
+			const thresholdTokens = getAutoCompactThresholdTokens(
+				this.api,
+				this.stateManager.getGlobalSettingsKey("autoCondenseThreshold") as number | undefined,
+			)
+			if (
+				this.taskState.apiRequestCount > 0 &&
+				this.taskState.apiRequestCount % limits.forceCompactAfterSteps === 0 &&
+				usedTokens >= thresholdTokens / 2
+			) {
 				shouldCompact = true
 			}
 		}
@@ -2794,6 +2807,9 @@ export class Task {
 			let didReceiveUsageChunk = false
 
 			try {
+				// [SKYCODE] Страховка от зацикливания: один и тот же кусок текста много раз подряд
+				const loopDetector = new RepetitionLoopDetector()
+				let loopDetected = false
 				for await (const chunk of stream) {
 					switch (chunk.type) {
 						case "usage":
@@ -2882,6 +2898,18 @@ export class Task {
 							})
 							break
 						}
+					}
+
+					if (
+						!loopDetected &&
+						loopDetector.push(chunk.type === "reasoning" ? chunk.reasoning : chunk.type === "text" ? chunk.text : undefined)
+					) {
+						loopDetected = true
+						Logger.warn("[Task] Model output started repeating itself — stopping the response")
+						this.api.abort?.()
+						assistantMessage += "\n\n[Response stopped: it was repeating the same text]"
+						this.taskState.userMessageContent.push({ type: "text", text: REPETITION_LOOP_NOTE })
+						break
 					}
 
 					// present content to user - we don't want the stream to break if present fails, so we catch errors here
@@ -3136,7 +3164,13 @@ export class Task {
 					}
 
 					// [SKYCODE] Текстовый ответ без инструмента — ответ пользователю: ждём его сообщения
-					if (isTextOnlyAnswer(assistantTextOnly)) {
+					const stoppedForLoop = this.taskState.userMessageContent.some(
+						(block) => block.type === "text" && block.text === REPETITION_LOOP_NOTE,
+					)
+					if (stoppedForLoop) {
+						// Ответ оборван из-за зацикливания — подсказка уже добавлена, повторяем запрос с ней
+						this.taskState.consecutiveMistakeCount++
+					} else if (isTextOnlyAnswer(assistantTextOnly)) {
 						const reply = await this.waitForReplyAfterTextAnswer()
 						if (!reply) {
 							return true
