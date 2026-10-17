@@ -1,6 +1,6 @@
 import type { HistoryItem } from "@shared/HistoryItem"
 import { describe, expect, it } from "vitest"
-import { displayTaskTitle, filterHistoryForDrawer, getHistoryGroupKey, groupHistoryByDate } from "./historyGroups"
+import { displayTaskTitle, filterHistoryForDrawer, formatHistoryTime, getHistoryGroupKey, groupHistoryByDate } from "./historyGroups"
 
 const HOUR = 60 * 60 * 1000
 const DAY = 24 * HOUR
@@ -57,5 +57,15 @@ describe("filterHistoryForDrawer", () => {
 
 	it("filters by text ignoring case", () => {
 		expect(filterHistoryForDrawer(items, new Set(), "login").map((i) => i.id)).toEqual(["1"])
+	})
+})
+
+describe("formatHistoryTime", () => {
+	it("shows time for today, a date for older items, never a minus sign", () => {
+		const now = new Date(2026, 9, 17, 15, 0).getTime()
+		expect(formatHistoryTime(new Date(2026, 9, 17, 14, 5).getTime(), now, "ru")).toBe("14:05")
+		const older = formatHistoryTime(new Date(2026, 8, 3, 10, 0).getTime(), now, "ru")
+		expect(older).toContain("3")
+		expect(older).not.toContain("-")
 	})
 })

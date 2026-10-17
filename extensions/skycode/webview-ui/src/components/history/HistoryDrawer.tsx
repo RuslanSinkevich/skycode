@@ -1,18 +1,21 @@
 import type { TabInfo } from "@shared/ExtensionMessage"
 import type { HistoryItem } from "@shared/HistoryItem"
 import { EmptyRequest, StringArrayRequest, StringRequest } from "@shared/proto/skycode/common"
-import { PlusIcon, SearchIcon, StarIcon, Trash2Icon, XIcon } from "lucide-react"
+import { MessageSquareIcon, PlusIcon, SearchIcon, StarIcon, Trash2Icon, XIcon } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { StatusIcon } from "@/components/chat/tabs/StatusIcon"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
 import { cn } from "@/lib/utils"
 import { TaskServiceClient } from "@/services/grpc-client"
-import { displayTaskTitle, filterHistoryForDrawer, formatRelativeTime, groupHistoryByDate } from "./historyGroups"
+import { displayTaskTitle, filterHistoryForDrawer, formatHistoryTime, groupHistoryByDate } from "./historyGroups"
 
 const rowClass =
-	"group flex items-center gap-1.5 h-6 px-2 cursor-pointer select-none text-[12px] hover:bg-(--vscode-list-hoverBackground)"
-const groupHeaderClass = "px-2 pt-2 pb-0.5 text-[11px] font-medium uppercase tracking-wide text-(--vscode-descriptionForeground)"
+	"group flex items-center gap-2 h-7 mx-1.5 px-2 rounded-md cursor-pointer select-none text-[13px] hover:bg-(--vscode-list-hoverBackground) focus-visible:outline focus-visible:outline-1 focus-visible:outline-(--vscode-focusBorder)"
+const groupHeaderClass =
+	"px-3.5 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wider text-(--vscode-descriptionForeground) opacity-80"
+const iconButtonClass =
+	"shrink-0 flex items-center justify-center size-6 rounded-md bg-transparent border-0 cursor-pointer text-inherit opacity-70 hover:opacity-100 hover:bg-(--vscode-toolbar-hoverBackground)"
 
 /**
  * Шторка истории: выезжает слева поверх чата. Открытые вкладки со статусами, ниже история
@@ -82,12 +85,23 @@ export function HistoryDrawer({ open, onClose }: { open: boolean; onClose: () =>
 		<div className="fixed inset-0 z-50 flex" data-testid="history-drawer">
 			<aside
 				aria-label={t("tabs.history")}
-				className="flex flex-col h-full w-1/2 min-w-[240px] max-w-[420px] border-r border-(--vscode-panel-border) bg-(--vscode-sideBar-background) text-(--vscode-foreground) shadow-lg">
-				<div className="flex items-center gap-1 p-2">
-					<div className="flex flex-1 min-w-0 items-center gap-1.5 h-6 px-1.5 rounded-sm border border-(--vscode-input-border,transparent) bg-(--vscode-input-background) focus-within:border-(--vscode-focusBorder)">
-						<SearchIcon className="shrink-0 opacity-60" size={12} />
+				className="flex flex-col h-full w-1/2 min-w-[260px] max-w-[420px] border-r border-(--vscode-panel-border) bg-(--vscode-sideBar-background) text-(--vscode-foreground) shadow-2xl animate-in slide-in-from-left duration-150">
+				<div className="flex items-center justify-between gap-2 pl-3.5 pr-2 pt-2.5 pb-2">
+					<span className="text-[13px] font-semibold">{t("tabs.history")}</span>
+					<button
+						aria-label={t("historyDrawer.close")}
+						className={iconButtonClass}
+						onClick={onClose}
+						title={t("historyDrawer.close")}
+						type="button">
+						<XIcon size={14} />
+					</button>
+				</div>
+				<div className="flex flex-col gap-1.5 px-3 pb-3 border-b border-(--vscode-panel-border)">
+					<div className="flex items-center gap-2 h-7 px-2 rounded-md border border-(--vscode-input-border,transparent) bg-(--vscode-input-background) focus-within:border-(--vscode-focusBorder)">
+						<SearchIcon className="shrink-0 opacity-60" size={13} />
 						<input
-							className="flex-1 min-w-0 bg-transparent border-0 outline-none text-[12px] text-(--vscode-input-foreground) placeholder:text-(--vscode-input-placeholderForeground)"
+							className="flex-1 min-w-0 bg-transparent border-0 outline-none text-[13px] text-(--vscode-input-foreground) placeholder:text-(--vscode-input-placeholderForeground)"
 							onChange={(e) => setQuery(e.target.value)}
 							placeholder={t("historyDrawer.search")}
 							ref={searchRef}
@@ -96,24 +110,15 @@ export function HistoryDrawer({ open, onClose }: { open: boolean; onClose: () =>
 						/>
 					</div>
 					<button
-						aria-label={t("historyDrawer.close")}
-						className="shrink-0 flex items-center justify-center size-6 rounded-sm bg-transparent border-0 cursor-pointer text-inherit opacity-70 hover:opacity-100 hover:bg-(--vscode-toolbar-hoverBackground)"
-						onClick={onClose}
-						title={t("historyDrawer.close")}
+						className="flex items-center gap-2 h-7 px-2 rounded-md border-0 cursor-pointer text-[13px] bg-transparent text-(--vscode-foreground) hover:bg-(--vscode-list-hoverBackground)"
+						onClick={newTab}
 						type="button">
-						<XIcon size={14} />
+						<PlusIcon className="opacity-80" size={14} />
+						{t("historyDrawer.newChat")}
 					</button>
 				</div>
 
-				<button
-					className="mx-2 mb-1 flex items-center gap-1.5 h-6 px-2 rounded-sm border-0 cursor-pointer text-[12px] bg-(--vscode-button-secondaryBackground) text-(--vscode-button-secondaryForeground) hover:bg-(--vscode-button-secondaryHoverBackground)"
-					onClick={newTab}
-					type="button">
-					<PlusIcon size={12} />
-					{t("historyDrawer.newChat")}
-				</button>
-
-				<div className="flex-1 min-h-0 overflow-y-auto pb-2">
+				<div className="flex-1 min-h-0 overflow-y-auto pb-3">
 					{visibleTabs.length > 0 && (
 						<section>
 							<div className={groupHeaderClass}>{t("historyDrawer.openTabs")}</div>
@@ -123,7 +128,8 @@ export function HistoryDrawer({ open, onClose }: { open: boolean; onClose: () =>
 									<div
 										className={cn(
 											rowClass,
-											tab.id === activeTabId && "bg-(--vscode-list-activeSelectionBackground)",
+											tab.id === activeTabId &&
+												"bg-(--vscode-list-activeSelectionBackground) text-(--vscode-list-activeSelectionForeground) hover:bg-(--vscode-list-activeSelectionBackground)",
 										)}
 										key={tab.id}
 										onClick={() => switchTab(tab.id)}
@@ -136,7 +142,11 @@ export function HistoryDrawer({ open, onClose }: { open: boolean; onClose: () =>
 										role="button"
 										tabIndex={0}
 										title={title}>
-										<StatusIcon status={tab.status} />
+										{tab.status === "idle" ? (
+											<MessageSquareIcon className="shrink-0 opacity-50" size={12} />
+										) : (
+											<StatusIcon status={tab.status} />
+										)}
 										<span className="flex-1 min-w-0 truncate">{title}</span>
 									</div>
 								)
@@ -161,22 +171,24 @@ export function HistoryDrawer({ open, onClose }: { open: boolean; onClose: () =>
 									role="button"
 									tabIndex={0}
 									title={displayTaskTitle(item.task, t("historyDrawer.untitled"))}>
-									{item.isFavorited && (
+									{item.isFavorited ? (
 										<StarIcon
 											className="shrink-0 fill-(--vscode-button-background) text-(--vscode-button-background)"
-											size={11}
+											size={12}
 										/>
+									) : (
+										<MessageSquareIcon className="shrink-0 opacity-50" size={12} />
 									)}
 									<span className="flex-1 min-w-0 truncate ph-no-capture">
 										{displayTaskTitle(item.task, t("historyDrawer.untitled"))}
 									</span>
 									<span className="shrink-0 text-[11px] text-(--vscode-descriptionForeground) group-hover:hidden">
-										{formatRelativeTime(item.ts, now, locale)}
+										{formatHistoryTime(item.ts, now, locale)}
 									</span>
 									{/* Избранное удалять нельзя — как в прежнем экране истории */}
 									<button
 										aria-label={t("history.delete")}
-										className="shrink-0 hidden group-hover:flex items-center justify-center size-5 rounded-sm bg-transparent border-0 cursor-pointer text-inherit opacity-70 hover:opacity-100 hover:bg-(--vscode-toolbar-hoverBackground) disabled:opacity-30 disabled:cursor-default"
+										className="shrink-0 hidden group-hover:flex items-center justify-center size-5 rounded-md bg-transparent border-0 cursor-pointer text-inherit opacity-70 hover:opacity-100 hover:bg-(--vscode-toolbar-hoverBackground) disabled:opacity-30 disabled:cursor-default"
 										disabled={item.isFavorited}
 										onClick={(e) => {
 											e.stopPropagation()
@@ -198,7 +210,7 @@ export function HistoryDrawer({ open, onClose }: { open: boolean; onClose: () =>
 					)}
 				</div>
 			</aside>
-			<div aria-hidden="true" className="flex-1 bg-black/50" data-testid="history-drawer-backdrop" onClick={onClose} />
+			<div aria-hidden="true" className="flex-1 bg-black/40 animate-in fade-in duration-150" data-testid="history-drawer-backdrop" onClick={onClose} />
 		</div>
 	)
 }

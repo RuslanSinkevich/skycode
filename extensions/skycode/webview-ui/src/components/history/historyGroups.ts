@@ -63,25 +63,20 @@ export function displayTaskTitle(task: string | undefined, fallback: string): st
 	return !text || text.startsWith('{"') ? fallback : text
 }
 
-/** Короткое относительное время («5 мин. назад», «вчера»), на языке интерфейса. */
-export function formatRelativeTime(ts: number, now: number, locale: string): string {
-	const diffSec = Math.round((ts - now) / 1000)
-	const abs = Math.abs(diffSec)
-	const formatter = new Intl.RelativeTimeFormat(locale === "ru" ? "ru-RU" : "en-US", { numeric: "auto", style: "narrow" })
-	if (abs < 60) {
-		return formatter.format(0, "second")
+/**
+ * [SKYCODE] Время в списке истории, как в мессенджерах: сегодня и вчера — часы и минуты
+ * (группа уже говорит, какой день), на этой неделе — день недели, раньше — дата.
+ */
+export function formatHistoryTime(ts: number, now: number, locale: string): string {
+	const lang = locale === "ru" ? "ru-RU" : "en-US"
+	const key = getHistoryGroupKey(ts, now)
+	const date = new Date(ts)
+	if (key === "today" || key === "yesterday") {
+		return date.toLocaleTimeString(lang, { hour: "2-digit", minute: "2-digit" })
 	}
-	if (abs < 3600) {
-		return formatter.format(Math.trunc(diffSec / 60), "minute")
+	if (key === "thisWeek") {
+		return date.toLocaleDateString(lang, { weekday: "short" })
 	}
-	if (abs < 86400) {
-		return formatter.format(Math.trunc(diffSec / 3600), "hour")
-	}
-	if (abs < 30 * 86400) {
-		return formatter.format(Math.trunc(diffSec / 86400), "day")
-	}
-	if (abs < 365 * 86400) {
-		return formatter.format(Math.trunc(diffSec / (30 * 86400)), "month")
-	}
-	return formatter.format(Math.trunc(diffSec / (365 * 86400)), "year")
+	const sameYear = date.getFullYear() === new Date(now).getFullYear()
+	return date.toLocaleDateString(lang, sameYear ? { day: "numeric", month: "short" } : { day: "numeric", month: "short", year: "numeric" })
 }
