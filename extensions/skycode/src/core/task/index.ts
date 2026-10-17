@@ -49,7 +49,7 @@ import { BrowserSession } from "@services/browser/BrowserSession"
 import { UrlContentFetcher } from "@services/browser/UrlContentFetcher"
 import { McpHub } from "@services/mcp/McpHub"
 import { ApiConfiguration } from "@shared/api"
-import { findLastIndex } from "@shared/array"
+import { findLast, findLastIndex } from "@shared/array"
 import { SkycodeApiReqCancelReason, SkycodeApiReqInfo, SkycodeAsk, SkycodeMessage, SkycodeSay } from "@shared/ExtensionMessage"
 import { HistoryItem } from "@shared/HistoryItem"
 import { getLanguageKey, LanguageDisplay } from "@shared/Languages"
@@ -497,8 +497,34 @@ export class Task {
 		if (this.controller.activeTask !== this) {
 			return
 		}
-		await sendPartialMessageEvent(protoMessage)
+		// [SKYCODE] Поток идёт почти по слову, и каждое обновление несёт весь накопленный текст:
+		// сотни тяжёлых сообщений в секунду забивали вебвью — тормозили ввод и переключение вкладок.
+		// Промежуточные обновления копим и шлём не чаще PARTIAL_THROTTLE_MS (всегда самое свежее);
+		// завершающее (partial=false) уходит сразу и отменяет отложенное.
+		if (!protoMessage.partial) {
+			this.pendingPartial = undefined
+			await sendPartialMessageEvent(protoMessage)
+			return
+		}
+		this.pendingPartial = protoMessage
+		if (this.partialFlushTimer) {
+			return
+		}
+		this.partialFlushTimer = setTimeout(() => {
+			this.partialFlushTimer = undefined
+			const pending = this.pendingPartial
+			this.pendingPartial = undefined
+			// Сообщение могли уже завершить — тогда устаревший кусок не шлём
+			const current = pending && findLast(this.messageStateHandler.getSkycodeMessages(), (m) => m.ts === pending.ts)
+			if (pending && current?.partial && this.controller.activeTask === this) {
+				void sendPartialMessageEvent(pending).catch(() => {})
+			}
+		}, Task.PARTIAL_THROTTLE_MS)
 	}
+
+	private static readonly PARTIAL_THROTTLE_MS = 80
+	private pendingPartial: Parameters<typeof sendPartialMessageEvent>[0] | undefined
+	private partialFlushTimer: ReturnType<typeof setTimeout> | undefined
 
 	async ask(
 		type: SkycodeAsk,
