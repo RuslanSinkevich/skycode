@@ -37,4 +37,12 @@ describe("buildRichClipboardHtml", () => {
 		expect(html).toContain('<td style="border:1px solid #999')
 		expect(html).not.toMatch(/<script/i)
 	})
+
+	it("drops whitespace between tags that Word turns into empty cells", () => {
+		const html = buildRichClipboardHtml(
+			"<table>\n  <thead>\n    <tr><th>a</th></tr>\n  </thead>\n  <tbody>\n    <tr><td>b c</td></tr>\n  </tbody>\n</table>",
+		)
+		expect(html).not.toMatch(/>\s+</)
+		expect(html).toContain("b c")
+	})
 })
