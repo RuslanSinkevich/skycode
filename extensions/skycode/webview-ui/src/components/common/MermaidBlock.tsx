@@ -8,75 +8,62 @@ import { FileServiceClient } from "@/services/grpc-client"
 import { quoteMermaidLabels } from "./mermaidFix"
 import { useDebounceEffect } from "@/utils/useDebounceEffect"
 
-const MERMAID_THEME = {
-	background: "#1e1e1e", // VS Code dark theme background
-	textColor: "#ffffff", // Main text color
-	mainBkg: "#2d2d2d", // Background for nodes
-	nodeBorder: "#888888", // Border color for nodes
-	lineColor: "#cccccc", // Lines connecting nodes
-	primaryColor: "#3c3c3c", // Primary color for highlights
-	primaryTextColor: "#ffffff", // Text in primary colored elements
-	primaryBorderColor: "#888888",
-	secondaryColor: "#2d2d2d", // Secondary color for alternate elements
-	tertiaryColor: "#454545", // Third color for special elements
-
-	// Class diagram specific
-	classText: "#ffffff",
-
-	// State diagram specific
-	labelColor: "#ffffff",
-
-	// Sequence diagram specific
-	actorLineColor: "#cccccc",
-	actorBkg: "#2d2d2d",
-	actorBorder: "#888888",
-	actorTextColor: "#ffffff",
-
-	// Flow diagram specific
-	fillType0: "#2d2d2d",
-	fillType1: "#3c3c3c",
-	fillType2: "#454545",
+// [SKYCODE] Схемы в цветах текущей темы VS Code. Mermaid считает производные цвета сам,
+// поэтому нужны настоящие значения, а не var(--…) — читаем их перед каждой отрисовкой.
+function themeColor(name: string, fallback: string): string {
+	const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+	return value || fallback
 }
 
-mermaid.initialize({
-	startOnLoad: false,
-	securityLevel: "loose",
-	theme: "dark",
-	themeVariables: {
-		...MERMAID_THEME,
-		fontSize: "16px",
-		fontFamily: "var(--vscode-font-family, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif)",
-
-		// Additional styling
-		noteTextColor: "#ffffff",
-		noteBkgColor: "#454545",
-		noteBorderColor: "#888888",
-
-		// Improve contrast for special elements
-		critBorderColor: "#ff9580",
-		critBkgColor: "#803d36",
-
-		// Task diagram specific
-		taskTextColor: "#ffffff",
-		taskTextOutsideColor: "#ffffff",
-		taskTextLightColor: "#ffffff",
-
-		// Numbers/sections
-		sectionBkgColor: "#2d2d2d",
-		sectionBkgColor2: "#3c3c3c",
-
-		// Alt sections in sequence diagrams
-		altBackground: "#2d2d2d",
-
-		// Links
-		linkColor: "#6cb6ff",
-
-		// Borders and lines
-		compositeBackground: "#2d2d2d",
-		compositeBorder: "#888888",
-		titleColor: "#ffffff",
-	},
-})
+function initMermaidForTheme() {
+	const foreground = themeColor("--vscode-foreground", "#cccccc")
+	const background = themeColor("--vscode-editor-background", "#1e1e1e")
+	const nodeFill = themeColor("--vscode-editorWidget-background", "#252526")
+	const accent = themeColor("--vscode-focusBorder", "#007fd4")
+	const muted = themeColor("--vscode-descriptionForeground", "#9d9d9d")
+	const fontFamily = themeColor("--vscode-font-family", "'Segoe UI', sans-serif")
+	mermaid.initialize({
+		startOnLoad: false,
+		securityLevel: "strict",
+		theme: "base",
+		fontFamily,
+		themeVariables: {
+			darkMode: !document.body.classList.contains("vscode-light"),
+			background,
+			fontFamily,
+			fontSize: "13px",
+			primaryColor: nodeFill,
+			primaryTextColor: foreground,
+			primaryBorderColor: accent,
+			secondaryColor: nodeFill,
+			tertiaryColor: background,
+			mainBkg: nodeFill,
+			nodeBorder: accent,
+			nodeTextColor: foreground,
+			textColor: foreground,
+			lineColor: muted,
+			edgeLabelBackground: background,
+			clusterBkg: background,
+			clusterBorder: muted,
+			titleColor: foreground,
+			actorBkg: nodeFill,
+			actorBorder: accent,
+			actorTextColor: foreground,
+			signalColor: muted,
+			signalTextColor: foreground,
+			noteBkgColor: nodeFill,
+			noteTextColor: foreground,
+			noteBorderColor: muted,
+		},
+		// Подписи обычным SVG-текстом: при открытии крупной картинкой не обрезаются;
+		// натуральный размер вместо ужатия до ширины колонки — широкая схема прокручивается
+		flowchart: { htmlLabels: false, useMaxWidth: false, curve: "basis", padding: 12, nodeSpacing: 36, rankSpacing: 44 },
+		sequence: { useMaxWidth: false },
+		class: { useMaxWidth: false },
+		er: { useMaxWidth: false },
+		state: { useMaxWidth: false },
+	})
+}
 
 interface MermaidBlockProps {
 	code: string
@@ -99,6 +86,7 @@ export default function MermaidBlock({ code }: MermaidBlockProps) {
 				containerRef.current.innerHTML = ""
 			}
 			// [SKYCODE] Если схема не разобралась — пробуем ещё раз с подписями в кавычках
+			initMermaidForTheme()
 			const pickValidCode = async (): Promise<string> => {
 				if (await mermaid.parse(code, { suppressErrors: true })) {
 					return code
@@ -225,7 +213,7 @@ async function svgToPng(svgEl: SVGElement): Promise<string> {
 			}
 
 			// Fill background with Mermaid's dark theme background color
-			ctx.fillStyle = MERMAID_THEME.background
+			ctx.fillStyle = themeColor("--vscode-editor-background", "#1e1e1e")
 			ctx.fillRect(0, 0, canvas.width, canvas.height)
 
 			ctx.imageSmoothingEnabled = true
@@ -273,8 +261,14 @@ const SvgContainer = styled.div<SvgContainerProps>`
 	min-height: 20px;
 	transition: opacity 0.2s ease;
 	cursor: pointer;
-	display: flex;
-	justify-content: center;
+	overflow-x: auto;
+	padding: 8px 0;
+
+	& > svg {
+		display: block;
+		margin: 0 auto;
+		max-width: none;
+	}
 `
 
 const StyledVSCodeButton = styled(VSCodeButton)`
