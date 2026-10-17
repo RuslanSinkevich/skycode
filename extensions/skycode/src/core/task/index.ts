@@ -57,7 +57,7 @@ import { USER_CONTENT_TAGS } from "@shared/messages/constants"
 import { convertSkycodeMessageToProto } from "@shared/proto-conversions/skycode-message"
 import { getApiSettingsMode, isReadOnlyMode, type Mode } from "@shared/storage/types"
 import { SkycodeDefaultTool } from "@shared/tools"
-import { isTextOnlyAnswer } from "./textOnlyReply"
+import { isIntentionOnly, isTextOnlyAnswer } from "./textOnlyReply"
 import { REPETITION_LOOP_NOTE, RepetitionLoopDetector } from "./repetitionLoop"
 import { getAutoCompactThresholdTokens } from "@core/context/context-management/context-window-utils"
 import { SkycodeAskResponse } from "@shared/WebviewMessage"
@@ -3251,6 +3251,9 @@ export class Task {
 				// if the model did not tool use, then we need to tell it to either use a tool or attempt_completion
 				const didToolUse = this.taskState.assistantMessageContent.some((block) => block.type === "tool_use")
 
+				if (didToolUse) {
+					this.taskState.nudgedIntentionOnly = false
+				}
 				if (!didToolUse) {
 					// Workflow step: text-only response means step is complete — exit immediately
 					if (this.taskState.isWorkflowStep) {
@@ -3265,7 +3268,13 @@ export class Task {
 					if (stoppedForLoop) {
 						// Ответ оборван из-за зацикливания — подсказка уже добавлена, повторяем запрос с ней
 						this.taskState.consecutiveMistakeCount++
-					} else if (!shouldCompact && isTextOnlyAnswer(assistantTextOnly)) {
+					} else if (
+						!shouldCompact &&
+						isTextOnlyAnswer(assistantTextOnly) &&
+						// [SKYCODE] «Начну с чтения…» без вызова — подсказка продолжить, но не два раза подряд
+						(this.taskState.nudgedIntentionOnly || !isIntentionOnly(assistantTextOnly))
+					) {
+						this.taskState.nudgedIntentionOnly = false
 						// (на запрос сжатия контекста текстовый ответ ответом не считаем: нужен вызов summarize_task)
 						const reply = await this.waitForReplyAfterTextAnswer()
 						if (!reply) {
@@ -3274,6 +3283,7 @@ export class Task {
 						this.taskState.userMessageContent = reply
 						this.taskState.consecutiveMistakeCount = 0
 					} else {
+						this.taskState.nudgedIntentionOnly = isTextOnlyAnswer(assistantTextOnly)
 						// normal request where tool use is required
 						this.taskState.userMessageContent.push({
 							type: "text",

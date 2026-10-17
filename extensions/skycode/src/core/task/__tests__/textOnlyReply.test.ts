@@ -1,6 +1,6 @@
 import { describe, it } from "mocha"
 import "should"
-import { isTextOnlyAnswer } from "../textOnlyReply"
+import { isIntentionOnly, isTextOnlyAnswer } from "../textOnlyReply"
 
 describe("isTextOnlyAnswer", () => {
 	it("plain answer or question to the user", () => {
@@ -30,5 +30,20 @@ describe("isTextOnlyAnswer", () => {
 		isTextOnlyAnswer("Смотрю файл.\n<read_file>\n<path>a.ts").should.be.false()
 		isTextOnlyAnswer("<search_files>\n<parameter=regex>x</parameter>").should.be.false()
 		isTextOnlyAnswer("<function=read_file>").should.be.false()
+	})
+})
+
+describe("isIntentionOnly", () => {
+	it("short announcements of the next step are intentions", () => {
+		isIntentionOnly("Нужно изучить связи между формами. Начну с чтения заголовков этих файлов.").should.be.true()
+		isIntentionOnly("Продолжаю чтение следующего файла: NumByWords.cs.").should.be.true()
+		isIntentionOnly("Посмотрю MainForm:").should.be.true()
+		isIntentionOnly("Let me check the designer file.").should.be.true()
+	})
+
+	it("real answers and questions are not", () => {
+		isIntentionOnly("Проект написан на C# с использованием WinForms и DevExpress.").should.be.false()
+		isIntentionOnly("Готово. Сделать то же для второго файла?").should.be.false()
+		isIntentionOnly(`Три рискованных места: ${"подробности ".repeat(60)}`).should.be.false()
 	})
 })

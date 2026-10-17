@@ -102,4 +102,6 @@ export class TaskState {
 
 	// [SKYCODE] Номер запроса (apiRequestCount), на котором последний раз запускали сжатие контекста
 	lastCompactApiRequestCount?: number
+	// [SKYCODE] Прошлый ответ был «объявлением действия» без вызова и уже получил подсказку продолжить
+	nudgedIntentionOnly = false
 }
