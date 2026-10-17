@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react"
 import styled from "styled-components"
 import { useI18n } from "@/i18n"
 import { FileServiceClient } from "@/services/grpc-client"
+import { quoteMermaidLabels } from "./mermaidFix"
 import { useDebounceEffect } from "@/utils/useDebounceEffect"
 
 const MERMAID_THEME = {
@@ -97,14 +98,21 @@ export default function MermaidBlock({ code }: MermaidBlockProps) {
 			if (containerRef.current) {
 				containerRef.current.innerHTML = ""
 			}
-			mermaid
-				.parse(code, { suppressErrors: true })
-				.then((isValid) => {
-					if (!isValid) {
-						throw new Error("Invalid or incomplete Mermaid code")
-					}
+			// [SKYCODE] Если схема не разобралась — пробуем ещё раз с подписями в кавычках
+			const pickValidCode = async (): Promise<string> => {
+				if (await mermaid.parse(code, { suppressErrors: true })) {
+					return code
+				}
+				const fixed = quoteMermaidLabels(code)
+				if (fixed !== code && (await mermaid.parse(fixed, { suppressErrors: true }))) {
+					return fixed
+				}
+				throw new Error("Invalid or incomplete Mermaid code")
+			}
+			pickValidCode()
+				.then((validCode) => {
 					const id = `mermaid-${Math.random().toString(36).substring(2)}`
-					return mermaid.render(id, code)
+					return mermaid.render(id, validCode)
 				})
 				.then(({ svg }) => {
 					if (containerRef.current) {
@@ -113,7 +121,14 @@ export default function MermaidBlock({ code }: MermaidBlockProps) {
 				})
 				.catch((err) => {
 					console.warn("Mermaid parse/render failed:", err)
-					containerRef.current!.innerHTML = code.replace(/</g, "&lt;").replace(/>/g, "&gt;")
+					// Не разобралась — показываем код как код, с переносами строк, а не слепленным абзацем
+					if (containerRef.current) {
+						const pre = document.createElement("pre")
+						pre.style.whiteSpace = "pre-wrap"
+						pre.style.margin = "0"
+						pre.textContent = code
+						containerRef.current.replaceChildren(pre)
+					}
 				})
 				.finally(() => {
 					setIsLoading(false)
