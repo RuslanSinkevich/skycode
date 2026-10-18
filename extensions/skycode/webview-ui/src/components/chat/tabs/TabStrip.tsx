@@ -127,7 +127,7 @@ export function TabStrip({
 				type="button">
 				<PanelLeftIcon size={14} />
 			</button>
-			<div className="flex flex-1 min-w-0 items-stretch h-full gap-px" role="tablist">
+			<div className="flex min-w-0 items-stretch h-full gap-px" role="tablist">
 				{visibleTabs.map((tab, index) => {
 					const isActive = tab.id === activeTabId
 					// Разделитель только между двумя неактивными: у активной своя боковая рамка
@@ -191,6 +191,8 @@ export function TabStrip({
 			<button aria-label={t("tabs.new")} className={iconButtonClass} onClick={newTab} title={t("tabs.new")} type="button">
 				<PlusIcon size={14} />
 			</button>
+			{/* [SKYCODE] «+» стоит сразу за последней вкладкой, как в браузере; справа — свободное место */}
+			<div className="flex-1" />
 			{hiddenCount > 0 && (
 				<button
 					aria-expanded={menuOpen}

@@ -41,6 +41,11 @@ export class ShowVisualToolHandler implements IToolHandler, IPartialBlockHandler
 
 		await config.callbacks.say("visual", buildVisualPayload(title, content), undefined, undefined, false)
 
-		return formatResponse.toolResult(`Visual "${title.trim()}" shown to the user.`)
+		// [SKYCODE] Похоже на схему (много блоков и стрелок) — мягко напоминаем, что схемы рисуются mermaid
+		const looksLikeDiagram = (content.match(/<(rect|line|path|polyline)/gi)?.length ?? 0) >= 6 && /marker|arrow|<line/i.test(content)
+		return formatResponse.toolResult(
+			`Visual "${title.trim()}" shown to the user.` +
+				(looksLikeDiagram ? " Next time draw diagrams as a ```mermaid block in your response instead of show_visual." : ""),
+		)
 	}
 }

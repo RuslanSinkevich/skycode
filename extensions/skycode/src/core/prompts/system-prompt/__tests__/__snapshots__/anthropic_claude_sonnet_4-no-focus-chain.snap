@@ -319,7 +319,7 @@ Usage:
 </generate_explanation>
 
 ## show_visual
-Description: Show the user a small static visual right in the chat: comparison tables, cards, simple charts drawn as SVG, UI/layout mockups, diagrams that Mermaid cannot express. Scripts do not run and external resources (except https images) are blocked. Do NOT use for plain answers or code (use text/code blocks) or for any diagram, flowchart or architecture/relationship scheme — ALWAYS use a ```mermaid block for those. Do not set text or background colors: the chat theme (light or dark) is applied automatically.
+Description: NOT for diagrams: any diagram, flowchart, scheme of relationships or architecture must be a ```mermaid code block in your response text, never this tool. Use show_visual only for a small static visual that is not a diagram: a UI/layout mockup or a styled card. For numbers and tables use show_chart. Scripts do not run; external resources except https images are blocked. Do not set text or background colors: the chat theme is applied automatically.
 Parameters:
 - title: (required) Short title of the visual.
 - content: (required) A self-contained HTML fragment or an <svg>. Inline CSS only; no scripts.
