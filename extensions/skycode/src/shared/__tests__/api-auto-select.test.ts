@@ -9,7 +9,7 @@ describe("pickAutoProvider", () => {
 	it("falls back to default when nothing is configured", () => {
 		const result = pickAutoProvider(empty)
 		expect(result.reason).to.equal("default")
-		expect(result.provider).to.equal("openai-native")
+		expect(result.provider).to.equal("openai")
 	})
 
 	it("prefers Anthropic over OpenAI when only those keys are present", () => {

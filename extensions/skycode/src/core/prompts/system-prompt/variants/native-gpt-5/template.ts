@@ -84,7 +84,7 @@ You accomplish a given task iteratively, breaking it down into clear steps and w
 
 const FEEDBACK = (_context: SystemPromptContext) => `FEEDBACK
 
-When user is providing you with feedback on how you could improve, you can let the user know to report new issue using the '/reportbug' slash command.`
+When the user gives you feedback on how you could improve, take it into account and adjust your approach.`
 
 export const GPT_5_TEMPLATE_OVERRIDES = {
 	BASE,

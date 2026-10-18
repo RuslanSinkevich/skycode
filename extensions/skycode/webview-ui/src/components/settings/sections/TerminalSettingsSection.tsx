@@ -1,9 +1,7 @@
-import { UpdateTerminalConnectionTimeoutResponse } from "@shared/proto/index.skycode"
-import { VSCodeCheckbox, VSCodeDropdown, VSCodeOption, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
-import React, { useState } from "react"
+import { VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
+import React from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
-import { StateServiceClient } from "../../../services/grpc-client"
 import AllowedCommandsField from "../common/AllowedCommandsField"
 import Section from "../Section"
 import TerminalOutputLineLimitSlider from "../TerminalOutputLineLimitSlider"
@@ -13,60 +11,10 @@ interface TerminalSettingsSectionProps {
 	renderSectionHeader: (tabId: string) => JSX.Element | null
 }
 
+// [SKYCODE] Профиль, тайм-аут интеграции оболочки и переиспользование терминала переехали во вкладку «Дополнительно»
 export const TerminalSettingsSection: React.FC<TerminalSettingsSectionProps> = ({ renderSectionHeader }) => {
 	const { t } = useI18n()
-	const {
-		shellIntegrationTimeout,
-		terminalReuseEnabled,
-		defaultTerminalProfile,
-		availableTerminalProfiles,
-		vscodeTerminalExecutionMode,
-	} = useExtensionState()
-
-	const [inputValue, setInputValue] = useState((shellIntegrationTimeout / 1000).toString())
-	const [inputError, setInputError] = useState<string | null>(null)
-
-	const handleTimeoutChange = (event: Event) => {
-		const target = event.target as HTMLInputElement
-		const value = target.value
-
-		setInputValue(value)
-
-		const seconds = parseFloat(value)
-		if (Number.isNaN(seconds) || seconds <= 0) {
-			setInputError(t("terminal.positiveNumber"))
-			return
-		}
-
-		setInputError(null)
-		const timeoutMs = Math.round(seconds * 1000)
-
-		StateServiceClient.updateTerminalConnectionTimeout({ timeoutMs })
-			.then((response: UpdateTerminalConnectionTimeoutResponse) => {
-				const timeoutMs = response.timeoutMs
-				// Backend calls postStateToWebview(), so state will update via subscription
-				// Just sync the input value with the confirmed backend value
-				if (timeoutMs !== undefined) {
-					setInputValue((timeoutMs / 1000).toString())
-				}
-			})
-			.catch((error) => {
-				console.error("Failed to update terminal connection timeout:", error)
-			})
-	}
-
-	const handleInputBlur = () => {
-		if (inputError) {
-			setInputValue((shellIntegrationTimeout / 1000).toString())
-			setInputError(null)
-		}
-	}
-
-	const handleTerminalReuseChange = (event: Event) => {
-		const target = event.target as HTMLInputElement
-		const checked = target.checked
-		updateSetting("terminalReuseEnabled", checked)
-	}
+	const { vscodeTerminalExecutionMode } = useExtensionState()
 
 	const handleExecutionModeChange = (event: Event) => {
 		const target = event.target as HTMLSelectElement
@@ -74,69 +22,11 @@ export const TerminalSettingsSection: React.FC<TerminalSettingsSectionProps> = (
 		updateSetting("vscodeTerminalExecutionMode", value)
 	}
 
-	// Use any to avoid type conflicts between Event and FormEvent
-	const handleDefaultTerminalProfileChange = (event: any) => {
-		const target = event.target as HTMLSelectElement
-		const profileId = target.value
-
-		// Save immediately using the consolidated updateSettings approach
-		updateSetting("defaultTerminalProfile", profileId || "default")
-	}
-
-	const profilesToShow = availableTerminalProfiles
-
 	return (
 		<div>
 			{renderSectionHeader("terminal")}
 			<Section>
 				<div className="mb-5" id="terminal-settings-section">
-					<div className="mb-4">
-						<label className="font-medium block mb-1" htmlFor="default-terminal-profile">
-							{t("terminal.defaultProfile")}
-						</label>
-						<VSCodeDropdown
-							className="w-full"
-							id="default-terminal-profile"
-							onChange={handleDefaultTerminalProfileChange}
-							value={defaultTerminalProfile || "default"}>
-							{profilesToShow.map((profile) => (
-								<VSCodeOption key={profile.id} title={profile.description} value={profile.id}>
-									{profile.name}
-								</VSCodeOption>
-							))}
-						</VSCodeDropdown>
-						<p className="text-xs text-(--vscode-descriptionForeground) mt-1">
-							{t("terminal.defaultProfileDescription")}
-						</p>
-					</div>
-
-					<div className="mb-4">
-						<div className="mb-2">
-							<label className="font-medium block mb-1">{t("terminal.shellIntegrationTimeout")}</label>
-							<div className="flex items-center">
-								<VSCodeTextField
-									className="w-full"
-									onBlur={handleInputBlur}
-									onChange={(event) => handleTimeoutChange(event as Event)}
-									placeholder={t("terminal.timeoutPlaceholder")}
-									value={inputValue}
-								/>
-							</div>
-							{inputError && <div className="text-(--vscode-errorForeground) text-xs mt-1">{inputError}</div>}
-						</div>
-						<p className="text-xs text-(--vscode-descriptionForeground)">{t("terminal.timeoutDescription")}</p>
-					</div>
-
-					<div className="mb-4">
-						<div className="flex items-center mb-2">
-							<VSCodeCheckbox
-								checked={terminalReuseEnabled ?? true}
-								onChange={(event) => handleTerminalReuseChange(event as Event)}>
-								{t("terminal.reuse")}
-							</VSCodeCheckbox>
-						</div>
-						<p className="text-xs text-(--vscode-descriptionForeground)">{t("terminal.reuseDescription")}</p>
-					</div>
 					<div className="mb-4">
 						<label className="font-medium block mb-1" htmlFor="terminal-execution-mode">
 							{t("terminal.executionMode")}

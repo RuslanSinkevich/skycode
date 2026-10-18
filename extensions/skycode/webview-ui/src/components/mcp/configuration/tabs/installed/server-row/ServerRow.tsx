@@ -18,7 +18,6 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
 import { cn } from "@/lib/utils"
 import { McpServiceClient } from "@/services/grpc-client"
-import { getMcpServerDisplayName } from "@/utils/mcp"
 import McpResourceRow from "./McpResourceRow"
 import McpToolRow from "./McpToolRow"
 
@@ -46,7 +45,7 @@ const ServerRow = ({
 	hasTrashIcon?: boolean
 }) => {
 	const { t } = useI18n()
-	const { mcpMarketplaceCatalog, autoApprovalSettings, setMcpServers } = useExtensionState()
+	const { autoApprovalSettings, setMcpServers } = useExtensionState()
 
 	const [isExpanded, setIsExpanded] = useState(false)
 	const [isDeleting, setIsDeleting] = useState(false)
@@ -176,7 +175,7 @@ const ServerRow = ({
 					/>
 				)}
 				<span className="flex-1 overflow-hidden break-all whitespace-normal flex items-center">
-					{getMcpServerDisplayName(server.name, mcpMarketplaceCatalog)}
+					{server.name}
 				</span>
 				{/* Collapsed view controls */}
 				{!server.error && (

@@ -20,11 +20,6 @@ service StateService {
   rpc togglePlanActModeProto(TogglePlanActModeRequest) returns (Boolean);
   rpc updateAutoApprovalSettings(AutoApprovalSettingsRequest) returns (Empty);
   rpc updateSettings(UpdateSettingsRequest) returns (Empty);
-  rpc setWelcomeViewCompleted(BooleanRequest) returns (Empty);
-  rpc updateInfoBannerVersion(Int64Request) returns (Empty);
-  rpc updateModelBannerVersion(Int64Request) returns (Empty);
-  rpc dismissBanner(StringRequest) returns (Empty);
-  rpc refreshBanners(EmptyRequest) returns (Empty);
   rpc getProcessInfo(EmptyRequest) returns (ProcessInfo);
   rpc flushPendingState(EmptyRequest) returns (Empty);
 }
@@ -285,7 +280,7 @@ message UpdateSettingsRequest {
   reserved 30; // was subagent_terminal_output_line_limit
   optional string skycode_env = 31;
   optional bool native_tool_call_enabled = 32;
-  optional OnboardingModelGroup onboarding_models = 33;
+  reserved 33; // was onboarding_models
   optional bool skycode_web_tools_enabled = 34;
   optional bool enable_parallel_tool_calling = 35;
   optional bool background_edit_enabled = 36;
@@ -329,17 +324,4 @@ message ProcessInfo {
   optional int64 uptime_ms = 3;
 }
 
-message OnboardingModelGroup {
-  repeated OnboardingModel models = 1;
-}
-
-message OnboardingModel {
-  string id = 1;
-  string name = 2;
-  int32 score = 3;
-  int32 latency = 4;
-  string badge = 5;
-  string group = 6;
-  OpenRouterModelInfo info = 7;
-}
 

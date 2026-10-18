@@ -53,58 +53,6 @@
 				}
 			}
 		},
-		"walkthroughs": [
-			{
-				"id": "SkycodeWalkthrough",
-				"title": "Познакомьтесь со Skycode, вашим помощником в разработке",
-				"description": "Skycode пишет код как разработчик, потому что работает по шагам. Вот 5 способов использовать его в работе:",
-				"steps": [
-					{
-						"id": "welcome",
-						"title": "Начните с цели, а не просто с промпта",
-						"description": "Опишите Skycode, чего нужно добиться. Он составит план, задаст вопросы и затем внесёт изменения.",
-						"media": {
-							"markdown": "walkthrough/step1.md"
-						}
-					},
-					{
-						"id": "learn",
-						"title": "Дайте Skycode изучить кодовую базу",
-						"description": "Откройте Skycode доступ к проекту. Он соберёт контекст, чтобы вносить точные изменения.",
-						"media": {
-							"markdown": "walkthrough/step2.md"
-						}
-					},
-					{
-						"id": "advanced-features",
-						"title": "Используйте лучшие AI-модели",
-						"description": "Skycode подключается к ведущим моделям Anthropic, Gemini, OpenAI и других провайдеров.",
-						"media": {
-							"markdown": "walkthrough/step3.md"
-						}
-					},
-					{
-						"id": "mcp",
-						"title": "Расширяйте возможности через MCP",
-						"description": "Подключайте базы данных, API и новые инструменты из MCP Marketplace.",
-						"media": {
-							"markdown": "walkthrough/step4.md"
-						}
-					},
-					{
-						"id": "getting-started",
-						"title": "Контроль остаётся у вас",
-						"description": "Проверяйте планы и diff от Skycode. Подтверждайте изменения до применения.",
-						"media": {
-							"markdown": "walkthrough/step5.md"
-						},
-						"content": {
-							"path": "walkthrough/step5.md"
-						}
-					}
-				]
-			}
-		],
 		"viewsContainers": {
 			"activitybar": [
 				{
@@ -132,14 +80,9 @@
 				"icon": "$(add)"
 			},
 			{
-				"command": "skycode.mcpButtonClicked",
-				"title": "MCP Серверы",
-				"icon": "$(server)"
-			},
-			{
 				"command": "skycode.accountButtonClicked",
-				"title": "Аккаунт",
-				"icon": "$(account)"
+				"title": "О проекте",
+				"icon": "$(heart)"
 			},
 			{
 				"command": "skycode.settingsButtonClicked",
@@ -170,18 +113,6 @@
 				"command": "skycode.indexing.resume",
 				"title": "Skycode: Продолжить индексацию",
 				"icon": "$(play)"
-			},
-			{
-				"command": "skycode.dev.createTestTasks",
-				"title": "Создать тестовые задачи",
-				"category": "Skycode",
-				"when": "skycode.isDevMode"
-			},
-			{
-				"command": "skycode.dev.expireMcpOAuthTokens",
-				"title": "Сбросить MCP OAuth токены (для тестов)",
-				"category": "Skycode",
-				"when": "skycode.isDevMode"
 			},
 			{
 				"command": "skycode.addToChat",
@@ -239,18 +170,8 @@
 				"icon": "$(lightbulb)"
 			},
 			{
-				"command": "skycode.openWalkthrough",
-				"title": "Открыть вводный тур",
-				"category": "Skycode"
-			},
-			{
 				"command": "skycode.reconstructTaskHistory",
 				"title": "Восстановить историю задач",
-				"category": "Skycode"
-			},
-			{
-				"command": "skycode.clearAllDiffs",
-				"title": "Очистить все ожидающие диффы (legacy)",
 				"category": "Skycode"
 			},
 			{
@@ -413,11 +334,6 @@
 				{
 					"command": "skycode.plusButtonClicked",
 					"group": "navigation@1",
-					"when": "view == skycode.SidebarProvider"
-				},
-				{
-					"command": "skycode.mcpButtonClicked",
-					"group": "navigation@2",
 					"when": "view == skycode.SidebarProvider"
 				},
 				{

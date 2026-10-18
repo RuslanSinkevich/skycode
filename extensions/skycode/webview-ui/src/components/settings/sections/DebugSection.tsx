@@ -1,8 +1,6 @@
 import { Button } from "@/components/ui/button"
 import { PLATFORM_CONFIG } from "@/config/platform.config"
-import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
-import { StateServiceClient } from "@/services/grpc-client"
 import Section from "../Section"
 
 interface DebugSectionProps {
@@ -22,7 +20,6 @@ const executeVsCodeCommand = (command: string, args?: any[]) => {
 
 const DebugSection = ({ onResetState, renderSectionHeader }: DebugSectionProps) => {
 	const { t } = useI18n()
-	const { setShowWelcome } = useExtensionState()
 	return (
 		<div>
 			{renderSectionHeader("debug")}
@@ -60,19 +57,6 @@ const DebugSection = ({ onResetState, renderSectionHeader }: DebugSectionProps) 
 				<p className="text-xs mt-[5px] text-(--vscode-descriptionForeground)">{t("debug.resetStateDescription")}</p>
 			</Section>
 
-			{/* ===== Onboarding ===== */}
-			<Section>
-				<h4 className="text-sm font-medium mb-2">{t("debug.onboardingTitle")}</h4>
-				<Button
-					onClick={async () =>
-						await StateServiceClient.setWelcomeViewCompleted({ value: false })
-							.catch(() => {})
-							.finally(() => setShowWelcome(true))
-					}
-					variant="secondary">
-					{t("debug.resetOnboarding")}
-				</Button>
-			</Section>
 		</div>
 	)
 }

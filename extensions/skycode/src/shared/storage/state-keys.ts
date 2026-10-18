@@ -44,7 +44,6 @@ type FieldDefinition<T> = {
 type FieldDefinitions = Record<string, FieldDefinition<any>>
 
 const GLOBAL_STATE_FIELDS = {
-	lastShownAnnouncementId: { default: undefined as string | undefined },
 	taskHistory: { default: [] as HistoryItem[], isAsync: true },
 	// [SKYCODE] Открытые вкладки (сессия -> задача) и активная; восстанавливаются при старте в состоянии «остановлена»
 	openTabs: { default: [] as Array<{ sessionId: string; taskId: string }> },
@@ -61,10 +60,7 @@ const GLOBAL_STATE_FIELDS = {
 	workspaceRoots: { default: undefined as WorkspaceRoot[] | undefined },
 	primaryRootIndex: { default: 0 as number },
 	multiRootEnabled: { default: false as boolean },
-	lastDismissedInfoBannerVersion: { default: 0 as number },
-	lastDismissedModelBannerVersion: { default: 0 as number },
 	nativeToolCallEnabled: { default: false as boolean },
-	dismissedBanners: { default: [] as Array<{ bannerId: string; dismissedAt: number }> },
 } satisfies FieldDefinitions
 
 // Fields that map directly to ApiHandlerOptions in @shared/api.ts

@@ -3,16 +3,14 @@ import { combineCommandSequences } from "@shared/combineCommandSequences"
 import { combineErrorRetryMessages } from "@shared/combineErrorRetryMessages"
 import { combineHookSequences } from "@shared/combineHookSequences"
 import type { SkycodeMessage } from "@shared/ExtensionMessage"
-import { BannerAction, BannerActionType } from "@shared/skycode/banner"
 import { BooleanRequest } from "@shared/proto/skycode/common"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useMount } from "react-use"
-import PromoBannerModal from "@/components/common/PromoBannerModal"
 import { normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useShowNavbar } from "@/context/PlatformContext"
 import { useI18n } from "@/i18n"
-import { FileServiceClient, StateServiceClient, UiServiceClient } from "@/services/grpc-client"
+import { FileServiceClient, UiServiceClient } from "@/services/grpc-client"
 import { Navbar } from "../menu/Navbar"
 // Import utilities and hooks from the new structure
 import {
@@ -41,18 +39,15 @@ import { TabStrip } from "./tabs/TabStrip"
 
 interface ChatViewProps {
 	isHidden: boolean
-	showAnnouncement: boolean
-	hideAnnouncement: () => void
 }
 
 // Use constants from the imported module
 const MAX_IMAGES_AND_FILES_PER_MESSAGE = CHAT_CONSTANTS.MAX_IMAGES_AND_FILES_PER_MESSAGE
 
-const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement }: ChatViewProps) => {
+const ChatView = ({ isHidden }: ChatViewProps) => {
 	const { t } = useI18n()
 	const showNavbar = useShowNavbar()
 	const {
-		version,
 		skycodeMessages: messages,
 		taskHistory,
 		apiConfiguration,
@@ -60,34 +55,11 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement }: ChatViewProp
 		currentFocusChainChecklist,
 		hooksEnabled,
 		currentSessionId,
-		banners,
 	} = useExtensionState()
 
 	// Шторка истории: открывается кнопкой в полосе вкладок и ссылкой «Показать все» на стартовом экране
 	const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false)
 	const closeHistoryDrawer = useCallback(() => setHistoryDrawerOpen(false), [])
-	const [promoModalBannerId, setPromoModalBannerId] = useState<string | null>(null)
-	const [dismissedModalId, setDismissedModalId] = useState<string | null>(null)
-
-	const modalBanner = useMemo(() => {
-		const modal = (banners ?? []).find((b) => b.placement === "modal")
-		if (!modal) { return null }
-		if (modal.id === dismissedModalId) { return null }
-		return modal
-	}, [banners, dismissedModalId])
-
-	useEffect(() => {
-		if (modalBanner && promoModalBannerId !== modalBanner.id) {
-			setPromoModalBannerId(modalBanner.id)
-		}
-	}, [modalBanner, promoModalBannerId])
-
-	const handlePromoAction = useCallback((action: BannerAction) => {
-		if (action.action === BannerActionType.Link && action.arg) {
-			UiServiceClient.openUrl({ value: action.arg }).catch(console.error)
-		}
-	}, [])
-
 	// --- NEW: Session-based state (pipeline architecture) ---
 	const session = useSession(currentSessionId ?? null)
 
@@ -388,11 +360,8 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement }: ChatViewProp
 					<TaskSection lastProgressMessageText={lastProgressMessageText} />
 				) : (
 					<WelcomeSection
-						hideAnnouncement={hideAnnouncement}
-						showAnnouncement={showAnnouncement}
 						showHistoryView={() => setHistoryDrawerOpen(true)}
 						taskHistory={taskHistory}
-						version={version}
 					/>
 				)}
 				{task && (
@@ -448,19 +417,6 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement }: ChatViewProp
 			</footer>
 		</ChatLayout>
 		{!isHidden && <HistoryDrawer onClose={closeHistoryDrawer} open={historyDrawerOpen} />}
-		{promoModalBannerId && modalBanner && (
-			<PromoBannerModal
-				banner={modalBanner}
-				onAction={handlePromoAction}
-				onClose={() => {
-					if (promoModalBannerId) {
-						StateServiceClient.dismissBanner({ value: promoModalBannerId }).catch(() => {})
-					}
-					setDismissedModalId(promoModalBannerId)
-					setPromoModalBannerId(null)
-				}}
-			/>
-		)}
 	</>
 	)
 }

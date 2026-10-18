@@ -1,14 +1,17 @@
 import { UpdateSettingsRequest } from "@shared/proto/skycode/state"
-import { Mode } from "@shared/storage/types"
-import { VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
+import { Mode, OpenaiReasoningEffort } from "@shared/storage/types"
+import { VSCodeCheckbox, VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import { useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
 import { StateServiceClient } from "@/services/grpc-client"
 import { TabButton } from "../../mcp/configuration/McpConfigurationView"
+import AdvancedBlock from "../AdvancedBlock"
 import ApiOptions from "../ApiOptions"
+import PromptProfileInfo from "../PromptProfileInfo"
 import Section from "../Section"
-import { syncModeConfigurations } from "../utils/providerUtils"
+import { normalizeApiConfiguration, syncModeConfigurations } from "../utils/providerUtils"
+import { updateSetting } from "../utils/settingsHandlers"
 import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
 
 interface ApiConfigurationSectionProps {
@@ -16,10 +19,14 @@ interface ApiConfigurationSectionProps {
 }
 
 const ApiConfigurationSection = ({ renderSectionHeader }: ApiConfigurationSectionProps) => {
-	const { planActSeparateModelsSetting, mode, apiConfiguration } = useExtensionState()
+	const { planActSeparateModelsSetting, mode, apiConfiguration, openaiReasoningEffort } = useExtensionState()
 	const { t } = useI18n()
 	const [currentTab, setCurrentTab] = useState<Mode>(mode)
 	const { handleFieldsChange } = useApiConfigurationHandlers()
+	// [SKYCODE] Уровень рассуждений влияет только на o-серию OpenAI, поэтому показываем его лишь для openai/openai-native
+	const { selectedProvider } = normalizeApiConfiguration(apiConfiguration, planActSeparateModelsSetting ? currentTab : mode)
+	const showReasoningEffort = selectedProvider === "openai-native" || selectedProvider === "openai"
+
 	return (
 		<div>
 			{renderSectionHeader?.("providers")}
@@ -59,32 +66,62 @@ const ApiConfigurationSection = ({ renderSectionHeader }: ApiConfigurationSectio
 					<ApiOptions currentMode={mode} showModelOptions={true} />
 				)}
 
-				<div className="mb-[5px]">
-					<VSCodeCheckbox
-						checked={planActSeparateModelsSetting}
-						className="mb-[5px]"
-						onChange={async (e: any) => {
-							const checked = e.target.checked === true
-							try {
-								// If unchecking the toggle, wait a bit for state to update, then sync configurations
-								if (!checked) {
-									await syncModeConfigurations(apiConfiguration, currentTab, handleFieldsChange)
+				<AdvancedBlock testId="provider-advanced">
+					<PromptProfileInfo />
+
+					{showReasoningEffort && (
+						<div>
+							<label
+								className="block text-sm font-medium text-(--vscode-foreground) mb-1"
+								htmlFor="openai-reasoning-effort-dropdown">
+								{t("features.openaiReasoningEffort")}
+							</label>
+							<VSCodeDropdown
+								className="w-full"
+								currentValue={openaiReasoningEffort || "medium"}
+								id="openai-reasoning-effort-dropdown"
+								onChange={(e: any) => {
+									const newValue = e.target.currentValue as OpenaiReasoningEffort
+									updateSetting("openaiReasoningEffort", newValue)
+								}}>
+								<VSCodeOption value="minimal">{t("features.reasoning.minimal")}</VSCodeOption>
+								<VSCodeOption value="low">{t("features.reasoning.low")}</VSCodeOption>
+								<VSCodeOption value="medium">{t("features.reasoning.medium")}</VSCodeOption>
+								<VSCodeOption value="high">{t("features.reasoning.high")}</VSCodeOption>
+							</VSCodeDropdown>
+							<p className="text-xs mt-[5px] text-(--vscode-descriptionForeground)">
+								{t("features.openaiReasoningEffortDescription")}
+							</p>
+						</div>
+					)}
+
+					<div className="mb-[5px]">
+						<VSCodeCheckbox
+							checked={planActSeparateModelsSetting}
+							className="mb-[5px]"
+							onChange={async (e: any) => {
+								const checked = e.target.checked === true
+								try {
+									// If unchecking the toggle, wait a bit for state to update, then sync configurations
+									if (!checked) {
+										await syncModeConfigurations(apiConfiguration, currentTab, handleFieldsChange)
+									}
+									await StateServiceClient.updateSettings(
+										UpdateSettingsRequest.create({
+											planActSeparateModelsSetting: checked,
+										}),
+									)
+								} catch (error) {
+									console.error("Failed to update separate models setting:", error)
 								}
-								await StateServiceClient.updateSettings(
-									UpdateSettingsRequest.create({
-										planActSeparateModelsSetting: checked,
-									}),
-								)
-							} catch (error) {
-								console.error("Failed to update separate models setting:", error)
-							}
-						}}>
-						{t("apiConfig.separateModels")}
-					</VSCodeCheckbox>
-					<p className="text-xs mt-[5px] text-(--vscode-descriptionForeground)">
-						{t("apiConfig.separateModelsDescription")}
-					</p>
-				</div>
+							}}>
+							{t("apiConfig.separateModels")}
+						</VSCodeCheckbox>
+						<p className="text-xs mt-[5px] text-(--vscode-descriptionForeground)">
+							{t("apiConfig.separateModelsDescription")}
+						</p>
+					</div>
+				</AdvancedBlock>
 			</Section>
 		</div>
 	)

@@ -1,4 +1,3 @@
-import type { McpViewTab } from "@shared/mcp"
 import { EmptyRequest } from "@shared/proto/skycode/common"
 import { McpServers } from "@shared/proto/skycode/mcp"
 import { convertProtoMcpServersToMcpServers } from "@shared/proto-conversions/mcp/mcp-server-conversion"
@@ -9,7 +8,9 @@ import { useI18n } from "@/i18n"
 import { McpServiceClient } from "@/services/grpc-client"
 import AddRemoteServerForm from "../../mcp/configuration/tabs/add-server/AddRemoteServerForm"
 import ConfigureServersView from "../../mcp/configuration/tabs/installed/ConfigureServersView"
-import McpMarketplaceView from "../../mcp/configuration/tabs/marketplace/McpMarketplaceView"
+
+// [SKYCODE] Маркетплейс убран: остались удалённые серверы и настройка установленных
+type McpSubTab = "addRemote" | "configure"
 
 interface McpSectionProps {
 	renderSectionHeader: (tabId: string) => React.ReactNode
@@ -17,20 +18,12 @@ interface McpSectionProps {
 
 const McpSection = ({ renderSectionHeader }: McpSectionProps) => {
 	const { t } = useI18n()
-	const { setMcpServers, setMcpMarketplaceCatalog } = useExtensionState()
+	const { setMcpServers } = useExtensionState()
 
-	const [activeTab, setActiveTab] = useState<McpViewTab>("marketplace")
+	const [activeTab, setActiveTab] = useState<McpSubTab>("addRemote")
 
 	// Refresh data when section mounts
 	useEffect(() => {
-		McpServiceClient.refreshMcpMarketplace(EmptyRequest.create({}))
-			.then((response) => {
-				setMcpMarketplaceCatalog(response)
-			})
-			.catch((error) => {
-				console.error("Error refreshing MCP marketplace:", error)
-			})
-
 		McpServiceClient.getLatestMcpServers(EmptyRequest.create({}))
 			.then((response: McpServers) => {
 				if (response.mcpServers) {
@@ -49,9 +42,6 @@ const McpSection = ({ renderSectionHeader }: McpSectionProps) => {
 
 			{/* Sub-tabs */}
 			<TabBar>
-				<SubTab $active={activeTab === "marketplace"} onClick={() => setActiveTab("marketplace")}>
-					{t("mcp.marketplace")}
-				</SubTab>
 				<SubTab $active={activeTab === "addRemote"} onClick={() => setActiveTab("addRemote")}>
 					{t("mcp.remoteServers")}
 				</SubTab>
@@ -62,7 +52,6 @@ const McpSection = ({ renderSectionHeader }: McpSectionProps) => {
 
 			{/* Content */}
 			<div>
-				{activeTab === "marketplace" && <McpMarketplaceView />}
 				{activeTab === "addRemote" && <AddRemoteServerForm onServerAdded={() => setActiveTab("configure")} />}
 				{activeTab === "configure" && <ConfigureServersView />}
 			</div>

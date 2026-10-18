@@ -37,7 +37,7 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
 import { cn } from "@/lib/utils"
 import { UiServiceClient } from "@/services/grpc-client"
-import { findMatchingResourceOrTemplate, getMcpServerDisplayName } from "@/utils/mcp"
+import { findMatchingResourceOrTemplate } from "@/utils/mcp"
 import CodeAccordian from "../common/CodeAccordian"
 import { CommandOutputContent, CommandOutputRow } from "./CommandOutputRow"
 import ErrorRow from "./ErrorRow"
@@ -45,7 +45,6 @@ import HookMessage from "./HookMessage"
 import { MarkdownRow } from "./MarkdownRow"
 import NewTaskPreview from "./NewTaskPreview"
 import PlanCompletionOutputRow from "./PlanCompletionOutputRow"
-import ReportBugPreview from "./ReportBugPreview"
 import { RequestStartRow } from "./RequestStartRow"
 import { ThinkingRow } from "./ThinkingRow"
 import { ToolRow } from "./ToolRow"
@@ -111,7 +110,6 @@ export const ChatRowContent = memo(
 		const {
 			backgroundEditEnabled,
 			mcpServers,
-			mcpMarketplaceCatalog,
 			vscodeTerminalExecutionMode,
 			skycodeMessages,
 		} = useExtensionState()
@@ -211,7 +209,7 @@ export const ChatRowContent = memo(
 							{mcpServerUse.type === "use_mcp_tool" ? t("chat.useMcpTool") : t("chat.accessMcpResource")}{" "}
 							{t("chat.onMcpServer")}{" "}
 							<code className="break-all">
-								{getMcpServerDisplayName(mcpServerUse.serverName, mcpMarketplaceCatalog)}
+								{mcpServerUse.serverName}
 							</code>
 							:
 						</span>,
@@ -823,16 +821,6 @@ export const ChatRowContent = memo(
 									<span className="text-foreground font-bold">{t("chat.wantsToCondenseConversation")}</span>
 								</div>
 								<NewTaskPreview context={message.text || ""} />
-							</div>
-						)
-					case "report_bug":
-						return (
-							<div>
-								<div className={HEADER_CLASSNAMES}>
-									<FilePlus2Icon className="size-2" />
-									<span className="text-foreground font-bold">{t("chat.wantsToCreateGithubIssue")}</span>
-								</div>
-								<ReportBugPreview data={message.text || ""} />
 							</div>
 						)
 					case "plan_mode_respond": {

@@ -13,7 +13,6 @@ import { getPendingChangesStorage } from "@core/diff-v2/storage/PendingChangesSt
 import { getDiffSystem } from "@core/diff-v2"
 import { getBackendLocaleForPreferredLanguage, setBackendLocale, t } from "../../i18n/backend-i18n"
 import type { HistoryItem } from "@shared/HistoryItem"
-import type { McpMarketplaceCatalog, McpMarketplaceItem } from "@shared/mcp"
 import { getApiSettingsMode, type Mode } from "@shared/storage/types"
 import { fileExistsAtPath } from "@utils/fs"
 import axios from "axios"
@@ -25,14 +24,11 @@ import * as vscode from "vscode"
 import { SkycodeEnv } from "@/config"
 import { HostProvider } from "@/hosts/host-provider"
 import { ExtensionRegistryInfo } from "@/registry"
-import { getDistinctId } from "@/services/logging/distinctId"
 import PROVIDERS from "@/shared/providers/providers.json"
-import { BannerCardData } from "@/shared/skycode/banner"
 import { DEFAULT_INDEXING_CONFIG, type IndexingConfig, type IndexingMode, type LocalModelId } from "@/shared/IndexingTypes"
 import { getAxiosSettings } from "@/shared/net"
 import { ShowMessageType } from "@/shared/proto/host/window"
 import { Logger } from "@/shared/services/Logger"
-import { getLatestAnnouncementId } from "@/utils/announcements"
 import { getCwd, getDesktopDir } from "@/utils/path"
 import { PromptRegistry } from "../prompts/system-prompt"
 import { getModelCapabilityTier, getSessionLimitsForModel } from "@utils/model-utils"
@@ -41,7 +37,6 @@ import {
 	ensureMcpServersDirectoryExists,
 	ensureSettingsDirectoryExists,
 	GlobalFileNames,
-	writeMcpMarketplaceCatalogToCache,
 } from "../storage/disk"
 import { type PersistenceErrorEvent, StateManager } from "../storage/StateManager"
 import { getContextUsageLimits } from "../context/context-management/context-window-utils"
@@ -49,8 +44,6 @@ import { type ContextBreakdownItem, estimateContextBreakdown } from "../context/
 import { Task } from "../task"
 import { ApiSlotLimiter, type Session, SessionManager } from "../session"
 import { buildTabs, deriveTabStatus, deriveTabTitle, normalizeTabTitle, planRestoredTabs, toPersistedTabs } from "../session/tabs"
-import { sendMcpMarketplaceCatalogEvent } from "./mcp/subscribeToMcpMarketplaceCatalog"
-import { getSkycodeOnboardingModels } from "./models/getSkycodeOnboardingModels"
 import { appendSkycodeStealthModels } from "./models/refreshOpenRouterModels"
 import { sendStateUpdate } from "./state/subscribeToState"
 import { sendChatButtonClickedEvent } from "./ui/subscribeToChatButtonClicked"
@@ -236,16 +229,6 @@ export class Controller {
 		const vscodeTerminalExecutionMode = this.stateManager.getGlobalStateKey("vscodeTerminalExecutionMode")
 		const terminalOutputLineLimit = this.stateManager.getGlobalSettingsKey("terminalOutputLineLimit")
 		const defaultTerminalProfile = this.stateManager.getGlobalSettingsKey("defaultTerminalProfile")
-		const isNewUser = this.stateManager.getGlobalStateKey("isNewUser")
-		const taskHistory = this.stateManager.getGlobalStateKey("taskHistory")
-
-		const NEW_USER_TASK_COUNT_THRESHOLD = 10
-
-		// Check if the user has completed enough tasks to no longer be considered a "new user"
-		if (isNewUser && !historyItem && taskHistory && taskHistory.length >= NEW_USER_TASK_COUNT_THRESHOLD) {
-			this.stateManager.setGlobalState("isNewUser", false)
-			await this.postStateToWebview()
-		}
 
 		if (autoApprovalSettings) {
 			const updatedAutoApprovalSettings = {
@@ -537,44 +520,6 @@ export class Controller {
 		await this.initTask(prompt)
 	}
 
-	// MCP Marketplace
-	private async fetchMcpMarketplaceFromApi(): Promise<McpMarketplaceCatalog> {
-		// [SKYCODE] Только встроенный каталог. API маркетплейса на skycode-ai.ru не отвечает, а запрос
-		// к нему держал вкладку MCP по 5 секунд до перехода на этот же каталог.
-		const catalogPath = path.join(__dirname, "assets", "mcp-marketplace-catalog.json")
-		const rawItems: McpMarketplaceItem[] = JSON.parse(await fs.readFile(catalogPath, "utf-8"))
-
-		if (!Array.isArray(rawItems)) {
-			throw new Error("Invalid MCP marketplace catalog data")
-		}
-
-		const items: McpMarketplaceItem[] = rawItems.map((item: McpMarketplaceItem) => ({
-			...item,
-			githubStars: item.githubStars ?? 0,
-			downloadCount: item.downloadCount ?? 0,
-			tags: item.tags ?? [],
-		}))
-
-		const catalog: McpMarketplaceCatalog = { items }
-
-		// Store in cache file
-		await writeMcpMarketplaceCatalogToCache(catalog)
-		return catalog
-	}
-
-	async refreshMcpMarketplace(sendCatalogEvent: boolean): Promise<McpMarketplaceCatalog | undefined> {
-		try {
-			const catalog = await this.fetchMcpMarketplaceFromApi()
-			if (catalog && sendCatalogEvent) {
-				await sendMcpMarketplaceCatalogEvent(catalog)
-			}
-			return catalog
-		} catch (error) {
-			Logger.error("Failed to refresh MCP marketplace:", error)
-			return undefined
-		}
-	}
-
 	// OpenRouter
 
 	async handleOpenRouterCallback(code: string) {
@@ -860,9 +805,7 @@ export class Controller {
 		}
 
 		// Get API configuration from cache for immediate access
-		const onboardingModels = getSkycodeOnboardingModels()
 		const apiConfiguration = this.stateManager.getApiConfiguration()
-		const lastShownAnnouncementId = this.stateManager.getGlobalStateKey("lastShownAnnouncementId")
 		const taskHistory = this.stateManager.getGlobalStateKey("taskHistory")
 		const autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
 		const browserSettings = this.stateManager.getGlobalSettingsKey("browserSettings")
@@ -889,17 +832,12 @@ export class Controller {
 		const terminalReuseEnabled = this.stateManager.getGlobalStateKey("terminalReuseEnabled")
 		const vscodeTerminalExecutionMode = this.stateManager.getGlobalStateKey("vscodeTerminalExecutionMode")
 		const defaultTerminalProfile = this.stateManager.getGlobalSettingsKey("defaultTerminalProfile")
-		const isNewUser = this.stateManager.getGlobalStateKey("isNewUser")
-		// Can be undefined but is set to either true or false by the migration that runs on extension launch in extension.ts
-		const welcomeViewCompleted = true // !!this.stateManager.getGlobalStateKey("welcomeViewCompleted")
 
 		const customPrompt = this.stateManager.getGlobalSettingsKey("customPrompt")
 		const mcpResponsesCollapsed = this.stateManager.getGlobalStateKey("mcpResponsesCollapsed")
 		const terminalOutputLineLimit = this.stateManager.getGlobalSettingsKey("terminalOutputLineLimit")
 		const maxConsecutiveMistakes = this.stateManager.getGlobalSettingsKey("maxConsecutiveMistakes")
 		const favoritedModelIds = this.stateManager.getGlobalStateKey("favoritedModelIds")
-		const lastDismissedInfoBannerVersion = this.stateManager.getGlobalStateKey("lastDismissedInfoBannerVersion") || 0
-		const lastDismissedModelBannerVersion = this.stateManager.getGlobalStateKey("lastDismissedModelBannerVersion") || 0
 		const skillsEnabled = this.stateManager.getGlobalSettingsKey("skillsEnabled")
 
 		const localSkycodeRulesToggles = this.stateManager.getWorkspaceStateKey("localSkycodeRulesToggles")
@@ -933,13 +871,9 @@ export class Controller {
 			.sort((a, b) => b.ts - a.ts)
 			.slice(0, 100) // for now we're only getting the latest 100 tasks, but a better solution here is to only pass in 3 for recent task history, and then get the full task history on demand when going to the task history view (maybe with pagination?)
 
-		const latestAnnouncementId = getLatestAnnouncementId()
-		const shouldShowAnnouncement = lastShownAnnouncementId !== latestAnnouncementId
 		const platform = process.platform as Platform
-		const distinctId = getDistinctId()
 		const version = ExtensionRegistryInfo.version
 		const environment = SkycodeEnv.config().environment
-		const banners = await this.getBanners()
 
 		// [SKYCODE-PERF] Use cached auth status instead of dynamic import + async check on every call
 		const openAiCodexIsAuthenticated = await this._getCodexAuthStatus()
@@ -964,7 +898,6 @@ export class Controller {
 
 		const updatedDictationSettings = {
 			...dictationSettings,
-			featureEnabled: true,
 			voiceReady,
 			voiceDownloading: (dictationSettings as any).voiceDownloading ?? false,
 			whisperModel: selectedModel,
@@ -997,7 +930,6 @@ export class Controller {
 			planActSeparateModelsSetting,
 			platform,
 			environment,
-			distinctId,
 			globalSkycodeRulesToggles: globalSkycodeRulesToggles || {},
 			localSkycodeRulesToggles: localSkycodeRulesToggles || {},
 			localWindsurfRulesToggles: localWindsurfRulesToggles || {},
@@ -1011,15 +943,11 @@ export class Controller {
 			terminalReuseEnabled,
 			vscodeTerminalExecutionMode: vscodeTerminalExecutionMode,
 			defaultTerminalProfile,
-			isNewUser,
-			welcomeViewCompleted,
-			onboardingModels,
 			mcpResponsesCollapsed,
 			terminalOutputLineLimit,
 			maxConsecutiveMistakes,
 			customPrompt,
 			taskHistory: processedTaskHistory,
-			shouldShowAnnouncement,
 			favoritedModelIds,
 			autoCondenseThreshold,
 			backgroundCommandRunning: this.backgroundCommandRunning,
@@ -1037,8 +965,6 @@ export class Controller {
 				featureFlag: true, // Web tools are always available, gated by authentication
 			},
 			hooksEnabled: getHooksEnabledSafe(),
-			lastDismissedInfoBannerVersion,
-			lastDismissedModelBannerVersion,
 			nativeToolCallSetting: this.stateManager.getGlobalStateKey("nativeToolCallEnabled"),
 			enableParallelToolCalling: this.stateManager.getGlobalSettingsKey("enableParallelToolCalling"),
 			backgroundEditEnabled: this.stateManager.getGlobalSettingsKey("backgroundEditEnabled"),
@@ -1130,7 +1056,6 @@ export class Controller {
 			indexingPromptDismissed: this.context.globalState.get<boolean>("skycode.indexingPromptDismissed", false),
 			// Skycode AI: Pending changes for inline diffs
 			pendingChanges: this.getPendingChangesInfo(),
-			banners,
 			openAiCodexIsAuthenticated,
 		}
 	}
@@ -1421,9 +1346,5 @@ export class Controller {
 		}
 		this.stateManager.setGlobalState("taskHistory", history)
 		return history
-	}
-
-	async getBanners(): Promise<BannerCardData[]> {
-		return []
 	}
 }

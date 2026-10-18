@@ -27,7 +27,7 @@ export const DEFAULT_INDEXING_CONFIG: IndexingConfig = {
 	remoteApiUrl: "",
 	remoteApiKey: "",
 	remoteModel: "text-embedding-3-small",
-	maxFileSize: 524288, // 512KB — 100KB was too small, large files with important code were silently dropped
+	maxFileSize: 102400, // 100KB — совпадает с skycode.indexing.maxFileSize в package.json
 	ignoredPatterns: [
 		"node_modules",
 		".git",

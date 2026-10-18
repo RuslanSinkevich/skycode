@@ -2,15 +2,15 @@ import { azureOpenAiDefaultApiVersion, openAiModelInfoSaneDefaults } from "@shar
 import { OpenAiModelsRequest } from "@shared/proto/skycode/models"
 import { Mode } from "@shared/storage/types"
 import { VSCodeButton, VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
 import { ModelsServiceClient } from "@/services/grpc-client"
-import { getAsVar, VSC_DESCRIPTION_FOREGROUND } from "@/utils/vscStyles"
 import { ApiKeyField } from "../common/ApiKeyField"
 import { BaseUrlField } from "../common/BaseUrlField"
 import { DebouncedTextField } from "../common/DebouncedTextField"
 import { ModelInfoView } from "../common/ModelInfoView"
+import AdvancedBlock from "../AdvancedBlock"
 import ThinkingBudgetSlider from "../ThinkingBudgetSlider"
 import { getModeSpecificFields, normalizeApiConfiguration } from "../utils/providerUtils"
 import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
@@ -32,7 +32,6 @@ export const OpenAICompatibleProvider = ({ showModelOptions, isPopup, currentMod
 	const { apiConfiguration } = useExtensionState()
 	const { handleFieldChange, handleModeFieldChange } = useApiConfigurationHandlers()
 
-	const [modelConfigurationSelected, setModelConfigurationSelected] = useState(false)
 
 	// Get the normalized configuration
 	const { selectedModelId, selectedModelInfo } = normalizeApiConfiguration(apiConfiguration, currentMode)
@@ -107,252 +106,224 @@ export const OpenAICompatibleProvider = ({ showModelOptions, isPopup, currentMod
 				<span style={{ fontWeight: 500 }}>{t("provider.modelId")}</span>
 			</DebouncedTextField>
 
-			{/* OpenAI Compatible Custom Headers */}
-			{(() => {
-				const headerEntries = Object.entries(apiConfiguration?.openAiHeaders ?? {})
-
-				return (
-					<div style={{ marginBottom: 10 }}>
-						<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-							<span style={{ fontWeight: 500 }}>{t("provider.customHeaders")}</span>
-							<VSCodeButton
-								onClick={() => {
-									const currentHeaders = { ...(apiConfiguration?.openAiHeaders || {}) }
-									const headerCount = Object.keys(currentHeaders).length
-									const newKey = `header${headerCount + 1}`
-									currentHeaders[newKey] = ""
-									handleFieldChange("openAiHeaders", currentHeaders)
-								}}>
-								{t("provider.addHeader")}
-							</VSCodeButton>
-						</div>
-
-						<div>
-							{headerEntries.map(([key, value]) => (
-								<div key={key} style={{ display: "flex", gap: 5, marginTop: 5 }}>
-									<DebouncedTextField
-										initialValue={key}
-										onChange={(newValue) => {
-											const currentHeaders = apiConfiguration?.openAiHeaders ?? {}
-											if (newValue && newValue !== key) {
-												const { [key]: _, ...rest } = currentHeaders
-												handleFieldChange("openAiHeaders", {
-													...rest,
-													[newValue]: value,
-												})
-											}
-										}}
-										placeholder={t("provider.headerName")}
-										style={{ width: "40%" }}
-									/>
-									<DebouncedTextField
-										initialValue={value}
-										onChange={(newValue) => {
-											handleFieldChange("openAiHeaders", {
-												...(apiConfiguration?.openAiHeaders ?? {}),
-												[key]: newValue,
-											})
-										}}
-										placeholder={t("provider.value")}
-										style={{ width: "40%" }}
-									/>
-									<VSCodeButton
-										appearance="secondary"
-										onClick={() => {
-											const { [key]: _, ...rest } = apiConfiguration?.openAiHeaders ?? {}
-											handleFieldChange("openAiHeaders", rest)
-										}}>
-										{t("provider.delete")}
-									</VSCodeButton>
-								</div>
-							))}
-						</div>
-					</div>
-				)
-			})()}
-
-			<BaseUrlField
-				initialValue={apiConfiguration?.azureApiVersion}
-				label={t("provider.azureApiVersion")}
-				onChange={(value) => handleFieldChange("azureApiVersion", value)}
-				placeholder={`${t("provider.defaultPrefix")} ${azureOpenAiDefaultApiVersion}`}
-			/>
-
-			<VSCodeCheckbox
-				checked={apiConfiguration?.azureIdentity || false}
-				onChange={(e: any) => {
-					const isChecked = e.target.checked === true
-					return handleFieldChange("azureIdentity", isChecked)
-				}}>
-				{t("provider.azureIdentity")}
-			</VSCodeCheckbox>
-
-			<div
-				onClick={() => setModelConfigurationSelected((val) => !val)}
-				style={{
-					color: getAsVar(VSC_DESCRIPTION_FOREGROUND),
-					display: "flex",
-					margin: "10px 0",
-					cursor: "pointer",
-					alignItems: "center",
-				}}>
-				<span
-					className={`codicon ${modelConfigurationSelected ? "codicon-chevron-down" : "codicon-chevron-right"}`}
-					style={{
-						marginRight: "4px",
-					}}></span>
-				<span
-					style={{
-						fontWeight: 700,
-						textTransform: "uppercase",
-					}}>
-					{t("provider.modelConfiguration")}
-				</span>
+			<div style={{ display: "flex", gap: 10, marginTop: "5px" }}>
+				<DebouncedTextField
+					initialValue={
+						openAiModelInfo?.contextWindow
+							? openAiModelInfo.contextWindow.toString()
+							: (openAiModelInfoSaneDefaults.contextWindow?.toString() ?? "")
+					}
+					onChange={(value) => {
+						const modelInfo = openAiModelInfo ? openAiModelInfo : { ...openAiModelInfoSaneDefaults }
+						modelInfo.contextWindow = Number(value)
+						handleModeFieldChange(
+							{ plan: "planModeOpenAiModelInfo", act: "actModeOpenAiModelInfo" },
+							modelInfo,
+							currentMode,
+						)
+					}}
+					style={{ flex: 1 }}>
+					<span style={{ fontWeight: 500 }}>{t("provider.contextWindowSize")}</span>
+				</DebouncedTextField>
 			</div>
 
-			{modelConfigurationSelected && (
-				<>
-					<VSCodeCheckbox
-						checked={!!openAiModelInfo?.supportsImages}
-						onChange={(e: any) => {
-							const isChecked = e.target.checked === true
+			<VSCodeCheckbox
+				checked={!!openAiModelInfo?.supportsImages}
+				onChange={(e: any) => {
+					const isChecked = e.target.checked === true
+					const modelInfo = openAiModelInfo ? openAiModelInfo : { ...openAiModelInfoSaneDefaults }
+					modelInfo.supportsImages = isChecked
+					handleModeFieldChange(
+						{ plan: "planModeOpenAiModelInfo", act: "actModeOpenAiModelInfo" },
+						modelInfo,
+						currentMode,
+					)
+				}}>
+				{t("provider.supportsImages")}
+			</VSCodeCheckbox>
+
+			<AdvancedBlock testId="openai-compatible-advanced">
+				<div style={{ display: "flex", gap: 10 }}>
+					<DebouncedTextField
+						initialValue={
+							openAiModelInfo?.maxTokens
+								? openAiModelInfo.maxTokens.toString()
+								: (openAiModelInfoSaneDefaults.maxTokens?.toString() ?? "")
+						}
+						onChange={(value) => {
 							const modelInfo = openAiModelInfo ? openAiModelInfo : { ...openAiModelInfoSaneDefaults }
-							modelInfo.supportsImages = isChecked
+							modelInfo.maxTokens = Number(value)
+							handleModeFieldChange(
+								{ plan: "planModeOpenAiModelInfo", act: "actModeOpenAiModelInfo" },
+								modelInfo,
+								currentMode,
+							)
+						}}
+						style={{ flex: 1 }}>
+						<span style={{ fontWeight: 500 }}>{t("provider.maxOutputTokens")}</span>
+					</DebouncedTextField>
+				</div>
+				<div style={{ display: "flex", gap: 10, marginTop: "5px" }}>
+					<DebouncedTextField
+						initialValue={
+							openAiModelInfo?.temperature
+								? openAiModelInfo.temperature.toString()
+								: (openAiModelInfoSaneDefaults.temperature?.toString() ?? "")
+						}
+						onChange={(value) => {
+							const modelInfo = openAiModelInfo ? openAiModelInfo : { ...openAiModelInfoSaneDefaults }
+
+							const shouldPreserveFormat = value.endsWith(".") || (value.includes(".") && value.endsWith("0"))
+
+							modelInfo.temperature =
+								value === ""
+									? openAiModelInfoSaneDefaults.temperature
+									: shouldPreserveFormat
+										? (value as any)
+										: parseFloat(value)
+
 							handleModeFieldChange(
 								{ plan: "planModeOpenAiModelInfo", act: "actModeOpenAiModelInfo" },
 								modelInfo,
 								currentMode,
 							)
 						}}>
-						{t("provider.supportsImages")}
-					</VSCodeCheckbox>
-
-					<VSCodeCheckbox
-						checked={!!openAiModelInfo?.isR1FormatRequired}
-						onChange={(e: any) => {
-							const isChecked = e.target.checked === true
-							let modelInfo = openAiModelInfo ? openAiModelInfo : { ...openAiModelInfoSaneDefaults }
-							modelInfo = { ...modelInfo, isR1FormatRequired: isChecked }
-
+						<span style={{ fontWeight: 500 }}>{t("provider.temperature")}</span>
+					</DebouncedTextField>
+				</div>
+				<div style={{ display: "flex", gap: 10, marginTop: "5px" }}>
+					<DebouncedTextField
+						initialValue={
+							openAiModelInfo?.inputPrice
+								? openAiModelInfo.inputPrice.toString()
+								: (openAiModelInfoSaneDefaults.inputPrice?.toString() ?? "")
+						}
+						onChange={(value) => {
+							const modelInfo = openAiModelInfo ? openAiModelInfo : { ...openAiModelInfoSaneDefaults }
+							modelInfo.inputPrice = Number(value)
 							handleModeFieldChange(
 								{ plan: "planModeOpenAiModelInfo", act: "actModeOpenAiModelInfo" },
 								modelInfo,
 								currentMode,
 							)
-						}}>
-						{t("provider.r1Format")}
-					</VSCodeCheckbox>
+						}}
+						style={{ flex: 1 }}>
+						<span style={{ fontWeight: 500 }}>{t("provider.inputPricePer1m")}</span>
+					</DebouncedTextField>
 
-					<div style={{ display: "flex", gap: 10, marginTop: "5px" }}>
-						<DebouncedTextField
-							initialValue={
-								openAiModelInfo?.contextWindow
-									? openAiModelInfo.contextWindow.toString()
-									: (openAiModelInfoSaneDefaults.contextWindow?.toString() ?? "")
-							}
-							onChange={(value) => {
-								const modelInfo = openAiModelInfo ? openAiModelInfo : { ...openAiModelInfoSaneDefaults }
-								modelInfo.contextWindow = Number(value)
-								handleModeFieldChange(
-									{ plan: "planModeOpenAiModelInfo", act: "actModeOpenAiModelInfo" },
-									modelInfo,
-									currentMode,
-								)
-							}}
-							style={{ flex: 1 }}>
-							<span style={{ fontWeight: 500 }}>{t("provider.contextWindowSize")}</span>
-						</DebouncedTextField>
+					<DebouncedTextField
+						initialValue={
+							openAiModelInfo?.outputPrice
+								? openAiModelInfo.outputPrice.toString()
+								: (openAiModelInfoSaneDefaults.outputPrice?.toString() ?? "")
+						}
+						onChange={(value) => {
+							const modelInfo = openAiModelInfo ? openAiModelInfo : { ...openAiModelInfoSaneDefaults }
+							modelInfo.outputPrice = Number(value)
+							handleModeFieldChange(
+								{ plan: "planModeOpenAiModelInfo", act: "actModeOpenAiModelInfo" },
+								modelInfo,
+								currentMode,
+							)
+						}}
+						style={{ flex: 1 }}>
+						<span style={{ fontWeight: 500 }}>{t("provider.outputPricePer1m")}</span>
+					</DebouncedTextField>
+				</div>
+				<VSCodeCheckbox
+					checked={!!openAiModelInfo?.isR1FormatRequired}
+					onChange={(e: any) => {
+						const isChecked = e.target.checked === true
+						let modelInfo = openAiModelInfo ? openAiModelInfo : { ...openAiModelInfoSaneDefaults }
+						modelInfo = { ...modelInfo, isR1FormatRequired: isChecked }
 
-						<DebouncedTextField
-							initialValue={
-								openAiModelInfo?.maxTokens
-									? openAiModelInfo.maxTokens.toString()
-									: (openAiModelInfoSaneDefaults.maxTokens?.toString() ?? "")
-							}
-							onChange={(value) => {
-								const modelInfo = openAiModelInfo ? openAiModelInfo : { ...openAiModelInfoSaneDefaults }
-								modelInfo.maxTokens = Number(value)
-								handleModeFieldChange(
-									{ plan: "planModeOpenAiModelInfo", act: "actModeOpenAiModelInfo" },
-									modelInfo,
-									currentMode,
-								)
-							}}
-							style={{ flex: 1 }}>
-							<span style={{ fontWeight: 500 }}>{t("provider.maxOutputTokens")}</span>
-						</DebouncedTextField>
-					</div>
+						handleModeFieldChange(
+							{ plan: "planModeOpenAiModelInfo", act: "actModeOpenAiModelInfo" },
+							modelInfo,
+							currentMode,
+						)
+					}}>
+					{t("provider.r1Format")}
+				</VSCodeCheckbox>
+				{/* OpenAI Compatible Custom Headers */}
+				{(() => {
+					const headerEntries = Object.entries(apiConfiguration?.openAiHeaders ?? {})
 
-					<div style={{ display: "flex", gap: 10, marginTop: "5px" }}>
-						<DebouncedTextField
-							initialValue={
-								openAiModelInfo?.inputPrice
-									? openAiModelInfo.inputPrice.toString()
-									: (openAiModelInfoSaneDefaults.inputPrice?.toString() ?? "")
-							}
-							onChange={(value) => {
-								const modelInfo = openAiModelInfo ? openAiModelInfo : { ...openAiModelInfoSaneDefaults }
-								modelInfo.inputPrice = Number(value)
-								handleModeFieldChange(
-									{ plan: "planModeOpenAiModelInfo", act: "actModeOpenAiModelInfo" },
-									modelInfo,
-									currentMode,
-								)
-							}}
-							style={{ flex: 1 }}>
-							<span style={{ fontWeight: 500 }}>{t("provider.inputPricePer1m")}</span>
-						</DebouncedTextField>
+					return (
+						<div style={{ marginBottom: 10 }}>
+							<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+								<span style={{ fontWeight: 500 }}>{t("provider.customHeaders")}</span>
+								<VSCodeButton
+									onClick={() => {
+										const currentHeaders = { ...(apiConfiguration?.openAiHeaders || {}) }
+										const headerCount = Object.keys(currentHeaders).length
+										const newKey = `header${headerCount + 1}`
+										currentHeaders[newKey] = ""
+										handleFieldChange("openAiHeaders", currentHeaders)
+									}}>
+									{t("provider.addHeader")}
+								</VSCodeButton>
+							</div>
 
-						<DebouncedTextField
-							initialValue={
-								openAiModelInfo?.outputPrice
-									? openAiModelInfo.outputPrice.toString()
-									: (openAiModelInfoSaneDefaults.outputPrice?.toString() ?? "")
-							}
-							onChange={(value) => {
-								const modelInfo = openAiModelInfo ? openAiModelInfo : { ...openAiModelInfoSaneDefaults }
-								modelInfo.outputPrice = Number(value)
-								handleModeFieldChange(
-									{ plan: "planModeOpenAiModelInfo", act: "actModeOpenAiModelInfo" },
-									modelInfo,
-									currentMode,
-								)
-							}}
-							style={{ flex: 1 }}>
-							<span style={{ fontWeight: 500 }}>{t("provider.outputPricePer1m")}</span>
-						</DebouncedTextField>
-					</div>
+							<div>
+								{headerEntries.map(([key, value]) => (
+									<div key={key} style={{ display: "flex", gap: 5, marginTop: 5 }}>
+										<DebouncedTextField
+											initialValue={key}
+											onChange={(newValue) => {
+												const currentHeaders = apiConfiguration?.openAiHeaders ?? {}
+												if (newValue && newValue !== key) {
+													const { [key]: _, ...rest } = currentHeaders
+													handleFieldChange("openAiHeaders", {
+														...rest,
+														[newValue]: value,
+													})
+												}
+											}}
+											placeholder={t("provider.headerName")}
+											style={{ width: "40%" }}
+										/>
+										<DebouncedTextField
+											initialValue={value}
+											onChange={(newValue) => {
+												handleFieldChange("openAiHeaders", {
+													...(apiConfiguration?.openAiHeaders ?? {}),
+													[key]: newValue,
+												})
+											}}
+											placeholder={t("provider.value")}
+											style={{ width: "40%" }}
+										/>
+										<VSCodeButton
+											appearance="secondary"
+											onClick={() => {
+												const { [key]: _, ...rest } = apiConfiguration?.openAiHeaders ?? {}
+												handleFieldChange("openAiHeaders", rest)
+											}}>
+											{t("provider.delete")}
+										</VSCodeButton>
+									</div>
+								))}
+							</div>
+						</div>
+					)
+				})()}
+				<BaseUrlField
+					initialValue={apiConfiguration?.azureApiVersion}
+					label={t("provider.azureApiVersion")}
+					onChange={(value) => handleFieldChange("azureApiVersion", value)}
+					placeholder={`${t("provider.defaultPrefix")} ${azureOpenAiDefaultApiVersion}`}
+				/>
 
-					<div style={{ display: "flex", gap: 10, marginTop: "5px" }}>
-						<DebouncedTextField
-							initialValue={
-								openAiModelInfo?.temperature
-									? openAiModelInfo.temperature.toString()
-									: (openAiModelInfoSaneDefaults.temperature?.toString() ?? "")
-							}
-							onChange={(value) => {
-								const modelInfo = openAiModelInfo ? openAiModelInfo : { ...openAiModelInfoSaneDefaults }
-
-								const shouldPreserveFormat = value.endsWith(".") || (value.includes(".") && value.endsWith("0"))
-
-								modelInfo.temperature =
-									value === ""
-										? openAiModelInfoSaneDefaults.temperature
-										: shouldPreserveFormat
-											? (value as any)
-											: parseFloat(value)
-
-								handleModeFieldChange(
-									{ plan: "planModeOpenAiModelInfo", act: "actModeOpenAiModelInfo" },
-									modelInfo,
-									currentMode,
-								)
-							}}>
-							<span style={{ fontWeight: 500 }}>{t("provider.temperature")}</span>
-						</DebouncedTextField>
-					</div>
-				</>
-			)}
+				<VSCodeCheckbox
+					checked={apiConfiguration?.azureIdentity || false}
+					onChange={(e: any) => {
+						const isChecked = e.target.checked === true
+						return handleFieldChange("azureIdentity", isChecked)
+					}}>
+					{t("provider.azureIdentity")}
+				</VSCodeCheckbox>
+			</AdvancedBlock>
 
 			<p
 				style={{

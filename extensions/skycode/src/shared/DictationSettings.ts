@@ -19,7 +19,7 @@ export interface DictationSettings {
 }
 
 export const DEFAULT_DICTATION_SETTINGS: DictationSettings = {
-	featureEnabled: false, // Feature flag, will be set by the extension based on platform
+	featureEnabled: true, // Диктовка доступна по умолчанию (локальный Whisper)
 	dictationEnabled: false, // Default is false while this service is in Experimental status
 	dictationLanguage: "ru",
 	whisperModel: "tiny", // Default quality level (only tiny is bundled and free)

@@ -112,7 +112,7 @@ export function pickAutoProvider(cfg: Partial<ApiConfiguration> | undefined | nu
 			return { provider: probe.provider, reason: probe.reason, label: probe.label }
 		}
 	}
-	return { provider: DEFAULT_API_PROVIDER, reason: "default", label: "OpenAI" }
+	return { provider: DEFAULT_API_PROVIDER, reason: "default", label: "OpenAI Compatible" }
 }
 
 /**

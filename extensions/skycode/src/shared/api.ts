@@ -20,7 +20,8 @@ export type ApiProvider =
 	| "gigachat"
 	| "yandexgpt"
 
-export const DEFAULT_API_PROVIDER = "openai-native" as ApiProvider
+// [SKYCODE] По умолчанию — OpenAI Compatible (свой шлюз/модель), а не нативный OpenAI
+export const DEFAULT_API_PROVIDER = "openai" as ApiProvider
 
 export interface ApiHandlerOptions extends Partial<ApiHandlerSettings> {
 	ulid?: string // Used to identify the task in API requests

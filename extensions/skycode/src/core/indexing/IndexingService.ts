@@ -112,16 +112,8 @@ export class IndexingService implements vscode.Disposable {
 	 * compatibility while Tab 1 prunes them from the type. */
 	private readConfig(): IndexingConfig {
 		const cfg = vscode.workspace.getConfiguration("skycode.indexing")
-		const savedMaxFileSize = cfg.get<number | undefined>("maxFileSize")
-
-		// Auto-migrate: if user has old default (100KB), upgrade to new default (512KB)
-		// This fixes the issue where large files were silently dropped from search results
-		let maxFileSize = cfg.get("maxFileSize", DEFAULT_INDEXING_CONFIG.maxFileSize)
-		if (savedMaxFileSize === 102400) {
-			maxFileSize = DEFAULT_INDEXING_CONFIG.maxFileSize
-			void cfg.update("maxFileSize", DEFAULT_INDEXING_CONFIG.maxFileSize, vscode.ConfigurationTarget.Global)
-			Logger.log(`[Skycode Indexing] Auto-upgraded maxFileSize from 100KB to 512KB for better search coverage`)
-		}
+		// [SKYCODE] Автомиграция 100KB -> 512KB убрана: дефолт снова 100KB (package.json и DEFAULT_INDEXING_CONFIG совпадают)
+		const maxFileSize = cfg.get("maxFileSize", DEFAULT_INDEXING_CONFIG.maxFileSize)
 
 		return {
 			...DEFAULT_INDEXING_CONFIG,

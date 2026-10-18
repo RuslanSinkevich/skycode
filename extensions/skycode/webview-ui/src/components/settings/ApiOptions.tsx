@@ -3,13 +3,14 @@ import PROVIDERS from "@shared/providers/providers.json"
 import { Mode } from "@shared/storage/types"
 import { VSCodeCheckbox, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import Fuse from "fuse.js"
-import { KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Fragment, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useInterval } from "react-use"
 import styled from "styled-components"
 import { normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
 import { ModelsServiceClient } from "@/services/grpc-client"
+import { MAIN_PROVIDER_VALUES, partitionProviders, splitProviders } from "./utils/providerGroups"
 import { updateSetting } from "./utils/settingsHandlers"
 import { OPENROUTER_MODEL_PICKER_Z_INDEX } from "./OpenRouterModelPicker"
 import { AnthropicProvider } from "./providers/AnthropicProvider"
@@ -66,7 +67,7 @@ declare module "vscode" {
 const ApiOptions = ({ showModelOptions, apiErrorMessage, modelIdErrorMessage, isPopup, currentMode }: ApiOptionsProps) => {
 	const { t } = useI18n()
 	// Use full context state for immediate save payload
-	const { apiConfiguration, lightweightMode, promptProfile } = useExtensionState()
+	const { apiConfiguration, lightweightMode } = useExtensionState()
 
 	const { selectedProvider } = normalizeApiConfiguration(apiConfiguration, currentMode)
 
@@ -139,9 +140,19 @@ const ApiOptions = ({ showModelOptions, apiErrorMessage, modelIdErrorMessage, is
 		})
 	}, [searchableItems])
 
-	const providerSearchResults = useMemo(() => {
-		return searchTerm && searchTerm !== currentProviderLabel ? fuse.search(searchTerm)?.map((r) => r.item) : searchableItems
-	}, [searchableItems, searchTerm, fuse, currentProviderLabel])
+	// [SKYCODE] Основные провайдеры показаны сразу, остальные — под «Ещё провайдеры». При поиске раскрыто всё.
+	const isSearching = !!searchTerm && searchTerm !== currentProviderLabel
+	const [moreExpanded, setMoreExpanded] = useState(() => !MAIN_PROVIDER_VALUES.includes(selectedProvider))
+
+	const { main: mainResults, more: moreResults } = useMemo(() => {
+		return isSearching ? partitionProviders(fuse.search(searchTerm)?.map((r) => r.item)) : splitProviders(searchableItems)
+	}, [searchableItems, searchTerm, fuse, isSearching])
+
+	const showMore = isSearching || moreExpanded
+	const providerSearchResults = useMemo(
+		() => (showMore ? [...mainResults, ...moreResults] : mainResults),
+		[showMore, mainResults, moreResults],
+	)
 
 	const handleProviderChange = (newProvider: string) => {
 		handleModeFieldChange({ plan: "planModeApiProvider", act: "actModeApiProvider" }, newProvider as any, currentMode)
@@ -275,18 +286,34 @@ const ApiOptions = ({ showModelOptions, apiErrorMessage, modelIdErrorMessage, is
 					{isDropdownVisible && (
 						<ProviderDropdownList ref={dropdownListRef}>
 							{providerSearchResults.map((item, index) => (
-								<ProviderDropdownItem
-									data-testid={`provider-option-${item.value}`}
-									isSelected={index === selectedIndex}
-									key={item.value}
-									onClick={() => handleProviderChange(item.value)}
-									onMouseEnter={() => setSelectedIndex(index)}
-									ref={(el) => {
-										itemRefs.current[index] = el
-									}}>
-									<span>{item.html}</span>
-								</ProviderDropdownItem>
+								<Fragment key={item.value}>
+									{/* [SKYCODE] Заголовок группы ставим перед первым провайдером из «ещё» */}
+									{showMore && index === mainResults.length && moreResults.length > 0 && (
+										<ProviderGroupHeader
+											data-testid="provider-more-header"
+											onClick={() => !isSearching && setMoreExpanded(false)}>
+											{!isSearching && <span className="codicon codicon-chevron-down mr-1" />}
+											{t("provider.moreProviders")}
+										</ProviderGroupHeader>
+									)}
+									<ProviderDropdownItem
+										data-testid={`provider-option-${item.value}`}
+										isSelected={index === selectedIndex}
+										onClick={() => handleProviderChange(item.value)}
+										onMouseEnter={() => setSelectedIndex(index)}
+										ref={(el) => {
+											itemRefs.current[index] = el
+										}}>
+										<span>{item.html}</span>
+									</ProviderDropdownItem>
+								</Fragment>
 							))}
+							{!showMore && moreResults.length > 0 && (
+								<ProviderGroupHeader data-testid="provider-more-toggle" onClick={() => setMoreExpanded(true)}>
+									<span className="codicon codicon-chevron-right mr-1" />
+									{t("provider.moreProviders")}
+								</ProviderGroupHeader>
+							)}
 						</ProviderDropdownList>
 					)}
 				</ProviderDropdownWrapper>
@@ -372,39 +399,6 @@ const ApiOptions = ({ showModelOptions, apiErrorMessage, modelIdErrorMessage, is
 				</p>
 			</div>
 
-			{/* Active prompt profile indicator */}
-			{promptProfile && (
-				<div
-					style={{
-						marginTop: 8,
-						padding: "6px 10px",
-						fontSize: 11,
-						borderRadius: 4,
-						background: "var(--vscode-textBlockQuote-background)",
-						border: "1px solid var(--vscode-textBlockQuote-border)",
-						color: "var(--vscode-descriptionForeground)",
-					}}>
-					<span style={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-						{t("provider.promptProfile")}
-					</span>
-					<span style={{ marginLeft: 8 }}>
-						{t("provider.promptProfileVariant")}: <strong style={{ color: "var(--vscode-foreground)" }}>{promptProfile.variant}</strong>
-					</span>
-					<span style={{ marginLeft: 12 }}>
-						{t("provider.promptProfileTier")}: <strong style={{ color: "var(--vscode-foreground)" }}>{promptProfile.tier}</strong>
-					</span>
-					<span style={{ marginLeft: 12 }}>
-						{promptProfile.maxToolCalls === Infinity ? String.fromCharCode(8734) : promptProfile.maxToolCalls}{" "}
-						{t("provider.promptProfileTools")}
-					</span>
-					{promptProfile.compactEvery !== Infinity && (
-						<span style={{ marginLeft: 12 }}>
-							{t("provider.promptProfileCompact")} {promptProfile.compactEvery} {t("provider.promptProfileSteps")}
-						</span>
-					)}
-				</div>
-			)}
-
 			{apiErrorMessage && (
 				<p
 					style={{
@@ -448,6 +442,21 @@ const ProviderDropdownList = styled.div`
 	z-index: ${DROPDOWN_Z_INDEX - 1};
 	border-bottom-left-radius: 3px;
 	border-bottom-right-radius: 3px;
+`
+
+const ProviderGroupHeader = styled.div`
+	padding: 5px 10px;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	font-size: 11px;
+	text-transform: uppercase;
+	color: var(--vscode-descriptionForeground);
+	border-top: 1px solid var(--vscode-widget-border);
+
+	&:hover {
+		color: var(--vscode-foreground);
+	}
 `
 
 const ProviderDropdownItem = styled.div<{ isSelected: boolean }>`

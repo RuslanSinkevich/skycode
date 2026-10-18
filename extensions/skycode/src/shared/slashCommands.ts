@@ -25,12 +25,6 @@ export const BASE_SLASH_COMMANDS: SlashCommand[] = [
 		cliCompatible: true,
 	},
 	{
-		name: "reportbug",
-		description: "Create a Github issue with Skycode",
-		section: "default",
-		cliCompatible: true,
-	},
-	{
 		name: "deep-planning",
 		description: "Create a comprehensive implementation plan before coding",
 		section: "default",

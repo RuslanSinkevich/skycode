@@ -1,5 +1,4 @@
-import { OpenaiReasoningEffort } from "@shared/storage/types"
-import { VSCodeCheckbox, VSCodeDropdown, VSCodeOption, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
+import { VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
 import { memo } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
@@ -12,12 +11,7 @@ interface ContextSectionProps {
 
 const ContextSection = ({ renderSectionHeader }: ContextSectionProps) => {
 	const { t } = useI18n()
-	const {
-		openaiReasoningEffort,
-		strictPlanModeEnabled,
-		useAutoCondense,
-		focusChainSettings,
-	} = useExtensionState()
+	const { useAutoCondense, focusChainSettings } = useExtensionState()
 
 	return (
 		<div>
@@ -37,44 +31,6 @@ const ContextSection = ({ renderSectionHeader }: ContextSectionProps) => {
 						<p className="text-xs text-(--vscode-descriptionForeground)">{t("features.autoCondenseDescription")}</p>
 					</div>
 
-					{/* Strict Plan Mode */}
-					<div style={{ marginTop: 10 }}>
-						<VSCodeCheckbox
-							checked={strictPlanModeEnabled}
-							onChange={(e: any) => {
-								const checked = e.target.checked === true
-								updateSetting("strictPlanModeEnabled", checked)
-							}}>
-							{t("features.strictPlanMode")}
-						</VSCodeCheckbox>
-						<p className="text-xs text-(--vscode-descriptionForeground)">{t("features.strictPlanModeDescription")}</p>
-					</div>
-
-					{/* Reasoning Effort */}
-					<div style={{ marginTop: 10 }}>
-						<label
-							className="block text-sm font-medium text-(--vscode-foreground) mb-1"
-							htmlFor="openai-reasoning-effort-dropdown">
-							{t("features.openaiReasoningEffort")}
-						</label>
-						<VSCodeDropdown
-							className="w-full"
-							currentValue={openaiReasoningEffort || "medium"}
-							id="openai-reasoning-effort-dropdown"
-							onChange={(e: any) => {
-								const newValue = e.target.currentValue as OpenaiReasoningEffort
-								updateSetting("openaiReasoningEffort", newValue)
-							}}>
-							<VSCodeOption value="minimal">{t("features.reasoning.minimal")}</VSCodeOption>
-							<VSCodeOption value="low">{t("features.reasoning.low")}</VSCodeOption>
-							<VSCodeOption value="medium">{t("features.reasoning.medium")}</VSCodeOption>
-							<VSCodeOption value="high">{t("features.reasoning.high")}</VSCodeOption>
-						</VSCodeDropdown>
-						<p className="text-xs mt-[5px] text-(--vscode-descriptionForeground)">
-							{t("features.openaiReasoningEffortDescription")}
-						</p>
-					</div>
-
 					{/* Focus Chain */}
 					<div style={{ marginTop: 10 }}>
 						<VSCodeCheckbox
@@ -87,32 +43,6 @@ const ContextSection = ({ renderSectionHeader }: ContextSectionProps) => {
 						</VSCodeCheckbox>
 						<p className="text-xs text-(--vscode-descriptionForeground)">{t("features.focusChainDescription")}</p>
 					</div>
-					{focusChainSettings?.enabled && (
-						<div style={{ marginTop: 10, marginLeft: 20 }}>
-							<label
-								className="block text-sm font-medium text-(--vscode-foreground) mb-1"
-								htmlFor="focus-chain-remind-interval">
-								{t("features.focusChainInterval")}
-							</label>
-							<VSCodeTextField
-								className="w-20"
-								id="focus-chain-remind-interval"
-								onChange={(e: any) => {
-									const value = parseInt(e.target.value, 10)
-									if (!Number.isNaN(value) && value >= 1 && value <= 100) {
-										updateSetting("focusChainSettings", {
-											...focusChainSettings,
-											remindSkycodeInterval: value,
-										})
-									}
-								}}
-								value={String(focusChainSettings?.remindSkycodeInterval || 6)}
-							/>
-							<p className="text-xs mt-[5px] text-(--vscode-descriptionForeground)">
-								{t("features.focusChainIntervalDescription")}
-							</p>
-						</div>
-					)}
 				</div>
 			</Section>
 		</div>

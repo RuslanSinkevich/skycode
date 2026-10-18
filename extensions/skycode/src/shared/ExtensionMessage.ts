@@ -7,14 +7,12 @@ import { ApiConfiguration } from "./api"
 import { BrowserSettings } from "./BrowserSettings"
 import { SkycodeFeatureSetting } from "./SkycodeFeatureSetting"
 import { IndexingConfig, IndexingProgress } from "./IndexingTypes"
-import { BannerCardData } from "./skycode/banner"
 import { SkycodeRulesToggles } from "./skycode-rules"
 import { DictationSettings } from "./DictationSettings"
 import { FocusChainSettings } from "./FocusChainSettings"
 import { HistoryItem } from "./HistoryItem"
 import { McpDisplayMode } from "./McpDisplayMode"
 import { SkycodeMessageModelInfo } from "./messages"
-import { OnboardingModelGroup } from "./proto/skycode/state"
 import { Mode, OpenaiReasoningEffort } from "./storage/types"
 // webview will hold state
 export interface ExtensionMessage {
@@ -48,9 +46,6 @@ export interface PendingChangeInfo {
 }
 
 export interface ExtensionState {
-	isNewUser: boolean
-	welcomeViewCompleted: boolean
-	onboardingModels: OnboardingModelGroup | undefined
 	apiConfiguration?: ApiConfiguration
 	autoApprovalSettings: AutoApprovalSettings
 	browserSettings: BrowserSettings
@@ -78,7 +73,6 @@ export interface ExtensionState {
 	planActSeparateModelsSetting: boolean
 	platform: Platform
 	environment?: Environment
-	shouldShowAnnouncement: boolean
 	taskHistory: HistoryItem[]
 	shellIntegrationTimeout: number
 	terminalReuseEnabled?: boolean
@@ -90,7 +84,6 @@ export interface ExtensionState {
 	backgroundCommandTaskId?: string
 	lastCompletedCommandTs?: number
 	version: string
-	distinctId: string
 	globalSkycodeRulesToggles: SkycodeRulesToggles
 	localSkycodeRulesToggles: SkycodeRulesToggles
 	localWorkflowToggles: SkycodeRulesToggles
@@ -113,8 +106,6 @@ export interface ExtensionState {
 	primaryRootIndex: number
 	isMultiRootWorkspace: boolean
 	multiRootSetting: SkycodeFeatureSetting
-	lastDismissedInfoBannerVersion: number
-	lastDismissedModelBannerVersion: number
 	hooksEnabled?: boolean
 	skillsEnabled?: boolean
 	globalSkillsToggles?: Record<string, boolean>
@@ -136,7 +127,6 @@ export interface ExtensionState {
 	indexingPromptDismissed?: boolean
 	// Skycode AI: Pending changes for inline diffs
 	pendingChanges?: PendingChangeInfo[]
-	banners?: BannerCardData[]
 	openAiCodexIsAuthenticated?: boolean
 	// Multi-step workflow
 	activeWorkflowName?: string

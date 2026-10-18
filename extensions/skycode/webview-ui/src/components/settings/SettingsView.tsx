@@ -3,8 +3,9 @@ import { ResetStateRequest } from "@shared/proto/skycode/state"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import {
 	DatabaseZap,
+	Ellipsis,
 	FlaskConical,
-	Gauge,
+	Globe,
 	Layers,
 	type LucideIcon,
 	Mic,
@@ -12,7 +13,6 @@ import {
 	Puzzle,
 	ShieldCheck,
 	SlidersHorizontal,
-	SquareMousePointer,
 	SquareTerminal,
 	Wrench,
 } from "lucide-react"
@@ -26,17 +26,16 @@ import { StateServiceClient } from "@/services/grpc-client"
 import { getEnvironmentColor } from "@/utils/environmentColors"
 import { Tab, TabContent, TabHeader, TabList, TabTrigger } from "../common/Tab"
 import SectionHeader from "./SectionHeader"
+import AdvancedSection from "./sections/AdvancedSection"
 import ApiConfigurationSection from "./sections/ApiConfigurationSection"
 import BrowserSettingsSection from "./sections/BrowserSettingsSection"
 import ContextSection from "./sections/ContextSection"
 import DebugSection from "./sections/DebugSection"
 import EditingSection from "./sections/EditingSection"
-import ExperimentsSection from "./sections/ExperimentsSection"
 import GeneralSettingsSection from "./sections/GeneralSettingsSection"
 import IndexingSettingsSection from "./sections/IndexingSettingsSection"
 import McpSection from "./sections/McpSection"
 import PermissionsSection from "./sections/PermissionsSection"
-import SessionBudgetSection from "./sections/SessionBudgetSection"
 import TerminalSettingsSection from "./sections/TerminalSettingsSection"
 import VoiceSection from "./sections/VoiceSection"
 
@@ -89,13 +88,6 @@ export const SETTINGS_TABS: SettingsTab[] = [
 		icon: Layers,
 	},
 	{
-		id: "sessionBudget",
-		nameKey: "settings.tabs.sessionBudget.name",
-		tooltipKey: "settings.tabs.sessionBudget.tooltip",
-		headerKey: "settings.tabs.sessionBudget.header",
-		icon: Gauge,
-	},
-	{
 		id: "terminal",
 		nameKey: "settings.tabs.terminal.name",
 		tooltipKey: "settings.tabs.terminal.tooltip",
@@ -103,11 +95,11 @@ export const SETTINGS_TABS: SettingsTab[] = [
 		icon: SquareTerminal,
 	},
 	{
-		id: "browser",
-		nameKey: "settings.tabs.browser.name",
-		tooltipKey: "settings.tabs.browser.tooltip",
-		headerKey: "settings.tabs.browser.header",
-		icon: SquareMousePointer,
+		id: "web",
+		nameKey: "settings.tabs.web.name",
+		tooltipKey: "settings.tabs.web.tooltip",
+		headerKey: "settings.tabs.web.header",
+		icon: Globe,
 	},
 	{
 		id: "voice",
@@ -131,11 +123,11 @@ export const SETTINGS_TABS: SettingsTab[] = [
 		icon: Puzzle,
 	},
 	{
-		id: "experiments",
-		nameKey: "settings.tabs.experiments.name",
-		tooltipKey: "settings.tabs.experiments.tooltip",
-		headerKey: "settings.tabs.experiments.header",
-		icon: FlaskConical,
+		id: "advanced",
+		nameKey: "settings.tabs.advanced.name",
+		tooltipKey: "settings.tabs.advanced.tooltip",
+		headerKey: "settings.tabs.advanced.header",
+		icon: Ellipsis,
 	},
 	// Debug tab — only visible in debug mode
 	{
@@ -147,6 +139,19 @@ export const SETTINGS_TABS: SettingsTab[] = [
 		hidden: true, // Controlled dynamically based on mode
 	},
 ]
+
+// [SKYCODE] Старые id вкладок (в том числе из навигации и сохранённого состояния) -> новые
+const LEGACY_TAB_IDS: Record<string, string> = {
+	"api-config": "providers",
+	features: "permissions",
+	about: "general",
+	browser: "web",
+	sessionBudget: "advanced",
+	"session-budget": "advanced",
+	experiments: "advanced",
+}
+
+export const resolveSettingsTabId = (tabId: string): string => LEGACY_TAB_IDS[tabId] ?? tabId
 
 type SettingsViewProps = {
 	onDone: () => void
@@ -162,14 +167,13 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 			permissions: PermissionsSection,
 			editing: EditingSection,
 			context: ContextSection,
-			sessionBudget: SessionBudgetSection,
 			general: GeneralSettingsSection,
-			browser: BrowserSettingsSection,
+			web: BrowserSettingsSection,
 			terminal: TerminalSettingsSection,
 			voice: VoiceSection,
 			indexing: IndexingSettingsSection,
 			mcp: McpSection,
-			experiments: ExperimentsSection,
+			advanced: AdvancedSection,
 			debug: DebugSection,
 		}),
 		[],
@@ -210,11 +214,7 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 	)
 
 	const [activeTab, setActiveTab] = useState<string>(() => {
-		// Map old tab IDs to new ones for backward compatibility
-		if (targetSection === "api-config") { return "providers" }
-		if (targetSection === "features") { return "permissions" }
-		if (targetSection === "about") { return "general" }
-		return targetSection || SETTINGS_TABS[0].id
+		return targetSection ? resolveSettingsTabId(targetSection) : SETTINGS_TABS[0].id
 	})
 
 	// Compact mode
@@ -271,10 +271,7 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 			}
 
 			// Map old IDs
-			let mappedTabId = tabId
-			if (tabId === "api-config") { mappedTabId = "providers" }
-			if (tabId === "features") { mappedTabId = "permissions" }
-			if (tabId === "about") { mappedTabId = "general" }
+			const mappedTabId = resolveSettingsTabId(tabId)
 
 			// Check if valid tab ID
 			if (SETTINGS_TABS.some((tab) => tab.id === mappedTabId)) {
@@ -315,11 +312,7 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 	// Update active tab when targetSection changes
 	useEffect(() => {
 		if (targetSection) {
-			let mapped = targetSection
-			if (targetSection === "api-config") { mapped = "providers" }
-			if (targetSection === "features") { mapped = "permissions" }
-			if (targetSection === "about") { mapped = "general" }
-			setActiveTab(mapped)
+			setActiveTab(resolveSettingsTabId(targetSection))
 		}
 	}, [targetSection])
 

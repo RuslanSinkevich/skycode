@@ -7,7 +7,7 @@ import { DEFAULT_FOCUS_CHAIN_SETTINGS } from "@shared/FocusChainSettings"
 import { DEFAULT_MCP_DISPLAY_MODE } from "@shared/McpDisplayMode"
 import { EmptyRequest } from "@shared/proto/skycode/common"
 import type { OpenRouterCompatibleModelInfo } from "@shared/proto/skycode/models"
-import { OnboardingModelGroup, type TerminalProfile } from "@shared/proto/skycode/state"
+import type { TerminalProfile } from "@shared/proto/skycode/state"
 import { convertProtoMcpServersToMcpServers } from "@shared/proto-conversions/mcp/mcp-server-conversion"
 import { fromProtobufModels } from "@shared/proto-conversions/models/typeConversion"
 import { convertProtoToSkycodeMessage } from "@shared/proto-conversions/skycode-message"
@@ -16,18 +16,15 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useNavigation } from "./useNavigation"
 import { Environment } from "../../../src/config"
 import { type ModelInfo, openRouterDefaultModelId, openRouterDefaultModelInfo } from "../../../src/shared/api"
-import type { McpMarketplaceCatalog, McpServer, McpViewTab } from "../../../src/shared/mcp"
+import type { McpServer, McpViewTab } from "../../../src/shared/mcp"
 import { McpServiceClient, ModelsServiceClient, StateServiceClient, UiServiceClient } from "../services/grpc-client"
 
 export interface ExtensionStateContextType extends ExtensionState {
 	didHydrateState: boolean
-	showWelcome: boolean
-	onboardingModels: OnboardingModelGroup | undefined
 	openRouterModels: Record<string, ModelInfo>
 	liteLlmModels: Record<string, ModelInfo>
 	openAiModels: string[]
 	mcpServers: McpServer[]
-	mcpMarketplaceCatalog: McpMarketplaceCatalog
 	totalTasksSize: number | null
 
 	availableTerminalProfiles: TerminalProfile[]
@@ -38,14 +35,11 @@ export interface ExtensionStateContextType extends ExtensionState {
 	showSettings: boolean
 	settingsTargetSection?: string
 	showAccount: boolean
-	showAnnouncement: boolean
 	showChatModelSelector: boolean
 
 	// Setters
 	setDictationSettings: (value: DictationSettings) => void
-	setShowAnnouncement: (value: boolean) => void
 	setShowChatModelSelector: (value: boolean) => void
-	setShouldShowAnnouncement: (value: boolean) => void
 	setMcpServers: (value: McpServer[]) => void
 	setGlobalSkycodeRulesToggles: (toggles: Record<string, boolean>) => void
 	setLocalSkycodeRulesToggles: (toggles: Record<string, boolean>) => void
@@ -56,10 +50,7 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setGlobalWorkflowToggles: (toggles: Record<string, boolean>) => void
 	setGlobalSkillsToggles: (toggles: Record<string, boolean>) => void
 	setLocalSkillsToggles: (toggles: Record<string, boolean>) => void
-	setMcpMarketplaceCatalog: (value: McpMarketplaceCatalog) => void
 	setTotalTasksSize: (value: number | null) => void
-	setShowWelcome: (value: boolean) => void
-	setOnboardingModels: (value: OnboardingModelGroup | undefined) => void
 
 	// Refresh functions
 	refreshOpenRouterModels: () => void
@@ -78,7 +69,6 @@ export interface ExtensionStateContextType extends ExtensionState {
 	// Hide functions
 	hideSettings: () => void
 	hideAccount: () => void
-	hideAnnouncement: () => void
 	hideChatModelSelector: () => void
 	closeMcpView: () => void
 
@@ -97,20 +87,17 @@ export const ExtensionStateContextProvider: React.FC<{
 		showSettings,
 		settingsTargetSection,
 		showAccount,
-		showAnnouncement,
 		showChatModelSelector,
 		setShowMcp,
 		setMcpTab,
 		closeMcpView,
 		hideSettings,
 		hideAccount,
-		hideAnnouncement,
 		hideChatModelSelector,
 		navigateToMcp,
 		navigateToSettings,
 		navigateToAccount,
 		navigateToChat,
-		setShowAnnouncement,
 		setShowChatModelSelector,
 	} = useNavigation()
 
@@ -119,7 +106,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		skycodeMessages: [],
 		tabs: [],
 		taskHistory: [],
-		shouldShowAnnouncement: false,
 		autoApprovalSettings: DEFAULT_AUTO_APPROVAL_SETTINGS,
 		browserSettings: DEFAULT_BROWSER_SETTINGS,
 		dictationSettings: DEFAULT_DICTATION_SETTINGS,
@@ -129,7 +115,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		mode: "act",
 		platform: DEFAULT_PLATFORM,
 		environment: Environment.production,
-		distinctId: "",
 		planActSeparateModelsSetting: true,
 		mcpDisplayMode: DEFAULT_MCP_DISPLAY_MODE,
 		globalSkycodeRulesToggles: {},
@@ -145,9 +130,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		terminalOutputLineLimit: 500,
 		maxConsecutiveMistakes: 3,
 		defaultTerminalProfile: "default",
-		isNewUser: false,
-		welcomeViewCompleted: false,
-		onboardingModels: undefined,
 		mcpResponsesCollapsed: false, // Default value (expanded), will be overwritten by extension state
 		strictPlanModeEnabled: false,
 		yoloModeToggled: false,
@@ -156,8 +138,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		skycodeWebToolsEnabled: { user: true, featureFlag: true },
 		autoCondenseThreshold: undefined,
 		favoritedModelIds: [],
-		lastDismissedInfoBannerVersion: 0,
-		lastDismissedModelBannerVersion: 0,
 		backgroundCommandRunning: false,
 		backgroundCommandTaskId: undefined,
 		backgroundEditEnabled: true,
@@ -192,9 +172,6 @@ export const ExtensionStateContextProvider: React.FC<{
 	})
 	const [didHydrateState, setDidHydrateState] = useState(false)
 
-	const [showWelcome, setShowWelcome] = useState(false)
-	const [onboardingModels, setOnboardingModels] = useState<OnboardingModelGroup | undefined>(undefined)
-
 	const [openRouterModels, setOpenRouterModels] = useState<Record<string, ModelInfo>>({
 		[openRouterDefaultModelId]: openRouterDefaultModelInfo,
 	})
@@ -204,17 +181,14 @@ export const ExtensionStateContextProvider: React.FC<{
 
 	const [openAiModels, _setOpenAiModels] = useState<string[]>([])
 	const [mcpServers, setMcpServers] = useState<McpServer[]>([])
-	const [mcpMarketplaceCatalog, setMcpMarketplaceCatalog] = useState<McpMarketplaceCatalog>({ items: [] })
 
 	// References to store subscription cancellation functions
 	const stateSubscriptionRef = useRef<(() => void) | null>(null)
 
-	const mcpButtonUnsubscribeRef = useRef<(() => void) | null>(null)
 	const chatButtonUnsubscribeRef = useRef<(() => void) | null>(null)
 	const accountButtonClickedSubscriptionRef = useRef<(() => void) | null>(null)
 	const settingsButtonClickedSubscriptionRef = useRef<(() => void) | null>(null)
 	const partialMessageUnsubscribeRef = useRef<(() => void) | null>(null)
-	const mcpMarketplaceUnsubscribeRef = useRef<(() => void) | null>(null)
 	const openRouterModelsUnsubscribeRef = useRef<(() => void) | null>(null)
 	const liteLlmModelsUnsubscribeRef = useRef<(() => void) | null>(null)
 	const workspaceUpdatesUnsubscribeRef = useRef<(() => void) | null>(null)
@@ -271,15 +245,6 @@ export const ExtensionStateContextProvider: React.FC<{
 									: prevState.autoApprovalSettings,
 							}
 
-							// Update welcome screen state based on API configuration if welcome view not in progress
-							if (!newState.welcomeViewCompleted && !showWelcome) {
-								setShowWelcome(true)
-								setOnboardingModels(newState.onboardingModels)
-							} else if (newState.welcomeViewCompleted) {
-								setShowWelcome(false)
-								setOnboardingModels(undefined)
-							}
-
 							setDidHydrateState(true)
 
 							return newState
@@ -295,20 +260,6 @@ export const ExtensionStateContextProvider: React.FC<{
 			},
 			onComplete: () => {},
 		})
-
-		// Subscribe to MCP button clicked events with webview type
-		mcpButtonUnsubscribeRef.current = UiServiceClient.subscribeToMcpButtonClicked(
-			{},
-			{
-				onResponse: () => {
-				navigateToMcp()
-				},
-				onError: (error) => {
-					console.error("Error in mcpButtonClicked subscription:", error)
-				},
-			onComplete: () => {},
-			},
-		)
 
 		// Subscribe to chat button clicked events with webview type
 		chatButtonUnsubscribeRef.current = UiServiceClient.subscribeToChatButtonClicked(
@@ -406,17 +357,6 @@ export const ExtensionStateContextProvider: React.FC<{
 			onComplete: () => {},
 		})
 
-		// Subscribe to MCP marketplace catalog updates
-		mcpMarketplaceUnsubscribeRef.current = McpServiceClient.subscribeToMcpMarketplaceCatalog(EmptyRequest.create({}), {
-			onResponse: (catalog) => {
-			setMcpMarketplaceCatalog(catalog)
-			},
-			onError: (error) => {
-				console.error("Error in MCP marketplace catalog subscription:", error)
-			},
-			onComplete: () => {},
-		})
-
 		// Subscribe to OpenRouter models updates
 		openRouterModelsUnsubscribeRef.current = ModelsServiceClient.subscribeToOpenRouterModels(EmptyRequest.create({}), {
 			onResponse: (response: OpenRouterCompatibleModelInfo) => {
@@ -451,10 +391,10 @@ export const ExtensionStateContextProvider: React.FC<{
 				console.error("Failed to initialize webview via gRPC:", error)
 			})
 
-		// Set up account button clicked subscription
+		// [SKYCODE] Кнопка «О проекте» в заголовке (внутреннее имя — accountButtonClicked)
 		accountButtonClickedSubscriptionRef.current = UiServiceClient.subscribeToAccountButtonClicked(EmptyRequest.create(), {
 			onResponse: () => {
-				// When account button is clicked, navigate to account view
+				// При нажатии «О проекте» открываем экран About
 				navigateToAccount()
 			},
 			onError: (error) => {
@@ -499,10 +439,6 @@ export const ExtensionStateContextProvider: React.FC<{
 				stateSubscriptionRef.current()
 				stateSubscriptionRef.current = null
 			}
-			if (mcpButtonUnsubscribeRef.current) {
-				mcpButtonUnsubscribeRef.current()
-				mcpButtonUnsubscribeRef.current = null
-			}
 			if (chatButtonUnsubscribeRef.current) {
 				chatButtonUnsubscribeRef.current()
 				chatButtonUnsubscribeRef.current = null
@@ -518,10 +454,6 @@ export const ExtensionStateContextProvider: React.FC<{
 			if (partialMessageUnsubscribeRef.current) {
 				partialMessageUnsubscribeRef.current()
 				partialMessageUnsubscribeRef.current = null
-			}
-			if (mcpMarketplaceUnsubscribeRef.current) {
-				mcpMarketplaceUnsubscribeRef.current()
-				mcpMarketplaceUnsubscribeRef.current = null
 			}
 			if (openRouterModelsUnsubscribeRef.current) {
 				openRouterModelsUnsubscribeRef.current()
@@ -582,8 +514,6 @@ export const ExtensionStateContextProvider: React.FC<{
 	])
 
 	const stableSetters = useRef({
-		setShouldShowAnnouncement: (value: boolean) =>
-			setState((prev) => ({ ...prev, shouldShowAnnouncement: value })),
 		setGlobalSkycodeRulesToggles: (toggles: Record<string, boolean>) =>
 			setState((prev) => ({ ...prev, globalSkycodeRulesToggles: toggles })),
 		setLocalSkycodeRulesToggles: (toggles: Record<string, boolean>) =>
@@ -609,13 +539,10 @@ export const ExtensionStateContextProvider: React.FC<{
 	const contextValue = useMemo<ExtensionStateContextType>(() => ({
 		...state,
 		didHydrateState,
-		showWelcome,
-		onboardingModels,
 		openRouterModels,
 		liteLlmModels,
 		openAiModels,
 		mcpServers,
-		mcpMarketplaceCatalog,
 		totalTasksSize,
 		availableTerminalProfiles,
 		showMcp,
@@ -623,7 +550,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		showSettings,
 		settingsTargetSection,
 		showAccount,
-		showAnnouncement,
 		showChatModelSelector,
 		globalSkycodeRulesToggles: state.globalSkycodeRulesToggles || {},
 		localSkycodeRulesToggles: state.localSkycodeRulesToggles || {},
@@ -643,14 +569,9 @@ export const ExtensionStateContextProvider: React.FC<{
 		// Hide functions
 		hideSettings,
 		hideAccount,
-		hideAnnouncement,
-		setShowAnnouncement,
 		hideChatModelSelector,
-		setShowWelcome,
-		setOnboardingModels,
 		setShowChatModelSelector,
 		setMcpServers,
-		setMcpMarketplaceCatalog,
 		setShowMcp,
 		closeMcpView,
 		setMcpTab,
@@ -660,17 +581,17 @@ export const ExtensionStateContextProvider: React.FC<{
 		onRelinquishControl,
 		...stableSetters,
 	}), [
-		state, didHydrateState, showWelcome, onboardingModels,
+		state, didHydrateState,
 		openRouterModels, liteLlmModels, openAiModels,
-		mcpServers, mcpMarketplaceCatalog, totalTasksSize,
+		mcpServers, totalTasksSize,
 		availableTerminalProfiles, showMcp, mcpTab, showSettings,
 		settingsTargetSection, showAccount,
-		showAnnouncement, showChatModelSelector,
+		showChatModelSelector,
 		navigateToMcp, navigateToSettings,
 		navigateToAccount, navigateToChat,
 		hideSettings, hideAccount,
-		hideAnnouncement, hideChatModelSelector, closeMcpView,
-		setShowAnnouncement, setShowChatModelSelector,
+		hideChatModelSelector, closeMcpView,
+		setShowChatModelSelector,
 		refreshOpenRouterModels, refreshLiteLlmModels, onRelinquishControl,
 	])
 

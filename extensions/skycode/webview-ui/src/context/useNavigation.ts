@@ -1,7 +1,5 @@
 import { useCallback, useState } from "react"
-import { EmptyRequest } from "@shared/proto/skycode/common"
 import type { McpViewTab } from "../../../src/shared/mcp"
-import { StateServiceClient } from "../services/grpc-client"
 
 export interface NavigationState {
 	showMcp: boolean
@@ -9,7 +7,6 @@ export interface NavigationState {
 	showSettings: boolean
 	settingsTargetSection: string | undefined
 	showAccount: boolean
-	showAnnouncement: boolean
 	showChatModelSelector: boolean
 }
 
@@ -20,7 +17,6 @@ export interface NavigationActions {
 
 	hideSettings: () => void
 	hideAccount: () => void
-	hideAnnouncement: () => void
 	hideChatModelSelector: () => void
 
 	navigateToMcp: (tab?: McpViewTab) => void
@@ -28,7 +24,6 @@ export interface NavigationActions {
 	navigateToAccount: () => void
 	navigateToChat: () => void
 
-	setShowAnnouncement: (value: boolean) => void
 	setShowChatModelSelector: (value: boolean) => void
 }
 
@@ -38,7 +33,6 @@ export function useNavigation(): NavigationState & NavigationActions {
 	const [showSettings, setShowSettings] = useState(false)
 	const [settingsTargetSection, setSettingsTargetSection] = useState<string | undefined>(undefined)
 	const [showAccount, setShowAccount] = useState(false)
-	const [showAnnouncement, setShowAnnouncement] = useState(false)
 	const [showChatModelSelector, setShowChatModelSelector] = useState(false)
 
 	const closeMcpView = useCallback(() => {
@@ -49,10 +43,8 @@ export function useNavigation(): NavigationState & NavigationActions {
 	const hideSettings = useCallback(() => {
 		setShowSettings(false)
 		setSettingsTargetSection(undefined)
-		StateServiceClient.refreshBanners(EmptyRequest.create({})).catch((err) => console.error("Failed to refresh banners:", err))
 	}, [])
 	const hideAccount = useCallback(() => setShowAccount(false), [])
-	const hideAnnouncement = useCallback(() => setShowAnnouncement(false), [])
 	const hideChatModelSelector = useCallback(() => setShowChatModelSelector(false), [])
 
 	const navigateToMcp = useCallback(
@@ -93,7 +85,6 @@ export function useNavigation(): NavigationState & NavigationActions {
 		showSettings,
 		settingsTargetSection,
 		showAccount,
-		showAnnouncement,
 		showChatModelSelector,
 
 		setShowMcp,
@@ -101,7 +92,6 @@ export function useNavigation(): NavigationState & NavigationActions {
 		closeMcpView,
 		hideSettings,
 		hideAccount,
-		hideAnnouncement,
 		hideChatModelSelector,
 
 		navigateToMcp,
@@ -109,7 +99,6 @@ export function useNavigation(): NavigationState & NavigationActions {
 		navigateToAccount,
 		navigateToChat,
 
-		setShowAnnouncement,
 		setShowChatModelSelector,
 	}
 }

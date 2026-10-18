@@ -104,64 +104,6 @@ export async function migrateCustomInstructionsToGlobalRules(context: vscode.Ext
 	}
 }
 
-export async function migrateWelcomeViewCompleted(context: vscode.ExtensionContext) {
-	try {
-		// Check if welcomeViewCompleted is already set
-		const welcomeViewCompleted = context.globalState.get("welcomeViewCompleted")
-
-		if (welcomeViewCompleted === undefined) {
-			Logger.log("Migrating welcomeViewCompleted setting...")
-
-			// Fetch API keys directly from secrets
-			const apiKey = await context.secrets.get("apiKey")
-			const openRouterApiKey = await context.secrets.get("openRouterApiKey")
-			const openAiApiKey = await context.secrets.get("openAiApiKey")
-			const ollamaApiKey = await context.secrets.get("ollamaApiKey")
-			const liteLlmApiKey = await context.secrets.get("liteLlmApiKey")
-			const geminiApiKey = await context.secrets.get("geminiApiKey")
-			const openAiNativeApiKey = await context.secrets.get("openAiNativeApiKey")
-			const deepSeekApiKey = await context.secrets.get("deepSeekApiKey")
-			const qwenApiKey = await context.secrets.get("qwenApiKey")
-
-			// Fetch configuration values from global state
-			const planModeOllamaModelId = context.globalState.get("planModeOllamaModelId")
-			const planModeLmStudioModelId = context.globalState.get("planModeLmStudioModelId")
-			const actModeOllamaModelId = context.globalState.get("actModeOllamaModelId")
-			const actModeLmStudioModelId = context.globalState.get("actModeLmStudioModelId")
-			const planModeVsCodeLmModelSelector = context.globalState.get("planModeVsCodeLmModelSelector")
-			const actModeVsCodeLmModelSelector = context.globalState.get("actModeVsCodeLmModelSelector")
-
-			// This is the original logic used for checking if the welcome view should be shown
-			// It was located in the ExtensionStateContextProvider
-			const hasKey = [
-				apiKey,
-				openRouterApiKey,
-				openAiApiKey,
-				ollamaApiKey,
-				planModeOllamaModelId,
-				planModeLmStudioModelId,
-				actModeOllamaModelId,
-				actModeLmStudioModelId,
-				liteLlmApiKey,
-				geminiApiKey,
-				openAiNativeApiKey,
-				deepSeekApiKey,
-				qwenApiKey,
-				planModeVsCodeLmModelSelector,
-				actModeVsCodeLmModelSelector,
-			].some((key) => key !== undefined)
-
-			// Set welcomeViewCompleted based on whether user has keys
-			await context.globalState.update("welcomeViewCompleted", hasKey)
-
-			Logger.log(`Migration: Set welcomeViewCompleted to ${hasKey} based on existing API keys`)
-		}
-	} catch (error) {
-		Logger.error("Failed to migrate welcomeViewCompleted:", error)
-		// Continue execution - migration failure shouldn't break extension startup
-	}
-}
-
 export async function cleanupMcpMarketplaceCatalogFromGlobalState(context: vscode.ExtensionContext) {
 	try {
 		// Check if mcpMarketplaceCatalog exists in global state

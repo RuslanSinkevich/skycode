@@ -11,7 +11,6 @@ import { McpServiceClient } from "@/services/grpc-client"
 import { getEnvironmentColor } from "@/utils/environmentColors"
 import AddRemoteServerForm from "./tabs/add-server/AddRemoteServerForm"
 import ConfigureServersView from "./tabs/installed/ConfigureServersView"
-import McpMarketplaceView from "./tabs/marketplace/McpMarketplaceView"
 
 type McpViewProps = {
 	onDone: () => void
@@ -20,22 +19,14 @@ type McpViewProps = {
 
 const McpConfigurationView = ({ onDone, initialTab }: McpViewProps) => {
 	const { t } = useI18n()
-	const { setMcpServers, setMcpMarketplaceCatalog, environment } = useExtensionState()
-	const [activeTab, setActiveTab] = useState<McpViewTab>(initialTab || "marketplace")
+	const { setMcpServers, environment } = useExtensionState()
+	const [activeTab, setActiveTab] = useState<McpViewTab>(initialTab || "addRemote")
 
 	const handleTabChange = (tab: McpViewTab) => {
 		setActiveTab(tab)
 	}
 
 	useEffect(() => {
-		McpServiceClient.refreshMcpMarketplace(EmptyRequest.create({}))
-			.then((response) => {
-				setMcpMarketplaceCatalog(response)
-			})
-			.catch((error) => {
-				console.error("Error refreshing MCP marketplace:", error)
-			})
-
 		McpServiceClient.getLatestMcpServers(EmptyRequest.create({}))
 			.then((response: McpServers) => {
 				if (response.mcpServers) {
@@ -85,9 +76,6 @@ const McpConfigurationView = ({ onDone, initialTab }: McpViewProps) => {
 						padding: "0 20px 0 20px",
 						borderBottom: "1px solid var(--vscode-panel-border)",
 					}}>
-					<TabButton isActive={activeTab === "marketplace"} onClick={() => handleTabChange("marketplace")}>
-						{t("mcp.marketplace")}
-					</TabButton>
 					<TabButton isActive={activeTab === "addRemote"} onClick={() => handleTabChange("addRemote")}>
 						{t("mcp.remoteServers")}
 					</TabButton>
@@ -98,7 +86,6 @@ const McpConfigurationView = ({ onDone, initialTab }: McpViewProps) => {
 
 				{/* Content container */}
 				<div style={{ width: "100%" }}>
-					{activeTab === "marketplace" && <McpMarketplaceView />}
 					{activeTab === "addRemote" && <AddRemoteServerForm onServerAdded={() => handleTabChange("configure")} />}
 					{activeTab === "configure" && <ConfigureServersView />}
 				</div>

@@ -117,7 +117,7 @@ This ensures your work aligns with the existing codebase structure and avoids un
 
 const GPT5_1_FEEDBACK = (_context: SystemPromptContext) => `FEEDBACK
 
-When user is providing you with feedback on how you could improve, you can let the user know to report new issue using the '/reportbug' slash command.`
+When the user gives you feedback on how you could improve, take it into account and adjust your approach.`
 
 export const gpt51ComponentOverrides: PromptVariant["componentOverrides"] = {
 	[SystemPromptSection.AGENT_ROLE]: {

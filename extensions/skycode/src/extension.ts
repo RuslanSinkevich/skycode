@@ -11,7 +11,6 @@ import { Logger } from "@/shared/services/Logger"
 import { cleanupOrphanedTempFiles } from "@core/storage/disk"
 import { sendAccountButtonClickedEvent } from "./core/controller/ui/subscribeToAccountButtonClicked"
 import { sendChatButtonClickedEvent } from "./core/controller/ui/subscribeToChatButtonClicked"
-import { sendMcpButtonClickedEvent } from "./core/controller/ui/subscribeToMcpButtonClicked"
 import { sendSettingsButtonClickedEvent } from "./core/controller/ui/subscribeToSettingsButtonClicked"
 import { WebviewProvider } from "./core/webview"
 import { createSkycodeAPI } from "./exports"
@@ -28,7 +27,6 @@ import { addToSkycode } from "./core/controller/commands/addToSkycode"
 import { explainWithSkycode } from "./core/controller/commands/explainWithSkycode"
 import { fixWithSkycode } from "./core/controller/commands/fixWithSkycode"
 import { improveWithSkycode } from "./core/controller/commands/improveWithSkycode"
-import { clearOnboardingModelsCache } from "./core/controller/models/getSkycodeOnboardingModels"
 import { sendAddToInputEvent } from "./core/controller/ui/subscribeToAddToInput"
 import { sendShowWebviewEvent } from "./core/controller/ui/subscribeToShowWebview"
 import { HookDiscoveryCache } from "./core/hooks/HookDiscoveryCache"
@@ -269,12 +267,6 @@ export async function activate(context: vscode.ExtensionContext) {
 	)
 
 	context.subscriptions.push(
-		vscode.commands.registerCommand(commands.McpButton, () => {
-			sendMcpButtonClickedEvent()
-		}),
-	)
-
-	context.subscriptions.push(
 		vscode.commands.registerCommand(commands.SettingsButton, () => {
 			sendSettingsButtonClickedEvent()
 		}),
@@ -315,20 +307,6 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 	}
 	context.subscriptions.push(vscode.window.registerUriHandler({ handleUri }))
-
-	// Register size testing commands in development mode
-	if (IS_DEV && IS_DEV === "true") {
-		// Use dynamic import to avoid loading the module in production
-		import("./dev/commands/tasks")
-			.then((module) => {
-				const devTaskCommands = module.registerTaskCommands(webview.controller)
-				context.subscriptions.push(...devTaskCommands)
-				Logger.log("Skycode dev task commands registered")
-			})
-			.catch((error) => {
-				Logger.log("Failed to register dev task commands: " + error)
-			})
-	}
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand(commands.TerminalOutput, async () => {
@@ -772,16 +750,6 @@ ${ctx.cellJson || "{}"}
 		vscode.commands.registerCommand("skycode.pendingChanges.rejectFile", () => {
 			vscode.commands.executeCommand("skycode.diff.rejectAllInFile")
 		}),
-		vscode.commands.registerCommand("skycode.clearAllDiffs", async () => {
-			await vscode.commands.executeCommand("skycode.diff.clearAll")
-		}),
-	)
-
-	// Register the openWalkthrough command handler
-	context.subscriptions.push(
-		vscode.commands.registerCommand(commands.Walkthrough, async () => {
-			await vscode.commands.executeCommand("workbench.action.openWalkthrough", `${context.extension.id}#SkycodeWalkthrough`)
-		}),
 	)
 
 	// Register the reconstructTaskHistory command handler
@@ -934,8 +902,6 @@ export async function deactivate() {
 
 	// Clean up comment review controller
 	disposeVscodeCommentReviewController()
-
-	clearOnboardingModelsCache()
 
 	// [SKYCODE-PERF] Dispose dev watcher (if any) to release the underlying chokidar
 	if (_devWatcher) {

@@ -10,7 +10,6 @@ const prefix = name
  */
 const SkycodeCommands = {
 	PlusButton: prefix + ".plusButtonClicked",
-	McpButton: prefix + ".mcpButtonClicked",
 	SettingsButton: prefix + ".settingsButtonClicked",
 	AccountButton: prefix + ".accountButtonClicked",
 	TerminalOutput: prefix + ".addTerminalOutputToChat",
@@ -19,7 +18,6 @@ const SkycodeCommands = {
 	ExplainCode: prefix + ".explainCode",
 	ImproveCode: prefix + ".improveCode",
 	FocusChatInput: prefix + ".focusChatInput",
-	Walkthrough: prefix + ".openWalkthrough",
 	GenerateCommit: prefix + ".generateGitCommitMessage",
 	AbortCommit: prefix + ".abortGitCommitMessage",
 	ReconstructTaskHistory: prefix + ".reconstructTaskHistory",

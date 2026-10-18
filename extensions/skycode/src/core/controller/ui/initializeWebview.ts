@@ -1,10 +1,8 @@
 import { Empty, EmptyRequest } from "@shared/proto/skycode/common"
 import { OpenRouterCompatibleModelInfo } from "@shared/proto/skycode/models"
-import { readMcpMarketplaceCatalogFromCache } from "@/core/storage/disk"
 import { Logger } from "@/shared/services/Logger"
 import { GlobalStateAndSettings } from "@/shared/storage/state-keys"
 import type { Controller } from "../index"
-import { sendMcpMarketplaceCatalogEvent } from "../mcp/subscribeToMcpMarketplaceCatalog"
 import { refreshLiteLlmModels } from "../models/refreshLiteLlmModels"
 import { refreshOpenRouterModels } from "../models/refreshOpenRouterModels"
 import { sendOpenRouterModelsEvent } from "../models/subscribeToOpenRouterModels"
@@ -90,18 +88,6 @@ export async function initializeWebview(controller: Controller, _request: EmptyR
 		// GUI relies on model info to be up-to-date to provide the most accurate pricing, so we need to fetch the latest details on launch.
 		// We do this for all users since many users switch between api providers and if they were to switch back to openrouter it would be showing outdated model info if we hadn't retrieved the latest at this point
 		// (see normalizeApiConfiguration > openrouter)
-		// Prefetch marketplace and OpenRouter models
-
-		// Send stored MCP marketplace catalog if available
-		const mcpMarketplaceCatalog = await readMcpMarketplaceCatalogFromCache()
-
-		if (mcpMarketplaceCatalog) {
-			sendMcpMarketplaceCatalogEvent(mcpMarketplaceCatalog)
-		}
-
-		// Silently refresh MCP marketplace catalog
-		controller.refreshMcpMarketplace(true /* sendCatalogEvent */)
-
 		return Empty.create({})
 	} catch (error) {
 		Logger.error("Failed to initialize webview:", error)
