@@ -546,6 +546,8 @@
 	"telemetry.closeBannerEnable": "Close banner and enable telemetry",
 	"mermaid.generating": "Generating mermaid diagram...",
 	"mermaid.copyCode": "Copy Code",
+	"mermaid.title": "Diagram",
+	"mermaid.openInEditor": "Open in an editor tab",
 	"banner.announcements": "Announcements",
 	"banner.carousel": "carousel",
 	"banner.dismissAll": "Dismiss all banners",

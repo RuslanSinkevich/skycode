@@ -546,6 +546,8 @@
 	"telemetry.closeBannerEnable": "Закрыть баннер и включить телеметрию",
 	"mermaid.generating": "Генерация диаграммы mermaid...",
 	"mermaid.copyCode": "Копировать код",
+	"mermaid.title": "Схема",
+	"mermaid.openInEditor": "Открыть во вкладке редактора",
 	"banner.announcements": "Объявления",
 	"banner.carousel": "карусель",
 	"banner.dismissAll": "Скрыть все баннеры",

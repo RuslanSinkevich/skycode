@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react"
 import styled from "styled-components"
 import { useI18n } from "@/i18n"
 import { FileServiceClient } from "@/services/grpc-client"
-import { quoteMermaidLabels } from "./mermaidFix"
+import { fixMermaidStyleContrast, quoteMermaidLabels } from "./mermaidFix"
 import { useDebounceEffect } from "@/utils/useDebounceEffect"
 
 // [SKYCODE] Схемы в цветах текущей темы VS Code. Mermaid считает производные цвета сам,
@@ -108,12 +108,14 @@ export default function MermaidBlock({ code }: MermaidBlockProps) {
 			}
 			// [SKYCODE] Если схема не разобралась — пробуем ещё раз с подписями в кавычках
 			initMermaidForTheme()
+			// Цвет текста на окрашенных моделью блоках подбираем под заливку — всегда, не только при ошибке
+			const contrastCode = fixMermaidStyleContrast(code)
 			const pickValidCode = async (): Promise<string> => {
-				if (await mermaid.parse(code, { suppressErrors: true })) {
-					return code
+				if (await mermaid.parse(contrastCode, { suppressErrors: true })) {
+					return contrastCode
 				}
-				const fixed = quoteMermaidLabels(code)
-				if (fixed !== code && (await mermaid.parse(fixed, { suppressErrors: true }))) {
+				const fixed = quoteMermaidLabels(contrastCode)
+				if (fixed !== contrastCode && (await mermaid.parse(fixed, { suppressErrors: true }))) {
 					return fixed
 				}
 				throw new Error("Invalid or incomplete Mermaid code")
@@ -151,23 +153,17 @@ export default function MermaidBlock({ code }: MermaidBlockProps) {
 	 * Called when user clicks the rendered diagram.
 	 * Converts the <svg> to a PNG and sends it to the extension.
 	 */
-	const handleClick = async () => {
-		if (!containerRef.current) {
-			return
-		}
-		const svgEl = containerRef.current.querySelector("svg")
+	// [SKYCODE] Клик по схеме и кнопка — открыть во вкладке редактора векторной картинкой на всю ширину
+	// (чётко при любом масштабе, в цветах темы); раньше открывалась PNG-картинка
+	const handleClick = () => {
+		const svgEl = containerRef.current?.querySelector("svg")
 		if (!svgEl) {
 			return
 		}
-
-		try {
-			const pngDataUrl = await svgToPng(svgEl)
-			FileServiceClient.openImage(StringRequest.create({ value: pngDataUrl })).catch((err) =>
-				console.error("Failed to open image:", err),
-			)
-		} catch (err) {
-			console.error("Error converting SVG to PNG:", err)
-		}
+		const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:var(--vscode-editor-background)}body{padding:24px;box-sizing:border-box}svg{display:block;margin:0 auto;max-width:100%;height:auto}</style></head><body>${svgEl.outerHTML}</body></html>`
+		FileServiceClient.openVisual(StringRequest.create({ value: JSON.stringify({ title: t("mermaid.title"), html }) })).catch(
+			(err) => console.error("Failed to open diagram:", err),
+		)
 	}
 
 	const handleCopyCode = async () => {
@@ -185,68 +181,15 @@ export default function MermaidBlock({ code }: MermaidBlockProps) {
 				<StyledVSCodeButton aria-label={t("mermaid.copyCode")} onClick={handleCopyCode} title={t("mermaid.copyCode")}>
 					<span className="codicon codicon-copy"></span>
 				</StyledVSCodeButton>
+				<StyledVSCodeButton aria-label={t("mermaid.openInEditor")} onClick={handleClick} title={t("mermaid.openInEditor")}>
+					<span className="codicon codicon-screen-full"></span>
+				</StyledVSCodeButton>
 			</ButtonContainer>
 			<SvgContainer $isLoading={isLoading} onClick={handleClick} ref={containerRef} />
 		</MermaidBlockContainer>
 	)
 }
 
-async function svgToPng(svgEl: SVGElement): Promise<string> {
-	console.log("svgToPng function called")
-	// Clone the SVG to avoid modifying the original
-	const svgClone = svgEl.cloneNode(true) as SVGElement
-
-	// Get the original viewBox
-	const viewBox = svgClone.getAttribute("viewBox")?.split(" ").map(Number) || []
-	const originalWidth = viewBox[2] || svgClone.clientWidth
-	const originalHeight = viewBox[3] || svgClone.clientHeight
-
-	// Calculate the scale factor to fit editor width while maintaining aspect ratio
-
-	// Unless we can find a way to get the actual editor window dimensions through the VS Code API (which might be possible but would require changes to the extension side),
-	// the fixed width seems like a reliable approach.
-	const editorWidth = 3_600
-
-	const scale = editorWidth / originalWidth
-	const scaledHeight = originalHeight * scale
-
-	// Update SVG dimensions
-	svgClone.setAttribute("width", `${editorWidth}`)
-	svgClone.setAttribute("height", `${scaledHeight}`)
-
-	const serializer = new XMLSerializer()
-	const svgString = serializer.serializeToString(svgClone)
-	const encoder = new TextEncoder()
-	const bytes = encoder.encode(svgString)
-	const base64 = btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(""))
-	const svgDataUrl = `data:image/svg+xml;base64,${base64}`
-
-	return new Promise((resolve, reject) => {
-		const img = new Image()
-		img.onload = () => {
-			const canvas = document.createElement("canvas")
-			canvas.width = editorWidth
-			canvas.height = scaledHeight
-
-			const ctx = canvas.getContext("2d")
-			if (!ctx) {
-				return reject("Canvas context not available")
-			}
-
-			// Fill background with Mermaid's dark theme background color
-			ctx.fillStyle = themeColor("--vscode-editor-background", "#1e1e1e")
-			ctx.fillRect(0, 0, canvas.width, canvas.height)
-
-			ctx.imageSmoothingEnabled = true
-			ctx.imageSmoothingQuality = "high"
-
-			ctx.drawImage(img, 0, 0, editorWidth, scaledHeight)
-			resolve(canvas.toDataURL("image/png", 1.0))
-		}
-		img.onerror = reject
-		img.src = svgDataUrl
-	})
-}
 
 const MermaidBlockContainer = styled.div`
 	position: relative;
@@ -255,6 +198,8 @@ const MermaidBlockContainer = styled.div`
 
 const ButtonContainer = styled.div`
 	position: absolute;
+	display: flex;
+	gap: 4px;
 	top: 8px;
 	right: 8px;
 	z-index: 1;
