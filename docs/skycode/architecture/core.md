@@ -1,120 +1,120 @@
-> **Русская версия:** [core.md](../ru/architecture/core.md)
+> **English version:** [core.md](../en/architecture/core.md)
 
-# Core Module
+# Модуль Core
 
-Entry point: `extension.ts` → Controller → Task
+Входная точка: `extension.ts` → Controller → Task
 
-## Directory Structure
+## Структура директорий
 
 ```
 src/core/
-├── controller/    # gRPC handlers, task management
-├── task/          # AI tasks: API requests + tool execution
-├── diff-v2/       # Inline Diff System v4 (snapshot-based)
-├── session/       # ApprovalGate (ask/response flow)
-├── indexing/      # Semantic indexing (Tree-sitter + embeddings)
-├── prompts/       # Prompt system (TemplateEngine + PromptBuilder)
-├── api/           # API providers (OpenAI, Anthropic, Gemini, ...)
+├── controller/    # gRPC-обработчики, управление задачами
+├── task/          # AI-задачи: API-запросы + выполнение инструментов
+├── diff-v2/       # Inline Diff System v4 (на основе снапшотов)
+├── session/       # ApprovalGate (механизм ask/response)
+├── indexing/      # Семантическая индексация (Tree-sitter + эмбеддинги)
+├── prompts/       # Система промптов (TemplateEngine + PromptBuilder)
+├── api/           # API-провайдеры (OpenAI, Anthropic, Gemini, ...)
 ├── workspace/     # Multi-root workspace resolver
-├── context/       # Context management (files, rules, focus chain)
-├── hooks/         # Lifecycle hooks (TaskStart, TaskComplete, ...)
-├── ignore/        # .skycodeignore controller
-├── mentions/      # @-mentions in chat
-└── permissions/   # Access control: CommandPermissionController + CommandSafetyClassifier
+├── context/       # Управление контекстом (файлы, правила, цепочка фокуса)
+├── hooks/         # Хуки жизненного цикла (TaskStart, TaskComplete, ...)
+├── ignore/        # Контроллер .skycodeignore
+├── mentions/      # @-упоминания в чате
+└── permissions/   # Контроль доступа: CommandPermissionController + CommandSafetyClassifier
 ```
 
-## Key Subsystems
+## Ключевые подсистемы
 
-### Task Lifecycle
+### Жизненный цикл задачи
 
 ```
 Controller.initTask()
     → new Task(taskId, ...)
     → Task.startTask() / resumeTaskFromHistory()
         → say("text", task) → startCheckpoint(messageTs)
-        → recursivelyMakeSkycodeRequests() — main AI loop
-            → attemptApiRequest() — stream chunks
+        → recursivelyMakeSkycodeRequests() — основной цикл AI
+            → attemptApiRequest() — потоковая передача чанков
             → parseAssistantMessage()
-            → executeTool() — write_to_file, replace_text, bash, etc.
-            → ask("completion_result") — wait for user
-        → User feedback → startCheckpoint(feedbackTs) — new ResponseGroup
+            → executeTool() — write_to_file, replace_text, bash и т.д.
+            → ask("completion_result") — ожидание пользователя
+        → Обратная связь → startCheckpoint(feedbackTs) — новая ResponseGroup
 ```
 
 ### DiffSystem v4 (`src/core/diff-v2/`)
 
-Cursor-like inline diffs with per-message snapshots. See [Diff System](../systems/diff-system.md).
+Cursor-подобные inline-диффы с per-message снапшотами. См. [Diff-система](../systems/diff-system.md).
 
 ```
-DiffSystem (facade)
+DiffSystem (фасад)
 ├── DiffStore — ResponseGroups, FileChanges, Hunks (workspaceState)
-├── FileSnapshotStorage — per-message file snapshots (disk)
-├── HunkApplier — applies changes, reads actual file for removedLines
-├── HunkReverter — reject/accept with \n EOL, parent status cascade
-├── PositionTracker — recalculates positions after edits
-├── SystemEditGuard — distinguishes system edits from manual
-├── InlineDiffRenderer — reactive View Zones + green decorations
-└── KeyboardNavigation — cross-file hunk navigation
+├── FileSnapshotStorage — per-message снапшоты файлов (диск)
+├── HunkApplier — применяет изменения, читает реальный файл для removedLines
+├── HunkReverter — reject/accept с \n EOL, каскад статуса родителя
+├── PositionTracker — пересчёт позиций после правок
+├── SystemEditGuard — отличает системные правки от ручных
+├── InlineDiffRenderer — реактивные View Zones + зелёные декорации
+└── KeyboardNavigation — кросс-файловая навигация по хункам
 ```
 
 ### ApprovalGate (`src/core/session/ApprovalGate.ts`)
 
-Promise-based ask/response mechanism replacing the legacy pWaitFor polling. Includes an early response queue to handle race conditions during message resend.
+Promise-based механизм ask/response, заменивший legacy pWaitFor-опрос. Включает очередь ранних ответов для обработки race condition при пересылке сообщений.
 
 ### Controller (`src/core/controller/index.ts`)
 
-- `initTask()` — create task, set DiffSystem context
-- `cancelTask()` — abort + re-init from history
-- `clearTask()` — finish checkpoint + cleanup
-- `deleteFromMessage()` — rollback + truncate history
-- `retryFromMessage()` — rollback + truncate + auto-resend
+- `initTask()` — создание задачи, установка контекста DiffSystem
+- `cancelTask()` — прерывание + повторная инициализация из истории
+- `clearTask()` — завершение checkpoint + очистка
+- `deleteFromMessage()` — откат + обрезка истории
+- `retryFromMessage()` — откат + обрезка + автоматическая повторная отправка
 
 ### ToolExecutor (`src/core/task/ToolExecutor.ts`)
 
-- Lightweight mode restrictions (XS models: no BASH, no FILE_EDIT)
-- Runtime tool blocking for weak models
-- EditNotebook — Jupyter `.ipynb` cell editing (insert/replace)
+- Ограничения Lightweight-режима (XS-модели: без BASH, без FILE_EDIT)
+- Рантайм-блокировка инструментов для слабых моделей
+- EditNotebook — редактирование ячеек Jupyter `.ipynb` (вставка/замена)
 
 ### Permissions (`src/core/permissions/`)
 
-Access control for agent actions:
+Контроль доступа для действий агента:
 
-- **CommandPermissionController** — environment-based command permissions
-- **CommandSafetyClassifier** — classifies shell commands as safe/unsafe (whitelist approach):
-  - `safe` = read-only (ls, cat, git status, npm test, grep, find, ...)
-  - `unsafe` = everything else (rm, npm install, git push, curl, sudo, ...)
-  - Pipes/chains: ALL segments must be safe
-  - Redirect (`>`, `>>`) = always unsafe
+- **CommandPermissionController** — разрешения команд на основе среды
+- **CommandSafetyClassifier** — классификация shell-команд как safe/unsafe (подход whitelist):
+  - `safe` = только чтение (ls, cat, git status, npm test, grep, find, ...)
+  - `unsafe` = всё остальное (rm, npm install, git push, curl, sudo, ...)
+  - Пайпы/цепочки: ВСЕ сегменты должны быть safe
+  - Перенаправление (`>`, `>>`) = всегда unsafe
 
 ### AutoApprove (`src/core/task/tools/autoApprove.ts`)
 
-Controls whether user confirmation is required before tool execution.
+Контролирует необходимость подтверждения пользователя перед выполнением инструмента.
 
-| Setting | Type | Default | Description |
-|---------|------|---------|-------------|
-| `executeSafeCommands` | boolean | true | Safe commands (read-only) |
-| `executeAllCommands` | boolean | false | All commands |
-| `deleteFiles` | boolean | false | File deletion |
-| `editNotebooks` | boolean | false | Jupyter notebooks |
-| `useBrowser` | boolean | true | Browser automation |
-| `useMcp` | boolean | true | MCP servers |
+| Настройка | Тип | По умолчанию | Описание |
+|-----------|-----|-------------|----------|
+| `executeSafeCommands` | boolean | true | Безопасные команды (только чтение) |
+| `executeAllCommands` | boolean | false | Все команды |
+| `deleteFiles` | boolean | false | Удаление файлов |
+| `editNotebooks` | boolean | false | Jupyter-ноутбуки |
+| `useBrowser` | boolean | true | Автоматизация браузера |
+| `useMcp` | boolean | true | MCP-серверы |
 
-## State Management
+## Управление состоянием
 
-### GlobalState (persists across sessions)
+### GlobalState (сохраняется между сессиями)
 
 ```typescript
 controller.stateManager.setGlobalState("key", value)
 controller.stateManager.getGlobalStateKey("key")
 ```
 
-### Secrets (secure storage)
+### Secrets (безопасное хранилище)
 
 ```typescript
 context.secrets.store("apiKey", value)
 context.secrets.get("apiKey")
 ```
 
-### Task State (per task, filesystem)
+### Task State (по задаче, файловая система)
 
 ```
 ~/.skycode/tasks/{taskId}/
@@ -122,7 +122,7 @@ context.secrets.get("apiKey")
 └── skycode_messages.json
 ```
 
-### DiffStore (per workspace, workspaceState)
+### DiffStore (по workspace, workspaceState)
 
 ```
 skycode.diff.v3.responseGroups  — ResponseGroup[]

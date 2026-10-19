@@ -1,65 +1,65 @@
-> **Русская версия:** [context-management.md](../ru/architecture/context-management.md)
+> **English version:** [context-management.md](../en/architecture/context-management.md)
 
-# Context Management
+# Управление контекстом
 
-How Skycode handles chat history accumulation, when and why context compression happens.
+Как Skycode управляет накоплением истории чата, когда и почему происходит сжатие контекста.
 
-## The Problem
+## Проблема
 
-During extended chat sessions, message history grows continuously: every user prompt, model response, and tool call result accumulates in `apiConversationHistory`. Models have limited context windows (64k–200k tokens), and exceeding the limit causes API errors.
+Во время длительных сессий чата история сообщений непрерывно растёт: каждый промпт пользователя, ответ модели и результат вызова инструмента накапливаются в `apiConversationHistory`. Модели имеют ограниченные контекстные окна (64k–200k токенов), и превышение лимита вызывает ошибки API.
 
-## Two Compression Strategies
+## Две стратегии сжатия
 
-### 1. Legacy Truncation
+### 1. Legacy Truncation (обрезка)
 
-Active when `useAutoCondense = false` or the model doesn't support summarization.
+Активна при `useAutoCondense = false` или когда модель не поддерживает суммаризацию.
 
-**Algorithm:**
-1. After each API request, checks if `totalTokens >= maxAllowedSize`
-2. If threshold exceeded — first attempts to optimize file reads (`attemptFileReadOptimizationCore`): duplicate reads of the same file are replaced with stubs
-3. If optimization saved < 30% — performs truncation: removes messages from the middle of history (preserves first user/assistant pair and recent messages)
-4. Inserts a notice into the first assistant message about deleted history
+**Алгоритм:**
+1. После каждого API-запроса проверяет `totalTokens >= maxAllowedSize`
+2. При превышении порога — сначала пытается оптимизировать чтение файлов (`attemptFileReadOptimizationCore`): дублирующие чтения одного файла заменяются заглушками
+3. Если оптимизация сэкономила < 30% — выполняет обрезку: удаляет сообщения из середины истории (сохраняет первую пару user/assistant и недавние сообщения)
+4. Вставляет уведомление в первое сообщение ассистента об удалённой истории
 
-**Buffer calculation** (reserves space for response generation):
+**Расчёт буфера** (резерв для генерации ответа):
 
 ```
 contextWindow  64k  → maxAllowed = 64k  - 27k = 37k
 contextWindow 128k  → maxAllowed = 128k - 30k = 98k
 contextWindow 200k  → maxAllowed = 200k - 40k = 160k
-default             → maxAllowed = max(contextWindow - 40k, contextWindow * 0.8)
+по умолчанию        → maxAllowed = max(contextWindow - 40k, contextWindow * 0.8)
 ```
 
-### 2. Auto-Condensation (Summarization)
+### 2. Auto-Condensation (суммаризация)
 
-Active when `useAutoCondense = true` AND the model supports tool calls.
+Активна при `useAutoCondense = true` И модель поддерживает вызовы инструментов.
 
-**Algorithm:**
-1. Before each API request, checks `shouldCompactContextWindow()`
-2. If threshold exceeded — first attempts file read optimization
-3. If insufficient — appends a `summarizeTask` prompt to the user message
-4. The model generates a structured summary via `summarize_task` tool call:
-   - Primary task and user intentions
-   - Technical decisions and patterns
-   - Modified files and key code
-   - Unresolved tasks and next step
-   - "Required Files" list for automatic re-reading
-5. `SummarizeTaskHandler` replaces the entire old history with the summary as a continuation prompt, and automatically re-reads up to 8 files from the Required Files list
+**Алгоритм:**
+1. Перед каждым API-запросом проверяет `shouldCompactContextWindow()`
+2. При превышении порога — сначала пытается оптимизировать чтение файлов
+3. Если недостаточно — добавляет промпт `summarizeTask` к сообщению пользователя
+4. Модель генерирует структурированное резюме через вызов инструмента `summarize_task`:
+   - Основная задача и намерения пользователя
+   - Технические решения и паттерны
+   - Изменённые файлы и ключевой код
+   - Нерешённые задачи и следующий шаг
+   - Список "Required Files" для автоматического перечитывания
+5. `SummarizeTaskHandler` заменяет всю старую историю на резюме как continuation prompt и автоматически перечитывает до 8 файлов из списка Required Files
 
-**Threshold configuration:**
-- `autoCondenseThreshold` — value from 0 to 1, default **0.75**
-- UI: click the context window progress bar in the chat header
-- Keyboard: ←/→ (5% step), Shift+←/→ (10% step)
+**Настройка порога:**
+- `autoCondenseThreshold` — значение от 0 до 1, по умолчанию **0.75**
+- UI: клик по прогресс-бару контекстного окна в шапке чата
+- Клавиатура: ←/→ (шаг 5%), Shift+←/→ (шаг 10%)
 
-## Error Handling
+## Обработка ошибок
 
-If context still overflows despite optimizations, `context-error-handling.ts` detects provider-specific errors (OpenAI, Anthropic, OpenRouter, Bedrock, etc.) and triggers graceful recovery.
+Если контекст всё равно переполняется несмотря на оптимизации, `context-error-handling.ts` определяет специфичные для провайдера ошибки (OpenAI, Anthropic, OpenRouter, Bedrock и др.) и запускает восстановление.
 
-## Key Files
+## Ключевые файлы
 
-| File | Purpose |
-|------|---------|
-| `src/core/context/context-management/ContextManager.ts` | Main logic: threshold check, file optimization, truncation |
-| `src/core/context/context-management/context-window-utils.ts` | `contextWindow` and `maxAllowedSize` calculation |
-| `src/core/context/context-management/context-error-handling.ts` | Provider error detection |
-| `src/core/prompts/contextManagement.ts` | `summarizeTask` prompt for LLM summarization |
-| `src/core/task/tools/handlers/SummarizeTaskHandler.ts` | `summarize_task` tool call handler |
+| Файл | Назначение |
+|------|-----------|
+| `src/core/context/context-management/ContextManager.ts` | Основная логика: проверка порога, оптимизация файлов, обрезка |
+| `src/core/context/context-management/context-window-utils.ts` | Расчёт `contextWindow` и `maxAllowedSize` |
+| `src/core/context/context-management/context-error-handling.ts` | Определение ошибок провайдеров |
+| `src/core/prompts/contextManagement.ts` | Промпт `summarizeTask` для суммаризации LLM |
+| `src/core/task/tools/handlers/SummarizeTaskHandler.ts` | Обработчик вызова `summarize_task` |

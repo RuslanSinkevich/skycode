@@ -1,76 +1,194 @@
-# Visual Studio Code - Open Source ("Code - OSS")
-[![Feature Requests](https://img.shields.io/github/issues/microsoft/vscode/feature-request.svg)](https://github.com/microsoft/vscode/issues?q=is%3Aopen+is%3Aissue+label%3Afeature-request+sort%3Areactions-%2B1-desc)
-[![Bugs](https://img.shields.io/github/issues/microsoft/vscode/bug.svg)](https://github.com/microsoft/vscode/issues?utf8=✓&q=is%3Aissue+is%3Aopen+label%3Abug)
+# Skycode AI
 
-## The Repository
+> English version: [README.en.md](README.en.md)
 
-This repository ("`Code - OSS`") is where we (Microsoft) develop the [Visual Studio Code](https://code.visualstudio.com) product together with the community. Not only do we work on code and issues here, but we also publish our [roadmap](https://github.com/microsoft/vscode/wiki/Roadmap), [monthly iteration plans](https://github.com/microsoft/vscode/wiki/Iteration-Plans), and our [endgame plans](https://github.com/microsoft/vscode/wiki/Running-the-Endgame). This source code is available to everyone under the standard [MIT license](https://github.com/microsoft/vscode/blob/main/LICENSE.txt).
+**AI-редактор кода на основе VS Code — открытая альтернатива Cursor**
 
-## Visual Studio Code
+Skycode — форк VS Code с глубоко встроенным AI-агентом. В отличие от расширений (Copilot, Continue и др.), AI здесь часть самого редактора — это даёт полный контроль над UX, производительностью и безопасностью.
 
 <p align="center">
-  <img alt="VS Code in action" src="https://github.com/user-attachments/assets/56af271c-949d-454c-a3ea-16188c063414">
+  <img src="./docs/skycode/hero-demo.gif" alt="Skycode AI в работе" width="900">
 </p>
 
-[Visual Studio Code](https://code.visualstudio.com) is a distribution of the `Code - OSS` repository with Microsoft-specific customizations released under a traditional [Microsoft product license](https://code.visualstudio.com/License/).
+<p align="center">
+  <a href="https://ruslansinkevich.ru/#skycode">Сайт</a> ·
+  <a href="#документация">Документация</a> ·
+  <a href="./README.en.md">English</a> ·
+  <a href="https://github.com/RuslanSinkevich/skycode">GitHub</a>
+</p>
 
-[Visual Studio Code](https://code.visualstudio.com) combines the simplicity of a code editor with what developers need for their core edit-build-debug cycle. It provides comprehensive code editing, navigation, and understanding support along with lightweight debugging, a rich extensibility model, and lightweight integration with existing tools.
+---
 
-Visual Studio Code is updated monthly with new features and bug fixes. You can download it for Windows, macOS, and Linux on the [Visual Studio Code website](https://code.visualstudio.com/Download). To get the latest releases every day, install the [Insiders build](https://code.visualstudio.com/insiders).
+## Возможности
 
-## Contributing
+### AI-агент с 30+ инструментами
 
-There are many ways in which you can participate in this project, for example:
+| Возможность | Описание |
+|-----------|-------------|
+| **Чтение и правка файлов** | Создание файлов, замена блоков, патчи |
+| **Выполнение команд** | Терминал: сборка, тесты, git, npm, Docker |
+| **Семантический поиск** | Поиск по смыслу по всей кодовой базе (локальные embeddings) |
+| **Поиск по regex** | Быстрый поиск по шаблону через ripgrep |
+| **Веб-поиск** | Поиск информации в интернете |
+| **Автоматизация браузера** | Puppeteer: скриншоты, клики, заполнение форм |
+| **MCP-интеграции** | Подключение внешних сервисов (Context7, базы данных, API) |
+| **Диагностика** | Чтение ошибок ESLint, TypeScript и других линтеров |
+| **Jupyter Notebooks** | Создание и редактирование ячеек |
 
-* [Submit bugs and feature requests](https://github.com/microsoft/vscode/issues), and help us verify them as they are checked in
-* Review [source code changes](https://github.com/microsoft/vscode/pulls)
-* Review the [documentation](https://github.com/microsoft/vscode-docs) and make pull requests for anything from typos to new content.
+### 5 режимов работы
 
-If you are interested in fixing issues and contributing directly to the codebase, please see the document [How to Contribute](https://github.com/microsoft/vscode/wiki/How-to-Contribute), which covers the following:
+| Режим | Назначение | Инструменты |
+|------|---------|-------|
+| **Act** | По умолчанию. Выполнение задач, правка файлов, запуск команд | Все |
+| **Ask** | Изучение кода, ответы на вопросы | Только чтение |
+| **Plan** | Сбор информации, проектирование решения | Только чтение + `plan_mode_respond` |
+| **Debug** | Систематическая отладка на реальных данных выполнения | Только чтение + `execute_command` |
+| **Chat** | Обычный разговор на любую тему | Только чтение (по явной просьбе) |
 
-* [How to build and run from source](https://github.com/microsoft/vscode/wiki/How-to-Contribute)
-* [The development workflow, including debugging and running tests](https://github.com/microsoft/vscode/wiki/How-to-Contribute#debugging)
-* [Coding guidelines](https://github.com/microsoft/vscode/wiki/Coding-Guidelines)
-* [Submitting pull requests](https://github.com/microsoft/vscode/wiki/How-to-Contribute#pull-requests)
-* [Finding an issue to work on](https://github.com/microsoft/vscode/wiki/How-to-Contribute#where-to-contribute)
-* [Contributing to translations](https://aka.ms/vscodeloc)
+Агент может сам переключаться между режимами по ходу разговора.
 
-## Feedback
+### Inline Diff System v4
 
-* Ask a question on [Stack Overflow](https://stackoverflow.com/questions/tagged/vscode)
-* [Request a new feature](CONTRIBUTING.md)
-* Upvote [popular feature requests](https://github.com/microsoft/vscode/issues?q=is%3Aopen+is%3Aissue+label%3Afeature-request+sort%3Areactions-%2B1-desc)
-* [File an issue](https://github.com/microsoft/vscode/issues)
-* Connect with the extension author community on [GitHub Discussions](https://github.com/microsoft/vscode-discussions/discussions) or [Slack](https://aka.ms/vscode-dev-community)
-* Follow [@code](https://x.com/code) and let us know what you think!
+- Изменения от AI показываются **прямо в редакторе** (зелёное — добавлено, красное — удалено)
+- Кнопки **Принять / Отклонить** для каждого блока изменений
+- Снимки состояния на каждое сообщение для точного отката
+- Навигация между ожидающими изменениями в разных файлах
+- 217 unit-тестов покрывают весь diff-движок
 
-See our [wiki](https://github.com/microsoft/vscode/wiki/Feedback-Channels) for a description of each of these channels and information on some other available community-driven channels.
+### Семантический поиск по коду
 
-## Related Projects
+- **Локальный индекс embeddings** по всему проекту (transformers.js, WASM, без интернета)
+- Гибридный поиск: семантический + по ключевым словам + переранжирование
+- Инкрементальное обновление через FileWatcher
+- Опционально — удалённый API (OpenAI-совместимый)
 
-Many of the core components and extensions to VS Code live in their own repositories on GitHub. For example, the [node debug adapter](https://github.com/microsoft/vscode-node-debug) and the [mono debug adapter](https://github.com/microsoft/vscode-mono-debug) repositories are separate from each other. For a complete list, please visit the [Related Projects](https://github.com/microsoft/vscode/wiki/Related-Projects) page on our [wiki](https://github.com/microsoft/vscode/wiki).
+### 40+ API-провайдеров
 
-## Bundled Extensions
+- **OpenAI** — GPT-4o, o1, o3
+- **Anthropic** — Claude Sonnet, Opus, Haiku
+- **Google** — Gemini 2.5 Pro/Flash
+- **GigaChat** — нативные function calls (Сбер)
+- **YandexGPT** — YandexGPT 5 Pro/Lite
+- **Open-source** — Qwen, DeepSeek, Llama, Mistral
+- **OpenRouter** — агрегатор 200+ моделей
+- Любой **OpenAI-совместимый** API (Ollama, LM Studio, vLLM)
 
-VS Code includes a set of built-in extensions located in the [extensions](extensions) folder, including grammars and snippets for many languages. Extensions that provide rich language support (inline suggestions, Go to Definition) for a language have the suffix `language-features`. For example, the `json` extension provides coloring for `JSON` and the `json-language-features` extension provides rich language support for `JSON`.
+### Голосовой ввод
 
-## Development Container
+Офлайн-распознавание речи (Whisper, 50+ языков). Интернет не нужен.
 
-This repository includes a Visual Studio Code Dev Containers / GitHub Codespaces development container.
+### Облегчённый режим
 
-* For [Dev Containers](https://aka.ms/vscode-remote/download/containers), use the **Dev Containers: Clone Repository in Container Volume...** command, which creates a Docker volume for better disk I/O on macOS and Windows.
-  * If you already have VS Code and Docker installed, you can also click [here](https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url=https://github.com/microsoft/vscode) to get started. This will cause VS Code to automatically install the Dev Containers extension if needed, clone the source code into a container volume, and spin up a dev container for use.
+Упрощённые промпты и инструменты для слабых и бесплатных моделей. 11 вариантов промптов, оптимизированных под конкретные семейства моделей.
 
-* For Codespaces, install the [GitHub Codespaces](https://marketplace.visualstudio.com/items?itemName=GitHub.codespaces) extension in VS Code, and use the **Codespaces: Create New Codespace** command.
+---
 
-Docker / the Codespace should have at least **4 cores and 6 GB of RAM (8 GB recommended)** to run a full build. See the [development container README](.devcontainer/README.md) for more information.
+## Быстрый старт
 
-## Code of Conduct
+```bash
+# Клонировать
+git clone https://github.com/RuslanSinkevich/skycode.git
+cd skycode
 
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/). For more information, see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+# Установить зависимости
+npm install
 
-## License
+# Запуск (режим разработки)
+# Windows:
+.\scripts\code.bat
+# macOS/Linux:
+./scripts/code.sh
+```
 
-Copyright (c) Microsoft Corporation. All rights reserved.
+### Сборка расширения
 
-Licensed under the [MIT](LICENSE.txt) license.
+```bash
+cd extensions/skycode/webview-ui
+npm run build          # UI
+
+cd ..
+node esbuild.mjs      # Бэкенд
+```
+
+Откройте панель Skycode на боковой панели → настройте API-провайдера → начинайте работать.
+
+---
+
+## Архитектура
+
+```
+┌──────────────────────────────────────────────┐
+│  VS Code Fork                                 │
+│  ┌──────────────────────────────────────┐    │
+│  │  Skycode Extension                    │    │
+│  │  ┌────────┐ ┌──────┐ ┌───────────┐  │    │
+│  │  │ Agent  │ │ Diff │ │ Indexing  │  │    │
+│  │  │ Loop   │ │ v4   │ │ (SQLite)  │  │    │
+│  │  └───┬────┘ └──────┘ └───────────┘  │    │
+│  │      ↓                               │    │
+│  │  ┌────────┐ ┌──────┐ ┌───────────┐  │    │
+│  │  │ 40+   │ │ MCP  │ │ Prompts   │  │    │
+│  │  │ APIs  │ │ Hub  │ │ Engine    │  │    │
+│  │  └────────┘ └──────┘ └───────────┘  │    │
+│  └──────────────────────────────────────┘    │
+│                    ↕ gRPC                     │
+│  ┌──────────────────────────────────────┐    │
+│  │  Webview UI (React, 230+ components) │    │
+│  └──────────────────────────────────────┘    │
+└──────────────────────────────────────────────┘
+```
+
+| Компонент | Технология |
+|-----------|-----------|
+| Редактор | Форк VS Code |
+| Связь | gRPC + Protobuf |
+| UI чата | React (230+ компонентов) |
+| Разбор кода | Tree-sitter (16 языков) |
+| Поиск | Индекс embeddings + ripgrep |
+| Аналитика | PostHog + OpenTelemetry (только с согласия) |
+
+---
+
+## Документация
+
+> **English documentation:** [docs/skycode/en/](./docs/skycode/en/architecture/overview.md)
+
+### Архитектура
+- [Обзор архитектуры](./docs/skycode/architecture/overview.md)
+- [Модуль Core](./docs/skycode/architecture/core.md)
+- [Управление контекстом](./docs/skycode/architecture/context-management.md)
+
+### Системы
+- [Inline Diff System v4](./docs/skycode/systems/diff-system.md)
+- [Индексация кодовой базы](./docs/skycode/systems/indexing-system.md)
+- [Интеграция MCP](./docs/skycode/systems/mcp.md)
+
+### Разработка
+- [Руководство по разработке](./docs/skycode/development/getting-started.md)
+- [Добавление инструментов агента](./docs/skycode/development/adding-tools.md)
+- [Сетевые запросы и прокси](./docs/skycode/development/network.md)
+- [Добавление настроек](./docs/skycode/development/adding-settings.md)
+- [Патчи форка VS Code](./docs/skycode/development/fork-patches.md)
+
+---
+
+## Участие в разработке
+
+Настройка окружения, стиль кода и правила PR — в [CONTRIBUTING.md](./CONTRIBUTING.md).
+
+---
+
+## Благодарности
+
+Skycode построен на нескольких open-source проектах:
+
+- [VS Code](https://github.com/microsoft/vscode) (MIT) — основа редактора
+- [Cline](https://github.com/cline/cline) (Apache 2.0) — исходная архитектура расширения
+- [Continue](https://github.com/continuedev/continue) (Apache 2.0) — локальный pipeline embeddings
+- [Kilocode](https://github.com/Kilo-Org/kilocode) (Apache 2.0 / MIT) — паттерны работы с инструментами
+
+Полный список — в [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).
+
+## Лицензия
+
+[Apache License 2.0](./LICENSE)

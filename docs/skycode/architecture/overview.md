@@ -1,14 +1,14 @@
-> **Русская версия:** [overview.md](../ru/architecture/overview.md)
+> **English version:** [overview.md](../en/architecture/overview.md)
 
-# Architecture Overview
+# Обзор архитектуры
 
-Skycode AI is a VS Code extension consisting of three major subsystems:
+Skycode AI — расширение VS Code, состоящее из трёх основных подсистем:
 
-- **Core Extension** — Node.js backend: agent loop, tool execution, API providers, diff engine
-- **Webview UI** — React frontend: chat interface, settings, history
-- **Indexing Subsystem** — semantic code search with local embeddings
+- **Core Extension** — Node.js бэкенд: цикл агента, выполнение инструментов, API-провайдеры, diff-движок
+- **Webview UI** — React фронтенд: чат-интерфейс, настройки, история
+- **Indexing Subsystem** — семантический поиск по коду с локальными эмбеддингами
 
-## High-Level Diagram
+## Диаграмма верхнего уровня
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -17,86 +17,87 @@ Skycode AI is a VS Code extension consisting of three major subsystems:
 │  │  Core Extension                                          │   │
 │  │  ┌──────────────┐  ┌────────────┐  ┌─────────────────┐  │   │
 │  │  │ Extension.ts │→ │ Webview    │→ │ Controller      │  │   │
-│  │  │ (entry point)│  │ Provider   │  │ (coordinator)   │  │   │
+│  │  │ (входная     │  │ Provider   │  │ (координатор)   │  │   │
+│  │  │  точка)      │  │            │  │                 │  │   │
 │  │  └──────────────┘  └────────────┘  └────────┬────────┘  │   │
 │  │                                              ↓           │   │
 │  │  ┌──────────────┐  ┌────────────┐  ┌─────────────────┐  │   │
 │  │  │ Indexing     │← │ Task       │← │ API Handlers    │  │   │
-│  │  │ (semantic)   │  │ (agent)    │  │ (40+ providers) │  │   │
+│  │  │ (семантика)  │  │ (агент)    │  │ (40+ провайд.)  │  │   │
 │  │  └──────────────┘  └────────────┘  └─────────────────┘  │   │
 │  │          ↑                                  ↓           │   │
 │  │  ┌───────┴──────┐                  ┌─────────────────┐  │   │
 │  │  │ Storage      │                  │ McpHub          │  │   │
-│  │  │ (SQLite/JSON)│                  │ (MCP servers)   │  │   │
+│  │  │ (SQLite/JSON)│                  │ (MCP серверы)   │  │   │
 │  │  └──────────────┘                  └─────────────────┘  │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │                              ↕ gRPC / postMessage               │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │  Webview UI (React)                                      │   │
 │  │  ┌──────────────────┐  ┌─────────────────────────────┐  │   │
-│  │  │ ExtensionState   │→ │ React Components            │  │   │
-│  │  │ Context          │  │ (Chat, Settings, History)   │  │   │
+│  │  │ ExtensionState   │→ │ React-компоненты            │  │   │
+│  │  │ Context          │  │ (Чат, Настройки, История)   │  │   │
 │  │  └──────────────────┘  └─────────────────────────────┘  │   │
 │  └─────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Key Components
+## Ключевые компоненты
 
-### Extension Entry (`src/extension.ts`)
+### Входная точка (`src/extension.ts`)
 
-Activation point. Creates the WebviewProvider and registers commands.
+Точка активации. Создаёт WebviewProvider и регистрирует команды.
 
 ### WebviewProvider (`src/core/webview/index.ts`)
 
-Manages the webview lifecycle: HTML generation with CSP headers, message routing, HMR for development.
+Управление жизненным циклом webview: генерация HTML с CSP-заголовками, маршрутизация сообщений, HMR для разработки.
 
 ### Controller (`src/core/controller/index.ts`)
 
-Central coordinator:
-- State management (GlobalState, Secrets)
-- Task creation and lifecycle
-- MCP server coordination
-- State synchronization with the webview
+Центральный координатор:
+- Управление состоянием (GlobalState, Secrets)
+- Создание и жизненный цикл задач
+- Координация MCP-серверов
+- Синхронизация состояния с webview
 
 ### Task (`src/core/task/index.ts`)
 
-Executes AI agent tasks:
-- API requests to model providers
-- Tool execution (files, terminal, browser, MCP)
-- Response streaming and parsing
-- Context management
+Выполнение AI-задач:
+- API-запросы к провайдерам моделей
+- Выполнение инструментов (файлы, терминал, браузер, MCP)
+- Потоковая обработка и парсинг ответов
+- Управление контекстом
 
 ### API Handlers (`src/core/api/`)
 
-40+ model providers: Anthropic (Claude), OpenAI (GPT-4o, o1, o3), Google (Gemini), OpenRouter, AWS Bedrock, Ollama, LM Studio, GigaChat, YandexGPT, and any OpenAI-compatible API.
+40+ провайдеров моделей: Anthropic (Claude), OpenAI (GPT-4o, o1, o3), Google (Gemini), OpenRouter, AWS Bedrock, Ollama, LM Studio, GigaChat, YandexGPT и любой OpenAI-совместимый API.
 
 ### McpHub (`src/services/mcp/McpHub.ts`)
 
-MCP server manager: connects to external MCP servers, manages tools and resources, handles auto-approval settings.
+Менеджер MCP-серверов: подключение к внешним MCP-серверам, управление инструментами и ресурсами, настройки автоматического подтверждения.
 
-## Data Flows
+## Потоки данных
 
-### Task Execution
-
-```
-User Input → Controller.initTask()
-                    ↓
-            Task.initiateTaskLoop()
-                    ↓
-            attemptApiRequest() → API Provider
-                    ↓
-            Stream Response → parseAssistantMessage()
-                    ↓
-            Tool Execution → presentAssistantMessage()
-                    ↓
-            Tool Result → Continue Loop or Complete
-```
-
-### State Synchronization
+### Выполнение задачи
 
 ```
-Extension State Change
+Ввод пользователя → Controller.initTask()
+                          ↓
+                  Task.initiateTaskLoop()
+                          ↓
+                  attemptApiRequest() → API Provider
+                          ↓
+                  Stream Response → parseAssistantMessage()
+                          ↓
+                  Выполнение инструмента → presentAssistantMessage()
+                          ↓
+                  Результат → Продолжить цикл или завершить
+```
+
+### Синхронизация состояния
+
+```
+Изменение состояния расширения
         ↓
 Controller.postStateToWebview()
         ↓
@@ -104,32 +105,32 @@ gRPC Message → Webview
         ↓
 ExtensionStateContext.setState()
         ↓
-React Components Re-render
+React-компоненты перерисовываются
 ```
 
-## Data Storage
+## Хранение данных
 
-| Type | Storage | Purpose |
-|------|---------|---------|
-| API keys | VS Code Secrets | Secure credential storage |
-| Settings | GlobalState | Persistent user preferences |
-| Task history | Filesystem | JSON files per taskId (`~/.skycode/tasks/`) |
-| Search index | SQLite | Embeddings and chunk metadata (`~/.skycode/indexing/`) |
+| Тип | Хранилище | Назначение |
+|-----|-----------|-----------|
+| API-ключи | VS Code Secrets | Безопасное хранение учётных данных |
+| Настройки | GlobalState | Персистентные пользовательские настройки |
+| История задач | Файловая система | JSON-файлы по taskId (`~/.skycode/tasks/`) |
+| Поисковый индекс | SQLite | Эмбеддинги и метаданные чанков (`~/.skycode/indexing/`) |
 
-## Operating Modes
+## Режимы работы
 
-| Mode | Purpose | Tools Available |
-|------|---------|----------------|
-| **Act** (default) | Execute tasks, edit files, run commands | All |
-| **Ask** | Explore code, answer questions | Read-only |
-| **Plan** | Gather info, ask questions, design approach | Read-only + `plan_mode_respond` |
-| **Debug** | Systematic debugging with runtime evidence | Read-only + `execute_command` |
-| **Chat** | General conversation, any topic | Read-only (only on explicit request) |
+| Режим | Назначение | Доступные инструменты |
+|-------|-----------|----------------------|
+| **Act** (по умолчанию) | Выполнение задач, редактирование файлов, запуск команд | Все |
+| **Ask** | Исследование кода, ответы на вопросы | Только чтение |
+| **Plan** | Сбор информации, проектирование подхода | Только чтение + `plan_mode_respond` |
+| **Debug** | Систематическая отладка с доказательствами | Только чтение + `execute_command` |
+| **Chat** | Общий диалог, любая тема | Только чтение (по явному запросу) |
 
-The agent can dynamically switch between modes during a conversation.
+Агент может динамически переключаться между режимами во время диалога.
 
-## See Also
+## См. также
 
-- [Core Module](./core.md)
-- [Diff System](../systems/diff-system.md)
-- [Indexing System](../systems/indexing-system.md)
+- [Модуль Core](./core.md)
+- [Diff-система](../systems/diff-system.md)
+- [Система индексации](../systems/indexing-system.md)

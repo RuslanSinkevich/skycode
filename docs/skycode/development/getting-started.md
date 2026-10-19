@@ -1,122 +1,122 @@
-> **Русская версия:** [getting-started.md](../ru/development/getting-started.md)
+> **English version:** [getting-started.md](../en/development/getting-started.md)
 
-# Development Guide
+# Руководство по разработке
 
-## Prerequisites
+## Требования
 
-- Node.js — the exact version in `vscode/.nvmrc` (24.18.0 as of upstream 1.136.1).
-  `build/npm/preinstall.ts` enforces it and refuses to install on an older one.
-- Python 3.x (for VS Code native module builds)
-- C++ build tools (Visual Studio Build Tools on Windows)
-- Git, with Git LFS installed
+- Node.js — ровно та версия, что указана в `vscode/.nvmrc` (24.18.0 на upstream 1.136.1).
+  `build/npm/preinstall.ts` проверяет её и отказывается ставить зависимости на более старой.
+- Python 3.x (для сборки нативных модулей VS Code)
+- C++ build tools (Visual Studio Build Tools на Windows)
+- Git с установленным Git LFS
 
-## Quick Start
+## Быстрый старт
 
 ```bash
-# Clone
+# Клонирование
 git clone https://github.com/RuslanSinkevich/skycode.git
 cd skycode/vscode
 
-# Install dependencies (Windows: see the toolset note below first)
+# Установка зависимостей (на Windows сначала прочитай раздел про тулсет ниже)
 npm install
 
-# Launch in development mode
+# Запуск в режиме разработки
 # Windows:
 .scriptscode.bat
 # macOS/Linux:
 ./scripts/code.sh
 ```
 
-## Windows: pin the MSVC toolset
+## Windows: пин тулсета MSVC
 
-Every command that builds native modules must run with `VCToolsVersion` pinned:
+Любая команда, собирающая нативные модули, должна запускаться с пином `VCToolsVersion`:
 
 ```bash
 VCToolsVersion=14.41.34120 npm ci
 ```
 
-Electron 42 (upstream 1.123.2 and later) requires Spectre-mitigated MSVC libraries. Those
-are an optional Visual Studio component and are usually installed for **one** toolset
-only, while MSBuild defaults to the newest one it finds — so the build dies with
-`MSB8040: this project requires the Spectre-mitigated libraries`.
+Electron 42 (upstream 1.123.2 и новее) требует Spectre-mitigated библиотек MSVC. Это
+необязательный компонент Visual Studio, и обычно он установлен только для **одного**
+тулсета, тогда как MSBuild по умолчанию берёт самый новый из найденных — сборка падает с
+`MSB8040: для этого проекта требуются библиотеки с устранением рисков Spectre`.
 
-Check which toolsets actually have them:
+Посмотреть, у каких тулсетов они реально есть:
 
 ```bash
 ls "/c/Program Files/Microsoft Visual Studio/"*/*/VC/Tools/MSVC/*/lib/spectre
 ```
 
-Pin `VCToolsVersion` to a version that appears in that listing. Installing the Spectre
-libs for the newest toolset through the Visual Studio Installer works too, but is a
-multi-gigabyte download. The pin does not persist between shells — put it in the same
-command, every time.
+Пини `VCToolsVersion` на версию из этого списка. Доустановить Spectre-библиотеки для
+нового тулсета через Visual Studio Installer тоже можно, но это закачка на несколько
+гигабайт. Пин не сохраняется между запусками терминала — указывай его в той же команде
+каждый раз.
 
-## Reinstalling dependencies after an upstream merge
+## Переустановка зависимостей после мержа upstream
 
-`npm ci` only cleans the **root** `node_modules`. Every folder under `extensions/` keeps
-its own tree, so after an upstream version bump they are left holding stale packages —
-typically an old `@types/node`, which makes `npm run compile` fail in files the merge
-never touched.
+`npm ci` чистит только **корневой** `node_modules`. У каждой папки внутри `extensions/`
+своё дерево, поэтому после смены версии upstream там остаются старые пакеты — обычно
+устаревший `@types/node`, из-за которого `npm run compile` падает в файлах, которых мерж
+вообще не касался.
 
-Refresh them with:
+Обновить их:
 
 ```bash
 VSCODE_FORCE_INSTALL=1 npm_command=install VCToolsVersion=14.41.34120 node build/npm/postinstall.ts
 ```
 
-Both environment variables are load-bearing:
+Обе переменные здесь обязательны:
 
-- `npm_command=install` — `build/npm/postinstall.ts` takes its subcommand from
-  `process.env['npm_command']`. Running it as `npm run postinstall` sets that variable to
-  `run-script`, so the script runs `npm run-script` in each folder, which merely prints the
-  available scripts. It exits 0 having installed nothing. Invoking the file through `node`
-  directly is what lets an explicit value survive.
-- `VSCODE_FORCE_INSTALL=1` — bypasses the up-to-date cache in
-  `node_modules/.postinstall-state`. An interrupted run can leave that cache claiming
-  everything is current.
+- `npm_command=install` — `build/npm/postinstall.ts` берёт подкоманду из
+  `process.env['npm_command']`. При запуске через `npm run postinstall` туда попадает
+  `run-script`, и скрипт выполняет в каждой папке `npm run-script`, который просто
+  печатает список доступных скриптов. Он завершается с кодом 0, не установив ничего.
+  Запуск файла напрямую через `node` — то, что позволяет явному значению уцелеть.
+- `VSCODE_FORCE_INSTALL=1` — обходит кеш актуальности в
+  `node_modules/.postinstall-state`. Прерванный запуск может оставить в этом кеше отметку,
+  что всё уже свежее.
 
-Verify afterwards that a sample extension matches its lockfile:
+После этого проверь, что какое-нибудь расширение соответствует своему лок-файлу:
 
 ```bash
 node -e "console.log(require('./extensions/git/node_modules/@types/node/package.json').version)"
 ```
 
-## Building the Full Distribution
+## Полная сборка дистрибутива
 
 ```bash
 VCToolsVersion=14.41.34120 npm run gulp vscode-win32-x64
 ```
 
-Output goes to `../VSCode-win32-x64` (`Skycode.exe`, not `code.exe`). The task begins by
-deleting that folder, so rename any build you still want before starting.
+Результат — в `../VSCode-win32-x64` (`Skycode.exe`, а не `code.exe`). Задача начинается с
+удаления этой папки, поэтому переименуй предыдущую сборку, если она ещё нужна.
 
-## Building the Extension
+## Сборка расширения
 
 ```bash
-# Build the webview UI
+# Сборка webview UI
 cd vscode/extensions/skycode/webview-ui
 npm run build
 
-# Build the extension backend
+# Сборка бэкенда расширения
 cd ..
 node esbuild.mjs
 ```
 
-## Type Checking
+## Проверка типов
 
 ```bash
 npm run compile
-# or
+# или
 npx tsc --noEmit
 ```
 
-## gRPC / Protobuf Communication
+## gRPC / Protobuf коммуникация
 
-The extension and webview communicate via a gRPC-like protocol.
+Расширение и webview общаются через gRPC-подобный протокол.
 
-### Proto Files
+### Proto-файлы
 
-Location: `proto/skycode/*.proto`
+Расположение: `proto/skycode/*.proto`
 
 ```protobuf
 service MyService { }      // PascalCase
@@ -124,81 +124,86 @@ rpc myMethod() { }         // camelCase
 message MyMessage { }      // PascalCase
 ```
 
-### After Changing Proto Files
+### После изменения Proto-файлов
 
 ```bash
 npm run protos
 ```
 
-Generates types in:
+Генерирует типы в:
+
 - `src/shared/proto/`
 - `src/generated/grpc-js/`
 - `src/generated/nice-grpc/`
 - `src/generated/hosts/`
 
-### Adding a New RPC Method
+### Добавление нового RPC-метода
 
-1. Add to the `.proto` file
-2. Create a handler in `src/core/controller/<domain>/`
-3. Call from webview: `UiServiceClient.myMethod(request)`
+1. Добавить в `.proto` файл
+2. Создать обработчик в `src/core/controller/<domain>/`
+3. Вызвать из webview: `UiServiceClient.myMethod(request)`
 
 ## GlobalState
 
-### Adding a New Key
+### Добавление нового ключа
 
-1. Add a field to `GLOBAL_STATE_FIELDS` in `src/shared/storage/state-keys.ts`:
+1. Добавить поле в `GLOBAL_STATE_FIELDS` в `src/shared/storage/state-keys.ts`:
+
    ```typescript
    const GLOBAL_STATE_FIELDS = {
      myKey: { default: undefined as string | undefined },
    } satisfies FieldDefinitions
    ```
 
-2. Read in `getStateToPostToWebview`:
+2. Считать в `getStateToPostToWebview`:
+
    ```typescript
    myKey: stateManager.getGlobalStateKey("myKey"),
    ```
 
-3. Use:
+3. Использовать:
+
    ```typescript
    controller.stateManager.setGlobalState("myKey", value)
    controller.stateManager.getGlobalStateKey("myKey")
    ```
 
-## Adding an API Provider
+## Добавление API-провайдера
 
-Three places for proto conversion (otherwise it resets to Anthropic):
+Три места для proto-конвертации (иначе сбросится на Anthropic):
 
-1. `proto/skycode/models.proto` — add to `ApiProvider` enum
-2. `convertApiProviderToProto()` in `src/shared/proto-conversions/models/api-configuration-conversion.ts`
-3. `convertProtoToApiProvider()` in the same file
+1. `proto/skycode/models.proto` — добавить в enum `ApiProvider`
+2. `convertApiProviderToProto()` в `src/shared/proto-conversions/models/api-configuration-conversion.ts`
+3. `convertProtoToApiProvider()` в том же файле
 
-Additionally:
-- `src/shared/api.ts` — union type and models
-- `src/shared/providers/providers.json` — for the dropdown
-- `src/core/api/index.ts` — handler in `createHandlerForProvider()`
-- Webview components
+Дополнительно:
+
+- `src/shared/api.ts` — union type и модели
+- `src/shared/providers/providers.json` — для выпадающего списка
+- `src/core/api/index.ts` — обработчик в `createHandlerForProvider()`
+- Webview-компоненты
 
 ## Changesets
 
-For significant user-facing changes:
+Для значимых пользовательских изменений:
 
 ```bash
 npm run changeset
 ```
 
-Create **patch** versions only. Skip for minor fixes, internal refactors, and invisible UI changes.
+Создавать только **patch** версии. Пропускать для мелких фиксов, внутренних рефакторингов и невидимых UI-изменений.
 
-## Regenerating Snapshots
+## Регенерация снапшотов
 
-After changing prompts:
+После изменения промптов:
 
 ```bash
 UPDATE_SNAPSHOTS=true npm run test:unit
 ```
 
-## See Also
+## См. также
 
-- [Adding Tools](./adding-tools.md)
-- [Network Requests](./network.md)
-- [Adding Settings](./adding-settings.md)
-- [Fork Patches](./fork-patches.md)
+- [Добавление инструментов](./adding-tools.md)
+- [Сетевые запросы](./network.md)
+- [Добавление настроек](./adding-settings.md)
+- [Патчи форка](./fork-patches.md)
