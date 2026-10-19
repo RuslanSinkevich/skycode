@@ -1,0 +1,101 @@
+name: Skycode Extension
+
+# [SKYCODE] Сборка и публикация расширения Skycode AI (skycode.skycode-ai).
+#  - push тега ext-vX.Y.Z → проверки, сборка .vsix, публикация в VS Code Marketplace
+#    (секрет VSCE_PAT) и, если задан секрет OVSX_PAT, в Open VSX; .vsix прикладывается к GitHub Release.
+#  - ручной запуск (Actions → Skycode Extension → Run workflow) → только сборка .vsix в артефакты.
+# Версия в теге должна совпадать с "version" в extensions/skycode/package.json.
+# Префикс ext-v — чтобы не пересекаться со сборкой программы (skycode-v*) и тегами upstream VS Code.
+
+on:
+  push:
+    tags: ['ext-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: skycode-extension-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  extension:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: extensions/skycode
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            extensions/skycode/package-lock.json
+            extensions/skycode/webview-ui/package-lock.json
+
+      - name: Version from tag
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF" == refs/tags/ext-v* ]]; then
+            TAG_VERSION="${GITHUB_REF#refs/tags/ext-v}"
+            if [[ "$TAG_VERSION" != "$VERSION" ]]; then
+              echo "::error::Тег ext-v$TAG_VERSION не совпадает с версией в package.json ($VERSION)"
+              exit 1
+            fi
+          fi
+
+      - name: Install dependencies
+        run: |
+          npm ci --no-audit --no-fund
+          cd webview-ui && npm ci --no-audit --no-fund
+
+      # Типы, proto, сборка интерфейса, линт и продакшен-бандл
+      - name: Build
+        run: npm run package
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Package .vsix
+        run: >
+          npx vsce package
+          --readme-path MARKETPLACE.md
+          --baseContentUrl https://github.com/RuslanSinkevich/skycode/tree/main/extensions/skycode
+          --baseImagesUrl https://github.com/RuslanSinkevich/skycode/raw/main/extensions/skycode
+          -o skycode-ai-${{ steps.version.outputs.version }}.vsix
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: skycode-ai-${{ steps.version.outputs.version }}
+          path: extensions/skycode/skycode-ai-${{ steps.version.outputs.version }}.vsix
+
+      - name: Publish to VS Code Marketplace
+        if: startsWith(github.ref, 'refs/tags/ext-v')
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          if [ -z "$VSCE_PAT" ]; then echo "::error::Нет секрета VSCE_PAT"; exit 1; fi
+          npx vsce publish --packagePath skycode-ai-${{ steps.version.outputs.version }}.vsix
+
+      - name: Publish to Open VSX
+        if: startsWith(github.ref, 'refs/tags/ext-v')
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          if [ -z "$OVSX_PAT" ]; then echo "Секрета OVSX_PAT нет — Open VSX пропускаем"; exit 0; fi
+          npx --yes ovsx publish skycode-ai-${{ steps.version.outputs.version }}.vsix -p "$OVSX_PAT"
+
+      - name: GitHub Release
+        if: startsWith(github.ref, 'refs/tags/ext-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Skycode AI ${{ steps.version.outputs.version }}
+          files: extensions/skycode/skycode-ai-${{ steps.version.outputs.version }}.vsix
+          make_latest: true
