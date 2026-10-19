@@ -70,7 +70,7 @@ const AboutView = ({ onDone }: AboutViewProps) => {
 
 					<a
 						className="w-full mb-4"
-						href="https://ruslansinkevich.ru/projects/skycode"
+						href="https://ruslansinkevich.ru/skycode/"
 						rel="noopener noreferrer"
 						style={{ textDecoration: "none" }}
 						target="_blank">
