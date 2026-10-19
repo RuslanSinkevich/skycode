@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react"
 import styled from "styled-components"
 import { useI18n } from "@/i18n"
 import { FileServiceClient } from "@/services/grpc-client"
-import { fixMermaidStyleContrast, quoteMermaidLabels } from "./mermaidFix"
+import { adaptMermaidStyles, quoteMermaidLabels } from "./mermaidFix"
 import { useDebounceEffect } from "@/utils/useDebounceEffect"
 
 // [SKYCODE] Схемы в цветах текущей темы VS Code. Mermaid считает производные цвета сам,
@@ -85,6 +85,20 @@ function useThemeVersion(): number {
 	return version
 }
 
+// [SKYCODE] В чате схема видна целиком: ужимается до ширины колонки, но не мельче ~55% натурального
+// размера (иначе текст не прочитать) — тогда прокрутка вбок. Крупно — кликом во вкладке редактора.
+function fitSvgToColumn(svg: SVGSVGElement | null) {
+	const naturalWidth = svg?.viewBox.baseVal?.width
+	if (!svg || !naturalWidth) {
+		return
+	}
+	svg.removeAttribute("height")
+	svg.style.width = `${naturalWidth}px`
+	svg.style.maxWidth = "100%"
+	svg.style.minWidth = `${Math.round(naturalWidth * 0.55)}px`
+	svg.style.height = "auto"
+}
+
 interface MermaidBlockProps {
 	code: string
 }
@@ -109,7 +123,7 @@ export default function MermaidBlock({ code }: MermaidBlockProps) {
 			// [SKYCODE] Если схема не разобралась — пробуем ещё раз с подписями в кавычках
 			initMermaidForTheme()
 			// Цвет текста на окрашенных моделью блоках подбираем под заливку — всегда, не только при ошибке
-			const contrastCode = fixMermaidStyleContrast(code)
+			const contrastCode = adaptMermaidStyles(code, !document.body.classList.contains("vscode-light"))
 			const pickValidCode = async (): Promise<string> => {
 				if (await mermaid.parse(contrastCode, { suppressErrors: true })) {
 					return contrastCode
@@ -128,6 +142,7 @@ export default function MermaidBlock({ code }: MermaidBlockProps) {
 				.then(({ svg }) => {
 					if (containerRef.current) {
 						containerRef.current.innerHTML = svg
+						fitSvgToColumn(containerRef.current.querySelector("svg"))
 					}
 				})
 				.catch((err) => {
@@ -160,7 +175,15 @@ export default function MermaidBlock({ code }: MermaidBlockProps) {
 		if (!svgEl) {
 			return
 		}
-		const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:var(--vscode-editor-background)}body{padding:24px;box-sizing:border-box}svg{display:block;margin:0 auto;max-width:100%;height:auto}</style></head><body>${svgEl.outerHTML}</body></html>`
+		// Во вкладке — натуральный размер (текст читаемый), большая схема прокручивается
+		const clone = svgEl.cloneNode(true) as SVGSVGElement
+		clone.removeAttribute("style")
+		const naturalWidth = svgEl.viewBox.baseVal?.width
+		if (naturalWidth) {
+			clone.setAttribute("width", String(naturalWidth))
+			clone.setAttribute("height", String(svgEl.viewBox.baseVal.height))
+		}
+		const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:var(--vscode-editor-background)}body{padding:24px;box-sizing:border-box;width:max-content;min-width:100%}svg{display:block;margin:0 auto}</style></head><body>${clone.outerHTML}</body></html>`
 		FileServiceClient.openVisual(StringRequest.create({ value: JSON.stringify({ title: t("mermaid.title"), html }) })).catch(
 			(err) => console.error("Failed to open diagram:", err),
 		)

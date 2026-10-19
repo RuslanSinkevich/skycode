@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { fixMermaidStyleContrast, quoteMermaidLabels } from "./mermaidFix"
+import { adaptMermaidStyles, quoteMermaidLabels } from "./mermaidFix"
 
 describe("quoteMermaidLabels", () => {
 	it("quotes edge and node labels with special characters", () => {
@@ -23,16 +23,23 @@ describe("quoteMermaidLabels", () => {
 	})
 })
 
-describe("fixMermaidStyleContrast", () => {
-	it("adds a readable text color to filled nodes without one", () => {
-		const code = "graph TD\n  style FF fill:#fff3e0,stroke:#e65100\n  classDef dark fill:#1a237e\n  style B fill:#fff,color:#333"
-		expect(fixMermaidStyleContrast(code)).toBe(
+describe("adaptMermaidStyles", () => {
+	const code = "graph TD\n  style FF fill:#fff3e0,stroke:#e65100\n  classDef dark fill:#1a237e\n  style B fill:#fff,color:#333"
+
+	it("light theme: adds a readable text color to filled nodes without one", () => {
+		expect(adaptMermaidStyles(code, false)).toBe(
 			"graph TD\n  style FF fill:#fff3e0,stroke:#e65100,color:#1e1e1e\n  classDef dark fill:#1a237e,color:#f3f3f3\n  style B fill:#fff,color:#333",
 		)
 	})
 
+	it("dark theme: pastel fills become a faint tint with a colored border and theme text", () => {
+		expect(adaptMermaidStyles(code, true)).toBe(
+			"graph TD\n  style FF fill:#fff3e026,stroke:#e65100\n  classDef dark fill:#1a237e,color:#f3f3f3\n  style B fill:#ffffff26,stroke:#ffffff",
+		)
+	})
+
 	it("leaves non-hex fills and other lines alone", () => {
-		const code = "graph TD\n  A --> B\n  style A fill:red"
-		expect(fixMermaidStyleContrast(code)).toBe(code)
+		const plain = "graph TD\n  A --> B\n  style A fill:red"
+		expect(adaptMermaidStyles(plain, true)).toBe(plain)
 	})
 })

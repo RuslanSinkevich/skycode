@@ -45,21 +45,34 @@ function hexLuminance(color: string): number | undefined {
 }
 
 /**
- * [SKYCODE] Модели красят блоки (`style A fill:#fff3e0`, `classDef x fill:#e1f5fe`), но не задают цвет
- * текста — и на светлой заливке остаётся светлый текст тёмной темы. Если цвет текста не задан,
- * подбираем его по яркости заливки: на светлой — тёмный, на тёмной — светлый.
+ * [SKYCODE] Модели красят блоки (`style A fill:#fff3e0`, `classDef x fill:#e1f5fe`) пастелью под светлый фон.
+ * В светлой теме дописываем только читаемый цвет текста, если он не задан. В тёмной теме яркие
+ * пастельные плашки режут глаз и выбиваются из темы — делаем из них лёгкую подложку того же
+ * оттенка с цветной рамкой, а текст оставляем цветом темы.
  */
-export function fixMermaidStyleContrast(code: string): string {
-	return code.replace(/^(\s*(?:style|classDef)\s+\S+\s+)(.+)$/gm, (line, head: string, props: string) => {
+export function adaptMermaidStyles(code: string, darkTheme: boolean): string {
+	return code.replace(/^(\s*(?:style|classDef)\s+\S+\s+)(.+)$/gm, (line, head: string, rawProps: string) => {
+		const props = rawProps.replace(/;\s*$/, "")
+		const fill = props.match(/(?:^|,)\s*fill\s*:\s*(#[0-9a-f]{3,6})\b/i)?.[1]
+		const luminance = fill ? hexLuminance(fill) : undefined
+		if (!fill || luminance === undefined) {
+			return line
+		}
+		if (darkTheme && luminance > 0.55) {
+			const hex = fill.length === 4 ? fill.replace(/[0-9a-f]/gi, "$&$&") : fill
+			const parts = props
+				.split(",")
+				.filter((part) => !/^\s*color\s*:/i.test(part))
+				.map((part) => (/^\s*fill\s*:/i.test(part) ? `fill:${hex}26` : part))
+			if (!/(^|,)\s*stroke\s*:/i.test(props)) {
+				parts.push(`stroke:${hex}`)
+			}
+			return `${head}${parts.join(",")}`
+		}
 		if (/(^|,)\s*color\s*:/i.test(props)) {
 			return line
 		}
-		const fill = props.match(/(?:^|,)\s*fill\s*:\s*(#[0-9a-f]{3,6})\b/i)?.[1]
-		const luminance = fill ? hexLuminance(fill) : undefined
-		if (luminance === undefined) {
-			return line
-		}
 		const text = luminance > 0.55 ? "#1e1e1e" : "#f3f3f3"
-		return `${head}${props.replace(/;\s*$/, "")},color:${text}`
+		return `${head}${props},color:${text}`
 	})
 }

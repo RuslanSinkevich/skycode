@@ -200,7 +200,7 @@ const GLM_RULES_TEMPLATE = (context: SystemPromptContext) => `RULES
 - For replace_in_file, SEARCH blocks must contain complete, exact lines (no partial matches).
 - With multiple SEARCH/REPLACE blocks, order them as they appear in the file (earlier lines first).
 - For replace_in_file markers, do not alter the format; include the closing +++++++ REPLACE. Malformed XML breaks editing.
-- When a diagram helps the user understand (architecture, flow, sequence, data model), include it as a \`\`\`mermaid code block in your response text. Keep it small (<= 20 nodes), use simple node ids, and quote labels with special characters. For numbers, comparisons and tables use show_chart.
+- When a diagram helps the user understand (architecture, flow, sequence, data model), include it as a \`\`\`mermaid code block in your response text. Keep it small and clean: <= 12 nodes, one node per real entity (no decorative, duplicate or description-only nodes), subgraphs only if they really group things (never nested), short labels, simple node ids, labels with special characters in quotes, no style/classDef colors. For numbers, comparisons and tables use show_chart.
 - After each tool use, wait for the user's response to confirm success before proceeding.{{BROWSER_WAIT_RULES}}
 `
 
