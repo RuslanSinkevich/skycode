@@ -1,6 +1,7 @@
 import { name, publisher, version } from "../package.json"
 
-const prefix = name
+// [SKYCODE] Команды и панель всегда под «skycode.*» (как в package.json), даже если имя пакета в Marketplace другое
+const prefix = "skycode"
 
 /**
  * List of commands with the name of the extension they are registered under.
@@ -34,7 +35,7 @@ const SkycodeCommands = {
  * These should match the name + view IDs defined in package.json.
  */
 const SkycodeViewIds = {
-	Sidebar: name + ".SidebarProvider",
+	Sidebar: prefix + ".SidebarProvider",
 }
 
 /**

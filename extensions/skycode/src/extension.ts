@@ -33,6 +33,7 @@ import { HookDiscoveryCache } from "./core/hooks/HookDiscoveryCache"
 import { HookProcessRegistry } from "./core/hooks/HookProcessRegistry"
 import { workspaceResolver } from "./core/workspace"
 import { findMatchingNotebookCell, getContextForCommand, showWebview } from "./hosts/vscode/commandUtils"
+import { migrateLegacyStorage } from "./hosts/vscode/migrateLegacyStorage"
 import { abortCommitGeneration, generateCommitMsg } from "./hosts/vscode/commit-message-generator"
 import { executeInlineEdit } from "./core/inline-edit/InlineEditController"
 import { StateManager } from "./core/storage/StateManager"
@@ -61,6 +62,7 @@ https://github.com/microsoft/vscode-webview-ui-toolkit-samples/tree/main/framewo
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export async function activate(context: vscode.ExtensionContext) {
+	migrateLegacyStorage(context.globalStorageUri.fsPath, context.extension.id)
 	setupHostProvider(context)
 	setNotificationIconPath(path.join(context.extensionPath, "assets", "icons", "icon.png"))
 
