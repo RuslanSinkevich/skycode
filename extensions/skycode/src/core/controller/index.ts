@@ -673,6 +673,8 @@ export class Controller {
 	// [SKYCODE-PERF] Cache voice readiness to avoid 3× fs.existsSync on every state push.
 	// Invalidated only when dictation settings change or on explicit refresh.
 	private _voiceReadyCache: { ready: boolean; model: string; checkedAt: number } | null = null
+	// [SKYCODE] Сброс «идёт загрузка голоса» после перезапуска — один раз за сеанс
+	private _voiceFlagsResetDone = false
 	private _lastDictationSettingsJson = ""
 
 	private _checkVoiceReadiness(dictationSettings: any): boolean {
@@ -827,7 +829,7 @@ export class Controller {
 		const autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
 		const browserSettings = this.stateManager.getGlobalSettingsKey("browserSettings")
 		const focusChainSettings = this.stateManager.getGlobalSettingsKey("focusChainSettings")
-		const dictationSettings = this.stateManager.getGlobalSettingsKey("dictationSettings")
+		let dictationSettings = this.stateManager.getGlobalSettingsKey("dictationSettings")
 		const preferredLanguage = this.stateManager.getGlobalSettingsKey("preferredLanguage")
 		// Sync backend i18n locale on every state push (covers startup + runtime changes)
 		if (preferredLanguage) {
@@ -904,15 +906,19 @@ export class Controller {
 		// Initialize WhisperLocalService once (not on every state push)
 		void this._ensureWhisperInitialized(selectedModel)
 
-		// Reset transient download flags on startup (they don't survive restarts)
-		if ((dictationSettings as any).voiceDownloading) {
-			this.stateManager.setGlobalState("dictationSettings", {
+		// Reset transient download flags on startup (they don't survive restarts).
+		// [SKYCODE] Только один раз за сеанс: раньше сброс шёл на каждой отправке состояния и гасил
+		// индикатор начавшейся загрузки — кнопка сразу возвращалась в «Загрузить»
+		if (!this._voiceFlagsResetDone && (dictationSettings as any).voiceDownloading) {
+			dictationSettings = {
 				...dictationSettings,
 				voiceDownloading: false,
 				voiceDownloadProgress: 0,
 				voiceReinstall: false,
-			})
+			}
+			this.stateManager.setGlobalState("dictationSettings", dictationSettings)
 		}
+		this._voiceFlagsResetDone = true
 
 		const voiceReady = this._checkVoiceReadiness({ ...dictationSettings, whisperModel: selectedModel })
 
