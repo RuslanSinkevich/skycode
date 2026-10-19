@@ -6,7 +6,7 @@
 
 **НЕ используйте** глобальный `fetch` или дефолтный `axios` в коде расширения!
 
-Глобальные функции не подхватывают настройки прокси в некоторых окружениях (JetBrains, CLI).
+Глобальные функции не подхватывают настройки прокси в некоторых окружениях (корпоративные прокси, CLI).
 
 ## Правила
 
@@ -82,7 +82,7 @@ const response = await fetch('/api/data')
 import { mockFetchForTesting } from "@/shared/net"
 
 test('my test', async () => {
-  const mockFetch = jest.fn().mockResolvedValue(new Response('{}'))
+  const mockFetch = (async () => new Response('{}')) as typeof globalThis.fetch
 
   await mockFetchForTesting(mockFetch, async () => {
     // Здесь fetch будет использовать mockFetch

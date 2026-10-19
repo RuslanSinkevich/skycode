@@ -2,7 +2,7 @@
 
 ## Обзор
 
-Skycode AI — это расширение VS Code, состоящее из трёх основных частей:
+Skycode AI — это расширение VS Code (`skycode.skycode-ai`, работает в обычном VS Code 1.124+, не форк), состоящее из трёх основных частей:
 - **Core Extension** (бэкенд на Node.js)
 - **Webview UI** (фронтенд на React)
 - **Code Search** (карта репозитория + ripgrep) и необязательный **Indexing Subsystem** (векторный индекс)
@@ -49,12 +49,12 @@ Skycode AI — это расширение VS Code, состоящее из тр
 Управляет жизненным циклом webview:
 - Создание HTML с CSP заголовками
 - Обработка сообщений от webview
-- Hot Module Replacement для разработки
+- Подключение dev-сервера webview в режиме разработки
 
 ### 3. Controller (`src/core/controller/index.ts`)
 Центральный координатор:
 - Управление состоянием (GlobalState, Secrets)
-- Создание и управление задачами (Task)
+- Создание и управление задачами (Task) и сессиями-вкладками (`SessionManager`, `src/core/session/`)
 - Координация MCP серверов
 - Синхронизация состояния с webview
 
@@ -91,7 +91,7 @@ Skycode AI — это расширение VS Code, состоящее из тр
 Последовательное выполнение YAML-сценариев поверх стандартного agent loop:
 - Каждый включённый шаг инжектит свой prompt как user-message и вызывает `Task.initiateStepLoop()`
 - История разговора шарится между шагами
-- `WorkflowParser` проверяет схему YAML; UI — таб «Сценарии»
+- `WorkflowParser` проверяет схему YAML; редактор — `WorkflowEditor` в окне правил и workflows
 - Отмена между шагами по `task.isAborted()`
 
 ### 9. Security subsystem
@@ -101,7 +101,6 @@ Skycode AI — это расширение VS Code, состоящее из тр
 - **Workspace containment** — `openFileRelativePath` проверяет `path.resolve` против `workspaceFolders`; `downloadSkycodeChromium` защищает распаковку Chromium от Zip Slip.
 - **Webview channel hardening** — `VscodeWebviewProvider.executeVsCodeCommand` доступна только в `ExtensionMode.Development`; `updateIndexingConfig` работает через allowlist ключей.
 
-Подробности — в корневом `SECURITY.md` и `CHANGELOG.md` (на уровне монорепы).
 
 ## Потоки данных
 
@@ -110,11 +109,11 @@ Skycode AI — это расширение VS Code, состоящее из тр
 ```
 User Input → Controller.initTask()
                     ↓
-            Task.initiateTaskLoop()
+            Task.initiateTaskLoop() → recursivelyMakeSkycodeRequests()
                     ↓
             attemptApiRequest() → API Provider
                     ↓
-            Stream Response → parseAssistantMessage()
+            Stream Response → parseAssistantMessageV2()
                     ↓
             Tool Execution → presentAssistantMessage()
                     ↓
@@ -142,7 +141,6 @@ React Components Re-render
 | API ключи | VS Code Secrets | Безопасное хранение |
 | Настройки | GlobalState | Персистентные настройки |
 | История задач | Файловая система | JSON файлы по taskId |
-| Checkpoints | Git (отключено) | Legacy Cline shadow-git, заменён DiffSystem V4 |
 
 ## Режимы работы
 
@@ -166,6 +164,12 @@ React Components Re-render
 - Read-only, исследование кода
 - Ответы на вопросы без модификации файлов
 
+### Chat Mode
+- Диалог без проактивного исследования проекта
+- Инструменты, меняющие файлы и запускающие команды, недоступны (`ToolExecutor.CHAT_MODE_RESTRICTED_TOOLS`)
+
+Режим хранится отдельно для каждой вкладки.
+
 ## Chat UI
 
 Chat UI использует **TurnBlock** архитектуру:
@@ -182,6 +186,4 @@ Chat UI использует **TurnBlock** архитектуру:
 - [CONTEXT_MANAGEMENT.md](./CONTEXT_MANAGEMENT.md) — Управление контекстом
 - [../DIFF_SYSTEM.md](../DIFF_SYSTEM.md) — Diff-система v4
 - [../INDEXING_SYSTEM.md](../INDEXING_SYSTEM.md) — Индексация
-- [../VSCODE_FORK_PATCHES.md](../VSCODE_FORK_PATCHES.md) — патчи ядра VS Code
 - [../development/TOOLS.md](../development/TOOLS.md) — Добавление инструментов
-- [../../../../../SECURITY.md](../../../../../SECURITY.md) — Политика безопасности (корень монорепы)

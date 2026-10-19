@@ -9,7 +9,7 @@
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  Webview UI (React)                                             │
-│  FeatureSettingsSection.tsx → updateSetting() → gRPC Client     │
+│  components/settings/sections/*.tsx → updateSetting() → gRPC    │
 └─────────────────────────────────────────────────────────────────┘
                               ↓ gRPC
 ┌─────────────────────────────────────────────────────────────────┐
@@ -29,11 +29,11 @@
 ```protobuf
 message UpdateSettingsRequest {
   // ... существующие поля ...
-  optional bool my_new_setting = 42;  // Следующий свободный номер
+  optional bool my_new_setting = 50;  // Следующий свободный номер
 }
 ```
 
-**Важно:** Номера полей должны быть уникальными и последовательными.
+**Важно:** номера полей не переиспользовать и не менять. Номера из `reserved` (удалённые поля) брать нельзя; удаляя поле, заменяйте его на `reserved N;`. Проверьте текущий максимум в `UpdateSettingsRequest` перед добавлением.
 
 ### 2. Регенерация Proto
 
@@ -41,10 +41,12 @@ message UpdateSettingsRequest {
 npm run protos
 ```
 
-Это обновит:
+Это обновит (папки в `.gitignore`, в репозиторий не попадают):
 - `webview-ui/src/services/grpc-client.ts`
 - `src/generated/hosts/vscode/protobus-*.ts`
 - `src/shared/proto/skycode/state.ts`
+
+`scripts/generate-state-proto.mjs` не запускать.
 
 ### 3. Extension State (интерфейс)
 
@@ -131,7 +133,7 @@ const [state, setState] = useState<ExtensionState>({
 
 **Файл:** Подходящая секция в `webview-ui/src/components/settings/sections/` (выбрать по смыслу)
 
-Доступные секции: `ApiConfigurationSection`, `GeneralSettingsSection`, `EditingSection`, `TerminalSettingsSection`, `BrowserSettingsSection`, `ContextSection`, `PermissionsSection`, `ExperimentsSection`, `DebugSection`, `IndexingSettingsSection`, `McpSection`, `VoiceSection`.
+Вкладки настроек (`SETTINGS_TABS` в `SettingsView.tsx`) и их секции: Провайдер (`ApiConfigurationSection`), Общие (`GeneralSettingsSection`), Разрешения (`PermissionsSection`), Редактирование (`EditingSection`), Контекст (`ContextSection`), Терминал (`TerminalSettingsSection`), Веб (`BrowserSettingsSection`), Голос (`VoiceSection`), Индексация (`IndexingSettingsSection`), MCP (`McpSection`), Дополнительно (`AdvancedSection`); `DebugSection` скрыта и видна только в режиме отладки.
 
 ```tsx
 const { myNewSetting } = useExtensionState()
@@ -194,7 +196,7 @@ optional MyEnum setting_name = N;
 
 1. **proto/skycode/state.proto:**
    ```protobuf
-   optional bool lightweight_mode = 45;
+   optional bool lightweight_mode = 45;  // в реальном proto номер 45
    ```
 
 2. **npm run protos**
@@ -204,7 +206,7 @@ optional MyEnum setting_name = N;
    lightweightMode?: boolean
    ```
 
-4. **src/shared/storage/state-keys.ts** (добавить в `GLOBAL_SETTINGS_FIELDS`):
+4. **src/shared/storage/state-keys.ts** (добавить в `USER_SETTINGS_FIELDS`):
    ```typescript
    lightweightMode: { default: false as boolean },
    ```

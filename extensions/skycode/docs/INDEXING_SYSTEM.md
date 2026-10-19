@@ -10,6 +10,8 @@
 Режимы: локально (`transformers.js`, WASM) или через удалённый OpenAI-совместимый API.
 Локальная индексация большого проекта занимает от минут до часов и нагружает CPU.
 
+> **В собранном .vsix локальный режим недоступен.** Пакет не содержит модель эмбеддингов (`models/`) и `onnxruntime-node` (см. `.vscodeignore`). В пакетной сборке работает режим `remote`. `codebase_search` без индекса работает в любом случае.
+
 ---
 
 ## Архитектура
@@ -21,7 +23,7 @@ IndexingService (оркестратор) — src/core/indexing/IndexingService.t
 ├── CodeChunker (разбивка на чанки)
 │   └── Tree-sitter chunking (с fallback на simple chunker)
 ├── EmbeddingRouter → выбор провайдера
-│   ├── LocalEmbeddingProvider (transformers.js WASM, модель выбирается через EmbeddingModelRegistry)
+│   ├── EmbeddingWorkerManager (локально: transformers.js WASM в Worker, модель выбирается через EmbeddingModelRegistry)
 │   └── RemoteEmbeddingProvider (OpenAI-compatible /v1/embeddings API)
 ├── models/
 │   └── EmbeddingModelRegistry (mini / base / large + резолв meta по id)
@@ -47,15 +49,14 @@ src/core/indexing/
   models/
     EmbeddingModelRegistry.ts  — реестр локальных моделей (mini / base / large)
   providers/
-    LocalEmbeddingProvider.ts  — transformers.js WASM (офлайн, без native-модулей)
     RemoteEmbeddingProvider.ts — HTTP клиент для OpenAI-совместимых API
   storage/
     IndexStorage.ts            — чтение/запись индекса (SQLite + JSON fallback)
     VectorSearch.ts            — cosine similarity поиск
     KeywordSearch.ts           — keyword поиск для hybrid retrieval
   workers/
-    embedding-worker.ts        — Worker для эмбеддингов (разгрузка главного потока)
-    EmbeddingWorkerManager.ts  — менеджер worker'ов
+    embedding-worker.ts        — Worker локальных эмбеддингов (transformers.js WASM, разгрузка главного потока)
+    EmbeddingWorkerManager.ts  — менеджер worker'ов (реализует EmbeddingProvider для локального режима)
   TreeSitterChunker.ts         — AST-aware chunking через web-tree-sitter
   Reranker.ts                  — post-retrieval rerank rules
 
@@ -63,7 +64,6 @@ src/shared/IndexingTypes.ts    — типы, общие для backend и webvie
 
 vendor/modules/@xenova/transformers/         — vendored transformers.js runtime
 models/paraphrase-multilingual-MiniLM-L12-v2/ — мультиязычная ONNX модель эмбеддингов
-models/all-MiniLM-L6-v2/                     — legacy модель (не используется)
 ```
 
 ## Конфигурация (VS Code Settings)
@@ -87,8 +87,8 @@ models/all-MiniLM-L6-v2/                     — legacy модель (не ис�
 Основной backend:
 - `index.db` (SQLite) — метаданные, чанки, и векторы (BLOB)
 
-SQLite — встроенный в Electron модуль `node:sqlite` (обёртка `src/core/storage/openSqlite.ts`),
-нативных модулей нет, обновления Electron индекс не ломают.
+SQLite — встроенный в Node.js модуль `node:sqlite` (обёртка `src/core/storage/openSqlite.ts`),
+нативных модулей нет, обновления VS Code индекс не ломают.
 
 Fallback backend (если открыть SQLite не удалось):
 - `index.json` — метаданные
@@ -105,7 +105,7 @@ Fallback backend (если открыть SQLite не удалось):
 
   | id | HuggingFace | Размерность | Размер | Prefix | Когда брать |
   |----|------------|-------------|--------|--------|-------------|
-  | `mini` (default) | `Xenova/paraphrase-multilingual-MiniLM-L12-v2` | 384 | ~23 МБ | нет | Быстрая, базовая мультиязычная поддержка; встроена |
+  | `mini` (default) | `Xenova/paraphrase-multilingual-MiniLM-L12-v2` | 384 | ~23 МБ | нет | Быстрая, базовая мультиязычная поддержка; лежит в `models/` (в .vsix не входит) |
   | `base` | `Xenova/multilingual-e5-base` | 768 | ~278 МБ | да (`query: ` / `passage: `) | Хороший recall, скачивается при первом использовании |
   | `large` | `Xenova/multilingual-e5-large` | 1024 | ~562 МБ | да (`query: ` / `passage: `) | Лучшее качество, скачивается при первом использовании |
 
@@ -141,6 +141,7 @@ Fallback backend (если открыть SQLite не удалось):
 | Очистить индекс | `skycode.indexing.clear` | Удаление всего индекса |
 | Приостановить | `skycode.indexing.pause` | Пауза индексации |
 | Продолжить | `skycode.indexing.resume` | Возобновление после паузы |
+| Очистить кэш эмбеддингов | `skycode.indexing.clearEmbeddingCache` | Удаление папки `models/` расширения (локальные модели) |
 
 ## StatusBar
 
@@ -154,7 +155,7 @@ Fallback backend (если открыть SQLite не удалось):
 - Tool ID: `SkycodeDefaultTool.CODEBASE_SEARCH`
 - Prompt spec: `src/core/prompts/system-prompt/tools/codebase_search.ts`
 - Handler: `src/core/task/tools/handlers/CodebaseSearchToolHandler.ts`
-- Регистрация handler: `src/core/task/ToolExecutor.ts`
+- Регистрация handler: `registerToolHandlers()` в `src/core/task/ToolExecutor.ts`
 - Доступ к `SearchEngine`: `src/core/indexing/searchEngineInstance.ts`
 - Подключение в variant tools: `src/core/prompts/system-prompt/variants/*/config.ts`
 

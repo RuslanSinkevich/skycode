@@ -314,6 +314,9 @@ if (didAutoApprove) {
 | `codebase_search` | `codebase_search.ts` | Поиск по объявлениям (карта репозитория) и тексту; по векторному индексу, если он включён |
 | `edit_notebook` | `edit_notebook.ts` | Jupyter notebook editing |
 | `check_background_command` | `check_background_command.ts` | Статус фоновой команды |
+| `read_symbol` | `read_symbol.ts` | Чтение одного объявления (функция, класс) по имени |
+| `show_visual` | `show_visual.ts` | Статичная HTML/SVG-визуализация в чате (не для диаграмм; скрипты не исполняются) |
+| `show_chart` | `show_chart.ts` | График или таблица из JSON-данных (bar, line, pie, table) |
 
 ## См. также
 

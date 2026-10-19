@@ -59,7 +59,7 @@ old_docs/**
 !node_modules/@vscode/codicons/dist/codicon.ttf
 
 # [SKYCODE] Модель эмбеддингов и нативный ONNX (≈360 МБ под все ОС) не кладём в пакет: индексация
-# по умолчанию выключена, модель при включении скачивается с Hugging Face.
+# по умолчанию выключена; режим local в собранном пакете недоступен, remote (OpenAI-совместимый API) работает.
 models/**
 
 # Include default themes JSON files used in getTheme

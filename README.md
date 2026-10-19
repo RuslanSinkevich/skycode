@@ -2,16 +2,17 @@
 
 > English version: [README.en.md](README.en.md)
 
-**AI-редактор кода на основе VS Code — открытая альтернатива Cursor**
+**AI-агент для VS Code под ваши модели**
 
-Skycode — форк VS Code с глубоко встроенным AI-агентом. В отличие от расширений (Copilot, Continue и др.), AI здесь часть самого редактора — это даёт полный контроль над UX, производительностью и безопасностью.
+Skycode — расширение VS Code (`skycode.skycode-ai`, в Marketplace — «Skycode AI»). Подключается к OpenAI-совместимому шлюзу (vLLM, LiteLLM), локальной модели (Ollama, LM Studio) или облачным провайдерам — GigaChat, YandexGPT, OpenRouter и другим. Без аккаунтов и подписок. Основано на [Cline](https://github.com/cline/cline), лицензия Apache 2.0.
 
 <p align="center">
   <img src="./docs/skycode/hero-demo.gif" alt="Skycode AI в работе" width="900">
 </p>
 
 <p align="center">
-  <a href="https://ruslansinkevich.ru/#skycode">Сайт</a> ·
+  <a href="https://ruslansinkevich.ru/skycode/">Сайт</a> ·
+  <a href="https://marketplace.visualstudio.com/items?itemName=skycode.skycode-ai">Marketplace</a> ·
   <a href="#документация">Документация</a> ·
   <a href="./README.en.md">English</a> ·
   <a href="https://github.com/RuslanSinkevich/skycode">GitHub</a>
@@ -27,7 +28,7 @@ Skycode — форк VS Code с глубоко встроенным AI-аген�
 |-----------|-------------|
 | **Чтение и правка файлов** | Создание файлов, замена блоков, патчи |
 | **Выполнение команд** | Терминал: сборка, тесты, git, npm, Docker |
-| **Семантический поиск** | Поиск по смыслу по всей кодовой базе (локальные embeddings) |
+| **Поиск по коду** | `codebase_search`: карта репозитория (tree-sitter) + ripgrep; опционально векторный индекс |
 | **Поиск по regex** | Быстрый поиск по шаблону через ripgrep |
 | **Веб-поиск** | Поиск информации в интернете |
 | **Автоматизация браузера** | Puppeteer: скриншоты, клики, заполнение форм |
@@ -53,29 +54,28 @@ Skycode — форк VS Code с глубоко встроенным AI-аген�
 - Кнопки **Принять / Отклонить** для каждого блока изменений
 - Снимки состояния на каждое сообщение для точного отката
 - Навигация между ожидающими изменениями в разных файлах
-- 217 unit-тестов покрывают весь diff-движок
 
-### Семантический поиск по коду
+### Поиск по коду
 
-- **Локальный индекс embeddings** по всему проекту (transformers.js, WASM, без интернета)
-- Гибридный поиск: семантический + по ключевым словам + переранжирование
+- `codebase_search` работает без индексации: карта репозитория (объявления через tree-sitter) и текстовый поиск ripgrep
+- Опциональный векторный индекс (`skycode.indexing.mode`): гибридный поиск — семантический + по ключевым словам + переранжирование
+- Индексация по умолчанию выключена. Режим `remote` — любой OpenAI-совместимый embeddings API. Режим `local` в сборках из Marketplace не работает: локальная модель и onnxruntime-node в VSIX не входят
 - Инкрементальное обновление через FileWatcher
-- Опционально — удалённый API (OpenAI-совместимый)
 
-### 40+ API-провайдеров
+### Провайдеры
 
-- **OpenAI** — GPT-4o, o1, o3
-- **Anthropic** — Claude Sonnet, Opus, Haiku
-- **Google** — Gemini 2.5 Pro/Flash
+Провайдер по умолчанию — **OpenAI Compatible**; остальные — в разделе «Ещё провайдеры».
+
+- Шлюзы с Qwen-подобными моделями (vLLM, LiteLLM) — основной целевой сценарий
+- Локальные модели — Ollama, LM Studio
 - **GigaChat** — нативные function calls (Сбер)
-- **YandexGPT** — YandexGPT 5 Pro/Lite
-- **Open-source** — Qwen, DeepSeek, Llama, Mistral
-- **OpenRouter** — агрегатор 200+ моделей
-- Любой **OpenAI-совместимый** API (Ollama, LM Studio, vLLM)
+- **YandexGPT**
+- **OpenRouter** — агрегатор моделей
+- OpenAI, Anthropic, Google и другие облачные API
 
 ### Голосовой ввод
 
-Офлайн-распознавание речи (Whisper, 50+ языков). Интернет не нужен.
+Локальное распознавание речи (whisper.cpp).
 
 ### Облегчённый режим
 
@@ -83,34 +83,29 @@ Skycode — форк VS Code с глубоко встроенным AI-аген�
 
 ---
 
-## Быстрый старт
+## Установка
+
+Нужен VS Code 1.124 или новее.
+
+- **Из Marketplace:** вкладка «Расширения» → поиск «Skycode AI» → Установить. Страница: [marketplace.visualstudio.com/items?itemName=skycode.skycode-ai](https://marketplace.visualstudio.com/items?itemName=skycode.skycode-ai)
+- **Из .vsix:** «Расширения» → `…` → «Установить из VSIX…» (файл прикладывается к [GitHub Release](https://github.com/RuslanSinkevich/skycode/releases) каждой версии)
+
+Затем: панель **Skycode** на боковой панели → шестерёнка → **Провайдер** → адрес шлюза, ключ API и имя модели.
+
+## Сборка из исходников
+
+Продукт живёт в `extensions/skycode/`. Репозиторий физически остаётся форком VS Code, но остальное дерево (`src/vs/`, `build/` и т. д.) для Skycode не используется.
 
 ```bash
-# Клонировать
-git clone https://github.com/RuslanSinkevich/skycode.git
-cd skycode
-
-# Установить зависимости
-npm install
-
-# Запуск (режим разработки)
-# Windows:
-.\scripts\code.bat
-# macOS/Linux:
-./scripts/code.sh
+cd extensions/skycode
+npm ci
+cd webview-ui && npm ci && cd ..
+npm run protos
+npm run package                                   # типы + webview + lint + esbuild
+npx vsce package --readme-path MARKETPLACE.md     # .vsix
 ```
 
-### Сборка расширения
-
-```bash
-cd extensions/skycode/webview-ui
-npm run build          # UI
-
-cd ..
-node esbuild.mjs      # Бэкенд
-```
-
-Откройте панель Skycode на боковой панели → настройте API-провайдера → начинайте работать.
+Подробнее — в [руководстве по разработке](./docs/skycode/development/getting-started.md).
 
 ---
 
@@ -118,7 +113,7 @@ node esbuild.mjs      # Бэкенд
 
 ```
 ┌──────────────────────────────────────────────┐
-│  VS Code Fork                                 │
+│  VS Code                                      │
 │  ┌──────────────────────────────────────┐    │
 │  │  Skycode Extension                    │    │
 │  │  ┌────────┐ ┌──────┐ ┌───────────┐  │    │
@@ -133,19 +128,18 @@ node esbuild.mjs      # Бэкенд
 │  └──────────────────────────────────────┘    │
 │                    ↕ gRPC                     │
 │  ┌──────────────────────────────────────┐    │
-│  │  Webview UI (React, 230+ components) │    │
+│  │  Webview UI (React)                  │    │
 │  └──────────────────────────────────────┘    │
 └──────────────────────────────────────────────┘
 ```
 
 | Компонент | Технология |
 |-----------|-----------|
-| Редактор | Форк VS Code |
+| Платформа | Расширение VS Code (1.124+) |
 | Связь | gRPC + Protobuf |
-| UI чата | React (230+ компонентов) |
-| Разбор кода | Tree-sitter (16 языков) |
-| Поиск | Индекс embeddings + ripgrep |
-| Аналитика | PostHog + OpenTelemetry (только с согласия) |
+| UI чата | React |
+| Разбор кода | Tree-sitter |
+| Поиск | Карта репозитория + ripgrep, опционально индекс embeddings |
 
 ---
 
@@ -168,7 +162,6 @@ node esbuild.mjs      # Бэкенд
 - [Добавление инструментов агента](./docs/skycode/development/adding-tools.md)
 - [Сетевые запросы и прокси](./docs/skycode/development/network.md)
 - [Добавление настроек](./docs/skycode/development/adding-settings.md)
-- [Патчи форка VS Code](./docs/skycode/development/fork-patches.md)
 
 ---
 
@@ -182,9 +175,8 @@ node esbuild.mjs      # Бэкенд
 
 Skycode построен на нескольких open-source проектах:
 
-- [VS Code](https://github.com/microsoft/vscode) (MIT) — основа редактора
 - [Cline](https://github.com/cline/cline) (Apache 2.0) — исходная архитектура расширения
-- [Continue](https://github.com/continuedev/continue) (Apache 2.0) — локальный pipeline embeddings
+- [Continue](https://github.com/continuedev/continue) (Apache 2.0) — pipeline embeddings
 - [Kilocode](https://github.com/Kilo-Org/kilocode) (Apache 2.0 / MIT) — паттерны работы с инструментами
 
 Полный список — в [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).

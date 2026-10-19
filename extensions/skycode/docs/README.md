@@ -1,98 +1,90 @@
-# Skycode AI
+# Skycode AI — документация разработчика
 
-AI-ассистент для разработки, интегрированный в VS Code.
+Skycode AI — расширение VS Code (`skycode.skycode-ai`, Visual Studio Marketplace). Работает в обычном VS Code 1.124+. Страница для пользователей — [MARKETPLACE.md](../MARKETPLACE.md); исходный код — https://github.com/RuslanSinkevich/skycode ; сайт — https://ruslansinkevich.ru/skycode/ .
 
-## Возможности
+Прежний форк VS Code (Skycode.exe, патчи ядра) больше не выпускается и в документации не описывается.
 
-- **Автономное выполнение задач**: Агент анализирует код, выполняет команды и редактирует файлы
-- **Поиск по коду**: карта репозитория (tree-sitter) + ранжированный ripgrep — без индексации; векторный индекс — по желанию
-- **Inline Diff система v4**: Визуализация изменений прямо в редакторе (Cursor-style, per-message snapshots)
-- **Поддержка MCP серверов**: Расширение функциональности через Model Context Protocol
-- **Мультипровайдерная архитектура**: Anthropic, OpenRouter, OpenAI, LiteLLM и 40+ других
-- **Проверка синтаксиса**: Валидация кода через Tree-sitter перед применением изменений
-- **Голосовой ввод**: Офлайн распознавание речи (Whisper, 50+ языков)
-- **4 режима работы**: Act, Plan, Debug, Ask — с динамическим переключением
-- **Jupyter Notebooks**: Создание и редактирование ячеек через AI
-- **Система баннеров**: Серверные баннеры и модалки для пользователей
+## Что умеет
 
-## Быстрый старт
+- Агент с инструментами: чтение и правка файлов, команды в терминале, поиск, браузер, MCP, Jupyter (`edit_notebook`), `read_symbol`, `show_visual`, `show_chart`.
+- Пять режимов: Act, Plan, Debug, Ask, Chat (режим хранится отдельно для каждой вкладки).
+- Вкладки сессий, очередь сообщений, шторка истории.
+- Diff-система v4: правки агента подсвечены в редакторе, принять/отклонить — в панели Pending Changes, откат по сообщениям.
+- Поиск по коду без индексации: карта репозитория (tree-sitter) + ранжированный ripgrep. Векторный индекс необязателен и выключен по умолчанию.
+- 17 провайдеров моделей (`src/shared/providers/providers.json`), по умолчанию OpenAI Compatible.
+- Inline Edit (`Ctrl+Shift+K`) и YAML-workflows.
 
-1. Соберите расширение: см. [BUILD.md](./BUILD.md)
-2. Откройте панель Skycode AI в боковой панели VS Code
-3. Настройте API провайдер в настройках
-4. Введите задачу и нажмите Enter
+## Быстрый старт разработчика
+
+Из папки `extensions/skycode`:
+
+```bash
+npm ci
+cd webview-ui && npm ci && cd ..
+npm run protos
+npm run package
+```
+
+Проверки и релиз — в [BUILD.md](./BUILD.md).
 
 ## Документация
 
 ### Сборка и настройка
-- [BUILD.md](./BUILD.md) — Инструкции по сборке
-  - [ADDING_SETTINGS.md](./ADDING_SETTINGS.md) — Добавление настроек
+- [BUILD.md](./BUILD.md) — сборка, проверки, упаковка .vsix, релиз
+- [ADDING_SETTINGS.md](./ADDING_SETTINGS.md) — добавление настроек
 
 ### Архитектура
-- [architecture/OVERVIEW.md](./architecture/OVERVIEW.md) — Общий обзор
-- [architecture/CORE.md](./architecture/CORE.md) — Core модуль
-- [architecture/PROMPTS.md](./architecture/PROMPTS.md) — Система промптов
-- [architecture/CHAT_PIPELINE_ARCHITECTURE.md](./architecture/CHAT_PIPELINE_ARCHITECTURE.md) — Пайплайн чата (целевая архитектура)
+- [architecture/OVERVIEW.md](./architecture/OVERVIEW.md) — общий обзор
+- [architecture/CORE.md](./architecture/CORE.md) — core модуль
+- [architecture/PROMPTS.md](./architecture/PROMPTS.md) — система промптов
+- [architecture/CHAT_PIPELINE_ARCHITECTURE.md](./architecture/CHAT_PIPELINE_ARCHITECTURE.md) — пайплайн чата (сессии, ApprovalGate)
+- [architecture/CONTEXT_MANAGEMENT.md](./architecture/CONTEXT_MANAGEMENT.md) — управление контекстом (сжатие, суммаризация)
 
 ### Подсистемы
-- [DIFF_SYSTEM.md](./DIFF_SYSTEM.md) — Inline Diff система v4
-- [CODE_SEARCH.md](./CODE_SEARCH.md) — Поиск по коду (карта репозитория)
-- [INDEXING_SYSTEM.md](./INDEXING_SYSTEM.md) — Векторный индекс (необязательно)
-- [TERMINAL_SYSTEM.md](./TERMINAL_SYSTEM.md) — Терминал, тайминги команд, фоновые команды
-- [BANNER_SYSTEM.md](./BANNER_SYSTEM.md) — Система баннеров (клиент)
-- [architecture/CONTEXT_MANAGEMENT.md](./architecture/CONTEXT_MANAGEMENT.md) — Управление контекстом (сжатие, суммаризация)
-- [mcp/how-mcp-works.md](./mcp/how-mcp-works.md) — Как работает MCP
+- [DIFF_SYSTEM.md](./DIFF_SYSTEM.md) — diff-система v4
+- [CODE_SEARCH.md](./CODE_SEARCH.md) — поиск по коду (карта репозитория)
+- [INDEXING_SYSTEM.md](./INDEXING_SYSTEM.md) — векторный индекс (необязательно)
+- [TERMINAL_SYSTEM.md](./TERMINAL_SYSTEM.md) — терминал, тайминги команд, фоновые команды
+- [mcp/how-mcp-works.md](./mcp/how-mcp-works.md) — как работает MCP
 
 ### Разработка
-- [development/GENERAL.md](./development/GENERAL.md) — Общие правила
-- [development/TOOLS.md](./development/TOOLS.md) — Добавление инструментов
-- [development/NETWORK.md](./development/NETWORK.md) — Сетевые запросы
-
-### VS Code Fork
-- [VSCODE_FORK_PATCHES.md](./VSCODE_FORK_PATCHES.md) — Патчи ядра VS Code
-
-### Безопасность и история
-- [../../../../SECURITY.md](../../../../SECURITY.md) — политика безопасности (как сообщать о уязвимостях)
-- [../../../../CHANGELOG.md](../../../../CHANGELOG.md) — история изменений (Keep a Changelog)
+- [development/GENERAL.md](./development/GENERAL.md) — общие правила
+- [development/TOOLS.md](./development/TOOLS.md) — добавление инструментов
+- [development/NETWORK.md](./development/NETWORK.md) — сетевые запросы
 
 ### Правила для AI агента
-- [agent-rules/general.md](./agent-rules/general.md) — Общие правила
-- [agent-rules/network.md](./agent-rules/network.md) — Сетевые правила
-- [agent-rules/protobuf.md](./agent-rules/protobuf.md) — Protobuf правила
+- [agent-rules/general.md](./agent-rules/general.md) — общие правила
+- [agent-rules/network.md](./agent-rules/network.md) — сетевые правила
+- [agent-rules/protobuf.md](./agent-rules/protobuf.md) — protobuf
 
 ### Планы
-- [plans/ROADMAP.md](./plans/ROADMAP.md) — Дорожная карта
-- [plans/REGISTRATION_GATE.md](./plans/REGISTRATION_GATE.md) — Стратегия регистрации
-- [plans/grant-fasie-start-ai.md](./plans/grant-fasie-start-ai.md) — Грант Фонда Бортника
-- [plans/implementation/](./plans/implementation/) — Планы реализации (IMPL)
+- [plans/ROADMAP.md](./plans/ROADMAP.md) — дорожная карта
+- [plans/TABS.md](./plans/TABS.md) — вкладки сессий
+- [plans/implementation/](./plans/implementation/) — планы реализации (IMPL)
 
 ## Структура проекта
 
 ```
-skycode/
-├── src/                    # Исходный код расширения
-│   ├── core/               # Ядро: controller, task, prompts, diff, indexing
-│   ├── services/           # Сервисы: MCP, auth, banner, telemetry
-│   ├── shared/             # Общие типы и утилиты
-│   └── extension.ts        # Точка входа
-├── webview-ui/             # React UI для панели
-├── proto/                  # Protobuf определения
-├── vendor/                 # Transformers.js runtime (WASM)
-├── models/                 # Embedding модели (ONNX)
-├── docs/                   # Документация (этот файл)
-└── package.json            # Манифест расширения
+extensions/skycode/
+├── src/
+│   ├── extension.ts        # точка входа
+│   ├── registry.ts         # id команд и views (префикс skycode.)
+│   ├── core/               # controller, task, session, prompts, diff-v2, indexing, workflow, ...
+│   ├── services/           # MCP, browser, repo-map, tree-sitter, ripgrep, dictation, ...
+│   ├── hosts/vscode/       # привязки к VS Code API (terminal, webview, migrateLegacyStorage)
+│   ├── integrations/       # terminal, editor, diagnostics, провайдеры-интеграции
+│   └── shared/             # общие типы, proto-конверсии, настройки
+├── webview-ui/             # React UI панели
+├── proto/skycode/          # protobuf определения
+├── assets/, vendor/, models/
+├── docs/                   # эта документация
+└── package.json            # манифест расширения
 ```
 
 ## Технологии
 
-- **TypeScript** — основной язык
-- **React** — UI компоненты
-- **gRPC/Protobuf** — коммуникация extension ↔ webview
-- **esbuild** — сборка
-- **Tree-sitter** — парсинг и валидация кода
-- **tree-sitter + ripgrep** — карта репозитория и поиск по коду
-- **node:sqlite + transformers.js** — необязательный векторный индекс
+TypeScript, React (webview), gRPC/Protobuf между расширением и webview, esbuild, tree-sitter, ripgrep, `node:sqlite` + transformers.js (необязательный индекс).
 
 ## Лицензия
 
-[Apache License 2.0](../../../LICENSE). VS Code-основа — MIT (`../../../LICENSE.txt`).
+[Apache License 2.0](../LICENSE). Основано на [Cline](https://github.com/cline/cline) (Apache 2.0).

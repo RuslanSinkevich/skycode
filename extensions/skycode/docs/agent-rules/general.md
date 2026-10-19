@@ -13,15 +13,18 @@
 
 ### Сборка
 
-- Это VS Code расширение — проверяй `package.json` для скриптов
-- `npm run compile` — полная проверка
+- Это VS Code расширение (`skycode.skycode-ai`) — проверяй `package.json` для скриптов
+- `npm run compile` — типы + линт + сборка
 - `node esbuild.mjs` — быстрая сборка
+- `npm run test:unit` — юнит-тесты (mocha)
 
 ### gRPC/Protobuf
 
 Proto файлы в `proto/skycode/*.proto`:
 - После изменений: `npm run protos`
-- Генерация в: `src/shared/proto/`, `src/generated/`
+- Генерация в: `src/shared/proto/`, `src/generated/`, `webview-ui/src/services/grpc-client.ts` (в git не хранится)
+- Номера полей не менять; удалённые — `reserved N;`
+- `scripts/generate-state-proto.mjs` не запускать
 - Новые enum значения требуют обновления конверсий в `src/shared/proto-conversions/`
 
 ### Добавление API провайдера
@@ -76,8 +79,3 @@ import { getAxiosSettings } from '@/shared/net'
 1. Провайдер в `isNextGenModelProvider()` в `model-utils.ts`
 2. Модель имеет `apiFormat: ApiFormat.OPENAI_RESPONSES`
 
-## Changesets
-
-При user-facing изменениях: `npm run changeset` (только patch).
-
-Пропускать для мелких фиксов и рефакторингов.

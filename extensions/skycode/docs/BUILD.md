@@ -1,84 +1,56 @@
-# 🛠️ Skycode AI Extension: "Золотой план сборки" (Windows)
+# Сборка, проверка и релиз расширения
 
-Эта инструкция гарантированно собирает расширение, обходя известные проблемы с `protobuf`, `grpc-tools` и кэшем на Windows.
+Все команды выполняются из папки `extensions/skycode` (репозиторий `RuslanSinkevich/skycode`). Расширение ставится в обычный VS Code 1.124+; форка VS Code и отдельной сборки редактора больше нет.
 
-Все команды выполняются в **PowerShell** из папки:
-`D:\Users\Admin\Desktop\Skycode\vscode\extensions\skycode`
+## Быстрый старт
 
----
-
-## 🧹 ЭТАП 1: Полная зачистка (Если всё сломалось)
-Выполнять, если возникают ошибки типов, `Cannot find module`, или после неудачных слияний.
-
-```powershell
-# Удаляем всё лишнее
-Remove-Item -Recurse -Force node_modules
-Remove-Item package-lock.json
-Remove-Item -Recurse -Force dist
-Remove-Item -Recurse -Force src/generated
-Remove-Item -Recurse -Force src/shared/proto
+```bash
+npm ci
+cd webview-ui && npm ci && cd ..
+npm run protos     # генерация TypeScript из proto/skycode/*.proto
+npm run package    # типы + сборка webview + линт + продакшен-бандл esbuild
 ```
 
----
+`npm run protos` обязателен после клонирования и после любого изменения `.proto`. Сгенерированное (`src/shared/proto/`, `src/generated/`, `webview-ui/src/services/grpc-client.ts`) в git не хранится.
 
-## 📦 ЭТАП 2: Установка зависимостей
-```powershell
-npm install
-```
+Для итераций: `node esbuild.mjs` (только бандл расширения), `npm run watch` (esbuild + tsc в watch), `npm run dev:webview` (dev-сервер webview).
 
----
+## Проверки
 
-## 🔧 ЭТАП 3: Ручной патч Protoc (КРИТИЧЕСКИ ВАЖНО)
-`npm` на Windows часто не скачивает `protoc.exe` корректно. Этот шаг скачивает его вручную и кладет в нужное место.
+| Что | Команда |
+|---|---|
+| Юнит-тесты (mocha, ~1400 тестов) | `npm run test:unit` |
+| Тесты webview | `cd webview-ui && npx vitest run` |
+| Типы расширения | `npx tsc --noEmit -p .` |
+| Типы тестов | `npx tsc --noEmit -p tsconfig.test.json` |
+| Типы webview | `cd webview-ui && npx tsc --noEmit -p tsconfig.app.json` |
+| Линт | `npx biome lint --diagnostic-level=error src webview-ui/src` |
+| Обновить снапшоты промптов | `UPDATE_SNAPSHOTS=true npm run test:unit` |
 
-**Скопируйте и выполните весь блок целиком:**
+Правила для proto: номера полей не переиспользовать и не менять, удалённые поля — `reserved N;`, `scripts/generate-state-proto.mjs` не запускать.
 
-```powershell
-# 1. Создаем временную папку
-mkdir temp_protoc_setup -ErrorAction SilentlyContinue
+## Попробовать локально
 
-# 2. Скачиваем рабочий protoc (v3.20.3)
-Invoke-WebRequest -Uri "https://github.com/protocolbuffers/protobuf/releases/download/v3.20.3/protoc-3.20.3-win64.zip" -OutFile "temp_protoc_setup\protoc.zip"
+1. Собрать .vsix: `npm run package:vsix` (результат — `dist/skycode.vsix`) или напрямую `npx vsce package --readme-path MARKETPLACE.md`.
+2. В VS Code: Extensions → `...` → Install from VSIX.
+3. `Developer: Reload Window`.
 
-# 3. Распаковываем
-Expand-Archive -Path "temp_protoc_setup\protoc.zip" -DestinationPath "temp_protoc_setup\extracted" -Force
+## Релиз
 
-# 4. Копируем EXE в grpc-tools (туда, где его ждет скрипт сборки)
-Copy-Item -Path "temp_protoc_setup\extracted\bin\protoc.exe" -Destination "node_modules\grpc-tools\bin\protoc.exe" -Force
+1. Поднять `version` в `extensions/skycode/package.json`.
+2. Запушить тег `ext-vX.Y.Z` (версия в теге должна совпадать с `package.json`).
+3. Workflow `.github/workflows/skycode-extension.yml` (корень репозитория) ставит зависимости, собирает, прогоняет юнит-тесты, пакует .vsix, публикует в Visual Studio Marketplace (расширение `skycode.skycode-ai`) и прикладывает .vsix к GitHub Release. Секрет `VSCE_PAT` задаёт токен публикации; без него workflow пробует trusted publishing (`vsce --oidc`), который Marketplace пока не поддерживает. Open VSX — только при заданном секрете `OVSX_PAT`.
+4. Ручной запуск workflow (Run workflow) только собирает .vsix в артефакты.
 
-# 5. Копируем папку include (обязательно для стандартных типов Google)
-Copy-Item -Path "temp_protoc_setup\extracted\include" -Destination "node_modules\grpc-tools\bin" -Recurse -Force
+## Что не входит в .vsix
 
-# 6. Убираем мусор
-Remove-Item "temp_protoc_setup" -Recurse -Force
+По `.vscodeignore` в пакет не попадают `models/` (модель эмбеддингов) и `onnxruntime-node`, поэтому локальный режим индексации в установленном расширении недоступен. Индексация выключена по умолчанию, режим `remote` работает, `codebase_search` работает и без индекса. Подробнее: [INDEXING_SYSTEM.md](./INDEXING_SYSTEM.md).
 
-Write-Host "✅ Protoc установлен успешно!" -ForegroundColor Green
-```
+## Если сборка ломается
 
----
+- Ошибки типов, `Cannot find module` или странное состояние после слияний: удалить `node_modules`, `dist`, `src/generated`, `src/shared/proto`, затем заново `npm ci` и `npm run protos`.
+- На Windows `npm` иногда не скачивает `protoc.exe` в `node_modules/grpc-tools/bin`. Тогда скачать `protoc-3.20.3-win64.zip` с https://github.com/protocolbuffers/protobuf/releases, положить `bin/protoc.exe` в `node_modules/grpc-tools/bin/`, а папку `include` — рядом с ним, и повторить `npm run protos`.
 
-## ⚙️ ЭТАП 4: Генерация кода и Сборка
+## Миграция с прежнего ID
 
-```powershell
-# 1. Генерация TypeScript из .proto файлов
-# ОБЯЗАТЕЛЬНО при изменении proto/skycode/*.proto (state.proto, models.proto и др.)
-npm run protos
-
-# 2. Сборка webview (при изменении webview-ui/)
-cd webview-ui
-npm run build
-cd ..
-
-# 3. Сборка extension (esbuild)
-# Используем напрямую, так как npm run compile прогоняет еще линтеры, что долго
-node esbuild.mjs
-```
-
----
-
-## 🚀 ЭТАП 5: Запуск
-Для запуска форка VS Code с расширением выполните команду **из корня репозитория** (`D:\Users\Admin\Desktop\Skycode\vscode`):
-
-```powershell
-.\scripts\code.bat --extensionDevelopmentPath="D:\Users\Admin\Desktop\Skycode\vscode\extensions\skycode"
-```
+При первой активации расширение копирует историю задач из хранилища старого ID `skycode.skycode` (`src/hosts/vscode/migrateLegacyStorage.ts`).

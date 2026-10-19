@@ -1,8 +1,10 @@
-# Skycode AI — Inline Diff System v4
+# Skycode AI — Diff System v4
 
 ## Обзор
 
-Cursor-like inline diff система. AI вносит изменения напрямую в файлы, пользователь контролирует через Accept/Reject кнопки в редакторе. Per-message snapshots обеспечивают точный откат.
+Cursor-like diff система. AI вносит изменения напрямую в файлы. В редакторе они подсвечиваются стандартными декорациями VS Code; принять или отклонить можно в панели Pending Changes в чате и командами `skycode.diff.*`. Разбор по кускам — в стандартном окне сравнения «до агента ↔ сейчас». Per-message snapshots обеспечивают точный откат.
+
+Расширение работает в обычном VS Code, поэтому закрытые (proposed) API, в том числе `editorInsets`, не используются: View Zones и кнопок Accept/Reject прямо в тексте редактора нет.
 
 ---
 
@@ -20,7 +22,7 @@ DiffSystem (facade) — src/core/diff-v2/DiffSystem.ts
 │   ├── PositionTracker (пересчёт позиций после правок/reject)
 │   └── SystemEditGuard (отличает системные записи от ручных)
 └── UI
-    ├── InlineDiffRenderer (реактивные View Zones + зелёные декорации)
+    ├── HunkDecorations (зелёный фон добавленного, красная черта на месте удаления, hover «что было до агента»)
     └── KeyboardNavigation (кросс-файловая навигация по диффам)
 ```
 
@@ -37,7 +39,7 @@ DiffSystem (facade) — src/core/diff-v2/DiffSystem.ts
 | removedLines | Из diff computation | Из реального файла (MISMATCH protection) |
 | HunkReverter EOL | `\r\n` на Windows | Всегда `\n` (VS Code нормализует) |
 | No-op detection | Нет | Да: модель получает ошибку если файл не изменился |
-| Навигация | Только в файле | Кросс-файловая (стрелки `< >` переходят между файлами) |
+| Навигация | Только в файле | Кросс-файловая (`Alt+]` / `Alt+[` переходят между файлами) |
 | Chat preview | Только для write_to_file | Для всех tool types (fallback из hunk data) |
 | ApprovalGate | pWaitFor polling | Promise-based + early response queue |
 | Orphaned RGs | Накапливаются | Cleanup при старте |
@@ -59,7 +61,7 @@ AI Tool (write_to_file / replace_text / delete_block)
     → HunkApplier.applyReplacement() — writes file + creates Hunk
       → removedLines = actual file content (not diff computation)
       → DiffStore.createHunk() — fires hunkAdded event
-        → InlineDiffRenderer (реактивно создаёт View Zones)
+        → HunkDecorations (пересчитывает декорации в редакторах)
         → PendingChangesStorage (синхронизация → webview)
 
 User feedback → startCheckpoint(feedbackTs) — NEW RG + snapshot
@@ -89,36 +91,17 @@ Checkpoints создаются в двух местах:
 
 ---
 
-## Три типа diff-блоков
+## Отображение в редакторе
 
-### DELETION
-```
-┌──────────────────────────────┐
-│ удалённая строка (красная)   │  ← View Zone
-└──────────────────────────────┘
-┌──────────────────────────────┐
-│ [✓ Принять] [✗ Отклонить]   │  ← View Zone (buttons)
-└──────────────────────────────┘
-```
+Только стандартные декорации VS Code (`HunkDecorations`), без вставок в текст:
 
-### ADDITION
-```
-│ 24 │ новая строка (зелёная)   │  ← TextEditorDecoration
-┌──────────────────────────────┐
-│ [✓ Принять] [✗ Отклонить]   │  ← View Zone (buttons)
-└──────────────────────────────┘
-```
+- **Добавленные и изменённые строки** — зелёный фон (`diffEditor.insertedLineBackground`) и метка на полосе прокрутки.
+- **Место удаления** — красная черта над следующей строкой (под последней, если удалено в конце файла) и метка на полосе прокрутки.
+- **Hover** — что было до агента (до 20 строк) и ссылка «открыть сравнение».
+- **Окно сравнения** — команда `skycode.diff.openBaselineDiff` открывает стандартный diff «до агента ↔ сейчас» (схема `skycode-base`), в нём у каждого куска есть стрелка отката.
+- **Принять/отклонить** — панель Pending Changes в чате (`PendingChangesBar`) и команды ниже.
 
-### REPLACEMENT
-```
-┌──────────────────────────────┐
-│ старая строка (красная)      │  ← View Zone (deletion)
-├──────────────────────────────┤
-│ 24 │ новая строка (зелёная)  │  ← TextEditorDecoration
-┌──────────────────────────────┐
-│ [✓ Принять] [✗ Отклонить]   │  ← View Zone (buttons)
-└──────────────────────────────┘
-```
+Декорации не хранят состояния: при любом изменении хранилища или набора видимых редакторов они пересчитываются из ожидающих hunks.
 
 ---
 
@@ -127,7 +110,7 @@ Checkpoints создаются в двух местах:
 ### Accept
 1. Файл не трогается (новый код уже на месте)
 2. `store.updateHunkStatus('accepted')` → fires `hunkRemoved`
-3. `InlineDiffRenderer` удаляет View Zones + зелёные декорации
+3. `HunkDecorations` пересчитывает декорации (подсветка снимается)
 4. Snapshot cleanup если 0 pending hunks
 
 ### Reject
@@ -179,22 +162,9 @@ Overlapping/adjacent hunks auto-reject'ятся bottom-to-top перед при�
 
 ## Тесты
 
-Покрытие Vitest по DiffSystem (9 suites внутри `src/core/diff-v2/`, плюс смежные handlers/session).
+Юнит-тесты (mocha) лежат рядом с кодом в `__tests__/`: `src/core/diff-v2/__tests__/`, `engine/__tests__/`, `storage/__tests__/`, `ui/__tests__/`, а также `src/core/session/__tests__/ApprovalGate.test.ts` и `src/core/task/tools/handlers/__tests__/WriteToFileToolHandler.test.ts`.
 
-| Компонент | Suite | Тесты |
-|-----------|-------|-------|
-| SystemEditGuard | `SystemEditGuard.test.ts` | 10 |
-| PositionTracker | `PositionTracker.test.ts` | 13 |
-| DiffStore | `DiffStore.test.ts` | 36 |
-| FileSnapshotStorage | `FileSnapshotStorage.test.ts` | 27 |
-| HunkApplier | `HunkApplier.test.ts` | 26 (включая bad AI input) |
-| HunkReverter | `HunkReverter.test.ts` | 25 |
-| DiffSystem (интеграция) | `DiffSystem.test.ts` + `DiffSystem.validateSyntax.test.ts` | 56 |
-| KeyboardNavigation | `KeyboardNavigation.test.ts` | 11 |
-| WriteToFileToolHandler | `task/tools/handlers/__tests__/WriteToFileToolHandler.test.ts` | 17 |
-| ApprovalGate | `session/ApprovalGate.test.ts` | 18 |
-
-Запуск: `npm run test:unit -- --grep "DiffSystem|DiffStore|Hunk|Snapshot|Position|Guard|Gate|Navigation|WriteToFile"`
+Запуск (из `extensions/skycode`): `npm run test:unit`.
 
 ---
 
@@ -206,20 +176,7 @@ Overlapping/adjacent hunks auto-reject'ятся bottom-to-top перед при�
 | `skycode.diff.reject` | Отклонить одно изменение |
 | `skycode.diff.acceptAllInFile` | Принять все в текущем файле |
 | `skycode.diff.rejectAllInFile` | Отклонить все в текущем файле |
-| `skycode.diff.nextHunk` | Следующий hunk (кросс-файловый) |
-| `skycode.diff.prevHunk` | Предыдущий hunk (кросс-файловый) |
+| `skycode.diff.nextHunk` / `skycode.diff.prevHunk` | Следующий / предыдущий hunk (кросс-файловый), `Alt+]` / `Alt+[` |
+| `skycode.diff.acceptCurrent` / `skycode.diff.rejectCurrent` | Принять / отклонить текущий hunk, `Ctrl+Shift+Y` / `Ctrl+Shift+N` |
+| `skycode.diff.openBaselineDiff` | Окно сравнения «до агента ↔ сейчас» для файла |
 | `skycode.diff.clearAll` | Очистить все pending changes |
-
----
-
-## Proposed API
-
-`vscode.window.createWebviewTextEditorInset` (Proposed API `editorInsets`).
-
-```json
-"enabledApiProposals": ["editorInsets"]
-```
-
----
-
-*Последнее обновление: 2026-05-01 — v4 architecture*

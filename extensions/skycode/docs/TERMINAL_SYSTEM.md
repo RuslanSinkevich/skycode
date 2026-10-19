@@ -5,16 +5,13 @@
 
 ## Два режима
 
-Настройка `terminalExecutionMode` (Settings → Terminal), по умолчанию `vscodeTerminal`.
+Настройка `vscodeTerminalExecutionMode` (Settings → Терминал), по умолчанию `vscodeTerminal`.
 
 | | `vscodeTerminal` (по умолчанию) | `backgroundExec` |
 |---|---|---|
 | Где выполняется | видимый терминал VS Code, shell integration | `child_process`, скрытый терминал |
 | Менеджер | `VscodeTerminalManager` | `StandaloneTerminalManager` |
 | Пользователь видит процесс | да, в панели терминала | нет, только вывод в чате |
-
-Команды субагентов (`skycode "prompt"`) всегда идут через `StandaloneTerminalManager`,
-чтобы не засорять терминал пользователя.
 
 ## Путь команды
 
@@ -77,7 +74,7 @@ ExecuteCommandToolHandler        // валидация, permissions, approval, P
 - после 1000 строк или 512 КБ вывод уходит в файл, модели отдаются первые и
   последние 100 строк плюс путь к логу;
 - в результат инструмента попадает не больше
-  `DEFAULT_TERMINAL_OUTPUT_LINE_LIMIT` строк (2000 для субагентов).
+  `DEFAULT_TERMINAL_OUTPUT_LINE_LIMIT` строк (500 по умолчанию).
 
 ## Файлы
 

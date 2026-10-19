@@ -13,9 +13,15 @@ npm run protos
 ## Генерация
 
 - `src/shared/proto/` — общие типы
-- `src/generated/grpc-js/` — сервисы
-- `src/generated/nice-grpc/` — Promise клиенты
-- `src/generated/hosts/` — хэндлеры
+- `src/generated/hosts/` — сервисы и клиент host bridge
+- `webview-ui/src/services/grpc-client.ts` — клиенты для webview
+
+Все три в `.gitignore`.
+
+## Правила
+
+- Номера полей не менять и не переиспользовать; удалённое поле → `reserved N;`.
+- `scripts/generate-state-proto.mjs` не запускать.
 
 ## Именование
 

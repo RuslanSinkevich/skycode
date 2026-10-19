@@ -1,5 +1,7 @@
 # Вкладки сессий — план работ
 
+> Статус: этапы 0–4 выполнены (проверено по коду 2026-10-19: `activeTask`, RPC newTab/switchTab/closeTab/openTaskInTab, лимит 3 + очередь, `TabStrip`, `HistoryDrawer`, `ContextRing`); открыт этап 5 — автосжатие срабатывает раньше порога.
+
 Ветка `experiment/agent-sessions`. Пушить только по слову владельца.
 
 ## Что делаем (утверждено 14.10.2026)

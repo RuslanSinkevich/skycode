@@ -1,5 +1,7 @@
 # IMPL-09: Inline Edit (Ctrl+K)
 
+> Статус: выполнено (проверено по коду 2026-10-19) — `core/inline-edit/InlineEditController.ts`, команда `skycode.inlineEdit` (Ctrl+Shift+K).
+
 > Приоритет: ВЫСОКИЙ
 > Оценка: 8-16 часов
 > Зависимости: нет

@@ -2,112 +2,60 @@
 
 # Руководство по разработке
 
+Skycode — расширение VS Code, код лежит в `extensions/skycode/`. Репозиторий физически остаётся форком VS Code, но сборка VS Code целиком (`npm install` в корне, gulp, `scripts/code.*`) для Skycode не нужна. Все команды ниже — из `extensions/skycode`, пути в разделах ниже тоже относительно этой папки.
+
 ## Требования
 
-- Node.js — ровно та версия, что указана в `vscode/.nvmrc` (24.18.0 на upstream 1.136.1).
-  `build/npm/preinstall.ts` проверяет её и отказывается ставить зависимости на более старой.
-- Python 3.x (для сборки нативных модулей VS Code)
-- C++ build tools (Visual Studio Build Tools на Windows)
-- Git с установленным Git LFS
+- VS Code 1.124+ (минимальная версия движка в `package.json`)
+- Node.js 22+ (версия, которой собирает CI) и npm
 
 ## Быстрый старт
 
 ```bash
-# Клонирование
 git clone https://github.com/RuslanSinkevich/skycode.git
-cd skycode/vscode
+cd skycode/extensions/skycode
 
-# Установка зависимостей (на Windows сначала прочитай раздел про тулсет ниже)
-npm install
+npm ci
+cd webview-ui && npm ci && cd ..
 
-# Запуск в режиме разработки
-# Windows:
-.scriptscode.bat
-# macOS/Linux:
-./scripts/code.sh
+npm run protos     # генерация типов из proto
+npm run package    # проверка типов + сборка webview + lint + esbuild (production)
 ```
 
-## Windows: пин тулсета MSVC
+Для разработки: `npm run dev` (protos + watch esbuild/tsc) и `npm run dev:webview` (Vite для webview).
 
-Любая команда, собирающая нативные модули, должна запускаться с пином `VCToolsVersion`:
+## Запуск и проверка
+
+- Установить собранный `.vsix` в обычный VS Code («Установить из VSIX…») и выполнить **Developer: Reload Window**.
+- Либо открыть `extensions/skycode` в VS Code и запустить Extension Development Host (F5).
+
+## Тесты
 
 ```bash
-VCToolsVersion=14.41.34120 npm ci
+npm run test:unit                    # mocha, юнит-тесты расширения
+cd webview-ui && npx vitest run      # тесты webview
 ```
 
-Electron 42 (upstream 1.123.2 и новее) требует Spectre-mitigated библиотек MSVC. Это
-необязательный компонент Visual Studio, и обычно он установлен только для **одного**
-тулсета, тогда как MSBuild по умолчанию берёт самый новый из найденных — сборка падает с
-`MSB8040: для этого проекта требуются библиотеки с устранением рисков Spectre`.
-
-Посмотреть, у каких тулсетов они реально есть:
+## Сборка .vsix
 
 ```bash
-ls "/c/Program Files/Microsoft Visual Studio/"*/*/VC/Tools/MSVC/*/lib/spectre
+npx vsce package --readme-path MARKETPLACE.md
 ```
 
-Пини `VCToolsVersion` на версию из этого списка. Доустановить Spectre-библиотеки для
-нового тулсета через Visual Studio Installer тоже можно, но это закачка на несколько
-гигабайт. Пин не сохраняется между запусками терминала — указывай его в той же команде
-каждый раз.
+`MARKETPLACE.md` — текст страницы в Marketplace; `README.md` в папке расширения — индекс для разработчиков.
 
-## Переустановка зависимостей после мержа upstream
+## Релиз
 
-`npm ci` чистит только **корневой** `node_modules`. У каждой папки внутри `extensions/`
-своё дерево, поэтому после смены версии upstream там остаются старые пакеты — обычно
-устаревший `@types/node`, из-за которого `npm run compile` падает в файлах, которых мерж
-вообще не касался.
+1. Поднять `version` в `extensions/skycode/package.json`.
+2. Запушить тег `ext-vX.Y.Z` (версия в теге должна совпадать с `package.json`).
+3. Workflow `.github/workflows/skycode-extension.yml` соберёт расширение, прогонит юнит-тесты, опубликует в VS Code Marketplace (секрет `VSCE_PAT`; переход на trusted publishing через `vsce publish --oidc` запланирован, когда Marketplace его поддержит) и приложит `.vsix` к GitHub Release. В Open VSX публикуется только если задан секрет `OVSX_PAT`.
 
-Обновить их:
-
-```bash
-VSCODE_FORCE_INSTALL=1 npm_command=install VCToolsVersion=14.41.34120 node build/npm/postinstall.ts
-```
-
-Обе переменные здесь обязательны:
-
-- `npm_command=install` — `build/npm/postinstall.ts` берёт подкоманду из
-  `process.env['npm_command']`. При запуске через `npm run postinstall` туда попадает
-  `run-script`, и скрипт выполняет в каждой папке `npm run-script`, который просто
-  печатает список доступных скриптов. Он завершается с кодом 0, не установив ничего.
-  Запуск файла напрямую через `node` — то, что позволяет явному значению уцелеть.
-- `VSCODE_FORCE_INSTALL=1` — обходит кеш актуальности в
-  `node_modules/.postinstall-state`. Прерванный запуск может оставить в этом кеше отметку,
-  что всё уже свежее.
-
-После этого проверь, что какое-нибудь расширение соответствует своему лок-файлу:
-
-```bash
-node -e "console.log(require('./extensions/git/node_modules/@types/node/package.json').version)"
-```
-
-## Полная сборка дистрибутива
-
-```bash
-VCToolsVersion=14.41.34120 npm run gulp vscode-win32-x64
-```
-
-Результат — в `../VSCode-win32-x64` (`Skycode.exe`, а не `code.exe`). Задача начинается с
-удаления этой папки, поэтому переименуй предыдущую сборку, если она ещё нужна.
-
-## Сборка расширения
-
-```bash
-# Сборка webview UI
-cd vscode/extensions/skycode/webview-ui
-npm run build
-
-# Сборка бэкенда расширения
-cd ..
-node esbuild.mjs
-```
+Ручной запуск workflow (Actions → Skycode Extension → Run workflow) только собирает `.vsix` в артефакты.
 
 ## Проверка типов
 
 ```bash
-npm run compile
-# или
-npx tsc --noEmit
+npm run check-types
 ```
 
 ## gRPC / Protobuf коммуникация
@@ -183,16 +131,6 @@ npm run protos
 - `src/core/api/index.ts` — обработчик в `createHandlerForProvider()`
 - Webview-компоненты
 
-## Changesets
-
-Для значимых пользовательских изменений:
-
-```bash
-npm run changeset
-```
-
-Создавать только **patch** версии. Пропускать для мелких фиксов, внутренних рефакторингов и невидимых UI-изменений.
-
 ## Регенерация снапшотов
 
 После изменения промптов:
@@ -206,4 +144,3 @@ UPDATE_SNAPSHOTS=true npm run test:unit
 - [Добавление инструментов](./adding-tools.md)
 - [Сетевые запросы](./network.md)
 - [Добавление настроек](./adding-settings.md)
-- [Патчи форка](./fork-patches.md)

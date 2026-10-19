@@ -2,9 +2,9 @@
 
 # Codebase Indexing System
 
-Semantic indexing for intelligent code search. Enables the AI agent to retrieve relevant context from the entire project before responding.
+Optional semantic indexing for code search. Enables the AI agent to retrieve relevant context from the entire project before responding.
 
-Runs fully locally by default (transformers.js, WASM), with an option to connect a remote API.
+Indexing is **off** by default (`skycode.indexing.mode = "off"`): `codebase_search` works without it, using a repo map (declarations via tree-sitter, `src/services/repo-map/`) and ripgrep text search. The working mode for Marketplace builds is `remote` (OpenAI-compatible embeddings API). The `local` mode (transformers.js / onnxruntime) does not work in Marketplace builds: the local model and onnxruntime-node are not bundled in the VSIX.
 
 ## Architecture
 
@@ -27,7 +27,7 @@ IndexingService (orchestrator) — src/core/indexing/IndexingService.ts
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `skycode.indexing.mode` | `"off" \| "local" \| "remote"` | `"local"` | Indexing mode |
+| `skycode.indexing.mode` | `"off" \| "local" \| "remote"` | `"off"` | Indexing mode (`local` is unavailable in Marketplace builds) |
 | `skycode.indexing.remoteApiUrl` | string | `""` | Remote API URL |
 | `skycode.indexing.remoteApiKey` | string | `""` | API key |
 | `skycode.indexing.remoteModel` | string | `"text-embedding-3-small"` | Model name |
@@ -48,7 +48,9 @@ Fallback backend (when native SQLite is unavailable):
 
 ## Embedding Providers
 
-### Local (default)
+### Local (does not work in Marketplace builds)
+
+The model and onnxruntime-node are not bundled in the VSIX; this mode only works in a build where they are supplied manually.
 
 - **Library:** `@xenova/transformers` (transformers.js)
 - **Backend:** WASM (no native modules, works in any environment)
@@ -86,7 +88,7 @@ Fallback backend (when native SQLite is unavailable):
 
 ## Performance
 
-| Project | Files | Chunks | Indexing (local) | Search |
+| Project | Files | Chunks | Indexing (local model) | Search |
 |---------|-------|--------|-----------------|--------|
 | Small (~100 files) | ~100 | ~500 | ~30 sec | <10ms |
 | Medium (~2000 files) | ~2000 | ~10K | ~5 min | ~30ms |

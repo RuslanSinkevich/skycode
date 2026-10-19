@@ -6,7 +6,7 @@ Skycode AI is a VS Code extension consisting of three major subsystems:
 
 - **Core Extension** — Node.js backend: agent loop, tool execution, API providers, diff engine
 - **Webview UI** — React frontend: chat interface, settings, history
-- **Indexing Subsystem** — semantic code search with local embeddings
+- **Indexing Subsystem** — optional vector index for code search (off by default; without it search uses the repo map and ripgrep)
 
 ## High-Level Diagram
 

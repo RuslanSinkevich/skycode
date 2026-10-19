@@ -1,5 +1,7 @@
 # Skycode — План тестирования
 
+> Статус: частично выполнено (проверено 2026-10-19) — тесты DiffSystem V4, ApprovalGate, WriteToFileToolHandler, KeyboardNavigation есть; не найдены `deleteFromMessage.test.ts` и `retryFromMessage.test.ts` (п. 2.2, 2.3).
+
 ## Текущее состояние (обновлено 2026-02-20)
 
 - **865 тестов** проходят (`npm run test:unit`)

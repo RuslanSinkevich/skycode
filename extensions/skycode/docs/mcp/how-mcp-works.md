@@ -28,7 +28,8 @@
 | `core/prompts/system-prompt/components/mcp.ts` | Инъекция MCP-тулов в системный промпт AI |
 | `core/task/tools/handlers/UseMcpToolHandler.ts` | Обработка вызовов `use_mcp_tool` от AI |
 | `core/task/tools/handlers/AccessMcpResourceHandler.ts` | Обработка вызовов `access_mcp_resource` от AI |
-| `core/controller/mcp/downloadMcp.ts` | Установка MCP-серверов из маркетплейса |
+| `services/mcp/McpTransportFactory.ts` | Создание транспорта (stdio / sse / streamableHttp) |
+| `core/controller/mcp/` | RPC-обработчики: добавить удалённый сервер, включить/выключить, перезапуск, auto-approve инструмента, таймаут |
 
 ## Пример: Context7
 
@@ -36,20 +37,13 @@ Context7 — MCP-сервер, который даёт AI доступ к акт
 
 ### 1. Установка
 
-При клике "Установить" в маркетплейсе вызывается `downloadMcp.ts`:
+Встроенного каталога (маркетплейса) MCP нет. Сервер добавляется в `skycode_mcp_settings.json` вручную (настройки → MCP → «Настроить», кнопка «Настроить MCP серверы» открывает файл) или через вкладку «Удаленные серверы» для SSE/HTTP.
 
-1. Загружает информацию о сервере (API → статический каталог)
-2. Парсит README, ищет JSON-блок с `"mcpServers"`
-3. Находит конфиг: `{"command": "npx", "args": ["-y", "@upstash/context7-mcp"]}`
-4. Если `requiresApiKey: false` — убирает placeholder-ключи из аргументов
-5. Записывает конфиг в `skycode_mcp_settings.json`
-6. McpHub подхватывает изменения через file watcher и запускает сервер
-
-Результат в `skycode_mcp_settings.json`:
+Конфиг для Context7:
 ```json
 {
   "mcpServers": {
-    "github.com/upstash/context7-mcp": {
+    "context7": {
       "command": "npx",
       "args": ["-y", "@upstash/context7-mcp"],
       "disabled": false,
@@ -59,12 +53,14 @@ Context7 — MCP-сервер, который даёт AI доступ к акт
 }
 ```
 
+McpHub подхватывает изменения файла через file watcher и запускает сервер.
+
 ### 2. Подключение
 
 McpHub при старте (или по file watcher) делает:
 1. Читает `skycode_mcp_settings.json`
 2. Для каждого сервера запускает процесс (`npx -y @upstash/context7-mcp`)
-3. Устанавливает stdio-соединение (stdin/stdout)
+3. Устанавливает соединение (stdio или удалённое, см. «Транспорт»)
 4. Запрашивает список tools и resources у сервера
 5. Сохраняет подключение в `connections[]`
 
@@ -75,7 +71,7 @@ McpHub при старте (или по file watcher) делает:
 ```
 ## Connected MCP Servers
 
-Server: github.com/upstash/context7-mcp
+Server: context7
 
 ### Tools
 - resolve-library-id: Resolves a package name to a Context7-compatible library ID...
@@ -97,7 +93,7 @@ AI видит доступные инструменты и их параметр
 
 ```xml
 <use_mcp_tool>
-  <server_name>github.com/upstash/context7-mcp</server_name>
+  <server_name>context7</server_name>
   <tool_name>resolve-library-id</tool_name>
   <arguments>{"query": "React documentation", "libraryName": "react"}</arguments>
 </use_mcp_tool>
@@ -125,7 +121,7 @@ AI видит результат `resolve-library-id`:
 Затем вызывает второй инструмент:
 ```xml
 <use_mcp_tool>
-  <server_name>github.com/upstash/context7-mcp</server_name>
+  <server_name>context7</server_name>
   <tool_name>query-docs</tool_name>
   <arguments>{"libraryId": "/facebook/react", "query": "hooks useEffect examples"}</arguments>
 </use_mcp_tool>
@@ -155,13 +151,8 @@ MCP поддерживает три типа транспорта:
 
 ## Как добавить новый MCP-сервер
 
-### Через маркетплейс
-1. Открой настройки → вкладка MCP → Маркетплейс
-2. Найди сервер → нажми "Установить"
-3. Если нужен API-ключ — введи его в появившемся диалоге
-
 ### Вручную
-Отредактируй `skycode_mcp_settings.json` (путь: VS Code globalStorage → `settings/skycode_mcp_settings.json`):
+Настройки → MCP → «Настроить» → «Настроить MCP серверы» откроет `skycode_mcp_settings.json` (файл лежит в VS Code globalStorage: `settings/skycode_mcp_settings.json`):
 
 ```json
 {
@@ -179,8 +170,8 @@ MCP поддерживает три типа транспорта:
 }
 ```
 
-### Через UI "Удалённые серверы"
-Для SSE/HTTP серверов — введи URL в форму "Добавить удалённый сервер".
+### Через форму удалённого сервера
+Настройки → вкладка MCP → «Удаленные серверы»: для SSE/HTTP серверов введи имя и URL.
 
 ## Отладка
 

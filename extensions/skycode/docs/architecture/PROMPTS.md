@@ -43,6 +43,7 @@ src/core/prompts/system-prompt/
     ├── devstral/            # Devstral
     ├── glm/                 # GLM
     ├── hermes/              # Hermes
+    ├── qwen/                # Qwen
     └── xs/                  # Маленькие модели (Qwen, ...)
 ```
 
@@ -195,7 +196,7 @@ export const read_file_variants = [generic]
 
 6. **Создать хэндлер** (`src/core/task/tools/handlers/MyToolHandler.ts`)
 
-7. **Зарегистрировать хэндлер** (`ToolExecutor.ts`)
+7. **Зарегистрировать хэндлер** (`registerToolHandlers()` в `src/core/task/ToolExecutor.ts`)
 
 ## Семейства моделей
 
@@ -239,7 +240,7 @@ const tool: SkycodeToolSpec = {
 
 - `PromptRegistry.getModelFamily()` возвращает `ModelFamily.XS` если `context.lightweightMode === true`
 - `useSimplifiedEditTools` автоматически привязан к `lightweightMode` (не отдельная настройка)
-- XS вариант: компактный промпт, 14 инструментов (вместо 20), упрощённые инструкции
+- XS вариант: компактный промпт, сокращённый набор инструментов, упрощённые инструкции
 - Сбрасывается при смене модели в `ModelPickerModal`
 
 ## См. также

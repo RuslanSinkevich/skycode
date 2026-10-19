@@ -4,9 +4,16 @@
 
 ## Сборка
 
-- Проверка сборки: `npm run compile` или `npx tsc --noEmit`
-- Быстрая сборка: `node esbuild.mjs`
+Команды выполняются в `extensions/skycode`:
+
+- Зависимости: `npm ci` и `cd webview-ui && npm ci`
 - Генерация proto: `npm run protos`
+- Проверка типов: `npx tsc --noEmit -p .`, `npx tsc --noEmit -p tsconfig.test.json`, webview: `cd webview-ui && npx tsc --noEmit -p tsconfig.app.json`
+- Линт: `npx biome lint --diagnostic-level=error src webview-ui/src`
+- Юнит-тесты: `npm run test:unit` (mocha); webview: `cd webview-ui && npx vitest run`
+- Быстрая сборка: `node esbuild.mjs`; полная: `npm run package`
+
+Подробнее — [../BUILD.md](../BUILD.md).
 
 ## gRPC/Protobuf коммуникация
 
@@ -29,11 +36,15 @@ message MyMessage { }      // PascalCase
 npm run protos
 ```
 
-Генерирует типы в:
+Генерирует (папки в `.gitignore`, в репозиторий не попадают):
 - `src/shared/proto/`
-- `src/generated/grpc-js/`
-- `src/generated/nice-grpc/`
 - `src/generated/hosts/`
+- `webview-ui/src/services/grpc-client.ts`
+
+### Правила для `.proto`
+
+- Номера полей не переиспользовать и не менять. Удалённое поле заменять на `reserved N;`.
+- `scripts/generate-state-proto.mjs` не запускать.
 
 ### Добавление нового RPC метода
 
@@ -123,23 +134,6 @@ const wasCancelled =
     lastModifiedMessage?.ask === "resume_completed_task")
 ```
 
-## Changesets
-
-При значимых user-facing изменениях:
-
-```bash
-npm run changeset
-```
-
-Создавать только **patch** версии. Пропускать для:
-- Мелких фиксов
-- Внутренних рефакторингов
-- Незаметных UI изменений
-
-## Feature Flags
-
-Пример добавления: #
-
 ## Регенерация снапшотов
 
 После изменения промптов:
@@ -153,3 +147,4 @@ UPDATE_SNAPSHOTS=true npm run test:unit
 - [NETWORK.md](./NETWORK.md) — сетевые запросы
 - [TOOLS.md](./TOOLS.md) — добавление инструментов
 - [../ADDING_SETTINGS.md](../ADDING_SETTINGS.md) — добавление настроек
+- [../BUILD.md](../BUILD.md) — сборка и релиз

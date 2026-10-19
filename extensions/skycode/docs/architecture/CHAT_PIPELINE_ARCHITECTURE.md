@@ -1,10 +1,10 @@
 # Chat Pipeline Architecture
 
-Источник: архитектурный план (chat pipeline)
+Исходный архитектурный план (chat pipeline); статус реализации — в конце страницы.
 
-## Проблема
+## Проблема (исходная)
 
-Текущая архитектура
+Архитектура до рефакторинга:
 
 - `task.ask()` блокирует через `pWaitFor` (поллит переменную каждые 100мс)
 - Один `controller.task` -- одна задача одновременно
@@ -142,7 +142,7 @@ class SessionManager {
 }
 ```
 
-Одна сессия сейчас. Добавление табов -- задача UI, не смена архитектуры.
+Сессий может быть несколько (вкладки в панели), по одной задаче на сессию.
 
 ## Изменения транспорта
 
@@ -190,12 +190,11 @@ service SessionService {
 
 | # | Задача | Статус |
 |---|--------|--------|
-| 1 | Session + SessionManager | ✅ Реализовано |
-| 2 | ApprovalGate вместо `pWaitFor` | ✅ Реализовано |
-| 3 | Pipeline + события прогресса | ✅ Реализовано |
-| 4 | `SessionEvent` stream вместо full-state push | ✅ Реализовано |
-| 5 | Переписанный frontend (`useSession`, новый approval flow) | ⚠️ Частично — `useSession.ts` и `ApprovalBar.tsx` созданы, но старый `ChatView` ещё активен |
-| 6 | Уборка legacy-кода (`task.ask()`, `pWaitFor`, poll-подход) | ❌ Не начато — `pWaitFor` и `askResponse` всё ещё используются в `Task` |
+| 1 | Session + SessionManager | Реализовано. Контроллер держит сессии, по одной задаче на сессию; на этом построены вкладки (`src/core/session/tabs.ts`) |
+| 2 | ApprovalGate вместо `pWaitFor` для ask/response | Реализовано (`Task.approvalGate`) |
+| 3 | Pipeline + события прогресса | Реализовано |
+| 4 | `SessionEvent` stream (`proto/skycode/session.proto`) | Реализовано |
+| 5 | Frontend (`useSession`, `ApprovalBar`) | Частично: используются в `ChatView`, но `useMessageQueue.ts` и `buttonConfig.ts` ещё живы |
+| 6 | Уборка legacy-кода | Частично: `pWaitFor` для ask/response убран, но остаётся в `Task` для других ожиданий (MCP, `userMessageContentReady`) |
 
-> **Примечание:** Новая архитектура работает параллельно со старой. `task.ask()` и `pWaitFor` всё ещё используются в `src/core/task/index.ts`. Chat UI переведён на `TurnBlock` архитектуру (sticky headers, CSS-based scroll) но пока поверх старого transport. Полная миграция запланирована.
-
+> **Примечание:** `Session` пока адаптер над `Task`; `Task` продолжает владеть agent loop, а состояние в webview по-прежнему идёт через `postStateToWebview()` вместе с событиями сессии. Одновременно стримят ответ не больше 3 задач (`ApiSlotLimiter`), остальные ждут слот. Вкладки: [plans/TABS.md](../plans/TABS.md).
