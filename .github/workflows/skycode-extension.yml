@@ -2,7 +2,12 @@ name: Skycode Extension
 
 # [SKYCODE] Сборка и публикация расширения Skycode AI (skycode.skycode-ai).
 #  - push тега ext-vX.Y.Z → проверки, сборка .vsix, публикация в VS Code Marketplace
-#    (секрет VSCE_PAT) и, если задан секрет OVSX_PAT, в Open VSX; .vsix прикладывается к GitHub Release.
+#    и, если задан секрет OVSX_PAT, в Open VSX; .vsix прикладывается к GitHub Release.
+# Marketplace: пока задан секрет VSCE_PAT — публикуем по токену Azure DevOps (глобальные PAT
+# «All accessible organizations» объявлены к отключению с 2026-12-01). Без секрета — trusted publishing
+# (vsce 4+, --oidc, без токена); на 2026-10-19 Marketplace его ещё не поддерживает
+# (microsoft/vscode-vsce#1275). Когда включат — разрешить на marketplace.visualstudio.com публикацию
+# из RuslanSinkevich/skycode этим workflow и удалить секрет VSCE_PAT.
 #  - ручной запуск (Actions → Skycode Extension → Run workflow) → только сборка .vsix в артефакты.
 # Версия в теге должна совпадать с "version" в extensions/skycode/package.json.
 # Префикс ext-v — чтобы не пересекаться со сборкой программы (skycode-v*) и тегами upstream VS Code.
@@ -14,6 +19,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 concurrency:
   group: skycode-extension-${{ github.ref }}
@@ -81,8 +87,12 @@ jobs:
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
         run: |
-          if [ -z "$VSCE_PAT" ]; then echo "::error::Нет секрета VSCE_PAT"; exit 1; fi
-          npx vsce publish --packagePath skycode-ai-${{ steps.version.outputs.version }}.vsix
+          VSIX=skycode-ai-${{ steps.version.outputs.version }}.vsix
+          if [ -n "$VSCE_PAT" ]; then
+            npx --yes @vscode/vsce@4.0.0 publish --packagePath "$VSIX"
+          else
+            npx --yes @vscode/vsce@4.0.0 publish --oidc --packagePath "$VSIX"
+          fi
 
       - name: Publish to Open VSX
         if: startsWith(github.ref, 'refs/tags/ext-v')
