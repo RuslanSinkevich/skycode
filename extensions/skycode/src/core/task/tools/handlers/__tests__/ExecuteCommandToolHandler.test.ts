@@ -1,6 +1,7 @@
-import { describe, it, beforeEach } from "mocha"
+import { describe, it, beforeEach, afterEach } from "mocha"
 import should from "should"
 import sinon from "sinon"
+import { StateManager } from "../../../../storage/StateManager"
 import {
 	DEFAULT_ALLOWED_COMMAND_PATTERNS,
 	findAllowedCommandPattern,
@@ -22,9 +23,20 @@ import { SkycodeDefaultTool } from "@shared/tools"
  */
 describe("ExecuteCommandToolHandler", () => {
 	let handler: ExecuteCommandToolHandler
+	let sandbox: sinon.SinonSandbox
 
 	beforeEach(() => {
+		sandbox = sinon.createSandbox()
+		// On unix the PreToolUse hook path resolves workspace roots through the
+		// static StateManager, which is not initialized in unit tests.
+		sandbox.stub(StateManager, "get").returns({
+			getGlobalStateKey: () => undefined,
+		} as any)
 		handler = new ExecuteCommandToolHandler({} as any)
+	})
+
+	afterEach(() => {
+		sandbox.restore()
 	})
 
 	/**

@@ -428,10 +428,11 @@ export async function loadFixture(fixtureName: string, destDir: string): Promise
 		const destFile = path.join(destHooksDir, file)
 		await fs.copyFile(sourceFile, destFile)
 
-		// Set executable permission (not needed on Windows)
+		// Fixtures are hook scripts: always make them executable on unix.
+		// Copying the source mode would keep files non-executable when the
+		// repo is checked out on Windows (git does not store the +x bit there).
 		if (process.platform !== "win32") {
-			const stats = await fs.stat(sourceFile)
-			await fs.chmod(destFile, stats.mode)
+			await fs.chmod(destFile, 0o755)
 		}
 	}
 }
