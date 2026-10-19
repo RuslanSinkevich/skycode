@@ -1,8 +1,11 @@
+import { isGigaAmActive } from "@shared/DictationSettings"
 import { RecordingResult } from "@shared/proto/skycode/dictation"
 import * as os from "os"
 import { HostProvider } from "@/hosts/host-provider"
 import { t } from "@/i18n/backend-i18n"
 import { audioRecordingService } from "@/services/dictation/AudioRecordingService"
+import { getSherpaDictationService } from "@/services/dictation/SherpaDictationService"
+import { getSherpaLocalService } from "@/services/dictation/SherpaLocalService"
 import { AUDIO_PROGRAM_CONFIG } from "@/shared/audioProgramConstants"
 import { ShowMessageType } from "@/shared/proto/host/window"
 import { Logger } from "@/shared/services/Logger"
@@ -88,17 +91,56 @@ function isMissingDependencyError(
 }
 
 /**
+ * [SKYCODE] Старт стриминговой записи для GigaAM v3: ffmpeg → PCM → воркер sherpa-onnx.
+ * Текст приходит подписчикам subscribeToDictationText, итог отдаёт stopRecording.
+ */
+async function startGigaAmRecording(controller: Controller): Promise<RecordingResult> {
+	const sherpa = getSherpaLocalService(HostProvider.get().globalStorageFsPath)
+	if (!sherpa || !sherpa.isSupported) {
+		return RecordingResult.create({ success: false, error: t("voice.gigaamUnavailable") })
+	}
+	if (!sherpa.isReady()) {
+		return RecordingResult.create({ success: false, error: t("voice.gigaamNotReady") })
+	}
+
+	const dictSettings = controller.stateManager.getGlobalSettingsKey("dictationSettings") as any
+	const userDeviceId: string | undefined = dictSettings?.audioDeviceId || undefined
+
+	if (process.platform === "win32") {
+		const { detectWindowsAudioDevice, setCachedWinAudioDevice } = await import("@/shared/audioProgramConstants")
+		if (userDeviceId) {
+			setCachedWinAudioDevice(userDeviceId)
+		} else {
+			await detectWindowsAudioDevice(sherpa.findFfmpeg() || "ffmpeg")
+		}
+	}
+
+	const result = await getSherpaDictationService().start(sherpa, HostProvider.get().extensionFsPath, userDeviceId)
+	if (!result.success) {
+		Logger.warn(`[startRecording] GigaAM start failed: ${result.error}`)
+	}
+	return RecordingResult.create({ success: result.success, error: result.error ?? "" })
+}
+
+/**
  * Starts audio recording using the Extension Host
  * @param controller The controller instance
  * @returns RecordingResult with success status
  */
 export const startRecording = async (controller: Controller): Promise<RecordingResult> => {
 	try {
+		// [SKYCODE] Русский GigaAM: стриминговая запись с живым текстом, whisper не используется
+		if (isGigaAmActive(controller.stateManager.getGlobalSettingsKey("dictationSettings"))) {
+			return await startGigaAmRecording(controller)
+		}
+
 		// Check if local Whisper.cpp is available (use model from user settings)
 		let whisper: any = null
 		try {
 			const dictSettings = controller.stateManager.getGlobalSettingsKey("dictationSettings") as any
-			const whisperModel = dictSettings?.whisperModel ?? "tiny"
+			// [SKYCODE] "gigaam" в whisper-ветке (язык не ru) — запасной вариант "tiny"
+			const whisperModel =
+				!dictSettings?.whisperModel || dictSettings.whisperModel === "gigaam" ? "tiny" : dictSettings.whisperModel
 			const { getWhisperLocalService } = await import("@/services/dictation/WhisperLocalService")
 			const { HostProvider: HP } = await import("@/hosts/host-provider")
 			whisper = getWhisperLocalService(HP.get().globalStorageFsPath, whisperModel, HP.get().extensionFsPath)

@@ -105,6 +105,44 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			globalWorkflowToggles,
 		})
 
+		// [SKYCODE] Живой текст диктовки (GigaAM): запоминаем текст до и после курсора на момент старта
+		// записи и на каждое обновление подставляем между ними распознанное, заменяя предыдущий превью.
+		const inputValueRef = useRef(inputValue)
+		inputValueRef.current = inputValue
+		const voiceAnchorRef = useRef<{ prefix: string; suffix: string } | null>(null)
+
+		const handleVoiceLiveStart = useCallback(() => {
+			const value = inputValueRef.current
+			const el = textAreaRef.current
+			const start = Math.min(el?.selectionStart ?? value.length, value.length)
+			const end = Math.min(el?.selectionEnd ?? start, value.length)
+			voiceAnchorRef.current = { prefix: value.slice(0, start), suffix: value.slice(end) }
+		}, [textAreaRef])
+
+		/** Подставляет живой текст между сохранёнными частями; `finished` — запись закончена, ставим курсор после текста */
+		const handleVoiceLiveText = useCallback(
+			(text: string, finished: boolean) => {
+				const anchor = voiceAnchorRef.current
+				if (!anchor) {
+					return
+				}
+				const left = anchor.prefix && text && !/s$/.test(anchor.prefix) ? `${anchor.prefix} ` : anchor.prefix
+				const right = anchor.suffix && text && !/^s/.test(anchor.suffix) ? ` ${anchor.suffix}` : anchor.suffix
+				setInputValue(left + text + right)
+				if (finished) {
+					voiceAnchorRef.current = null
+					const caret = (left + text).length
+					setTimeout(() => {
+						if (textAreaRef.current) {
+							textAreaRef.current.focus()
+							textAreaRef.current.setSelectionRange(caret, caret)
+						}
+					}, 0)
+				}
+			},
+			[setInputValue, textAreaRef],
+		)
+
 		const {
 			showContextMenu,
 			setShowContextMenu,
@@ -465,6 +503,9 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								<VoiceRecorder
 									disabled={sendingDisabled}
 									language={dictationSettings?.dictationLanguage || "en"}
+									engine={dictationSettings?.whisperModel}
+									onLiveStart={handleVoiceLiveStart}
+									onLiveText={handleVoiceLiveText}
 									onProcessingStateChange={(isProcessing, message) => {
 										setIsVoiceProcessing(isProcessing)
 										if (isProcessing && message) {

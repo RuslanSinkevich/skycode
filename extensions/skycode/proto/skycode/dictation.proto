@@ -15,6 +15,8 @@ service DictationService {
   rpc getRecordingStatus(EmptyRequest) returns (RecordingStatus);
   rpc transcribeAudio(TranscribeAudioRequest) returns (Transcription);
   rpc listAudioDevices(EmptyRequest) returns (AudioDeviceList);
+  // [SKYCODE] Живой текст диктовки (GigaAM): committed - зафиксированная часть, partial - текущая фраза
+  rpc subscribeToDictationText(EmptyRequest) returns (stream DictationText);
 }
 
 message TranscribeAudioRequest {
@@ -31,6 +33,8 @@ message RecordedAudio {
   bool success = 1;
   string audio_base64 = 2;
   string error = 3;
+  // [SKYCODE] Итоговый текст движков со стримингом (GigaAM); для whisper пусто
+  string final_text = 4;
 }
 
 message RecordingStatus {
@@ -53,4 +57,11 @@ message AudioDeviceInfo {
 message AudioDeviceList {
   repeated AudioDeviceInfo devices = 1;
   string error = 2;
+}
+
+message DictationText {
+  string committed = 1;
+  string partial = 2;
+  bool final = 3;
+  string error = 4;
 }

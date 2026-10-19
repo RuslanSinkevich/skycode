@@ -24,6 +24,8 @@ const en: Record<string, string> = {
 	"voice.ready": "Voice input is ready! Click the microphone again.",
 	"voice.downloadFailed": "Failed to download voice input components: {{error}}",
 	"voice.downloadTimeout": "Download timed out. Please check your internet connection and try again.",
+	"voice.gigaamNotReady": "Russian GigaAM components are not installed. Open Voice settings and click Download.",
+	"voice.gigaamUnavailable": "Russian GigaAM dictation is not available on this platform. Choose a Whisper model in Voice settings.",
 	"auth.success.title": "Skycode - Authorization",
 	"auth.success.heading": "Done!",
 	"auth.success.body": "You are authorized. Return to Skycode.",
@@ -107,6 +109,10 @@ const ru: Record<string, string> = {
 	"voice.downloadFailed": "Не удалось загрузить компоненты голосового ввода: {{error}}",
 	// allow-any-unicode-next-line
 	"voice.downloadTimeout": "Загрузка прервана по таймауту. Проверьте подключение к интернету и попробуйте снова.",
+	// allow-any-unicode-next-line
+	"voice.gigaamNotReady": "Компоненты русского GigaAM не установлены. Откройте настройки голоса и нажмите «Загрузить».",
+	// allow-any-unicode-next-line
+	"voice.gigaamUnavailable": "Русская диктовка GigaAM недоступна на этой платформе. Выберите модель Whisper в настройках голоса.",
 	// allow-any-unicode-next-line
 	"auth.success.title": "Skycode — Авторизация",
 	// allow-any-unicode-next-line

@@ -1,5 +1,6 @@
 import { RecordingResult } from "@shared/proto/skycode/dictation"
 import { audioRecordingService } from "@/services/dictation/AudioRecordingService"
+import { getSherpaDictationService } from "@/services/dictation/SherpaDictationService"
 import { Logger } from "@/shared/services/Logger"
 import { Controller } from ".."
 
@@ -11,6 +12,13 @@ export const cancelRecording = async (controller: Controller): Promise<Recording
 	let isSuccess = true
 
 	try {
+		// [SKYCODE] Запись GigaAM отменяем отдельно: там воркер и стриминговый ffmpeg
+		const sherpaDictation = getSherpaDictationService()
+		if (sherpaDictation.isActive) {
+			await sherpaDictation.cancel()
+			return RecordingResult.create({ success: true, error: "" })
+		}
+
 		const result = await audioRecordingService.cancelRecording()
 		isSuccess = !!result?.success
 		errorMessage = result?.error ?? ""

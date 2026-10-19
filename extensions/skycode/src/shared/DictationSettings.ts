@@ -9,10 +9,11 @@ export interface DictationSettings {
 	dictationEnabled: boolean // User preference - whether user has enabled dictation
 	dictationLanguage: string
 	// allow-any-unicode-next-line
-	whisperModel?: string // "tiny" | "base" | "small" — local whisper model quality
+	whisperModel?: string // "tiny" | "base" | "small" — local whisper model quality; "gigaam" — русский GigaAM v3 (sherpa-onnx), только для языка "ru"
 	voiceReady?: boolean // true when all voice components are downloaded and ready
 	voiceDownloading?: boolean // true while components are being downloaded (transient, not persisted across restarts)
 	voiceDownloadProgress?: number // 0-100, download percentage (transient)
+	gigaamAvailable?: boolean // true, если движок GigaAM поддерживается на этой платформе (транзиентно, считает расширение)
 	voiceReinstall?: boolean // transient flag: delete model and re-download
 	audioDeviceId?: string // User-selected microphone device ID (empty = auto-detect)
 	audioDevices?: AudioDevice[] // Available audio devices list (transient, populated on request)
@@ -22,7 +23,15 @@ export const DEFAULT_DICTATION_SETTINGS: DictationSettings = {
 	featureEnabled: true, // Диктовка доступна по умолчанию (локальный Whisper)
 	dictationEnabled: false, // Default is false while this service is in Experimental status
 	dictationLanguage: "ru",
-	whisperModel: "tiny", // Default quality level (only tiny is bundled and free)
+	whisperModel: "gigaam", // [SKYCODE] По умолчанию русский GigaAM (язык по умолчанию — ru); для других языков переключается на whisper
+}
+
+/** [SKYCODE] Значение whisperModel для движка GigaAM v3 (sherpa-onnx) */
+export const GIGAAM_MODEL_ID = "gigaam"
+
+/** GigaAM работает только с русским языком */
+export function isGigaAmActive(settings: Pick<DictationSettings, "whisperModel" | "dictationLanguage"> | undefined): boolean {
+	return settings?.whisperModel === GIGAAM_MODEL_ID && settings?.dictationLanguage === "ru"
 }
 
 export interface LanguageItem {

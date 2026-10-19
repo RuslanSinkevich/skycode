@@ -17,27 +17,26 @@ export function setCachedWinAudioDevice(device: string | null): void {
 	_cachedWinAudioDevice = device
 }
 
+// [SKYCODE] Выходные аргументы вынесены отдельно от входных (устройство захвата), чтобы один и тот же
+// вход можно было писать в .webm для whisper или стримить сырым PCM в stdout для GigaAM.
+/** Whisper: запись в файл .webm (opus, 16 кГц, mono) */
+export function getWhisperOutputArgs(outputFile: string): string[] {
+	return ["-c:a", "libopus", "-b:a", "32k", "-application", "voip", "-ar", "16000", "-ac", "1", outputFile]
+}
+
+/** GigaAM: сырой PCM s16le 16 кГц mono в stdout (pipe:1) */
+export const PCM_STREAM_OUTPUT_ARGS: string[] = ["-f", "s16le", "-ac", "1", "-ar", "16000", "pipe:1"]
+
+const darwinInputArgs = (deviceId?: string) => ["-f", "avfoundation", "-i", deviceId ? `:${deviceId}` : ":default"]
+const linuxInputArgs = (deviceId?: string) => ["-f", "alsa", "-i", deviceId || "default"]
+const win32InputArgs = (deviceId?: string) => ["-f", "dshow", "-i", `audio=${deviceId || _cachedWinAudioDevice || "default"}`]
+
 export const AUDIO_PROGRAM_CONFIG = {
 	darwin: {
 		command: "ffmpeg",
 		fallbackPaths: ["/usr/local/bin/ffmpeg", "/opt/homebrew/bin/ffmpeg"],
-		getArgs: (outputFile: string, deviceId?: string) => [
-			"-f",
-			"avfoundation",
-			"-i",
-			deviceId ? `:${deviceId}` : ":default",
-			"-c:a",
-			"libopus",
-			"-b:a",
-			"32k",
-			"-application",
-			"voip",
-			"-ar",
-			"16000",
-			"-ac",
-			"1",
-			outputFile,
-		],
+		getInputArgs: darwinInputArgs,
+		getArgs: (outputFile: string, deviceId?: string) => [...darwinInputArgs(deviceId), ...getWhisperOutputArgs(outputFile)],
 		dependencyName: "FFmpeg",
 		installCommand: "brew install ffmpeg",
 		error: "FFmpeg is required for voice recording but is not installed on your system.",
@@ -46,23 +45,8 @@ export const AUDIO_PROGRAM_CONFIG = {
 	linux: {
 		command: "ffmpeg",
 		fallbackPaths: ["/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/snap/bin/ffmpeg"],
-		getArgs: (outputFile: string, deviceId?: string) => [
-			"-f",
-			"alsa",
-			"-i",
-			deviceId || "default",
-			"-c:a",
-			"libopus",
-			"-b:a",
-			"32k",
-			"-application",
-			"voip",
-			"-ar",
-			"16000",
-			"-ac",
-			"1",
-			outputFile,
-		],
+		getInputArgs: linuxInputArgs,
+		getArgs: (outputFile: string, deviceId?: string) => [...linuxInputArgs(deviceId), ...getWhisperOutputArgs(outputFile)],
 		dependencyName: "FFmpeg",
 		installCommand: "sudo apt-get update && sudo apt-get install -y ffmpeg",
 		error: "FFmpeg is required for voice recording but is not installed on your system.",
@@ -75,23 +59,8 @@ export const AUDIO_PROGRAM_CONFIG = {
 			"C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe",
 			"C:\\Program Files (x86)\\ffmpeg\\bin\\ffmpeg.exe",
 		],
-		getArgs: (outputFile: string, deviceId?: string) => [
-			"-f",
-			"dshow",
-			"-i",
-			`audio=${deviceId || _cachedWinAudioDevice || "default"}`,
-			"-c:a",
-			"libopus",
-			"-b:a",
-			"32k",
-			"-application",
-			"voip",
-			"-ar",
-			"16000",
-			"-ac",
-			"1",
-			outputFile,
-		],
+		getInputArgs: win32InputArgs,
+		getArgs: (outputFile: string, deviceId?: string) => [...win32InputArgs(deviceId), ...getWhisperOutputArgs(outputFile)],
 		dependencyName: "FFmpeg",
 		installCommand: "winget install Gyan.FFmpeg",
 		error: "FFmpeg is required for voice recording but is not installed on your system.",

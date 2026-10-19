@@ -1,5 +1,6 @@
 import * as vscode from "vscode"
 import { buildApiHandler } from "@core/api"
+import { GIGAAM_MODEL_ID } from "@shared/DictationSettings"
 import { Empty } from "@shared/proto/skycode/common"
 import {
 	PlanActMode,
@@ -192,25 +193,61 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 
 		if (request.dictationSettings !== undefined) {
 			const incoming = request.dictationSettings as any
-			const whisperModel = incoming.whisperModel ?? "tiny"
+			const dictationLanguage = incoming.dictationLanguage ?? "ru"
+			// [SKYCODE] GigaAM работает только с русским: при смене языка переключаемся на whisper "tiny"
+			let whisperModel = incoming.whisperModel ?? "tiny"
+			if (whisperModel === GIGAAM_MODEL_ID && dictationLanguage !== "ru") {
+				whisperModel = "tiny"
+			}
+			const useGigaAm = whisperModel === GIGAAM_MODEL_ID
 			const wantReinstall = incoming.voiceReinstall === true
 			const wantDownload = incoming.voiceDownloading === true
 
 			// Check if selected model is already downloaded
 			let voiceReady = false
-			try {
-				const { getWhisperLocalService } = await import("@/services/dictation/WhisperLocalService")
-				const { HostProvider: HP } = await import("@/hosts/host-provider")
-				const svc = getWhisperLocalService(HP.get().globalStorageFsPath, whisperModel, HP.get().extensionFsPath)
-				if (svc) {
-					if (wantReinstall) {
-						svc.resetModel()
-					} else {
-						voiceReady = svc.isReady
+			if (useGigaAm) {
+				try {
+					const { getSherpaLocalService } = await import("@/services/dictation/SherpaLocalService")
+					const { getSherpaDictationService } = await import("@/services/dictation/SherpaDictationService")
+					const { HostProvider: HP } = await import("@/hosts/host-provider")
+					const sherpa = getSherpaLocalService(HP.get().globalStorageFsPath)
+					if (sherpa?.isSupported) {
+						if (wantReinstall) {
+							// Воркер держит файлы модели открытыми (на Windows их нельзя удалить) — выгружаем перед удалением
+							await getSherpaDictationService().dispose()
+							sherpa.reset()
+						} else {
+							voiceReady = sherpa.isReady()
+						}
 					}
+				} catch {
+					// SherpaLocalService not available
 				}
-			} catch {
-				// WhisperLocalService not available
+			} else {
+				try {
+					const { getWhisperLocalService } = await import("@/services/dictation/WhisperLocalService")
+					const { HostProvider: HP } = await import("@/hosts/host-provider")
+					const svc = getWhisperLocalService(HP.get().globalStorageFsPath, whisperModel, HP.get().extensionFsPath)
+					if (svc) {
+						if (wantReinstall) {
+							svc.resetModel()
+						} else {
+							voiceReady = svc.isReady
+						}
+					}
+				} catch {
+					// WhisperLocalService not available
+				}
+				// Движок GigaAM не выбран — модель из памяти выгружаем (если сейчас не идёт запись)
+				try {
+					const { getSherpaDictationService } = await import("@/services/dictation/SherpaDictationService")
+					const dictation = getSherpaDictationService()
+					if (!dictation.isActive) {
+						await dictation.dispose()
+					}
+				} catch {
+					// ignore
+				}
 			}
 
 			const shouldDownload = !voiceReady && (wantDownload || wantReinstall)
@@ -218,16 +255,69 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			const dictationSettings = {
 				featureEnabled: incoming.featureEnabled ?? true,
 				dictationEnabled: incoming.dictationEnabled ?? true,
-				dictationLanguage: incoming.dictationLanguage ?? "ru",
+				dictationLanguage,
 				whisperModel,
 				voiceReady,
 				voiceDownloading: shouldDownload,
+				voiceDownloadProgress: 0,
 				audioDeviceId: incoming.audioDeviceId ?? "",
 			}
 			controller.stateManager.setGlobalState("dictationSettings", dictationSettings)
 			controller.postStateToWebview().catch(() => {})
 
-			if (shouldDownload) {
+			if (shouldDownload && useGigaAm) {
+				// [SKYCODE] Установка GigaAM: рантайм sherpa-onnx, модель, VAD и (при необходимости) ffmpeg
+				import("@/services/dictation/SherpaLocalService")
+					.then(async ({ getSherpaLocalService }) => {
+						const { HostProvider: HP } = await import("@/hosts/host-provider")
+						const { ShowMessageType } = await import("@/shared/proto/host/window")
+						const { t: t2 } = await import("@/i18n/backend-i18n")
+						const sherpa = getSherpaLocalService(HP.get().globalStorageFsPath)
+						if (!sherpa) {
+							return
+						}
+						let lastPosted = 0
+						try {
+							await sherpa.install((percent) => {
+								// Не засыпаем webview обновлениями: не чаще раза в 400 мс
+								const now = Date.now()
+								if (percent < 100 && now - lastPosted < 400) {
+									return
+								}
+								lastPosted = now
+								controller.stateManager.setGlobalState("dictationSettings", {
+									...controller.stateManager.getGlobalSettingsKey("dictationSettings"),
+									voiceDownloadProgress: percent,
+								})
+								controller.postStateToWebview().catch(() => {})
+							})
+							// Берём актуальные настройки, а не снимок на начало загрузки: пользователь мог что-то поменять
+							const updated = {
+								...controller.stateManager.getGlobalSettingsKey("dictationSettings"),
+								voiceReady: true,
+								voiceDownloading: false,
+								voiceDownloadProgress: 100,
+							}
+							controller.stateManager.setGlobalState("dictationSettings", updated)
+							await controller.postStateToWebview()
+							HP.window.showMessage({ type: ShowMessageType.INFORMATION, message: t2("voice.ready") })
+						} catch (err) {
+							Logger.error("[VoiceDownload] GigaAM install failed:", err)
+							const updated = {
+								...controller.stateManager.getGlobalSettingsKey("dictationSettings"),
+								voiceDownloading: false,
+								voiceDownloadProgress: 0,
+							}
+							controller.stateManager.setGlobalState("dictationSettings", updated)
+							await controller.postStateToWebview()
+							HP.window.showMessage({
+								type: ShowMessageType.ERROR,
+								message: t2("voice.downloadFailed", { error: err instanceof Error ? err.message : String(err) }),
+							})
+						}
+					})
+					.catch((err) => Logger.error("[VoiceDownload] Import failed:", err))
+			} else if (shouldDownload) {
 				import("@/services/dictation/WhisperLocalService")
 					.then(async ({ getWhisperLocalService }) => {
 						const { HostProvider: HP } = await import("@/hosts/host-provider")

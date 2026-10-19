@@ -187,17 +187,31 @@ const workerConfig = {
 	plugins: [aliasResolverPlugin, esbuildProblemMatcherPlugin],
 }
 
+// [SKYCODE] Воркер диктовки GigaAM (sherpa-onnx). Нативный аддон не бандлится — он грузится
+// в рантайме из папки, куда его скачивает SherpaLocalService.
+const sherpaWorkerConfig = {
+	...baseConfig,
+	entryPoints: ["src/services/dictation/workers/sherpa-dictation-worker.ts"],
+	outfile: `${destDir}/sherpa-dictation-worker.js`,
+	external: ["vscode"],
+	plugins: [aliasResolverPlugin, esbuildProblemMatcherPlugin],
+}
+
 async function main() {
 	// Build main extension
 	const extensionCtx = await esbuild.context(extensionConfig)
 
-	// Build worker
+	// Build workers
 	const workerCtx = await esbuild.context(workerConfig)
+	const sherpaWorkerCtx = await esbuild.context(sherpaWorkerConfig)
 	if (watch) {
 		await workerCtx.watch()
+		await sherpaWorkerCtx.watch()
 	} else {
 		await workerCtx.rebuild()
 		await workerCtx.dispose()
+		await sherpaWorkerCtx.rebuild()
+		await sherpaWorkerCtx.dispose()
 	}
 
 	if (watch) {

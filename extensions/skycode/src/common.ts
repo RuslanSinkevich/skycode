@@ -13,6 +13,7 @@ import { FileContextTracker } from "./core/context/context-tracking/FileContextT
 import { StateManager } from "./core/storage/StateManager"
 import { openAiCodexOAuthManager } from "./integrations/openai-codex/oauth"
 import { audioRecordingService } from "./services/dictation/AudioRecordingService"
+import { getSherpaDictationService } from "./services/dictation/SherpaDictationService"
 import { initializeDistinctId } from "./services/logging/distinctId"
 import { ShowMessageType } from "./shared/proto/host/window"
 /**
@@ -66,6 +67,8 @@ export async function initialize(context: vscode.ExtensionContext): Promise<Webv
 export async function tearDown(): Promise<void> {
 	// Clean up audio recording service to ensure no orphaned processes
 	audioRecordingService.cleanup()
+	// [SKYCODE] Выгружаем воркер диктовки GigaAM
+	await getSherpaDictationService().dispose()
 
 	// Dispose all webview instances
 	await WebviewProvider.disposeAllInstances()

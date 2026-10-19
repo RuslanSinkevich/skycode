@@ -7,6 +7,7 @@ import { setupWorkspaceManager } from "@core/workspace/setup"
 import type { WorkspaceRootManager } from "@core/workspace/WorkspaceRootManager"
 import { McpHub } from "@services/mcp/McpHub"
 import type { ApiProvider, ModelInfo } from "@shared/api"
+import { GIGAAM_MODEL_ID, isGigaAmActive } from "@shared/DictationSettings"
 import type { ChatContent } from "@shared/ChatContent"
 import type { ExtensionState, PendingChangeInfo, Platform, TabInfo } from "@shared/ExtensionMessage"
 import { getPendingChangesStorage } from "@core/diff-v2/storage/PendingChangesStorage"
@@ -23,6 +24,7 @@ import * as path from "path"
 import * as vscode from "vscode"
 import { SkycodeEnv } from "@/config"
 import { HostProvider } from "@/hosts/host-provider"
+import { getSherpaLocalService } from "@/services/dictation/SherpaLocalService"
 import { ExtensionRegistryInfo } from "@/registry"
 import PROVIDERS from "@/shared/providers/providers.json"
 import { DEFAULT_INDEXING_CONFIG, type IndexingConfig, type IndexingMode, type LocalModelId } from "@/shared/IndexingTypes"
@@ -675,7 +677,11 @@ export class Controller {
 
 	private _checkVoiceReadiness(dictationSettings: any): boolean {
 		const selectedModel = dictationSettings?.whisperModel ?? "tiny"
-		const settingsJson = JSON.stringify({ model: selectedModel, downloading: dictationSettings?.voiceDownloading })
+		const settingsJson = JSON.stringify({
+			model: selectedModel,
+			language: dictationSettings?.dictationLanguage,
+			downloading: dictationSettings?.voiceDownloading,
+		})
 
 		// Return cached value if settings haven't changed and cache is fresh (< 10s)
 		if (
@@ -686,11 +692,20 @@ export class Controller {
 			return this._voiceReadyCache.ready
 		}
 
+		// [SKYCODE] GigaAM (только русский): готовность считает SherpaLocalService
+		if (isGigaAmActive(dictationSettings)) {
+			const sherpa = getSherpaLocalService(HostProvider.get().globalStorageFsPath)
+			const gigaReady = !!sherpa?.isSupported && sherpa.isReady()
+			this._voiceReadyCache = { ready: gigaReady, model: selectedModel, checkedAt: Date.now() }
+			this._lastDictationSettingsJson = settingsJson
+			return gigaReady
+		}
+
 		const _fs = require("fs") as typeof import("fs")
 		const _path = require("path") as typeof import("path")
 		const whisperDir = _path.join(HostProvider.get().globalStorageFsPath, "whisper")
 		const modelFileMap: Record<string, string> = { tiny: "ggml-tiny.bin", base: "ggml-base.bin", small: "ggml-small.bin" }
-		const modelFile = modelFileMap[selectedModel] || "ggml-base.bin"
+		const modelFile = modelFileMap[selectedModel] || (selectedModel === GIGAAM_MODEL_ID ? "ggml-tiny.bin" : "ggml-base.bin")
 		const binaryName = process.platform === "win32" ? "whisper-cli.exe" : "whisper-cli"
 		const ffmpegName = process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg"
 
@@ -730,7 +745,9 @@ export class Controller {
 		}
 		try {
 			const { getWhisperLocalService } = await import("@/services/dictation/WhisperLocalService")
-			getWhisperLocalService(HostProvider.get().globalStorageFsPath, selectedModel, HostProvider.get().extensionFsPath)
+			// [SKYCODE] Для GigaAM инициализируем whisper как "tiny": его ffmpeg может пригодиться записи
+			const whisperModel = selectedModel === GIGAAM_MODEL_ID ? "tiny" : selectedModel
+			getWhisperLocalService(HostProvider.get().globalStorageFsPath, whisperModel, HostProvider.get().extensionFsPath)
 			this._whisperInitialized = true
 		} catch (err) {
 			Logger.warn("Failed to initialize WhisperLocalService:", err)
@@ -879,7 +896,10 @@ export class Controller {
 		const openAiCodexIsAuthenticated = await this._getCodexAuthStatus()
 
 		// [SKYCODE-PERF] Voice readiness — cached, no fs.existsSync on every call
-		const selectedModel = (dictationSettings as any)?.whisperModel ?? "tiny"
+		// [SKYCODE] GigaAM годится только для русского: для другого языка показываем whisper "tiny"
+		const storedModel = (dictationSettings as any)?.whisperModel ?? "tiny"
+		const selectedModel =
+			storedModel === GIGAAM_MODEL_ID && (dictationSettings as any)?.dictationLanguage !== "ru" ? "tiny" : storedModel
 
 		// Initialize WhisperLocalService once (not on every state push)
 		void this._ensureWhisperInitialized(selectedModel)
@@ -894,11 +914,12 @@ export class Controller {
 			})
 		}
 
-		const voiceReady = this._checkVoiceReadiness(dictationSettings)
+		const voiceReady = this._checkVoiceReadiness({ ...dictationSettings, whisperModel: selectedModel })
 
 		const updatedDictationSettings = {
 			...dictationSettings,
 			voiceReady,
+			gigaamAvailable: getSherpaLocalService(HostProvider.get().globalStorageFsPath)?.isSupported ?? false,
 			voiceDownloading: (dictationSettings as any).voiceDownloading ?? false,
 			whisperModel: selectedModel,
 		}

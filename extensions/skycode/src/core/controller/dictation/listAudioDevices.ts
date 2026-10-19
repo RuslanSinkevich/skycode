@@ -1,4 +1,5 @@
 import * as fs from "node:fs"
+import { isGigaAmActive } from "@shared/DictationSettings"
 import { AudioDeviceList } from "@shared/proto/skycode/dictation"
 import {
 	listAudioDevices as listDevices,
@@ -23,10 +24,19 @@ export const listAudioDevices = async (controller: Controller): Promise<AudioDev
 			const { getWhisperLocalService } = await import("@/services/dictation/WhisperLocalService")
 			const { HostProvider: HP } = await import("@/hosts/host-provider")
 			const dictSettings = controller.stateManager.getGlobalSettingsKey("dictationSettings") as any
-			const whisperModel = dictSettings?.whisperModel ?? "tiny"
-			const whisper = getWhisperLocalService(HP.get().globalStorageFsPath, whisperModel, HP.get().extensionFsPath)
-			if (whisper?.ffmpegPath && fs.existsSync(whisper.ffmpegPath)) {
-				ffmpegPath = whisper.ffmpegPath
+			// [SKYCODE] Для GigaAM ffmpeg ищет sherpa-сервис; whisper-сервис при этом инициализируем как "tiny"
+			if (isGigaAmActive(dictSettings)) {
+				const { getSherpaLocalService } = await import("@/services/dictation/SherpaLocalService")
+				const sherpaFfmpeg = getSherpaLocalService(HP.get().globalStorageFsPath)?.findFfmpeg()
+				if (sherpaFfmpeg) {
+					ffmpegPath = sherpaFfmpeg
+				}
+			} else {
+				const whisperModel = dictSettings?.whisperModel === "gigaam" ? "tiny" : (dictSettings?.whisperModel ?? "tiny")
+				const whisper = getWhisperLocalService(HP.get().globalStorageFsPath, whisperModel, HP.get().extensionFsPath)
+				if (whisper?.ffmpegPath && fs.existsSync(whisper.ffmpegPath)) {
+					ffmpegPath = whisper.ffmpegPath
+				}
 			}
 		} catch {
 			// Use system ffmpeg

@@ -2,7 +2,8 @@ import { ChildProcess, spawn } from "node:child_process"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { AUDIO_PROGRAM_CONFIG } from "@/shared/audioProgramConstants"
+import type { Readable } from "node:stream"
+import { AUDIO_PROGRAM_CONFIG, PCM_STREAM_OUTPUT_ARGS } from "@/shared/audioProgramConstants"
 import { Logger } from "@/shared/services/Logger"
 
 function isExecutable(filePath: string): boolean {
@@ -18,6 +19,8 @@ export class AudioRecordingService {
 	private recordingProcess: ChildProcess | null = null
 	private startTime: number = 0
 	private outputFile: string = ""
+	private stopRequested = false
+	private streamStdout: Readable | null = null
 
 	constructor() {}
 
@@ -61,6 +64,8 @@ export class AudioRecordingService {
 		if (!this.recordingProcess) {
 			return
 		}
+		// Завершение инициировано нами — не считать это сбоем ffmpeg
+		this.stopRequested = true
 
 		if (process.platform === "win32") {
 			// Windows: SIGINT doesn't work — ffmpeg won't finalize the file.
@@ -171,6 +176,89 @@ export class AudioRecordingService {
 			Logger.error("Failed to start audio recording: " + errorMessage)
 			return { success: false, error: `Failed to start recording: ${errorMessage}` }
 		}
+	}
+
+	/**
+	 * [SKYCODE] Стриминговая запись для GigaAM: тот же вход ffmpeg (dshow/avfoundation/alsa),
+	 * но на выходе сырой PCM s16le 16 кГц mono в stdout вместо файла .webm.
+	 * @param ffmpegPath путь к ffmpeg
+	 * @param deviceId выбранный пользователем микрофон (пусто = авто)
+	 * @param onData вызывается с каждым чанком PCM из stdout
+	 * @param onFailure вызывается, если ffmpeg неожиданно завершился (не по нашей команде остановки)
+	 */
+	async startStreamingRecording(
+		ffmpegPath: string,
+		deviceId: string | undefined,
+		onData: (chunk: Buffer) => void,
+		onFailure?: (message: string) => void,
+	): Promise<{ success: boolean; error?: string }> {
+		try {
+			if (this.recordingProcess || this.outputFile) {
+				await this.performCleanup()
+			}
+			const platform = os.platform() as keyof typeof AUDIO_PROGRAM_CONFIG
+			const config = AUDIO_PROGRAM_CONFIG[platform]
+			if (!config) {
+				return { success: false, error: `Audio recording is not supported on platform: ${platform}` }
+			}
+
+			const args = ["-hide_banner", "-nostats", ...config.getInputArgs(deviceId), ...PCM_STREAM_OUTPUT_ARGS]
+			Logger.info(`[AudioRecording] Streaming via ${ffmpegPath}`)
+			// stdin нужен для штатной остановки на Windows ("q")
+			const proc = spawn(ffmpegPath, args, { stdio: ["pipe", "pipe", "pipe"] })
+			this.recordingProcess = proc
+			this.startTime = Date.now()
+			this.stopRequested = false
+			this.streamStdout = proc.stdout
+			let lastStderr = ""
+
+			proc.stdout?.on("data", (chunk: Buffer) => onData(chunk))
+			proc.stderr?.on("data", (data) => {
+				const message = data.toString().trim()
+				if (message) {
+					lastStderr = message.substring(message.length - 300)
+				}
+			})
+			proc.on("error", (error) => {
+				Logger.error(`Streaming recording process error: ${error.message}`)
+				if (this.recordingProcess === proc) {
+					this.resetRecordingState()
+				}
+				onFailure?.(error.message)
+			})
+			proc.on("exit", (code) => {
+				if (code !== 0 && code !== null) {
+					Logger.warn(`Streaming recording process exited with code: ${code}`)
+					if (!this.stopRequested) {
+						onFailure?.(lastStderr || `ffmpeg exited with code ${code}`)
+					}
+				}
+			})
+			return { success: true }
+		} catch (error) {
+			await this.performCleanup()
+			const errorMessage = error instanceof Error ? error.message : String(error)
+			Logger.error("Failed to start streaming recording: " + errorMessage)
+			return { success: false, error: `Failed to start recording: ${errorMessage}` }
+		}
+	}
+
+	/** Останавливает стриминговую запись и дожидается, пока stdout отдаст остаток аудио */
+	async stopStreamingRecording(): Promise<void> {
+		const stdout = this.streamStdout
+		this.stopRequested = true
+		await this.terminateProcess()
+		this.resetRecordingState()
+		if (stdout && !stdout.readableEnded && !stdout.destroyed) {
+			await new Promise<void>((resolve) => {
+				const timer = setTimeout(resolve, 1000)
+				stdout.once("close", () => {
+					clearTimeout(timer)
+					resolve()
+				})
+			})
+		}
+		this.streamStdout = null
 	}
 
 	async stopRecording(): Promise<{ success: boolean; audioBase64?: string; error?: string }> {

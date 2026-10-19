@@ -1,3 +1,4 @@
+import { GIGAAM_MODEL_ID } from "@shared/DictationSettings"
 import { EmptyRequest } from "@shared/proto/index.skycode"
 import { TranscribeAudioRequest } from "@shared/proto/skycode/dictation"
 import React, { useCallback, useEffect, useRef, useState } from "react"
@@ -13,6 +14,12 @@ interface VoiceRecorderProps {
 	onRecordingStateChange?: (isRecording: boolean) => void
 	disabled?: boolean
 	language?: string
+	/** Движок распознавания из настроек (whisperModel): "gigaam" включает живой текст */
+	engine?: string
+	/** GigaAM: запись стартует — родитель запоминает текст до/после курсора */
+	onLiveStart?: () => void
+	/** GigaAM: живой текст (committed + partial); finished=true — итоговый текст, превью закреплено */
+	onLiveText?: (text: string, finished: boolean) => void
 }
 
 const MAX_DURATION = 5 * 60 // 5 minutes
@@ -32,12 +39,28 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 	onRecordingStateChange,
 	disabled = false,
 	language = "ru",
+	engine,
+	onLiveStart,
+	onLiveText,
 }) => {
 	const { t } = useI18n()
 	const [state, setState] = useState<"idle" | "starting" | "recording" | "transcribing">("idle")
 	const [recordingDuration, setRecordingDuration] = useState(0)
 	const [error, setError] = useState<string | null>(null)
 	const pollingRef = useRef<NodeJS.Timeout | null>(null)
+
+	// [SKYCODE] Живой текст GigaAM: подписка на поток, пока идёт запись
+	const liveMode = engine === GIGAAM_MODEL_ID && language === "ru"
+	const liveSubscriptionRef = useRef<(() => void) | null>(null)
+	const liveActiveRef = useRef(false)
+	// Колбэки родителя меняются на каждый рендер — храним в ref, чтобы подписка не ловила устаревшие
+	const onLiveTextRef = useRef(onLiveText)
+	onLiveTextRef.current = onLiveText
+
+	const stopLiveSubscription = useCallback(() => {
+		liveSubscriptionRef.current?.()
+		liveSubscriptionRef.current = null
+	}, [])
 
 	// Detect "preparing/downloading" state (both EN and RU contain "170")
 	const isPreparing = error
@@ -90,34 +113,97 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 		setRecordingDuration(0)
 
 		try {
+			if (liveMode) {
+				// Подписываемся до старта записи, чтобы не пропустить первые обновления
+				onLiveStart?.()
+				liveActiveRef.current = true
+				stopLiveSubscription()
+				liveSubscriptionRef.current = DictationServiceClient.subscribeToDictationText(EmptyRequest.create({}), {
+					onResponse: (update) => {
+						if (!liveActiveRef.current) {
+							return
+						}
+						if (update.error) {
+							// Сбой записи/распознавания: убираем превью и останавливаем запись
+							liveActiveRef.current = false
+							stopLiveSubscription()
+							onLiveTextRef.current?.("", true)
+							DictationServiceClient.cancelRecording(EmptyRequest.create({})).catch(() => {})
+							setError(update.error)
+							setState("idle")
+							onProcessingStateChange?.(false)
+							return
+						}
+						if (!update.final) {
+							const live = [update.committed, update.partial].filter(Boolean).join(" ")
+							onLiveTextRef.current?.(live, false)
+						}
+					},
+					onError: () => {},
+					onComplete: () => {},
+				})
+			}
 			const response = await DictationServiceClient.startRecording(EmptyRequest.create({}))
 			if (!response.success) {
+				liveActiveRef.current = false
+				stopLiveSubscription()
+				onLiveTextRef.current?.("", true)
 				setError(response.error || t("voice.failedToStart"))
 				setState("idle")
 				return
 			}
 			setState("recording")
 		} catch (err) {
+			liveActiveRef.current = false
+			stopLiveSubscription()
+			onLiveTextRef.current?.("", true)
 			setError(err instanceof Error ? err.message : t("voice.failedToStart"))
 			setState("idle")
 		}
-	}, [disabled, state, error, t])
+	}, [disabled, state, error, t, liveMode, onLiveStart, onProcessingStateChange, stopLiveSubscription])
 
 	const handleStop = useCallback(async () => {
 		if (state !== "recording") { return }
 
 		setState("transcribing")
-		onProcessingStateChange?.(true, t("chat.transcribing"))
+		// Для живого текста не дописываем "[Transcribing...]" в поле: превью уже в нём
+		onProcessingStateChange?.(true, liveActiveRef.current ? undefined : t("chat.transcribing"))
 
 		try {
 			// 1. Stop recording
 			const response = await DictationServiceClient.stopRecording(EmptyRequest.create({}))
 
 			if (!response.success) {
+				if (liveActiveRef.current) {
+					liveActiveRef.current = false
+					stopLiveSubscription()
+					onLiveTextRef.current?.("", true)
+				}
 				setError(response.error || t("voice.failedToStop"))
 				setState("idle")
 				onProcessingStateChange?.(false)
 				return
+			}
+
+			// GigaAM: итоговый текст приходит прямо в ответе stopRecording, транскрибировать не нужно
+			if (response.finalText || (liveActiveRef.current && !response.audioBase64)) {
+				liveActiveRef.current = false
+				stopLiveSubscription()
+				setError(null)
+				if (onLiveTextRef.current) {
+					onLiveTextRef.current(response.finalText, true)
+				} else if (response.finalText) {
+					onTranscription(response.finalText)
+				}
+				setState("idle")
+				onProcessingStateChange?.(false)
+				return
+			}
+			// Живой режим был включён, но запись пошла через whisper — убираем превью и идём обычным путём
+			if (liveActiveRef.current) {
+				liveActiveRef.current = false
+				stopLiveSubscription()
+				onLiveTextRef.current?.("", true)
 			}
 
 			if (!response.audioBase64) {
@@ -148,7 +234,7 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 			setState("idle")
 			onProcessingStateChange?.(false)
 		}
-	}, [state, language, onTranscription, onProcessingStateChange, t])
+	}, [state, language, onTranscription, onProcessingStateChange, t, stopLiveSubscription])
 
 	const _handleCancel = useCallback(async () => {
 		if (state !== "recording") { return }
@@ -157,14 +243,27 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 			await DictationServiceClient.cancelRecording(EmptyRequest.create({}))
 		} catch {}
 
+		// Отмена: превью из поля убираем
+		if (liveActiveRef.current) {
+			liveActiveRef.current = false
+			stopLiveSubscription()
+			onLiveTextRef.current?.("", true)
+		}
 		setState("idle")
 		onProcessingStateChange?.(false)
-	}, [state, onProcessingStateChange])
+	}, [state, onProcessingStateChange, stopLiveSubscription])
 
 	// Cleanup on unmount
 	useEffect(() => {
 		return () => {
 			if (pollingRef.current) { clearInterval(pollingRef.current) }
+			// GigaAM: не оставляем запись и подписку висеть, если компонент закрыли посреди диктовки
+			if (liveActiveRef.current) {
+				liveActiveRef.current = false
+				liveSubscriptionRef.current?.()
+				liveSubscriptionRef.current = null
+				DictationServiceClient.cancelRecording(EmptyRequest.create({})).catch(() => {})
+			}
 		}
 	}, [])
 

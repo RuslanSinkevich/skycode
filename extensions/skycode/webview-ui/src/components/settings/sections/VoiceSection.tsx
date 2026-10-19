@@ -3,7 +3,7 @@ import { memo, useCallback, useEffect, useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useI18n } from "@/i18n"
 import { DictationServiceClient } from "@/services/grpc-client"
-import { SUPPORTED_DICTATION_LANGUAGES } from "@shared/DictationSettings"
+import { GIGAAM_MODEL_ID, SUPPORTED_DICTATION_LANGUAGES } from "@shared/DictationSettings"
 import type { AudioDevice } from "@shared/DictationSettings"
 import { EmptyRequest } from "@shared/proto/index.skycode"
 import Section from "../Section"
@@ -12,6 +12,9 @@ import { updateSetting } from "../utils/settingsHandlers"
 interface VoiceSectionProps {
 	renderSectionHeader: (tabId: string) => JSX.Element | null
 }
+
+// [SKYCODE] GigaAM v3 (sherpa-onnx) — только для русского; остальные модели — whisper.cpp
+const GIGAAM_MODEL = { id: GIGAAM_MODEL_ID, labelKey: "voice.modelGigaam", requiresAuth: false, locked: false }
 
 const WHISPER_MODELS = [
 	{ id: "tiny", labelKey: "voice.modelTiny", requiresAuth: false, locked: false },
@@ -25,6 +28,14 @@ const VoiceSection = ({ renderSectionHeader }: VoiceSectionProps) => {
 
 	const isReady = dictationSettings?.voiceReady === true
 	const isDownloading = dictationSettings?.voiceDownloading === true
+	const downloadProgress = dictationSettings?.voiceDownloadProgress ?? 0
+
+	const language = dictationSettings?.dictationLanguage || "ru"
+	const gigaamAvailable = dictationSettings?.gigaamAvailable !== false
+	// GigaAM предлагаем только для русского языка
+	const modelOptions = language === "ru" ? [GIGAAM_MODEL, ...WHISPER_MODELS] : WHISPER_MODELS
+	const currentModel = dictationSettings?.whisperModel || "tiny"
+	const isGigaAmSelected = currentModel === GIGAAM_MODEL_ID && language === "ru"
 
 	const [audioDevices, setAudioDevices] = useState<AudioDevice[]>([])
 	const [devicesLoading, setDevicesLoading] = useState(false)
@@ -92,7 +103,13 @@ const VoiceSection = ({ renderSectionHeader }: VoiceSectionProps) => {
 									className="w-full mt-1"
 									value={dictationSettings?.dictationLanguage || "ru"}
 									onChange={(e: any) => {
-										updateDictation({ dictationLanguage: e.target.value })
+										const newLanguage = e.target.value
+										// GigaAM — только русский: при смене языка переключаемся на whisper
+										if (newLanguage !== "ru" && dictationSettings?.whisperModel === GIGAAM_MODEL_ID) {
+											updateDictation({ dictationLanguage: newLanguage, whisperModel: "tiny", voiceReady: false })
+										} else {
+											updateDictation({ dictationLanguage: newLanguage })
+										}
 									}}>
 									{SUPPORTED_DICTATION_LANGUAGES.map((lang) => (
 										<VSCodeOption key={lang.code} value={lang.code}>
@@ -160,25 +177,28 @@ const VoiceSection = ({ renderSectionHeader }: VoiceSectionProps) => {
 								<label className="text-sm font-medium">{t("voice.model")}</label>
 								<VSCodeDropdown
 									className="w-full mt-1"
-									value={dictationSettings?.whisperModel || "tiny"}
+									value={isGigaAmSelected ? GIGAAM_MODEL_ID : currentModel === GIGAAM_MODEL_ID ? "tiny" : currentModel}
 									onChange={(e: any) => {
 										const newModel = e.target.value
-										const modelConfig = WHISPER_MODELS.find((m) => m.id === newModel)
+										const modelConfig = modelOptions.find((m) => m.id === newModel)
 										if (!modelConfig || modelConfig.locked) { return }
 										if (newModel !== dictationSettings?.whisperModel) {
 											updateDictation({ whisperModel: newModel, voiceReady: false, voiceDownloading: false })
 										}
 									}}>
-									{WHISPER_MODELS.map((model) => {
-										const disabled = model.locked
+									{modelOptions.map((model) => {
+										const unavailable = model.id === GIGAAM_MODEL_ID && !gigaamAvailable
+										const disabled = model.locked || unavailable
 										return (
 											<VSCodeOption key={model.id} value={model.id} disabled={disabled}>
-												{t(model.labelKey)}
+												{unavailable ? t("voice.modelGigaamUnavailable") : t(model.labelKey)}
 											</VSCodeOption>
 										)
 									})}
 								</VSCodeDropdown>
-								<p className="text-xs text-description mt-1">{t("voice.modelDescription")}</p>
+								<p className="text-xs text-description mt-1">
+									{isGigaAmSelected ? t("voice.modelGigaamDescription") : t("voice.modelDescription")}
+								</p>
 							</div>
 
 							{/* Download / Reinstall button */}
@@ -190,7 +210,9 @@ const VoiceSection = ({ renderSectionHeader }: VoiceSectionProps) => {
 									{isDownloading ? (
 										<>
 											<span className="codicon codicon-loading animate-spin mr-1.5" />
-											{t("voice.downloading")}
+											{isGigaAmSelected && downloadProgress > 0
+												? t("voice.downloadingPercent", { percent: downloadProgress })
+												: t("voice.downloading")}
 										</>
 									) : isReady ? (
 										t("voice.reinstallButton")
