@@ -1,43 +1,43 @@
 {
 	"name": "skycode",
 	"displayName": "Skycode AI",
-	"description": "Enterprise AI Code Assistant for STP.",
+	"description": "AI-агент для VS Code под ваши модели: корпоративный OpenAI-совместимый шлюз, Qwen, GigaChat, YandexGPT, локальные модели. Без аккаунтов и подписок.",
 	"version": "0.6.0",
 	"icon": "assets/icons/icon.png",
 	"engines": {
 		"vscode": "^1.124.0"
 	},
 	"author": {
-		"name": "SKYCODE"
+		"name": "Ruslan Sinkevich"
 	},
 	"license": "Apache-2.0",
 	"publisher": "skycode",
 	"repository": {
 		"type": "git",
-		"url": "#"
+		"url": "https://github.com/RuslanSinkevich/skycode"
 	},
-	"homepage": "#",
+	"homepage": "https://ruslansinkevich.ru/skycode/",
+	"bugs": {
+		"url": "https://github.com/RuslanSinkevich/skycode/issues"
+	},
 	"categories": [
 		"AI",
 		"Chat",
-		"Programming Languages",
-		"Education",
-		"Snippets",
-		"Testing"
+		"Programming Languages"
 	],
 	"keywords": [
 		"skycode",
-		"claude",
-		"dev",
-		"mcp",
-		"openrouter",
-		"coding",
-		"agent",
-		"autonomous",
-		"chatgpt",
-		"sonnet",
 		"ai",
-		"llama"
+		"agent",
+		"coding assistant",
+		"openai-compatible",
+		"qwen",
+		"gigachat",
+		"yandexgpt",
+		"ollama",
+		"vllm",
+		"mcp",
+		"llm"
 	],
 	"activationEvents": [
 		"onUri"
@@ -559,7 +559,7 @@
 		"watch:esbuild": "node esbuild.mjs --watch",
 		"watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
 		"package": "npm run check-types && npm run build:webview && npm run lint && node esbuild.mjs --production",
-		"package:vsix": "npm run package && vsce package --allow-package-secrets sendgrid --allow-missing-repository --baseContentUrl https://github.com/skycode/skycode/tree/main/vscode/extensions/skycode --baseImagesUrl https://github.com/skycode/skycode/raw/main/vscode/extensions/skycode --out dist/skycode.vsix",
+		"package:vsix": "npm run package && vsce package --allow-package-secrets sendgrid --readme-path MARKETPLACE.md --baseContentUrl https://github.com/RuslanSinkevich/skycode/tree/main/extensions/skycode --baseImagesUrl https://github.com/RuslanSinkevich/skycode/raw/main/extensions/skycode --out dist/skycode.vsix",
 		"protos": "node scripts/build-proto.mjs",
 		"postprotos": "biome format src/shared/proto src/core/controller src/hosts/ webview-ui/src/services src/generated --write --no-errors-on-unmatched",
 		"clean:build": "rimraf dist webview-ui/build src/generated out/",

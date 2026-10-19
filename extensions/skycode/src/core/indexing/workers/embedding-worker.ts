@@ -286,7 +286,10 @@ async function initModel(msg: InitMessage): Promise<void> {
 		parentPort?.postMessage({
 			type: "error",
 			id: -1,
-			message: `Model init failed: ${err.message}`,
+			// [SKYCODE] Нативный onnxruntime в пакет из Marketplace не входит — говорим, что делать
+			message: /onnxruntime/i.test(String(err?.message))
+				? "Локальная модель индексации недоступна в этой сборке (нет onnxruntime-node). Выберите режим «Удалённый API» (skycode.indexing.mode = remote)."
+				: `Model init failed: ${err.message}`,
 		} satisfies ErrorMessage)
 	}
 }

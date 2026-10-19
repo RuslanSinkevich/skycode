@@ -58,8 +58,9 @@ old_docs/**
 !node_modules/@vscode/codicons/dist/codicon.css
 !node_modules/@vscode/codicons/dist/codicon.ttf
 
-# Include native ONNX runtime used by @xenova/transformers for local embeddings
-!node_modules/onnxruntime-node/**
+# [SKYCODE] Модель эмбеддингов и нативный ONNX (≈360 МБ под все ОС) не кладём в пакет: индексация
+# по умолчанию выключена, модель при включении скачивается с Hugging Face.
+models/**
 
 # Include default themes JSON files used in getTheme
 !src/integrations/theme/default-themes/**
@@ -99,3 +100,9 @@ tsc-webview-out.txt
 vsce-out.txt
 TODO_LINT_FIXES.md
 
+test-unit-out.txt
+webview-ui/tsconfig*.json
+webview-ui/tailwind.config.mjs
+webview-ui/components.json
+assets/icons/svg-src/**
+README.md
