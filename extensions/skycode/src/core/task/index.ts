@@ -59,14 +59,10 @@ import { getApiSettingsMode, isReadOnlyMode, type Mode } from "@shared/storage/t
 import { SkycodeDefaultTool } from "@shared/tools"
 import { isIntentionOnly, isTextOnlyAnswer } from "./textOnlyReply"
 import { REPETITION_LOOP_NOTE, RepetitionLoopDetector } from "./repetitionLoop"
+import { isTruncatedToolCall, TRUNCATED_TOOL_NOTE_PREFIX, truncatedToolNote } from "./truncatedToolCall"
 import { getAutoCompactThresholdTokens } from "@core/context/context-management/context-window-utils"
 import { SkycodeAskResponse } from "@shared/WebviewMessage"
-import {
-	getModelCapabilityTier,
-	getSessionLimitsForModel,
-	isGPT5ModelFamily,
-	isLocalModel,
-} from "@utils/model-utils"
+import { getModelCapabilityTier, getSessionLimitsForModel, isGPT5ModelFamily, isLocalModel } from "@utils/model-utils"
 import cloneDeep from "clone-deep"
 import Mutex from "p-mutex"
 import pWaitFor from "p-wait-for"
@@ -2145,7 +2141,8 @@ export class Task {
 						// If the conversation has more than 3 messages, we can truncate again. If not, then the conversation is bricked.
 						// ToDo: Allow the user to change their input if this is the case.
 						if (truncatedConversationHistory.length > 3) {
-							skycodeError.message = "Context window exceeded. Click retry to truncate the conversation and try again."
+							skycodeError.message =
+								"Context window exceeded. Click retry to truncate the conversation and try again."
 							this.taskState.didAutomaticallyRetryFailedApiRequest = false
 						}
 					}
@@ -2159,7 +2156,9 @@ export class Task {
 					)
 					if (lastApiReqStartedIndex !== -1) {
 						const skycodeMessages = this.messageStateHandler.getSkycodeMessages()
-						const currentApiReqInfo: SkycodeApiReqInfo = JSON.parse(skycodeMessages[lastApiReqStartedIndex].text || "{}")
+						const currentApiReqInfo: SkycodeApiReqInfo = JSON.parse(
+							skycodeMessages[lastApiReqStartedIndex].text || "{}",
+						)
 						delete currentApiReqInfo.retryStatus
 
 						await this.messageStateHandler.updateSkycodeMessage(lastApiReqStartedIndex, {
@@ -2262,7 +2261,9 @@ export class Task {
 					)
 					if (manualRetryApiReqIndex !== -1) {
 						const skycodeMessages = this.messageStateHandler.getSkycodeMessages()
-						const currentApiReqInfo: SkycodeApiReqInfo = JSON.parse(skycodeMessages[manualRetryApiReqIndex].text || "{}")
+						const currentApiReqInfo: SkycodeApiReqInfo = JSON.parse(
+							skycodeMessages[manualRetryApiReqIndex].text || "{}",
+						)
 						delete currentApiReqInfo.streamingFailedMessage
 						await this.messageStateHandler.updateSkycodeMessage(manualRetryApiReqIndex, {
 							text: JSON.stringify(currentApiReqInfo),
@@ -2593,7 +2594,6 @@ export class Task {
 			(m) => m.say === "api_req_started",
 		)
 
-
 		// Determine if we should compact context window
 		// Note: We delay context loading until we know if we're compacting (performance optimization)
 		const useCompactPrompt = customPrompt === "compact" && isLocalModel(this.getCurrentProviderInfo())
@@ -2672,7 +2672,10 @@ export class Task {
 			const limits = getSessionLimitsForModel(currentProviderInfo.model.id, currentProviderInfo, customSettings)
 			// [SKYCODE] Принудительно — только если контекст уже заполнен хотя бы наполовину до порога:
 			// сводка почти пустого контекста теряет детали и ничего не освобождает
-			const usedTokens = this.contextManager.getPreviousRequestTokens(this.messageStateHandler.getSkycodeMessages(), previousApiReqIndex)
+			const usedTokens = this.contextManager.getPreviousRequestTokens(
+				this.messageStateHandler.getSkycodeMessages(),
+				previousApiReqIndex,
+			)
 			const thresholdTokens = getAutoCompactThresholdTokens(
 				this.api,
 				this.stateManager.getGlobalSettingsKey("autoCondenseThreshold") as number | undefined,
@@ -2681,7 +2684,8 @@ export class Task {
 				this.taskState.apiRequestCount > 0 &&
 				this.taskState.apiRequestCount % limits.forceCompactAfterSteps === 0 &&
 				(this.taskState.lastCompactApiRequestCount === undefined ||
-					this.taskState.apiRequestCount - this.taskState.lastCompactApiRequestCount >= limits.forceCompactAfterSteps) &&
+					this.taskState.apiRequestCount - this.taskState.lastCompactApiRequestCount >=
+						limits.forceCompactAfterSteps) &&
 				usedTokens >= thresholdTokens / 2
 			) {
 				shouldCompact = true
@@ -2751,7 +2755,6 @@ export class Task {
 			role: "user",
 			content: userContent,
 		})
-
 
 		// Capture task initialization timing telemetry for the first API request
 
@@ -2827,7 +2830,6 @@ export class Task {
 						cost: taskMetrics.totalCost,
 					},
 				})
-
 
 				// signals to provider that it can retrieve the saved messages from disk, as abortTask can not be awaited on in nature
 				this.taskState.didFinishAbortingStream = true
@@ -2966,7 +2968,11 @@ export class Task {
 					if (
 						!loopDetected &&
 						loopDetector.push(
-							chunk.type === "reasoning" ? chunk.reasoning : chunk.type === "text" && !insideToolCall ? chunk.text : undefined,
+							chunk.type === "reasoning"
+								? chunk.reasoning
+								: chunk.type === "text" && !insideToolCall
+									? chunk.text
+									: undefined,
 						)
 					) {
 						loopDetected = true
@@ -3132,7 +3138,6 @@ export class Task {
 			// Stored the assistant API response immediately after the stream finishes in the same turn
 			const assistantHasContent = assistantMessage.length > 0 || this.useNativeToolCalls
 			if (assistantHasContent) {
-
 				const { reasonsHandler } = this.streamHandler.getHandlers()
 				const redactedThinkingContent = reasonsHandler.getRedactedThinking()
 
@@ -3204,11 +3209,29 @@ export class Task {
 			// [SKYCODE] Ответ оборван зацикливанием: недописанные вызовы инструментов (XML и нативные) НЕ исполняем —
 			// полузаписанный write_to_file/replace_in_file обрезал бы файл. Текстовые блоки сохраняем.
 			let droppedUnfinishedTools = false
-			if (loopDetected) {
+			// [SKYCODE] То же при обрыве ответа по лимиту длины: вызов, записывающий файл или запускающий команду,
+			// не дописан (нет закрывающего тега параметра) — не исполняем и просим модель разбить работу на части
+			const truncatedTools = loopDetected
+				? []
+				: this.taskState.assistantMessageContent.filter(
+						(block) =>
+							block.type === "tool_use" &&
+							block.partial &&
+							isTruncatedToolCall(block.name, block.params, assistantMessage),
+					)
+			if (loopDetected || truncatedTools.length > 0) {
 				const before = this.taskState.assistantMessageContent
-				const kept = before.filter((block) => !(block.type === "tool_use" && block.partial))
-				droppedUnfinishedTools = kept.length !== before.length || toolUseHandler.getPartialToolUsesAsContent().length > 0
+				const kept = before.filter(
+					(block) => !(block.type === "tool_use" && block.partial && (loopDetected || truncatedTools.includes(block))),
+				)
+				droppedUnfinishedTools =
+					kept.length !== before.length || (loopDetected && toolUseHandler.getPartialToolUsesAsContent().length > 0)
 				this.taskState.assistantMessageContent = kept
+				if (truncatedTools.length > 0) {
+					const names = truncatedTools.map((block) => (block.type === "tool_use" ? block.name : ""))
+					Logger.warn(`[Task] Response was cut off inside ${names.join(", ")} — not executing it`)
+					this.taskState.userMessageContent.push({ type: "text", text: truncatedToolNote(names) })
+				}
 				if (droppedUnfinishedTools) {
 					if (this.diffViewProvider.isEditing) {
 						await this.diffViewProvider.revertChanges()
@@ -3226,7 +3249,9 @@ export class Task {
 			})
 			if (!loopDetected) {
 				// in case there are native tool calls pending
-				const partialToolBlocks = toolUseHandler.getPartialToolUsesAsContent()?.map((block) => ({ ...block, partial: false }))
+				const partialToolBlocks = toolUseHandler
+					.getPartialToolUsesAsContent()
+					?.map((block) => ({ ...block, partial: false }))
 				this.processNativeToolCalls(assistantTextOnly, partialToolBlocks)
 			}
 
@@ -3263,7 +3288,9 @@ export class Task {
 
 					// [SKYCODE] Текстовый ответ без инструмента — ответ пользователю: ждём его сообщения
 					const stoppedForLoop = this.taskState.userMessageContent.some(
-						(block) => block.type === "text" && block.text === REPETITION_LOOP_NOTE,
+						(block) =>
+							block.type === "text" &&
+							(block.text === REPETITION_LOOP_NOTE || block.text.startsWith(TRUNCATED_TOOL_NOTE_PREFIX)),
 					)
 					if (stoppedForLoop) {
 						// Ответ оборван из-за зацикливания — подсказка уже добавлена, повторяем запрос с ней
