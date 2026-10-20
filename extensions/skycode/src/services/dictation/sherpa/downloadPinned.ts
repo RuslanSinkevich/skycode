@@ -13,7 +13,31 @@ const INACTIVITY_MS = 120_000
 
 export type ByteProgress = (downloaded: number, total: number) => void
 
+const MAX_ATTEMPTS = 3
+
+/**
+ * [SKYCODE] Обрыв соединения (ECONNRESET, таймаут — частое дело за корпоративным прокси) повторяем
+ * до трёх раз с паузой; несовпадение хеша и HTTP-ошибки не повторяем — там повтор не поможет.
+ */
 export async function downloadPinned(spec: PinnedDownload, destPath: string, onProgress?: ByteProgress): Promise<void> {
+	for (let attempt = 1; ; attempt++) {
+		try {
+			await downloadOnce(spec, destPath, onProgress)
+			return
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err)
+			const retryable = !/Checksum mismatch|^HTTP \d/.test(message)
+			if (!retryable || attempt >= MAX_ATTEMPTS) {
+				throw err
+			}
+			Logger.warn(`[SherpaDownload] ${spec.id}: ${message} — retry ${attempt + 1}/${MAX_ATTEMPTS}`)
+			onProgress?.(0, spec.sizeBytes)
+			await new Promise((resolve) => setTimeout(resolve, 2000 * attempt))
+		}
+	}
+}
+
+async function downloadOnce(spec: PinnedDownload, destPath: string, onProgress?: ByteProgress): Promise<void> {
 	const tempPath = `${destPath}.part`
 	removeQuietly(tempPath)
 	try {

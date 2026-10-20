@@ -103,6 +103,61 @@ export const GIGAAM_MODEL_ARCHIVE: PinnedDownload = {
 	expectedHash: "f9620a0099019c6afcee26525ef9ed3297fa50dd5691c1902af0c948fc1a470b",
 }
 
+/** Та же модель отдельными файлами на Hugging Face (репозиторий автора sherpa-onnx, закреплённая ревизия) */
+const GIGAAM_HF_BASE = `https://huggingface.co/csukuangfj/${GIGAAM_MODEL_FOLDER}/resolve/a6039be7cee829a9044a69ac0ebaf1c191217c97`
+
+/**
+ * [SKYCODE] Основной источник модели: готовые файлы без распаковки. Архив .tar.bz2 распаковывается
+ * системным tar.exe, а его на корпоративных машинах блокируют (AppLocker, антивирус) — тогда установка
+ * падала на «Failed to extract». Хеши совпадают с файлами из архива GIGAAM_MODEL_ARCHIVE (запасной путь).
+ */
+export const GIGAAM_MODEL_FILE_DOWNLOADS: { file: (typeof GIGAAM_MODEL_FILES)[number]; download: PinnedDownload }[] = [
+	{
+		file: "encoder.int8.onnx",
+		download: {
+			id: "gigaam-v3-punct/encoder",
+			url: `${GIGAAM_HF_BASE}/encoder.int8.onnx`,
+			sizeBytes: 224570820,
+			hashAlgorithm: "sha256",
+			hashEncoding: "hex",
+			expectedHash: "369f35a71bf288d3b8e0391fabd8dba5f2314088d440bca474056b7b4b6e66bf",
+		},
+	},
+	{
+		file: "decoder.onnx",
+		download: {
+			id: "gigaam-v3-punct/decoder",
+			url: `${GIGAAM_HF_BASE}/decoder.onnx`,
+			sizeBytes: 4600132,
+			hashAlgorithm: "sha256",
+			hashEncoding: "hex",
+			expectedHash: "38fc7475443ea2a26f63211ca350f73ac50fff824ab7a3876ee2bd610c53bbc4",
+		},
+	},
+	{
+		file: "joiner.onnx",
+		download: {
+			id: "gigaam-v3-punct/joiner",
+			url: `${GIGAAM_HF_BASE}/joiner.onnx`,
+			sizeBytes: 2712896,
+			hashAlgorithm: "sha256",
+			hashEncoding: "hex",
+			expectedHash: "602ff7017a93311aad34df1437c8d7f49911353c13d6eae7a6ee7b041339465c",
+		},
+	},
+	{
+		file: "tokens.txt",
+		download: {
+			id: "gigaam-v3-punct/tokens",
+			url: `${GIGAAM_HF_BASE}/tokens.txt`,
+			sizeBytes: 13354,
+			hashAlgorithm: "sha256",
+			hashEncoding: "hex",
+			expectedHash: "39abae20e692998290c574e606f11a9edef2902a1995463fcff63d1490cf22b7",
+		},
+	},
+]
+
 export const SILERO_VAD: PinnedDownload = {
 	id: "silero-vad",
 	url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",

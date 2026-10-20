@@ -15,6 +15,7 @@ import {
 	getRuntimePackages,
 	getSherpaPlatformKey,
 	GIGAAM_MODEL_ARCHIVE,
+	GIGAAM_MODEL_FILE_DOWNLOADS,
 	GIGAAM_MODEL_FILES,
 	GIGAAM_MODEL_FOLDER,
 	type PinnedDownload,
@@ -266,35 +267,67 @@ export class SherpaLocalService {
 		}
 
 		if (!this.isModelReady) {
+			const modelBytes = GIGAAM_MODEL_FILE_DOWNLOADS.reduce((sum, item) => sum + item.download.sizeBytes, 0)
 			steps.push({
-				download: GIGAAM_MODEL_ARCHIVE,
+				download: { ...GIGAAM_MODEL_ARCHIVE, sizeBytes: modelBytes },
 				run: async (onFraction) => {
-					const modelsDir = path.dirname(this.modelDir)
-					fs.mkdirSync(modelsDir, { recursive: true })
-					const archive = path.join(modelsDir, "gigaam-v3-punct.tar.bz2")
-					const staging = path.join(modelsDir, "gigaam-v3-punct.installing")
 					try {
-						await downloadPinned(GIGAAM_MODEL_ARCHIVE, archive, (d, t) => onFraction(t ? d / t : 0))
-						fs.rmSync(staging, { recursive: true, force: true })
-						fs.mkdirSync(staging, { recursive: true })
-						await this.extractBzip2(archive, staging)
-						const extracted = path.join(staging, GIGAAM_MODEL_FOLDER)
-						for (const file of GIGAAM_MODEL_FILES) {
-							if (!fs.existsSync(path.join(extracted, file))) {
-								throw new Error(`Model archive extracted but ${file} is missing`)
-							}
-						}
-						fs.rmSync(this.modelDir, { recursive: true, force: true })
-						fs.renameSync(extracted, this.modelDir)
-					} finally {
-						fs.rmSync(archive, { force: true })
-						fs.rmSync(staging, { recursive: true, force: true })
+						await this.downloadModelFiles(modelBytes, onFraction)
+					} catch (err) {
+						// Hugging Face недоступен (прокси, блокировка) — запасной путь: архив с GitHub и системный tar
+						Logger.warn(`[SherpaLocal] Model files download failed, falling back to the archive: ${err instanceof Error ? err.message : String(err)}`)
+						onFraction(0)
+						await this.downloadModelArchive(onFraction)
 					}
 				},
 			})
 		}
 
 		return steps
+	}
+
+	/** Модель отдельными файлами (без распаковки): качаем во временную папку и переносим целиком */
+	private async downloadModelFiles(totalBytes: number, onFraction: (fraction: number) => void): Promise<void> {
+		const modelsDir = path.dirname(this.modelDir)
+		const staging = path.join(modelsDir, "gigaam-v3-punct.files")
+		fs.rmSync(staging, { recursive: true, force: true })
+		fs.mkdirSync(staging, { recursive: true })
+		try {
+			let done = 0
+			for (const { file, download } of GIGAAM_MODEL_FILE_DOWNLOADS) {
+				await downloadPinned(download, path.join(staging, file), (d) => onFraction((done + d) / totalBytes))
+				done += download.sizeBytes
+			}
+			fs.rmSync(this.modelDir, { recursive: true, force: true })
+			fs.renameSync(staging, this.modelDir)
+		} finally {
+			fs.rmSync(staging, { recursive: true, force: true })
+		}
+	}
+
+	/** Запасной путь: архив .tar.bz2 с GitHub, распаковка системным tar */
+	private async downloadModelArchive(onFraction: (fraction: number) => void): Promise<void> {
+		const modelsDir = path.dirname(this.modelDir)
+		fs.mkdirSync(modelsDir, { recursive: true })
+		const archive = path.join(modelsDir, "gigaam-v3-punct.tar.bz2")
+		const staging = path.join(modelsDir, "gigaam-v3-punct.installing")
+		try {
+			await downloadPinned(GIGAAM_MODEL_ARCHIVE, archive, (d, t) => onFraction(t ? d / t : 0))
+			fs.rmSync(staging, { recursive: true, force: true })
+			fs.mkdirSync(staging, { recursive: true })
+			await this.extractBzip2(archive, staging)
+			const extracted = path.join(staging, GIGAAM_MODEL_FOLDER)
+			for (const file of GIGAAM_MODEL_FILES) {
+				if (!fs.existsSync(path.join(extracted, file))) {
+					throw new Error(`Model archive extracted but ${file} is missing`)
+				}
+			}
+			fs.rmSync(this.modelDir, { recursive: true, force: true })
+			fs.renameSync(extracted, this.modelDir)
+		} finally {
+			fs.rmSync(archive, { force: true })
+			fs.rmSync(staging, { recursive: true, force: true })
+		}
 	}
 
 	/**
