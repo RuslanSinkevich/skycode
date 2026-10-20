@@ -2,7 +2,7 @@
 	"name": "skycode-ai",
 	"displayName": "Skycode AI",
 	"description": "AI-агент для VS Code под ваши модели: корпоративный OpenAI-совместимый шлюз, Qwen, GigaChat, YandexGPT, локальные модели. Без аккаунтов и подписок.",
-	"version": "0.6.3",
+	"version": "0.6.4",
 	"icon": "assets/icons/icon.png",
 	"engines": {
 		"vscode": "^1.124.0"
