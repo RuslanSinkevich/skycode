@@ -2,7 +2,7 @@
 
 ## Обзор
 
-Skycode AI — это расширение VS Code (`skycode.skycode-ai`, работает в обычном VS Code 1.124+, не форк), состоящее из трёх основных частей:
+Skycode AI — это расширение VS Code (`skycode.skycode-ai`, работает в обычном VS Code 1.90+, не форк), состоящее из трёх основных частей:
 - **Core Extension** (бэкенд на Node.js)
 - **Webview UI** (фронтенд на React)
 - **Code Search** (карта репозитория + ripgrep) и необязательный **Indexing Subsystem** (векторный индекс)

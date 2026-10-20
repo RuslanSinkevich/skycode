@@ -6,7 +6,7 @@ Skycode is a VS Code extension; its code lives in `extensions/skycode/`. The rep
 
 ## Prerequisites
 
-- VS Code 1.124+ (minimum engine version in `package.json`)
+- VS Code 1.90+ (minimum engine version in `package.json`)
 - Node.js 22+ (the version CI builds with) and npm
 
 ## Quick Start

@@ -1,6 +1,6 @@
 # Skycode AI — документация разработчика
 
-Skycode AI — расширение VS Code (`skycode.skycode-ai`, Visual Studio Marketplace). Работает в обычном VS Code 1.124+. Страница для пользователей — [MARKETPLACE.md](../MARKETPLACE.md); исходный код — https://github.com/RuslanSinkevich/skycode ; сайт — https://ruslansinkevich.ru/skycode/ .
+Skycode AI — расширение VS Code (`skycode.skycode-ai`, Visual Studio Marketplace). Работает в обычном VS Code 1.90+. Страница для пользователей — [MARKETPLACE.md](../MARKETPLACE.md); исходный код — https://github.com/RuslanSinkevich/skycode ; сайт — https://ruslansinkevich.ru/skycode/ .
 
 Прежний форк VS Code (Skycode.exe, патчи ядра) больше не выпускается и в документации не описывается.
 

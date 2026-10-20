@@ -85,7 +85,7 @@ Skycode — расширение VS Code (`skycode.skycode-ai`, в Marketplace �
 
 ## Установка
 
-Нужен VS Code 1.124 или новее.
+Нужен VS Code 1.90 или новее.
 
 - **Из Marketplace:** вкладка «Расширения» → поиск «Skycode AI» → Установить. Страница: [marketplace.visualstudio.com/items?itemName=skycode.skycode-ai](https://marketplace.visualstudio.com/items?itemName=skycode.skycode-ai)
 - **Из .vsix:** «Расширения» → `…` → «Установить из VSIX…» (файл прикладывается к [GitHub Release](https://github.com/RuslanSinkevich/skycode/releases) каждой версии)
@@ -135,7 +135,7 @@ npx vsce package --readme-path MARKETPLACE.md     # .vsix
 
 | Компонент | Технология |
 |-----------|-----------|
-| Платформа | Расширение VS Code (1.124+) |
+| Платформа | Расширение VS Code (1.90+) |
 | Связь | gRPC + Protobuf |
 | UI чата | React |
 | Разбор кода | Tree-sitter |

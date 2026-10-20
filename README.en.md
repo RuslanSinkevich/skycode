@@ -85,7 +85,7 @@ Simplified prompts and tools for weaker/free models. 11 prompt variants optimize
 
 ## Installation
 
-Requires VS Code 1.124 or newer.
+Requires VS Code 1.90 or newer.
 
 - **From the Marketplace:** Extensions view → search "Skycode AI" → Install. Page: [marketplace.visualstudio.com/items?itemName=skycode.skycode-ai](https://marketplace.visualstudio.com/items?itemName=skycode.skycode-ai)
 - **From a .vsix:** Extensions → `…` → "Install from VSIX…" (the file is attached to each [GitHub Release](https://github.com/RuslanSinkevich/skycode/releases))
@@ -135,7 +135,7 @@ More in the [Development Guide](./docs/skycode/en/development/getting-started.md
 
 | Component | Technology |
 |-----------|-----------|
-| Platform | VS Code extension (1.124+) |
+| Platform | VS Code extension (1.90+) |
 | Communication | gRPC + Protobuf |
 | Chat UI | React |
 | Code parsing | Tree-sitter |

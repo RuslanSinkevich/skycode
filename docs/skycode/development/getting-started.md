@@ -6,7 +6,7 @@ Skycode — расширение VS Code, код лежит в `extensions/skyco
 
 ## Требования
 
-- VS Code 1.124+ (минимальная версия движка в `package.json`)
+- VS Code 1.90+ (минимальная версия движка в `package.json`)
 - Node.js 22+ (версия, которой собирает CI) и npm
 
 ## Быстрый старт
