@@ -760,6 +760,8 @@
 	"about.author": "Author: Ruslan Sinkevich",
 	"about.sayThanks": "Say thanks",
 	"about.sayThanksSubtitle": "Skycode is free — but we'd love your support!",
+	"about.otherAmount": "Other amount",
+	"about.otherAmountHint": "SBP, T-Pay or card — via CloudTips (T-Bank)",
 	"about.orViaBoosty": "or via Boosty",
 	"about.projectPage": "Open project page",
 	"account.and": "and",

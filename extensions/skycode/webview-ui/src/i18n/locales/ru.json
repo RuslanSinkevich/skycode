@@ -760,6 +760,8 @@
 	"about.author": "Автор: Руслан Синкевич",
 	"about.sayThanks": "Сказать спасибо",
 	"about.sayThanksSubtitle": "Skycode бесплатный — но мы будем рады вашей поддержке!",
+	"about.otherAmount": "Другая сумма",
+	"about.otherAmountHint": "СБП, T-Pay или картой — через CloudTips (Т-Банк)",
 	"about.orViaBoosty": "или через Boosty",
 	"about.projectPage": "Открыть страницу проекта",
 	"account.and": "и",

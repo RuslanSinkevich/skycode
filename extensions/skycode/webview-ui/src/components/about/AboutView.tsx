@@ -8,6 +8,9 @@ type AboutViewProps = {
 	onDone: () => void
 }
 
+// [SKYCODE] Пожертвования — через CloudTips (Т-Банк): СБП, T-Pay или картой; ?amount= подставляет сумму
+const CLOUDTIPS_URL = "https://pay.cloudtips.ru/p/cd782939"
+
 // [SKYCODE] Экран «О проекте» (бывший «Аккаунт»): описание, автор, версия и блок «Поддержать проект».
 const AboutView = ({ onDone }: AboutViewProps) => {
 	const { t } = useI18n()
@@ -44,7 +47,7 @@ const AboutView = ({ onDone }: AboutViewProps) => {
 							{[300, 500, 1000, 5000].map((sum) => (
 								<a
 									className="flex-1"
-									href={`https://yoomoney.ru/quickpay/confirm?receiver=4100117726681107&sum=${sum}&quickpay-form=donate&targets=${encodeURIComponent("Поддержка Skycode AI")}`}
+									href={`${CLOUDTIPS_URL}?amount=${sum}`}
 									key={sum}
 									rel="noopener noreferrer"
 									style={{ textDecoration: "none" }}
@@ -55,6 +58,18 @@ const AboutView = ({ onDone }: AboutViewProps) => {
 								</a>
 							))}
 						</div>
+
+						<a
+							className="block mb-1"
+							href={CLOUDTIPS_URL}
+							rel="noopener noreferrer"
+							style={{ textDecoration: "none" }}
+							target="_blank">
+							<div className="w-full py-2 rounded-md bg-white/10 hover:bg-white/20 text-white text-sm font-semibold text-center cursor-pointer transition-colors">
+								{t("about.otherAmount")}
+							</div>
+							<div className="text-[11px] text-white/60 text-center mt-1">{t("about.otherAmountHint")}</div>
+						</a>
 
 						<a
 							className="block"
