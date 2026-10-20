@@ -58,30 +58,24 @@ export class DictationAssembler {
 		this.vad.acceptWaveform(samples)
 
 		let changed = false
-		while (!this.vad.isEmpty()) {
-			const segment = this.vad.front()
-			this.vad.pop()
-			const text = this.decode(segment.samples).trim()
-			if (text) {
-				this.committed.push(text)
-			}
-			this.clearPending()
-			this.partial = ""
+		const segments = this.drainVad()
+		if (segments.length > 0) {
+			this.commit(segments)
 			changed = true
 		}
 
 		const speech = this.vad.isDetected ? this.vad.isDetected() : true
 		if (!speech) {
-			// Речи нет — не гоняем распознавание по тишине и не копим её бесконечно
+			// Речи нет — не гоняем распознавание по тишине и не копим её бесконечно. Показанный partial
+			// не стираем: короткая пауза внутри фразы не должна прятать уже показанный текст
 			this.trimPending(this.silenceKeep)
-			if (this.partial) {
-				this.partial = ""
+		} else if (this.sinceDecode >= this.partialInterval && this.pendingLength > 0) {
+			const partial = this.decode(this.joinPending()).trim()
+			if (partial !== this.partial) {
+				this.partial = partial
 				changed = true
 			}
-		} else if (this.sinceDecode >= this.partialInterval && this.pendingLength > 0) {
-			this.partial = this.decode(this.joinPending()).trim()
 			this.sinceDecode = 0
-			changed = true
 		}
 		return changed ? this.snapshot() : null
 	}
@@ -89,12 +83,9 @@ export class DictationAssembler {
 	/** Завершает запись: дочитывает хвост из VAD и возвращает итоговый текст */
 	finish(): DictationUpdate {
 		this.vad.flush()
-		while (!this.vad.isEmpty()) {
-			const text = this.decode(this.vad.front().samples).trim()
-			this.vad.pop()
-			if (text) {
-				this.committed.push(text)
-			}
+		const segments = this.drainVad()
+		if (segments.length > 0 || this.partial) {
+			this.commit(segments)
 		}
 		this.clearPending()
 		this.partial = ""
@@ -111,6 +102,39 @@ export class DictationAssembler {
 
 	snapshot(): DictationUpdate {
 		return { committed: this.committed.join(" "), partial: this.partial }
+	}
+
+	private drainVad(): Float32Array[] {
+		const segments: Float32Array[] = []
+		while (!this.vad.isEmpty()) {
+			segments.push(this.vad.front().samples)
+			this.vad.pop()
+		}
+		return segments
+	}
+
+	/**
+	 * Фиксирует фразу на паузе. Распознаём весь накопленный звук (с запасом тишины по краям — так же,
+	 * как считался показанный partial): сегмент VAD обрезан вплотную, и живой микрофон на нём распознаётся
+	 * хуже, вплоть до пустой строки — тогда показанный текст пропадал. Запасные варианты — сегменты VAD,
+	 * затем последний показанный partial.
+	 */
+	private commit(segments: Float32Array[]): void {
+		let text = this.pendingLength > 0 ? this.decode(this.joinPending()).trim() : ""
+		if (!text) {
+			text = segments
+				.map((segment) => this.decode(segment).trim())
+				.filter(Boolean)
+				.join(" ")
+		}
+		if (!text) {
+			text = this.partial
+		}
+		if (text) {
+			this.committed.push(text)
+		}
+		this.clearPending()
+		this.partial = ""
 	}
 
 	private clearPending(): void {

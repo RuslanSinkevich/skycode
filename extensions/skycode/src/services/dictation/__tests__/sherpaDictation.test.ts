@@ -166,13 +166,30 @@ describe("DictationAssembler", () => {
 		expect(update).to.deep.equal({ committed: "", partial: "t300:1" })
 	})
 
-	it("commits a VAD segment, clears partial and pending", () => {
-		const seg = block(250, 2)
-		const vad = new FakeVad([{ at: 200, samples: seg }])
+	it("commits the whole pending audio at a VAD segment, clears partial and pending", () => {
+		const vad = new FakeVad([{ at: 200, samples: block(50, 2) }])
 		const asm = new DictationAssembler(fakeDecode, vad, { partialIntervalSamples: 1000 })
 		asm.push(block(100, 1))
 		const update = asm.push(block(100, 1))
-		expect(update).to.deep.equal({ committed: "t250:2", partial: "" })
+		// распознаётся весь накопленный звук (с запасом), а не обрезанный вплотную сегмент
+		expect(update).to.deep.equal({ committed: "t200:1", partial: "" })
+	})
+
+	it("falls back to the VAD segment, then to the shown partial, when pending decodes to nothing", () => {
+		const vad = new FakeVad([{ at: 300, samples: block(50, 2) }])
+		const decode = (samples: Float32Array) => (samples[0] === 2 ? "сегмент" : "")
+		const asm = new DictationAssembler(decode, vad, { partialIntervalSamples: 10000 })
+		asm.push(block(100, 1))
+		asm.push(block(100, 1))
+		expect(asm.push(block(100, 1))?.committed).to.equal("сегмент")
+
+		const vad2 = new FakeVad([{ at: 300, samples: block(50, 3) }])
+		let call = 0
+		const decode2 = () => (++call === 1 ? "показанный текст" : "")
+		const asm2 = new DictationAssembler(decode2, vad2, { partialIntervalSamples: 200 })
+		asm2.push(block(100, 1))
+		expect(asm2.push(block(100, 1))?.partial).to.equal("показанный текст")
+		expect(asm2.push(block(100, 1))).to.deep.equal({ committed: "показанный текст", partial: "" })
 	})
 
 	it("decodes whole pending buffer for partial after a commit", () => {
@@ -181,10 +198,10 @@ describe("DictationAssembler", () => {
 		asm.push(block(100, 1)) // сегмент закоммичен, pending очищен
 		asm.push(block(100, 7))
 		const update = asm.push(block(100, 7))
-		expect(update).to.deep.equal({ committed: "t100:5", partial: "t200:7" })
+		expect(update).to.deep.equal({ committed: "t100:1", partial: "t200:7" })
 	})
 
-	it("joins committed segments with single spaces and skips empty recognitions", () => {
+	it("joins committed phrases with single spaces and skips empty recognitions", () => {
 		const decode = (samples: Float32Array) => (samples[0] === 0 ? "   " : `s${samples[0]}`)
 		const vad = new FakeVad([
 			{ at: 100, samples: block(10, 1) },
@@ -192,9 +209,9 @@ describe("DictationAssembler", () => {
 			{ at: 300, samples: block(10, 3) },
 		])
 		const asm = new DictationAssembler(decode, vad, { partialIntervalSamples: 10000 })
-		asm.push(block(100, 9))
-		asm.push(block(100, 9))
-		const update = asm.push(block(100, 9))
+		asm.push(block(100, 1))
+		asm.push(block(100, 0))
+		const update = asm.push(block(100, 3))
 		expect(update?.committed).to.equal("s1 s3")
 	})
 
@@ -204,7 +221,7 @@ describe("DictationAssembler", () => {
 		asm.push(block(100, 1))
 		const final = asm.finish()
 		expect(vad.flushed).to.equal(true)
-		expect(final).to.deep.equal({ committed: "t50:4", partial: "" })
+		expect(final).to.deep.equal({ committed: "t100:1", partial: "" })
 	})
 
 	it("does not decode silence and trims the pending buffer when no speech is detected", () => {
@@ -229,19 +246,21 @@ describe("DictationAssembler", () => {
 		expect(update?.partial).to.equal("n250")
 	})
 
-	it("clears a stale partial when speech stops without a segment", () => {
+	it("keeps the shown partial during a short pause and commits it on finish", () => {
 		const vad = new FakeVad([])
 		const asm = new DictationAssembler(fakeDecode, vad, { partialIntervalSamples: 100 })
 		expect(asm.push(block(100, 1))?.partial).to.equal("t100:1")
 		vad.detected = false
-		expect(asm.push(block(10, 0))).to.deep.equal({ committed: "", partial: "" })
+		expect(asm.push(block(10, 0))).to.equal(null)
+		expect(asm.snapshot().partial).to.equal("t100:1")
+		expect(asm.finish().committed).to.equal("t110:1")
 	})
 
 	it("reset starts a fresh recording", () => {
 		const vad = new FakeVad([{ at: 100, samples: block(10, 1) }])
 		const asm = new DictationAssembler(fakeDecode, vad, { partialIntervalSamples: 10000 })
 		asm.push(block(100, 1))
-		expect(asm.snapshot().committed).to.equal("t10:1")
+		expect(asm.snapshot().committed).to.equal("t100:1")
 		asm.reset()
 		expect(asm.snapshot()).to.deep.equal({ committed: "", partial: "" })
 		expect(vad.resets).to.equal(1)

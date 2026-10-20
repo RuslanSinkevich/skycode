@@ -102,6 +102,16 @@ export class SherpaLocalService {
 		} catch {
 			// WhisperLocalService ещё не инициализирован
 		}
+		// [SKYCODE] При запуске сервис whisper создаётся асинхронно и может ещё не существовать —
+		// тогда смотрим его папку напрямую, иначе готовая GigaAM считалась бы нескачанной
+		const whisperDirFfmpeg = path.join(
+			path.dirname(this.rootDir),
+			"whisper",
+			process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg",
+		)
+		if (fs.existsSync(whisperDirFfmpeg)) {
+			return whisperDirFfmpeg
+		}
 		if (fs.existsSync(this.ownFfmpegPath)) {
 			return this.ownFfmpegPath
 		}

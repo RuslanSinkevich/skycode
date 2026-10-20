@@ -148,8 +148,8 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				if (!anchor) {
 					return
 				}
-				const left = anchor.prefix && text && !/s$/.test(anchor.prefix) ? `${anchor.prefix} ` : anchor.prefix
-				const right = anchor.suffix && text && !/^s/.test(anchor.suffix) ? ` ${anchor.suffix}` : anchor.suffix
+				const left = anchor.prefix && text && !/\s$/.test(anchor.prefix) ? `${anchor.prefix} ` : anchor.prefix
+				const right = anchor.suffix && text && !/^\s/.test(anchor.suffix) ? ` ${anchor.suffix}` : anchor.suffix
 				setInputValue(left + text + right)
 				if (finished) {
 					voiceAnchorRef.current = null
