@@ -57,7 +57,7 @@ function init(msg: InitMessage): void {
 			numThreads: msg.numThreads ?? 4,
 		},
 	})
-	const vad: VadLike = new sherpa.Vad(
+	const sileroVad = new sherpa.Vad(
 		{
 			sileroVad: {
 				model: msg.vadPath,
@@ -72,6 +72,18 @@ function init(msg: InitMessage): void {
 		},
 		60,
 	)
+	// [SKYCODE] В VS Code (Electron) включена защита памяти V8: нативный модуль не может отдавать
+	// «внешние» буферы («External buffers are not allowed»). front() по умолчанию отдаёт именно такой —
+	// просим копию
+	const vad: VadLike = {
+		acceptWaveform: (samples) => sileroVad.acceptWaveform(samples),
+		isEmpty: () => sileroVad.isEmpty(),
+		isDetected: () => sileroVad.isDetected(),
+		front: () => sileroVad.front(false),
+		pop: () => sileroVad.pop(),
+		flush: () => sileroVad.flush(),
+		reset: () => sileroVad.reset(),
+	}
 
 	const decode = (samples: Float32Array): string => {
 		const stream = recognizer.createStream()
