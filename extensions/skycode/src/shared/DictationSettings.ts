@@ -15,6 +15,7 @@ export interface DictationSettings {
 	voiceDownloadProgress?: number // 0-100, download percentage (transient)
 	gigaamAvailable?: boolean // true, если движок GigaAM поддерживается на этой платформе (транзиентно, считает расширение)
 	voiceReinstall?: boolean // transient flag: delete model and re-download
+	gigaamDefaultApplied?: boolean // [SKYCODE] разовый переход русской диктовки с whisper "tiny" на GigaAM уже выполнен
 	audioDeviceId?: string // User-selected microphone device ID (empty = auto-detect)
 	audioDevices?: AudioDevice[] // Available audio devices list (transient, populated on request)
 }

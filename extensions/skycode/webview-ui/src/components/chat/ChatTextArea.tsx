@@ -94,6 +94,28 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		const [isTextAreaFocused, setIsTextAreaFocused] = useState(false)
 		const [isVoiceRecording, setIsVoiceRecording] = useState(false)
 		const [isVoiceProcessing, setIsVoiceProcessing] = useState(false)
+		// [SKYCODE] Отправка во время диктовки: останавливаем запись и отправляем, когда придёт итоговый текст
+		const voiceStopRef = useRef<(() => Promise<void>) | null>(null)
+		const sendAfterVoiceRef = useRef(false)
+		const sendOrFinishVoice = useCallback(
+			(info?: { repeat?: boolean }) => {
+				if (isVoiceRecording || isVoiceProcessing) {
+					sendAfterVoiceRef.current = true
+					if (isVoiceRecording) {
+						void voiceStopRef.current?.()
+					}
+					return
+				}
+				onSend(info)
+			},
+			[isVoiceRecording, isVoiceProcessing, onSend],
+		)
+		useEffect(() => {
+			if (sendAfterVoiceRef.current && !isVoiceRecording && !isVoiceProcessing) {
+				sendAfterVoiceRef.current = false
+				onSend()
+			}
+		}, [isVoiceRecording, isVoiceProcessing, onSend])
 		const [thumbnailsHeight, setThumbnailsHeight] = useState(0)
 		const [textAreaBaseHeight, setTextAreaBaseHeight] = useState<number | undefined>(undefined)
 		const [cursorPosition, setCursorPosition] = useState(0)
@@ -177,7 +199,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			cursorPosition,
 			setCursorPosition,
 			sendingDisabled,
-			onSend,
+			onSend: sendOrFinishVoice,
 			textAreaRef,
 			localWorkflowToggles,
 			globalWorkflowToggles,
@@ -466,7 +488,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							outline:
 								isDraggingOver && !showUnsupportedFileError // Only show drag outline if not showing error
 									? "2px dashed var(--vscode-focusBorder)"
-									: isTextAreaFocused
+									: isTextAreaFocused || isVoiceRecording
 										? `1px solid ${MODE_COLORS[mode] || "var(--vscode-focusBorder)"}`
 										: "none",
 							outlineOffset: isDraggingOver && !showUnsupportedFileError ? "1px" : "0px", // Add offset for drag-over outline
@@ -506,6 +528,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 									engine={dictationSettings?.whisperModel}
 									onLiveStart={handleVoiceLiveStart}
 									onLiveText={handleVoiceLiveText}
+									stopRef={voiceStopRef}
 									onProcessingStateChange={(isProcessing, message) => {
 										setIsVoiceProcessing(isProcessing)
 										if (isProcessing && message) {
@@ -566,18 +589,18 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 										title={t("chat.stopAI")}
 									/>
 								) : (
-								// Кнопка Send — disabled при записи голоса и транскрипции
+								// Кнопка Send — во время диктовки останавливает запись и отправляет итоговый текст
 									<div
 										className={cn(
 											"input-icon-button",
-										{ disabled: sendingDisabled || isVoiceRecording || isVoiceProcessing },
+										{ disabled: sendingDisabled },
 											"codicon codicon-send text-sm",
 										)}
 										data-testid="send-button"
 										onClick={() => {
-										if (!sendingDisabled && !isVoiceRecording && !isVoiceProcessing) {
+										if (!sendingDisabled) {
 												setIsTextAreaFocused(false)
-												onSend()
+												sendOrFinishVoice()
 											}
 										}}
 									/>

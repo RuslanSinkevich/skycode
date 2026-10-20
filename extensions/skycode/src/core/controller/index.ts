@@ -897,6 +897,21 @@ export class Controller {
 		// [SKYCODE-PERF] Use cached auth status instead of dynamic import + async check on every call
 		const openAiCodexIsAuthenticated = await this._getCodexAuthStatus()
 
+		// [SKYCODE] Один раз переводим русскую диктовку со старого умолчания whisper "tiny" на GigaAM
+		// (у тех, кто ставил расширение до появления GigaAM, в настройках сохранён "tiny")
+		if (!dictationSettings?.gigaamDefaultApplied) {
+			const supported = getSherpaLocalService(HostProvider.get().globalStorageFsPath)?.isSupported ?? false
+			const oldDefault = !dictationSettings?.whisperModel || dictationSettings.whisperModel === "tiny"
+			dictationSettings = {
+				...dictationSettings,
+				...(supported && oldDefault && dictationSettings?.dictationLanguage === "ru"
+					? { whisperModel: GIGAAM_MODEL_ID }
+					: {}),
+				gigaamDefaultApplied: true,
+			}
+			this.stateManager.setGlobalState("dictationSettings", dictationSettings)
+		}
+
 		// [SKYCODE-PERF] Voice readiness — cached, no fs.existsSync on every call
 		// [SKYCODE] GigaAM годится только для русского: для другого языка показываем whisper "tiny"
 		const storedModel = (dictationSettings as any)?.whisperModel ?? "tiny"

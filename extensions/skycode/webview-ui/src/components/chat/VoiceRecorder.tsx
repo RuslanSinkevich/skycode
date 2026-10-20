@@ -20,6 +20,8 @@ interface VoiceRecorderProps {
 	onLiveStart?: () => void
 	/** GigaAM: живой текст (committed + partial); finished=true — итоговый текст, превью закреплено */
 	onLiveText?: (text: string, finished: boolean) => void
+	/** Сюда кладётся функция остановки записи — родитель останавливает запись, когда отправляют сообщение */
+	stopRef?: React.MutableRefObject<(() => Promise<void>) | null>
 }
 
 const MAX_DURATION = 5 * 60 // 5 minutes
@@ -42,6 +44,7 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 	engine,
 	onLiveStart,
 	onLiveText,
+	stopRef,
 }) => {
 	const { t } = useI18n()
 	const [state, setState] = useState<"idle" | "starting" | "recording" | "transcribing">("idle")
@@ -235,6 +238,12 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 			onProcessingStateChange?.(false)
 		}
 	}, [state, language, onTranscription, onProcessingStateChange, t, stopLiveSubscription])
+
+	useEffect(() => {
+		if (stopRef) {
+			stopRef.current = handleStop
+		}
+	}, [stopRef, handleStop])
 
 	const _handleCancel = useCallback(async () => {
 		if (state !== "recording") { return }
