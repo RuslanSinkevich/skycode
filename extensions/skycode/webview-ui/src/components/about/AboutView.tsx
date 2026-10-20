@@ -9,7 +9,7 @@ type AboutViewProps = {
 }
 
 // [SKYCODE] Пожертвования — через CloudTips (Т-Банк): СБП, T-Pay или картой; ?amount= подставляет сумму
-const CLOUDTIPS_URL = "https://pay.cloudtips.ru/p/cd782939"
+const CLOUDTIPS_URL = "https://pay.cloudtips.ru/p/3a95e808"
 
 // [SKYCODE] Экран «О проекте» (бывший «Аккаунт»): описание, автор, версия и блок «Поддержать проект».
 const AboutView = ({ onDone }: AboutViewProps) => {
