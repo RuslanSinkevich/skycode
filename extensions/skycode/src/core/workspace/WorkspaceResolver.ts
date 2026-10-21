@@ -142,7 +142,6 @@ export class WorkspaceResolver {
 		// Check which roots have this relative path
 		const candidateRoots: WorkspaceRoot[] = []
 		for (const root of workspaceRoots) {
-			// const testPath = path.join(root.path, relativePath)
 			// In Phase 1, check if path exists
 			// For now, just add all roots as candidates
 			candidateRoots.push(root)

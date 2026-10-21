@@ -3,21 +3,6 @@ import { SkycodeDefaultTool } from "@/shared/tools"
 import type { SkycodeToolSpec } from "../spec"
 import { TASK_PROGRESS_PARAMETER } from "../types"
 
-// {
-//     "name": "apply_patch",
-//     "description": APPLY_PATCH_TOOL_DESC,
-//     "parameters": {
-//         "type": "object",
-//         "properties": {
-//             "input": {
-//                 "type": "string",
-//                 "description": " The apply_patch command that you wish to execute.",
-//             }
-//         },
-//         "required": ["input"],
-//     },
-// }
-
 const APPLY_PATCH_TOOL_DESC = `This is a custom utility that makes it more convenient to add, remove, move, or edit code in a single file. \`apply_patch\` effectively allows you to execute a diff/patch against a file, but the format of the diff specification is unique to this task, so pay careful attention to these instructions. To use the \`apply_patch\` command, you should pass a message of the following structure as "input":
 
 %%bash

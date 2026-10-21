@@ -32,7 +32,6 @@ export async function parseSourceCodeForDefinitionsTopLevel(
 	const languageParsers = await loadRequiredLanguageParsers(filesToParse)
 
 	// Parse specific files we have language parsers for
-	// const filesWithoutDefinitions: string[] = []
 
 	// Filter filepaths for access if controller is provided
 	const allowedFilesToParse = skycodeIgnoreController ? skycodeIgnoreController.filterPaths(filesToParse) : filesToParse
@@ -42,23 +41,7 @@ export async function parseSourceCodeForDefinitionsTopLevel(
 		if (definitions) {
 			result += `${path.relative(dirPath, filePath).toPosix()}\n${definitions}\n`
 		}
-		// else {
-		// 	filesWithoutDefinitions.push(file)
-		// }
 	}
-
-	// List remaining files' paths
-	// let didFindUnparsedFiles = false
-	// filesWithoutDefinitions
-	// 	.concat(remainingFiles)
-	// 	.sort()
-	// 	.forEach((file) => {
-	// 		if (!didFindUnparsedFiles) {
-	// 			result += "# Unparsed Files\n\n"
-	// 			didFindUnparsedFiles = true
-	// 		}
-	// 		result += `${path.relative(dirPath, file)}\n`
-	// 	})
 
 	return result ? result : "No source code definitions found."
 }
@@ -169,11 +152,6 @@ async function parseFile(
 			if (name.includes("name") && lines[startLine]) {
 				formattedOutput += `│${lines[startLine]}\n`
 			}
-			// Adds all the captured lines
-			// for (let i = startLine; i <= endLine; i++) {
-			// 	formattedOutput += `│${lines[i]}\n`
-			// }
-			//}
 
 			lastLine = endLine
 		})

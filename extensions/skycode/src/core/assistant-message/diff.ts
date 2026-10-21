@@ -316,13 +316,6 @@ async function constructNewFileContentV1(
 			inSearch = false
 			inReplace = true
 
-			// Remove trailing linebreak for adding the === marker
-			// if (currentSearchContent.endsWith("\r\n")) {
-			// 	currentSearchContent = currentSearchContent.slice(0, -2)
-			// } else if (currentSearchContent.endsWith("\n")) {
-			// 	currentSearchContent = currentSearchContent.slice(0, -1)
-			// }
-
 			if (!currentSearchContent) {
 				// Empty search block
 				if (originalContent.length === 0) {
@@ -338,15 +331,6 @@ async function constructNewFileContentV1(
 					)
 				}
 			} else {
-				// Add check for inefficient full-file search
-				// if (currentSearchContent.trim() === originalContent.trim()) {
-				// 	throw new Error(
-				// 		"The SEARCH block contains the entire file content. Please either:\n" +
-				// 			"1. Use an empty SEARCH block to replace the entire file, or\n" +
-				// 			"2. Make focused changes to specific parts of the file that need modification.",
-				// 	)
-				// }
-
 				// Exact search match scenario
 				const exactIndex = originalContent.indexOf(currentSearchContent, lastProcessedIndex)
 				if (exactIndex !== -1) {
@@ -658,13 +642,6 @@ class NewFileContentConstructor {
 	}
 
 	private beforeReplace() {
-		// Remove trailing linebreak for adding the === marker
-		// if (currentSearchContent.endsWith("\r\n")) {
-		// 	currentSearchContent = currentSearchContent.slice(0, -2)
-		// } else if (currentSearchContent.endsWith("\n")) {
-		// 	currentSearchContent = currentSearchContent.slice(0, -1)
-		// }
-
 		if (!this.currentSearchContent) {
 			// Empty search block
 			if (this.originalContent.length === 0) {
@@ -677,14 +654,6 @@ class NewFileContentConstructor {
 				this.searchEndIndex = this.originalContent.length
 			}
 		} else {
-			// Add check for inefficient full-file search
-			// if (currentSearchContent.trim() === originalContent.trim()) {
-			// 	throw new Error(
-			// 		"The SEARCH block contains the entire file content. Please either:\n" +
-			// 			"1. Use an empty SEARCH block to replace the entire file, or\n" +
-			// 			"2. Make focused changes to specific parts of the file that need modification.",
-			// 	)
-			// }
 			// Exact search match scenario
 			const exactIndex = this.originalContent.indexOf(this.currentSearchContent, this.lastProcessedIndex)
 			if (exactIndex !== -1) {
@@ -760,10 +729,6 @@ class NewFileContentConstructor {
 		const replaceBeginTagRegexp = /^[=]{3,}$/
 		const replaceBeginTagIndex = this.findLastMatchingLineIndex(replaceBeginTagRegexp, lineLimit)
 		if (replaceBeginTagIndex !== -1) {
-			// // 校验非标内容
-			// if (!this.isSearchingActive()) {
-			// 	removeLineCount += this.tryFixSearchBlock(replaceBeginTagIndex)
-			// }
 			const fixLines = this.pendingNonStandardLines.slice(
 				replaceBeginTagIndex - removeLineCount,
 				lineLimit - removeLineCount,
@@ -791,10 +756,6 @@ class NewFileContentConstructor {
 		const replaceEndTagIndex = this.findLastMatchingLineIndex(replaceEndTagRegexp, lineLimit)
 		const likeReplaceEndTag = replaceEndTagIndex === lineLimit - 1
 		if (likeReplaceEndTag) {
-			// // 校验非标内容
-			// if (!this.isReplacingActive()) {
-			// 	removeLineCount += this.tryFixReplaceBlock(replaceEndTagIndex)
-			// }
 			const fixLines = this.pendingNonStandardLines.slice(replaceEndTagIndex - removeLineCount, lineLimit - removeLineCount)
 			fixLines[fixLines.length - 1] = REPLACE_BLOCK_END
 			for (const line of fixLines) {

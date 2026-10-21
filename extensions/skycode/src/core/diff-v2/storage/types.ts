@@ -1,5 +1,5 @@
 /**
- * Storage Types - Cursor-like diff system
+ * Storage Types — система просмотра изменений агента
  *
  * Форматы данных совместимы с Cursor для возможной миграции
  */
@@ -102,7 +102,7 @@ export interface Checkpoint {
 export type PendingStatus = 'pending' | 'accepted' | 'rejected';
 
 /**
- * Отдельное pending изменение для UI (кнопки Accept/Reject)
+ * Отдельное pending изменение для UI (полоса изменений в чате, Ctrl+Shift+Y / Ctrl+Shift+N)
  */
 export interface PendingChange {
   /** Уникальный ID */
@@ -184,7 +184,7 @@ export interface WorkspaceInfo {
 }
 
 // ============================================================
-// V3 TYPES — Cursor-like diff system architecture
+// Типы хранилища изменений (ResponseGroup → FileChange → Hunk)
 // ============================================================
 
 export type ResponseGroupStatus = 'active' | 'accepted' | 'rejected' | 'partial';
@@ -195,7 +195,7 @@ export type HunkType = 'addition' | 'deletion' | 'replacement';
 /** Group of changes from one AI response */
 export interface ResponseGroup {
   id: string;
-  taskId?: string;           // v4: привязка к задаче для scoped rollback
+  taskId?: string;           // привязка к задаче для scoped rollback
   chatMessageTs: number;
   description?: string;
   status: ResponseGroupStatus;

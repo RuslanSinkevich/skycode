@@ -240,7 +240,7 @@ export class Controller {
 			this.stateManager.setGlobalState("autoApprovalSettings", updatedAutoApprovalSettings)
 		}
 
-		// Initialize and persist the workspace manager (multi-root or single-root) with telemetry + fallback
+		// Initialize and persist the workspace manager (multi-root or single-root) with fallback
 		this.workspaceManager = await setupWorkspaceManager({
 			stateManager: this.stateManager,
 			detectRoots: detectWorkspaceRoots,
@@ -362,8 +362,6 @@ export class Controller {
 		// Store mode to global state
 		this.stateManager.setGlobalState("mode", modeToSwitchTo)
 
-		// Capture mode switch telemetry | Capture regardless of if we know the taskId
-
 		// Update API handler with new mode (buildApiHandler now selects provider based on mode)
 		if (this.activeTask) {
 			this.activeTask.setMode(modeToSwitchTo)
@@ -454,8 +452,6 @@ export class Controller {
 				taskToCancel.taskState.abandoned = true
 			}
 
-			// Small delay to ensure state manager has persisted the history update
-			//await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// NOW try to get history after abort has finished (hook may have saved messages)
 			let historyItem: HistoryItem | undefined
@@ -811,7 +807,7 @@ export class Controller {
 
 	async getStateToPostToWebview(): Promise<ExtensionState> {
 		// [SKYCODE-SKYCODE] Capture indexing progress IMMEDIATELY before any awaits.
-		// getStateToPostToWebview has multiple awaits (getBanners, openAiCodex, etc.)
+		// getStateToPostToWebview has multiple awaits (openAiCodex, etc.)
 		// that yield to the event loop. During those yields, indexing continues and
 		// progress advances. If we read progress after the awaits, we miss intermediate states.
 		let indexingProgressSnapshot: import("@shared/IndexingTypes").IndexingProgress | undefined

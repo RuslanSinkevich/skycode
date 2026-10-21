@@ -63,7 +63,6 @@ const ChatView = ({ isHidden }: ChatViewProps) => {
 	// --- NEW: Session-based state (pipeline architecture) ---
 	const session = useSession(currentSessionId ?? null)
 
-	//const task = messages.length > 0 ? (messages[0].say === "task" ? messages[0] : undefined) : undefined) : undefined
 	const task = useMemo(() => messages.at(0), [messages]) // leaving this less safe version here since if the first message is not a task, then the extension is in a bad state and needs to be debugged (see Skycode.abort)
 	// [SKYCODE] Шапка первого хода — только настоящая первая реплика пользователя: служебная строка
 	// (статистика удалённых запросов и т.п.) не должна показываться вместо текста задачи

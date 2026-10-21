@@ -182,8 +182,6 @@ export class StandaloneTerminalProcess extends EventEmitter<TerminalProcessEvent
 
 			// Handle process errors (spawn failures)
 			this.childProcess.on("error", (error: Error) => {
-				// Track terminal execution error telemetry
-				// method: "child_process_error" already indicates spawn failure
 				this.emit("error", error)
 			})
 

@@ -351,10 +351,8 @@ export abstract class DiffViewProvider {
 		if (normalizedPreSaveContent !== normalizedNewContent) {
 			// user made changes before approving edit. let the model know about user made changes (not including post-save auto-formatting changes)
 			userEdits = formatResponse.createPrettyPatch(this.relPath.toPosix(), normalizedNewContent, normalizedPreSaveContent)
-			// return { newProblemsMessage, userEdits, finalContent: normalizedPostSaveContent }
 		} else {
 			// no changes to skycode's edits
-			// return { newProblemsMessage, userEdits: undefined, finalContent: normalizedPostSaveContent }
 		}
 
 		let autoFormattingEdits: string | undefined

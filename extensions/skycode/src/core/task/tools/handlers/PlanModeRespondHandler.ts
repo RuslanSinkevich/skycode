@@ -58,7 +58,6 @@ export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandle
 			return formatResponse.toolResult(`[Go ahead and execute.]`)
 		}
 
-		// Store the number of options for telemetry
 		const options = parsePartialArrayString(optionsRaw || "[]")
 
 		const sharedMessage = {

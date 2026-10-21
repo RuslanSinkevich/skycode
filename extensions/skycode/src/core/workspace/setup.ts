@@ -12,7 +12,7 @@ type DetectRoots = () => Promise<WorkspaceRoot[]>
 
 /**
  * Initializes and persists the WorkspaceRootManager (multi-root or single-root),
- * emits telemetry, and handles fallback on error.
+ * and handles fallback on error.
  *
  * The caller injects detectRoots to avoid tight coupling to Controller.
  */
@@ -35,37 +35,11 @@ export async function setupWorkspaceManager({
 			manager = new WorkspaceRootManager(roots, 0)
 			Logger.log(`[WorkspaceManager] Multi-root mode: ${roots.length} roots detected`)
 
-			// Telemetry
-
 			// Persist
 			stateManager.setGlobalState("workspaceRoots", manager.getRoots())
 			stateManager.setGlobalState("primaryRootIndex", manager.getPrimaryIndex())
 			return manager
 		}
-
-		// Single-root mode code for when we actually start using workspacerootmanager
-		// if (historyItem) {
-		// 	const savedRoots = stateManager.getWorkspaceRoots()
-		// 	if (savedRoots && savedRoots.length > 0) {
-		// 		const primaryIndex = stateManager.getPrimaryRootIndex()
-		// 		manager = new WorkspaceRootManager(savedRoots, primaryIndex)
-		// 		Logger.log(`[WorkspaceManager] Restored ${savedRoots.length} roots from state`)
-		// 		telemetryService.captureWorkspaceInitialized(
-		// 			savedRoots.length,
-		// 			savedRoots.map((r) => r.vcs.toString()),
-		// 			performance.now() - startTime,
-		// 			false,
-		// 		)
-		// 	} else {
-		// 		manager = await WorkspaceRootManager.fromLegacyCwd(cwd)
-		// 		telemetryService.captureWorkspaceInitialized(
-		// 			1,
-		// 			[manager.getRoots()[0].vcs.toString()],
-		// 			performance.now() - startTime,
-		// 			false,
-		// 		)
-		// 	}
-		// }
 
 		manager = await WorkspaceRootManager.fromLegacyCwd(cwd)
 

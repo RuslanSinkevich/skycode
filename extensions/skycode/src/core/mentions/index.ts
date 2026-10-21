@@ -317,7 +317,6 @@ async function getFileOrFolderContent(mentionPath: string, cwd: string): Promise
 					folderContent += `${linePrefix}${entry.name}\n`
 					const filePath = path.join(mentionPath, entry.name)
 					const absoluteFilePath = path.resolve(absPath, entry.name)
-					// const relativeFilePath = path.relative(cwd, absoluteFilePath);
 					fileContentPromises.push(
 						(async () => {
 							try {

@@ -110,11 +110,6 @@ export function toolSpecFunctionDefinition(tool: SkycodeToolSpec, context: Syste
 				}
 			}
 
-			// Add usage example as part of description if available
-			// if (param.usage) {
-			// 	paramSchema.description += ` Example: ${param.usage}`
-			// }
-
 			properties[param.name] = paramSchema
 		}
 	}
@@ -202,11 +197,6 @@ export function toolSpecInputSchema(tool: SkycodeToolSpec, context: SystemPrompt
 					paramSchema[key] = param[key]
 				}
 			}
-
-			// Add usage example as part of description if available
-			// if (param.usage) {
-			// 	paramSchema.description += ` Example: ${param.usage}`
-			// }
 
 			properties[param.name] = paramSchema
 		}

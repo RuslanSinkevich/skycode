@@ -1,5 +1,5 @@
 /**
- * DiffSystem v3 — Cursor-like diff system facade
+ * DiffSystem — фасад системы просмотра изменений агента
  *
  * Single entry point for all diff operations.
  * Public API is backward-compatible with v2 callers (tool handlers, retry/delete).
@@ -13,18 +13,18 @@ import { t } from '../../i18n/backend-i18n';
 import { Logger } from "@/shared/services/Logger"
 
 
-// v3 storage
+// storage
 import { DiffStore } from './storage/DiffStore';
 import { FileSnapshotStorage } from './storage/FileSnapshotStorage';
 import type { Hunk } from './storage/types';
 
-// v3 engine
+// engine
 import { SystemEditGuard } from './engine/SystemEditGuard';
 import { PositionTracker } from './engine/PositionTracker';
 import { HunkApplier } from './engine/HunkApplier';
 import { HunkReverter } from './engine/HunkReverter';
 
-// v3 UI
+// UI
 import { HunkDecorations } from './ui/HunkDecorations';
 import { KeyboardNavigation } from './ui/KeyboardNavigation';
 
@@ -160,7 +160,7 @@ export class DiffSystem implements vscode.Disposable {
       }),
     );
 
-    // Restore View Zones for visible editors on startup
+    // Восстанавливаем подсветку непринятых изменений в открытых редакторах при запуске
     if (!clearOnStartup) {
       const editors = vscode.window.visibleTextEditors;
       for (const editor of editors) {
@@ -171,7 +171,7 @@ export class DiffSystem implements vscode.Disposable {
       }
     }
 
-    // Restore View Zones when editor tabs become visible (e.g. tab switch, reopen)
+    // Восстанавливаем подсветку, когда вкладка редактора снова видна (переключение, повторное открытие)
     this.disposables.push(
       vscode.window.onDidChangeVisibleTextEditors(async (editors) => {
         for (const editor of editors) {
@@ -639,10 +639,10 @@ export class DiffSystem implements vscode.Disposable {
   }
 
   /**
-   * Replace lines in a file (Cursor-like).
-   * originalLines removed, newLines replace them. View Zone shows deleted lines.
+   * Replace lines in a file.
+   * originalLines removed, newLines replace them; deleted lines are marked by HunkDecorations (red border + hover).
    *
-   * v4: Pre-saves dirty files, takes snapshot, checks for overlaps.
+   * Pre-saves dirty files, takes snapshot, checks for overlaps.
    */
   async replaceLines(
     fsPath: string,
@@ -656,10 +656,10 @@ export class DiffSystem implements vscode.Disposable {
     const messageTs = this.getCurrentMessageTs(taskId);
     await this.ensureDocumentLoaded(fsPath);
 
-    // v4: Pre-save and snapshot before first AI edit
+    // Pre-save and snapshot before first AI edit
     await this.preSaveAndSnapshot(fsPath, rgId, messageTs);
 
-    // v4: Overlap detection → reject overlapping, then apply
+    // Overlap detection → reject overlapping, then apply
     const endLine = startLine + originalLines.length;
     const hunkId = await this.applyWithOverlapCheck(
       fsPath,
@@ -672,9 +672,9 @@ export class DiffSystem implements vscode.Disposable {
   }
 
   /**
-   * Delete lines from a file. View Zone shows deleted content as ghost.
+   * Delete lines from a file; HunkDecorations marks the deletion (red border + hover with the removed text).
    *
-   * v4: Pre-saves dirty files, takes snapshot, checks for overlaps.
+   * Pre-saves dirty files, takes snapshot, checks for overlaps.
    */
   async deleteLines(fsPath: string, startLine: number, count: number, taskId?: string): Promise<string> {
     this.ensureInitialized();
@@ -682,10 +682,10 @@ export class DiffSystem implements vscode.Disposable {
     const messageTs = this.getCurrentMessageTs(taskId);
     await this.ensureDocumentLoaded(fsPath);
 
-    // v4: Pre-save and snapshot before first AI edit
+    // Pre-save and snapshot before first AI edit
     await this.preSaveAndSnapshot(fsPath, rgId, messageTs);
 
-    // v4: Overlap detection → reject overlapping, then apply
+    // Overlap detection → reject overlapping, then apply
     const endLine = startLine + count;
     const hunkId = await this.applyWithOverlapCheck(
       fsPath,
@@ -703,7 +703,7 @@ export class DiffSystem implements vscode.Disposable {
   /**
    * Add (insert) lines after a specific line.
    *
-   * v4: Pre-saves dirty files, takes snapshot, checks for overlaps.
+   * Pre-saves dirty files, takes snapshot, checks for overlaps.
    */
   async addLines(fsPath: string, afterLine: number, newLines: string[], taskId?: string): Promise<string> {
     this.ensureInitialized();
@@ -711,7 +711,7 @@ export class DiffSystem implements vscode.Disposable {
     const messageTs = this.getCurrentMessageTs(taskId);
     await this.ensureDocumentLoaded(fsPath);
 
-    // v4: Pre-save and snapshot before first AI edit
+    // Pre-save and snapshot before first AI edit
     await this.preSaveAndSnapshot(fsPath, rgId, messageTs);
 
     // For additions, overlap check targets the insertion point
@@ -745,7 +745,7 @@ export class DiffSystem implements vscode.Disposable {
     if (hunk) {
       await this.updateBaselineAfterAccept(hunk.fsPath);
 
-      // v4: Cleanup snapshots when no pending hunks remain for this file
+      // Cleanup snapshots when no pending hunks remain for this file
       this.checkSnapshotCleanup(hunk.fsPath);
     }
   }
@@ -788,7 +788,7 @@ export class DiffSystem implements vscode.Disposable {
         }
       }
 
-      // v4: Cleanup snapshots when no pending hunks remain for this file
+      // Cleanup snapshots when no pending hunks remain for this file
       this.checkSnapshotCleanup(fsPath);
     }
   }

@@ -239,10 +239,6 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 		let lineEndIndex: number
 		while ((lineEndIndex = this.buffer.indexOf("\n")) !== -1) {
 			const line = this.buffer.slice(0, lineEndIndex).trimEnd() // removes trailing \r
-			// Remove \r if present (for Windows-style line endings)
-			// if (line.endsWith("\r")) {
-			// 	line = line.slice(0, -1)
-			// }
 			this.emit("line", line)
 			this.buffer = this.buffer.slice(lineEndIndex + 1)
 		}

@@ -83,9 +83,6 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 		// and executes code based on the message that is received
 		this.setWebviewMessageListener(webviewView.webview)
 
-		// Logs show up in bottom panel > Debug Console
-		//Logger.log("registering listener")
-
 		// Listen for when the sidebar becomes visible
 		// https://github.com/microsoft/vscode-discussions/discussions/840
 

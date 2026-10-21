@@ -242,7 +242,6 @@ export type HookStreamCallback = (
  * - Parses JSON output from stdout, attempting to extract it even if mixed with debug output
  * - Truncates context modifications that exceed 50KB to prevent prompt overflow
  * - Handles both successful and failed executions gracefully
- * - Emits per-hook telemetry with source attribution (global or workspace)
  *
  * Error handling:
  * - Treats hooks as "fail-open": only shouldContinue:false blocks tool execution
@@ -433,8 +432,6 @@ class StdioHookRunner<Name extends HookName> extends HookRunner<Name> {
 				// Hook succeeded but didn't provide JSON - allow execution (no cancellation)
 				Logger.warn(`[Hook ${this.hookName}] Completed successfully but no JSON response found`)
 
-				// Capture success telemetry even without JSON
-
 				return HookOutput.create({
 					cancel: false,
 				})
@@ -619,7 +616,7 @@ export class HookFactory {
 		const { HookDiscoveryCache } = await import("./HookDiscoveryCache")
 		const scripts = await HookDiscoveryCache.getInstance().get(hookName)
 
-		// Fetch hooks dirs once for source determination and telemetry
+		// Fetch hooks dirs once for source determination
 		const hooksDirs = await getAllHooksDirs()
 
 

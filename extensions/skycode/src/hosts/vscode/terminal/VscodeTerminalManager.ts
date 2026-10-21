@@ -123,7 +123,6 @@ export class VscodeTerminalManager implements ITerminalManager {
 				e?.execution?.read()
 			})
 		} catch (_error) {
-			// Logger.error("Error setting up onDidEndTerminalShellExecution", error)
 		}
 		if (disposable) {
 			this.disposables.push(disposable)
@@ -563,9 +562,6 @@ export class VscodeTerminalManager implements ITerminalManager {
 	}
 
 	disposeAll() {
-		// for (const info of this.terminals) {
-		// 	//info.terminal.dispose() // dont want to dispose terminals when task is aborted
-		// }
 		this.disposeBackgroundCommands()
 		this.terminalIds.clear()
 		this.processes.clear()

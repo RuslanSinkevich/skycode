@@ -89,7 +89,6 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 			await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "use_mcp_server")
 			await config.callbacks.say("use_mcp_server", completeMessage, undefined, undefined, false)
 
-			// Capture telemetry
 		} else {
 			// Manual approval flow
 			const notificationMessage = `Skycode wants to use ${tool_name || "unknown tool"} on ${server_name || "unknown server"}`

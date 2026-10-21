@@ -171,13 +171,9 @@ export class BrowserSession {
 				await this.launchRemoteBrowser()
 				// Don't create a new page here, as we'll create it in launchRemoteBrowser
 
-				// Send telemetry for browser tool start
-
 				return
 			} catch (error) {
 				Logger.error("Failed to launch remote browser, falling back to local mode:", error)
-
-				// Capture error telemetry
 
 				await this.launchLocalBrowser()
 			}
@@ -188,7 +184,6 @@ export class BrowserSession {
 
 		this.page = await this.browser?.newPage()
 
-		// Send telemetry for browser tool start
 	}
 
 	async launchLocalBrowser() {
@@ -246,8 +241,6 @@ export class BrowserSession {
 			} catch (error) {
 				Logger.log(`Failed to connect using cached endpoint: ${error}`)
 
-				// Capture error telemetry
-
 				// Clear the cached endpoint since it's no longer valid
 				this.cachedWebSocketEndpoint = undefined
 				// User wants to give up after one reconnection attempt
@@ -287,7 +280,6 @@ export class BrowserSession {
 			} catch (error) {
 				Logger.log(`Failed to connect to remote browser: ${error}`)
 
-				// Capture error telemetry
 			}
 		}
 
@@ -299,7 +291,6 @@ export class BrowserSession {
 
 	async closeBrowser(): Promise<BrowserActionResult> {
 		if (this.browser || this.page) {
-			// Send telemetry for browser tool end if we have a task ID and session was started
 
 			if (this.isConnectedToRemote && this.browser) {
 				// Close the page/tab first if it exists
@@ -363,7 +354,6 @@ export class BrowserSession {
 			if (!(err instanceof TimeoutError)) {
 				logs.push(`[Error] ${errorMessage}`)
 
-				// Capture error telemetry
 			}
 		}
 
@@ -375,13 +365,6 @@ export class BrowserSession {
 
 		const options: ScreenshotOptions = {
 			encoding: "base64",
-
-			// clip: {
-			// 	x: 0,
-			// 	y: 0,
-			// 	width: 900,
-			// 	height: 600,
-			// },
 		}
 
 		const screenshotType = this.useWebp ? "webp" : "png"
@@ -402,7 +385,6 @@ export class BrowserSession {
 		}
 
 		if (!screenshotBase64) {
-			// Capture error telemetry
 			throw new Error("Failed to take screenshot.")
 		}
 
@@ -427,7 +409,6 @@ export class BrowserSession {
 				timeout: 7_000,
 				waitUntil: ["domcontentloaded", "networkidle2"],
 			})
-			// await page.goto(url, { timeout: 10_000, waitUntil: "load" })
 			await this.waitTillHTMLStable(page) // in case the page is loading more resources
 		})
 	}
@@ -446,7 +427,6 @@ export class BrowserSession {
 			const html = await page.content()
 			const currentHTMLSize = html.length
 
-			// let bodyHTMLSize = await page.evaluate(() => document.body.innerHTML.length)
 			Logger.info("last: ", lastHTMLSize, " <> curr: ", currentHTMLSize)
 
 			if (lastHTMLSize !== 0 && currentHTMLSize === lastHTMLSize) {

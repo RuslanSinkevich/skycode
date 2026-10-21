@@ -267,7 +267,6 @@ export class McpHub {
 		this.connections = this.connections.filter((conn) => conn.server.name !== name)
 
 		if (config.disabled) {
-			//Logger.log(`[MCP Debug] Creating disabled connection object for server "${name}"`)
 			// Create a connection object for disabled server so it appears in UI
 			const disabledConnection: McpConnection = {
 				server: {
@@ -377,10 +376,6 @@ export class McpHub {
 			connection.server.error = ""
 
 			// Register notification handler for real-time messages
-			//Logger.log(`[MCP Debug] Setting up notification handlers for server: ${name}`)
-			//Logger.log(`[MCP Debug] Client instance:`, connection.client)
-			//Logger.log(`[MCP Debug] Transport type:`, config.type)
-
 			// Try to set notification handler using the client's method
 			try {
 				// Import the notification schema from MCP SDK
@@ -401,21 +396,16 @@ export class McpHub {
 
 				// Set the notification handler
 				connection.client.setNotificationHandler(NotificationMessageSchema as any, async (notification: any) => {
-					//Logger.log(`[MCP Notification] ${name}:`, JSON.stringify(notification, null, 2))
-
 					const params = notification.params || {}
 					const level = params.level || "info"
 					const data = params.data || params.message || ""
 					const logger = params.logger || ""
-
-					//Logger.log(`[MCP Message Notification] ${name}: level=${level}, data=${data}, logger=${logger}`)
 
 					// Format the message
 					const message = logger ? `[${logger}] ${data}` : data
 
 					// Send notification directly to every subscribed task
 					if (this.notificationListeners.size > 0) {
-						//Logger.log(`[MCP Debug] Sending notification to subscribed tasks: ${message}`)
 						for (const listener of [...this.notificationListeners.values()]) {
 							try {
 								listener(name, level, message)
@@ -425,7 +415,6 @@ export class McpHub {
 						}
 					} else {
 						// Fallback: store for later retrieval
-						//Logger.log(`[MCP Debug] No active task, storing notification: ${message}`)
 						this.pendingNotifications.push({
 							serverName: name,
 							level,
@@ -434,19 +423,15 @@ export class McpHub {
 						})
 					}
 				})
-				//Logger.log(`[MCP Debug] Successfully set notifications/message handler for ${name}`)
 
 				// Also set a fallback handler for any other notification types
 				connection.client.fallbackNotificationHandler = async (notification: any) => {
-					//Logger.log(`[MCP Fallback Notification] ${name}:`, JSON.stringify(notification, null, 2))
-
 					// Show in VS Code for visibility
 					HostProvider.window.showMessage({
 						type: ShowMessageType.INFORMATION,
 						message: `MCP ${name}: ${notification.method || "unknown"} - ${JSON.stringify(notification.params || {})}`,
 					})
 				}
-				//Logger.log(`[MCP Debug] Successfully set fallback notification handler for ${name}`)
 			} catch (error) {
 				Logger.error(`[MCP Debug] Error setting notification handlers for ${name}:`, error)
 			}
@@ -521,7 +506,6 @@ export class McpHub {
 			})
 			return response?.resources || []
 		} catch (_error) {
-			// Logger.error(`Failed to fetch resources for ${serverName}:`, error)
 			return []
 		}
 	}
@@ -545,7 +529,6 @@ export class McpHub {
 
 			return response?.resourceTemplates || []
 		} catch (_error) {
-			// Logger.error(`Failed to fetch resource templates for ${serverName}:`, error)
 			return []
 		}
 	}

@@ -640,7 +640,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 				? { absolutePath: pathResult, resolvedPath: relPath }
 				: { absolutePath: pathResult.absolutePath, resolvedPath: pathResult.resolvedPath }
 
-		// Determine workspace context for telemetry
+		// Determine workspace context
 		const fallbackAbsolutePath = path.resolve(config.cwd, relPath)
 		const workspaceContext = {
 			isMultiRootEnabled: config.isMultiRootEnabled || false,
@@ -995,7 +995,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 	}
 
 	private getModelInfo(config: TaskConfig) {
-		// Extract provider information for telemetry
+		// Extract provider information
 		const apiConfig = config.services.stateManager.getApiConfiguration()
 		const currentMode = config.mode
 		const providerId = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string

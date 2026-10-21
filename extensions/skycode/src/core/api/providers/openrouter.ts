@@ -201,7 +201,6 @@ export class OpenRouterHandler implements ApiHandler {
 			try {
 				const generationIterator = this.fetchGenerationDetails(this.lastGenerationId)
 				const generation = (await generationIterator.next()).value
-				// Logger.log("OpenRouter generation details:", generation)
 				return {
 					type: "usage",
 					cacheWriteTokens: 0,
@@ -221,7 +220,6 @@ export class OpenRouterHandler implements ApiHandler {
 
 	@withRetry({ maxRetries: 4, baseDelay: 250, maxDelay: 1000, retryAllErrors: true })
 	async *fetchGenerationDetails(genId: string) {
-		// Logger.log("Fetching generation details for:", genId)
 		try {
 			const response = await axios.get(`https://openrouter.ai/api/v1/generation?id=${genId}`, {
 				headers: {

@@ -112,7 +112,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// [SKYCODE-SKYCODE] Legacy NativeDiffManager - ОТКЛЮЧЕН
 	// Используем только DiffSystem V2 (стандартные декорации + окно сравнения, без proposed API)
-	// const nativeDiffManager = new NativeDiffManager(context);
 
 	const webview = (await initialize(context)) as VscodeWebviewProvider
 

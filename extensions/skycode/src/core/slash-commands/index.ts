@@ -120,8 +120,6 @@ export async function parseSlashCommands(
 				const textWithoutSlashCommand = removeSlashCommand(text, tagContent, contentStartIndex, slashMatch)
 				const processedText = commandReplacements[commandName] + textWithoutSlashCommand
 
-				// Track telemetry for builtin slash command usage
-
 				return { processedText: processedText, needsSkycoderulesFileCheck: commandName === "newrule" }
 			}
 
@@ -154,8 +152,6 @@ export async function parseSlashCommands(
 					const processedText =
 						`<explicit_instructions type="${matchingWorkflow.fileName}">\n${workflowContent}\n</explicit_instructions>\n` +
 						textWithoutSlashCommand
-
-					// Track telemetry for workflow command usage
 
 					return { processedText, needsSkycoderulesFileCheck: false }
 				} catch (error) {

@@ -185,9 +185,6 @@ export class OpenAiNativeHandler implements ApiHandler {
 
 		Logger.debug("OpenAI Responses Input: " + JSON.stringify(input))
 
-		// const lastAssistantMessage = [...messages].reverse().find((msg) => msg.role === "assistant" && msg.id)
-		// const previous_response_id = lastAssistantMessage?.id
-
 		const signal = this.aborter.reset()
 		const stream = await client.responses.create(
 			{

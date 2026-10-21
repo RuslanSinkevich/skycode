@@ -317,8 +317,6 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 		const searchPaths = this.determineSearchPaths(config, parsedPath, workspaceHint, relDirPath)
 
 
-		// Capture workspace path resolution telemetry
-
 		let effectiveFilePattern = filePattern
 		let guardrailPrefix = ""
 		const missingPattern = !effectiveFilePattern || effectiveFilePattern.trim().length === 0
@@ -369,8 +367,6 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 
 		// Format and combine results
 		const results = guardrailPrefix + this.formatSearchResults(config, searchResults, effectiveSearchPaths)
-
-		// Capture workspace search pattern telemetry
 
 		const sharedMessageProps = {
 			tool: "searchFiles",

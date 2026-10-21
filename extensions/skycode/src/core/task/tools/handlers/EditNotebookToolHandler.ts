@@ -313,8 +313,6 @@ export class EditNotebookToolHandler implements IFullyManagedTool {
 				await vscode.window.showTextDocument(doc)
 			}
 
-			// Track telemetry
-
 			config.taskState.didEditFile = true
 			config.services.fileContextTracker.markFileAsEditedBySkycode(resolvedPath)
 			await config.services.fileContextTracker.trackFileContext(resolvedPath, "skycode_edited")

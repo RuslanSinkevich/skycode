@@ -566,8 +566,6 @@ export class Task {
 						{ persist: false },
 					)
 					// todo be more efficient about saving and posting only new data or one whole message at a time so ignore partial for saves, and only post parts of partial message instead of whole array in new listener
-					// await this.saveSkycodeMessagesAndUpdateHistory()
-					// await this.postStateToWebview()
 					const protoMessage = convertSkycodeMessageToProto(lastMessage)
 					await this.sendPartialIfActive(protoMessage)
 					throw new Error("Current ask promise was ignored 1")
@@ -607,7 +605,6 @@ export class Task {
 						text,
 						partial: false,
 					})
-					// await this.postStateToWebview()
 					const protoMessage = convertSkycodeMessageToProto(lastMessage)
 					await this.sendPartialIfActive(protoMessage)
 				} else {
@@ -733,7 +730,6 @@ export class Task {
 
 					// instead of streaming partialMessage events, we do a save and post like normal to persist to disk
 					await this.messageStateHandler.saveSkycodeMessagesAndUpdateHistory()
-					// await this.postStateToWebview()
 					const protoMessage = convertSkycodeMessageToProto(lastMessage)
 					await this.sendPartialIfActive(protoMessage) // more performant than an entire postStateToWebview
 					return undefined
@@ -835,7 +831,7 @@ export class Task {
 		// Update UI
 		await this.postStateToWebview()
 
-		// Log for debugging/telemetry
+		// Log for debugging
 		Logger.log(`[Task ${this.taskId}] ${hookName} hook cancelled (userInitiated: ${wasCancelled})`)
 	}
 
@@ -1371,10 +1367,8 @@ export class Task {
 
 			//  The way this agentic loop works is that skycode will be given a task that he then calls tools to complete. unless there's an attempt_completion call, we keep responding back to him with his tool's responses until he either attempt_completion or does not use anymore tools. If he does not use anymore tools, we ask him to consider if he's completed the task and then call attempt_completion, otherwise proceed with completing the task.
 
-			//const totalCost = this.calculateApiCost(totalInputTokens, totalOutputTokens)
 			if (didEndLoop) {
 				// For now a task never 'completes'. This will only happen if the user hits max requests and denies resetting the count.
-				//this.say("task_completed", `Task completed. Total API usage cost: ${totalCost}`)
 				this._session?.pipeline.complete()
 				break
 			} else {
@@ -2756,8 +2750,6 @@ export class Task {
 			content: userContent,
 		})
 
-		// Capture task initialization timing telemetry for the first API request
-
 		// since we sent off a placeholder api_req_started message to update the webview while waiting to actually start the API request (to load potential details for example), we need to update the text of that message
 		const lastApiReqIndex = findLastIndex(this.messageStateHandler.getSkycodeMessages(), (m) => m.say === "api_req_started")
 		await this.messageStateHandler.updateSkycodeMessage(lastApiReqIndex, {
@@ -2788,7 +2780,6 @@ export class Task {
 					lastMessage.partial = false
 					// instead of streaming partialMessage events, we do a save and post like normal to persist to disk
 					Logger.log("updating partial message", lastMessage)
-					// await this.saveSkycodeMessagesAndUpdateHistory()
 				}
 				// update api_req_started to have cancelled and cost, so that we can display the cost of the partial stream
 				await updateApiReqMsg({
@@ -3263,14 +3254,6 @@ export class Task {
 			// need to save assistant responses to file before proceeding to tool use since user can exit at any moment and we wouldn't be able to save the assistant's response
 			let didEndLoop = false
 			if (assistantHasContent) {
-				// NOTE: this comment is here for future reference - this was a workaround for userMessageContent not getting set to true. It was due to it not recursively calling for partial blocks when didRejectTool, so it would get stuck waiting for a partial block to complete before it could continue.
-				// in case the content blocks finished
-				// it may be the api stream finished after the last parsed content block was executed, so  we are able to detect out of bounds and set userMessageContentReady to true (note you should not call presentAssistantMessage since if the last block is completed it will be presented again)
-				// const completeBlocks = this.assistantMessageContent.filter((block) => !block.partial) // if there are any partial blocks after the stream ended we can consider them invalid
-				// if (this.currentStreamingContentIndex >= completeBlocks.length) {
-				// 	this.userMessageContentReady = true
-				// }
-
 				await pWaitFor(() => this.taskState.userMessageContentReady)
 
 				// if the model did not tool use, then we need to tell it to either use a tool or attempt_completion
@@ -3346,8 +3329,6 @@ export class Task {
 				}
 			} else {
 				const reqId = this.getApiRequestIdSafe()
-
-				// Minimal diagnostics: structured log and telemetry
 
 				const baseErrorMessage =
 					"Invalid API Response: The provider returned an empty or unparsable response. This is a provider-side issue where the model failed to generate valid output or returned tool calls that Skycode cannot process. Retrying the request may help resolve this issue."
