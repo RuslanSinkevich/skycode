@@ -2,134 +2,101 @@
 
 # Architecture Overview
 
-Skycode AI is a VS Code extension consisting of three major subsystems:
+Skycode AI is a VS Code extension (`skycode.skycode-ai`). The code lives in `extensions/skycode/`. The extension has three parts:
 
-- **Core Extension** — Node.js backend: agent loop, tool execution, API providers, diff engine
-- **Webview UI** — React frontend: chat interface, settings, history
-- **Indexing Subsystem** — optional vector index for code search (off by default; without it search uses the repo map and ripgrep)
+- **Extension (Node.js)**: agent loop, tool execution, model providers, the change review system, MCP.
+- **Webview UI (React)**: chat, settings, history, tabs.
+- **Indexing**: an optional vector index. Off by default. Without it, search uses the repository map and ripgrep.
 
-## High-Level Diagram
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  VS Code Extension Host                                         │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  Core Extension                                          │   │
-│  │  ┌──────────────┐  ┌────────────┐  ┌─────────────────┐  │   │
-│  │  │ Extension.ts │→ │ Webview    │→ │ Controller      │  │   │
-│  │  │ (entry point)│  │ Provider   │  │ (coordinator)   │  │   │
-│  │  └──────────────┘  └────────────┘  └────────┬────────┘  │   │
-│  │                                              ↓           │   │
-│  │  ┌──────────────┐  ┌────────────┐  ┌─────────────────┐  │   │
-│  │  │ Indexing     │← │ Task       │← │ API Handlers    │  │   │
-│  │  │ (semantic)   │  │ (agent)    │  │ (40+ providers) │  │   │
-│  │  └──────────────┘  └────────────┘  └─────────────────┘  │   │
-│  │          ↑                                  ↓           │   │
-│  │  ┌───────┴──────┐                  ┌─────────────────┐  │   │
-│  │  │ Storage      │                  │ McpHub          │  │   │
-│  │  │ (SQLite/JSON)│                  │ (MCP servers)   │  │   │
-│  │  └──────────────┘                  └─────────────────┘  │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                              ↕ gRPC / postMessage               │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  Webview UI (React)                                      │   │
-│  │  ┌──────────────────┐  ┌─────────────────────────────┐  │   │
-│  │  │ ExtensionState   │→ │ React Components            │  │   │
-│  │  │ Context          │  │ (Chat, Settings, History)   │  │   │
-│  │  └──────────────────┘  └─────────────────────────────┘  │   │
-│  └─────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-## Key Components
-
-### Extension Entry (`src/extension.ts`)
-
-Activation point. Creates the WebviewProvider and registers commands.
-
-### WebviewProvider (`src/core/webview/index.ts`)
-
-Manages the webview lifecycle: HTML generation with CSP headers, message routing, HMR for development.
-
-### Controller (`src/core/controller/index.ts`)
-
-Central coordinator:
-- State management (GlobalState, Secrets)
-- Task creation and lifecycle
-- MCP server coordination
-- State synchronization with the webview
-
-### Task (`src/core/task/index.ts`)
-
-Executes AI agent tasks:
-- API requests to model providers
-- Tool execution (files, terminal, browser, MCP)
-- Response streaming and parsing
-- Context management
-
-### API Handlers (`src/core/api/`)
-
-40+ model providers: Anthropic (Claude), OpenAI (GPT-4o, o1, o3), Google (Gemini), OpenRouter, AWS Bedrock, Ollama, LM Studio, GigaChat, YandexGPT, and any OpenAI-compatible API.
-
-### McpHub (`src/services/mcp/McpHub.ts`)
-
-MCP server manager: connects to external MCP servers, manages tools and resources, handles auto-approval settings.
-
-## Data Flows
-
-### Task Execution
+## Diagram
 
 ```
-User Input → Controller.initTask()
-                    ↓
-            Task.initiateTaskLoop()
-                    ↓
-            attemptApiRequest() → API Provider
-                    ↓
-            Stream Response → parseAssistantMessage()
-                    ↓
-            Tool Execution → presentAssistantMessage()
-                    ↓
-            Tool Result → Continue Loop or Complete
+┌──────────────────────────────────────────────────────────┐
+│ VS Code (extension host)                                 │
+│                                                          │
+│  extension.ts ──► WebviewProvider ──► Controller         │
+│                                          │               │
+│            ┌─────────────┬───────────────┼────────────┐  │
+│            ▼             ▼               ▼            ▼  │
+│     SessionManager   StateManager    McpHub     DiffSystem│
+│        (tabs)          (state)                            │
+│            │                                             │
+│            ▼                                             │
+│      Task (agent) ──► API provider ──► model             │
+│            │                                             │
+│            └──► ToolExecutor ──► tool handlers           │
+│                                                          │
+│                     ▲ gRPC messages ▼                    │
+│  Webview UI (React): chat, settings, pending changes bar │
+└──────────────────────────────────────────────────────────┘
 ```
 
-### State Synchronization
+## Key components
+
+| Component | File | Purpose |
+|---|---|---|
+| Entry point | `src/extension.ts` | Activation, commands and keybindings |
+| WebviewProvider | `src/core/webview/` | Creates the webview, HTML with CSP |
+| Controller | `src/core/controller/index.ts` | State, task creation, pushing state to the webview. Handlers for webview requests are in subfolders of `src/core/controller/*` |
+| SessionManager | `src/core/session/` | Sessions and tabs. `ApiSlotLimiter` lets at most three model requests run at once |
+| Task | `src/core/task/index.ts` | One agent run: model request, stream parsing, tool calls |
+| ToolExecutor | `src/core/task/ToolExecutor.ts` | Registers tool handlers, enforces mode restrictions |
+| Providers | `src/core/api/providers/` | 17 providers, listed in `src/shared/providers/providers.json` |
+| Prompts | `src/core/prompts/system-prompt/` | System prompt: variants per model family, tool descriptions |
+| DiffSystem | `src/core/diff-v2/` | Agent edits, snapshots, rollback. See [Change review](../systems/diff-system.md) |
+| McpHub | `src/services/mcp/McpHub.ts` | Connects MCP servers. See [MCP](../systems/mcp.md) |
+| Dictation | `src/services/dictation/` | Voice input. See [Voice input](../systems/voice-input.md) |
+| Indexing | `src/core/indexing/`, `src/services/repo-map/` | Repository map and the optional vector index |
+
+## Extension and webview communication
+
+The webview and the extension exchange messages shaped as gRPC-style calls. The definitions are in `proto/skycode/*.proto`; the code is generated by `npm run protos`. The extension pushes state to the webview (`Controller.postStateToWebview`). The webview calls service methods (for example `TaskServiceClient`, `UiServiceClient`).
+
+## Running a task
 
 ```
-Extension State Change
-        ↓
-Controller.postStateToWebview()
-        ↓
-gRPC Message → Webview
-        ↓
-ExtensionStateContext.setState()
-        ↓
-React Components Re-render
+User input → Controller.initTask()
+                  ↓
+            Task: model request (attemptApiRequest)
+                  ↓
+            Stream parsing: text, reasoning, tool calls
+                  ↓
+            ToolExecutor → handler → result into history
+                  ↓
+            Next request or completion
 ```
 
-## Data Storage
+Two guards work while the stream is parsed: stopping on repetition loops and refusing to execute a truncated tool call. See [Core module](./core.md).
 
-| Type | Storage | Purpose |
-|------|---------|---------|
-| API keys | VS Code Secrets | Secure credential storage |
-| Settings | GlobalState | Persistent user preferences |
-| Task history | Filesystem | JSON files per taskId (`~/.skycode/tasks/`) |
-| Search index | SQLite | Embeddings and chunk metadata (`~/.skycode/indexing/`) |
+## Data storage
 
-## Operating Modes
+| What | Where |
+|---|---|
+| API keys | VS Code SecretStorage |
+| Settings | VS Code `globalState`, in-memory cache (`StateManager`) |
+| Workspace state, list of pending changes | `workspaceState` |
+| Tasks | `tasks/<id>/` in the extension data folder: `api_conversation_history.json`, `ui_messages.json`, `context_history.json`, `task_metadata.json` |
+| File snapshots for rollback | extension data folder, `FileSnapshotStorage` |
+| MCP configuration file | `skycode_mcp_settings.json` in `settings/` of the extension data folder |
+| Vector index | `~/.skycode/indexing/<workspace hash>/` |
+| Repository map cache | `~/.skycode/repo-map/<hash>.json` |
+| Voice components | `voice-sherpa/` and `whisper/` in the extension data folder |
 
-| Mode | Purpose | Tools Available |
-|------|---------|----------------|
-| **Act** (default) | Execute tasks, edit files, run commands | All |
-| **Ask** | Explore code, answer questions | Read-only |
-| **Plan** | Gather info, ask questions, design approach | Read-only + `plan_mode_respond` |
-| **Debug** | Systematic debugging with runtime evidence | Read-only + `execute_command` |
-| **Chat** | General conversation, any topic | Read-only (only on explicit request) |
+The extension data folder is the VS Code `globalStorage` for `skycode.skycode-ai`. Migration from the old ID: `src/hosts/vscode/migrateLegacyStorage.ts`.
 
-The agent can dynamically switch between modes during a conversation.
+## Modes
 
-## See Also
+| Mode | What it does |
+|---|---|
+| Act | All tools except `plan_mode_respond`. Default |
+| Ask | Reading code, search, web tools. Writing, commands, browser and MCP are blocked in `ToolExecutor` |
+| Plan | Gathers information and presents a plan through `plan_mode_respond`. With the `strictPlanModeEnabled` setting (on by default) write tools are blocked |
+| Debug | The system prompt asks for evidence first, then hypotheses, then verification. No tool restrictions |
+| Chat | Conversation. Tools only on explicit request. Writing, commands, browser and MCP are blocked |
 
-- [Core Module](./core.md)
-- [Diff System](../systems/diff-system.md)
-- [Indexing System](../systems/indexing-system.md)
+## See also
+
+- [Core module](./core.md)
+- [Context management](./context-management.md)
+- [Change review](../systems/diff-system.md)
+- [Indexing](../systems/indexing-system.md)

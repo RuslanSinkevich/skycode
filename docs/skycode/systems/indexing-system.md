@@ -1,120 +1,85 @@
 > **English version:** [indexing-system.md](../en/systems/indexing-system.md)
 
-# Система индексации кодовой базы
+# Поиск по коду и индексация
 
-Опциональная семантическая индексация для поиска по коду. Позволяет AI-агенту извлекать релевантный контекст из всего проекта перед ответом.
+Страница описывает два уровня поиска: карту репозитория (работает всегда) и необязательный векторный индекс. Пути относительно `extensions/skycode/src/`.
 
-По умолчанию индексация **выключена** (`skycode.indexing.mode = "off"`): `codebase_search` работает без неё — по карте репозитория (объявления через tree-sitter, `src/services/repo-map/`) и тексту через ripgrep. Рабочий режим для сборок из Marketplace — `remote` (OpenAI-совместимый embeddings API). Режим `local` (transformers.js / onnxruntime) в Marketplace-сборках не работает: локальная модель и onnxruntime-node в VSIX не входят.
+## Поиск без индекса
 
-## Архитектура
+Инструмент `codebase_search` по умолчанию ищет без индекса и без скачивания моделей:
 
-```
-IndexingService (оркестратор) — src/core/indexing/IndexingService.ts
-├── FileWalker (обход файлов)
-│   └── Учитывает .gitignore, ignoredPatterns, maxFileSize, бинарные файлы
-├── CodeChunker (разбиение на чанки)
-│   └── Tree-sitter чанкинг (с fallback на простой чанкер)
-├── EmbeddingRouter → выбор провайдера
-│   ├── LocalEmbeddingProvider (transformers.js WASM + multilingual MiniLM)
-│   └── RemoteEmbeddingProvider (OpenAI-совместимый /v1/embeddings API)
-├── Storage
-│   ├── IndexStorage (SQLite по умолчанию, JSON fallback при недоступности нативного)
-│   └── VectorSearch (brute-force cosine similarity на векторах в памяти)
-└── SearchEngine (гибридный: semantic + keyword + rerank + форматирование промпта)
-```
+1. **Карта репозитория** (`services/repo-map/`). Список объявлений проекта (классы, методы, функции, процедуры и таблицы SQL) с файлом и строкой. Файлы перечисляет `rg --files` (уважает `.gitignore`), объявления извлекает tree-sitter. Кэш лежит в `~/.skycode/repo-map/<хеш>.json`, при повторном запуске разбираются только изменившиеся файлы.
+2. **Текстовый поиск ripgrep** по словам запроса. Файлы ранжируются по числу разных слов запроса, которые в них встречаются. Ищутся и комментарии, и строки.
 
-## Настройки
+Обработчик: `core/task/tools/handlers/CodebaseSearchToolHandler.ts`, поиск без индекса: `services/repo-map/searchWithoutIndex.ts`. Краткий обзор проекта из карты также добавляется в первое сообщение задачи.
+
+## Векторный индекс
+
+Индекс необязателен и по умолчанию **выключен** (`skycode.indexing.mode = "off"`). Если он включён и готов, `codebase_search` использует его вместе с ключевым поиском.
+
+| Режим | Что делает | Доступность |
+|---|---|---|
+| `off` | Индекса нет | По умолчанию |
+| `remote` | Эмбеддинги считает OpenAI-совместимый API (`/v1/embeddings`) | Работает в сборке из Marketplace |
+| `local` | Эмбеддинги считает локальная модель в отдельном потоке (transformers.js, onnxruntime) | В сборке из Marketplace недоступен: модели и `onnxruntime-node` в VSIX не входят |
+
+В режиме `remote` фрагменты кода отправляются на указанный адрес. Режим `remote` подходит для любого сервера с совместимым API (OpenAI, vLLM, HuggingFace TEI и др.).
+
+### Настройки
 
 | Настройка | Тип | По умолчанию | Описание |
-|-----------|-----|-------------|----------|
-| `skycode.indexing.mode` | `"off" \| "local" \| "remote"` | `"off"` | Режим индексации (`local` недоступен в Marketplace-сборках) |
-| `skycode.indexing.remoteApiUrl` | string | `""` | URL удалённого API |
-| `skycode.indexing.remoteApiKey` | string | `""` | API-ключ |
-| `skycode.indexing.remoteModel` | string | `"text-embedding-3-small"` | Имя модели |
-| `skycode.indexing.maxFileSize` | number | `102400` | Макс. размер файла (байт) |
-| `skycode.indexing.ignoredPatterns` | string[] | `[node_modules, .git, ...]` | Игнорируемые паттерны |
+|---|---|---|---|
+| `skycode.indexing.mode` | `"off" \| "local" \| "remote"` | `"off"` | Режим |
+| `skycode.indexing.remoteApiUrl` | string | `""` | Адрес embeddings API |
+| `skycode.indexing.remoteApiKey` | string | `""` | Ключ API |
+| `skycode.indexing.remoteModel` | string | `"text-embedding-3-small"` | Модель эмбеддингов |
+| `skycode.indexing.localModel` | `"mini" \| "base" \| "large"` | `"mini"` | Локальная модель (только режим `local`) |
+| `skycode.indexing.maxFileSize` | number | `102400` | Максимальный размер файла в байтах |
+| `skycode.indexing.ignoredPatterns` | string[] | `node_modules`, `.git`, `dist` и др. | Что не индексировать |
 
-## Хранилище индекса
+Настройки доступны также во вкладке «Индексация» в настройках Skycode.
 
-Хранится локально в `~/.skycode/indexing/{workspace-hash}/`.
+Локальные модели: `mini` (`paraphrase-multilingual-MiniLM-L12-v2`, размерность 384), `base` (`multilingual-e5-base`, 768), `large` (`multilingual-e5-large`, 1024). Если файлов модели нет рядом с расширением, воркер скачивает архив из хранилища проекта.
 
-Основной бэкенд:
-- `index.db` (SQLite) — метаданные, чанки и векторы (BLOB)
+## Устройство
 
-Резервный бэкенд (при недоступности нативного SQLite):
-- `index.json` — метаданные
-- `chunks.json` — массив метаданных чанков
-- `vectors.bin` — Float32Array векторов
+```
+IndexingService — core/indexing/IndexingService.ts
+├── FileWalker          обход файлов: .gitignore, ignoredPatterns, maxFileSize, бинарные файлы
+├── CodeChunker         разбиение на чанки (tree-sitter, запасной вариант без него)
+├── EmbeddingRouter     выбор провайдера
+│   ├── EmbeddingWorkerManager   локальная модель, отдельный поток
+│   └── RemoteEmbeddingProvider  OpenAI-совместимый API, до 100 текстов за запрос
+├── IndexStorage        хранилище индекса
+│   └── VectorSearch, KeywordSearch
+└── SearchEngine        гибридный поиск и оформление результата
+```
 
-## Провайдеры эмбеддингов
+**Хранилище.** `~/.skycode/indexing/<хеш рабочей области>/`. Основной вариант: `index.db` (встроенный `node:sqlite`). Если `node:sqlite` недоступен в среде выполнения VS Code, используется запасной вариант: файлы `index.json`, `chunks.json` и `vectors.bin`. Он медленнее на больших репозиториях.
 
-### Локальный (не работает в Marketplace-сборках)
+**Пайплайн.**
 
-Модель и onnxruntime-node не входят в VSIX; режим работает только в сборке, где они доставлены вручную.
+1. `FileWalker` обходит рабочую область.
+2. `CodeChunker` режет файлы на чанки.
+3. Чанки пачками по 16 отправляются на эмбеддинг.
+4. Результат сохраняется в хранилище.
+5. `FileSystemWatcher` отслеживает изменения. События группируются (700 мс), изменившийся файл перечанкуется. Изменение определяется по MD5 содержимого. Удалённый файл убирается из индекса.
 
-- **Библиотека:** `@xenova/transformers` (transformers.js)
-- **Бэкенд:** WASM (без нативных модулей, работает в любой среде)
-- **Модель:** `paraphrase-multilingual-MiniLM-L12-v2` (мультиязычная, поддержка русского)
-- **Размерность:** 384
-- **Скорость:** ~50–100 чанков/сек
-
-### Удалённый
-
-- **Протокол:** OpenAI Embeddings API (`POST /v1/embeddings`)
-- **Совместим с:** OpenAI, Voyage AI, HuggingFace TEI, vLLM, любой OpenAI-совместимый эндпоинт
-- **Батчинг:** до 100 текстов за запрос
-
-## Пайплайн индексации
-
-1. **Обход файлов** — `FileWalker` рекурсивно обходит workspace, пропуская игнорируемые/бинарные/слишком большие файлы
-2. **Чанкинг** — `CodeChunker` использует Tree-sitter для AST-aware чанкинга, с fallback на простой чанкер при ошибках
-3. **Эмбеддинг** — батчи по 32 чанка через выбранный провайдер
-4. **Сохранение** — в SQLite (`index.db`) или JSON fallback
-5. **FileWatcher** — отслеживает изменения и обновляет инкрементально
-
-## Инкрементальные обновления
-
-- `FileSystemWatcher` отслеживает события create/change/delete
-- События change/create дебаунсятся (защита от burst)
-- При изменении файла: старые чанки удаляются, файл заново чанкуется и эмбеддится
-- При удалении файла: чанки удаляются из индекса
-- Сравнение по MD5-хешу содержимого файла
-
-## Поиск
-
-- **Гибридное извлечение:** semantic (`VectorSearch`) + keyword (`KeywordSearch`)
-- **Rerank:** пост-извлечение reranking для повышения точности
-- Снижает шум на мультиязычных запросах
-
-## Производительность
-
-| Проект | Файлов | Чанков | Индексация (локальная модель) | Поиск |
-|--------|--------|--------|----------------------|-------|
-| Малый (~100 файлов) | ~100 | ~500 | ~30 сек | <10мс |
-| Средний (~2000 файлов) | ~2000 | ~10K | ~5 мин | ~30мс |
-| Большой (~10000 файлов) | ~10K | ~50K | ~20 мин | ~80мс |
-
-## Интеграция с агентом
-
-Поиск доступен как инструмент `codebase_search`:
-- **Tool ID:** `SkycodeDefaultTool.CODEBASE_SEARCH`
-- **Обработчик:** `src/core/task/tools/handlers/CodebaseSearchToolHandler.ts`
-- Вызывает `SearchEngine.getContextForPrompt(query)` и возвращает `<codebase_context>` с релевантными чанками
+**Поиск.** `SearchEngine` объединяет семантический поиск (`VectorSearch`), поиск по ключевым словам и по путям, затем переранжирует результаты (`Reranker`). Для запросов не на латинице вес семантического поиска выше. Если эмбеддинг не удался, поиск переходит на ключевые слова. Ответ инструмента оформлен блоком `<codebase_context>`.
 
 ## Команды
 
-| Команда | Описание |
-|---------|----------|
+| Команда | Что делает |
+|---|---|
 | `skycode.indexing.reindex` | Полная переиндексация |
-| `skycode.indexing.clear` | Очистка всего индекса |
-| `skycode.indexing.pause` | Пауза индексации |
-| `skycode.indexing.resume` | Возобновление после паузы |
+| `skycode.indexing.clear` | Очистить индекс |
+| `skycode.indexing.pause` | Приостановить |
+| `skycode.indexing.resume` | Продолжить |
+| `skycode.indexing.clearEmbeddingCache` | Удалить локальные файлы модели эмбеддингов |
 
-## Расширение
+## Добавление провайдера эмбеддингов
 
-### Добавление нового провайдера эмбеддингов
-
-1. Создать класс, реализующий `EmbeddingProvider` из `src/core/indexing/types.ts`
-2. Добавить вариант в `EmbeddingRouter.ts`
-3. Добавить опцию в enum `skycode.indexing.mode` в `package.json`
-4. Добавить UI в `IndexingSettingsSection.tsx`
+1. Реализовать `EmbeddingProvider` из `core/indexing/types.ts`.
+2. Добавить ветку в `EmbeddingRouter.ts`.
+3. Добавить значение в `skycode.indexing.mode` в `package.json`.
+4. Добавить интерфейс в `webview-ui/src/components/settings/sections/IndexingSettingsSection.tsx`.

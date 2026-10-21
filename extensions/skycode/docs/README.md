@@ -9,7 +9,9 @@ Skycode AI — расширение VS Code (`skycode.skycode-ai`, Visual Studio
 - Агент с инструментами: чтение и правка файлов, команды в терминале, поиск, браузер, MCP, Jupyter (`edit_notebook`), `read_symbol`, `show_visual`, `show_chart`.
 - Пять режимов: Act, Plan, Debug, Ask, Chat (режим хранится отдельно для каждой вкладки).
 - Вкладки сессий, очередь сообщений, шторка истории.
-- Diff-система v4: правки агента подсвечены в редакторе, принять/отклонить — в панели Pending Changes, откат по сообщениям.
+- Система diff: правки агента подсвечены в редакторе (зелёный фон добавленного, красная черта на месте удаления), принять или отменить можно в панели изменений в чате и клавишами `Ctrl+Shift+Y` / `Ctrl+Shift+N`, откат — по сообщениям. Кнопок в самом редакторе нет.
+- Контекст: кольцо заполненности с разбивкой по категориям и кнопкой «Сжать сессию», авто-сжатие.
+- Голосовой ввод: для русского GigaAM v3 (sherpa-onnx), текст появляется во время речи, работает офлайн; для остальных языков whisper.cpp.
 - Поиск по коду без индексации: карта репозитория (tree-sitter) + ранжированный ripgrep. Векторный индекс необязателен и выключен по умолчанию.
 - 17 провайдеров моделей (`src/shared/providers/providers.json`), по умолчанию OpenAI Compatible.
 - Inline Edit (`Ctrl+Shift+K`) и YAML-workflows.
@@ -41,7 +43,8 @@ npm run package
 - [architecture/CONTEXT_MANAGEMENT.md](./architecture/CONTEXT_MANAGEMENT.md) — управление контекстом (сжатие, суммаризация)
 
 ### Подсистемы
-- [DIFF_SYSTEM.md](./DIFF_SYSTEM.md) — diff-система v4
+- [DIFF_SYSTEM.md](./DIFF_SYSTEM.md) — система diff: подсветка, панель изменений, откат
+- [VOICE_INPUT.md](./VOICE_INPUT.md) — голосовой ввод GigaAM (sherpa-onnx)
 - [CODE_SEARCH.md](./CODE_SEARCH.md) — поиск по коду (карта репозитория)
 - [INDEXING_SYSTEM.md](./INDEXING_SYSTEM.md) — векторный индекс (необязательно)
 - [TERMINAL_SYSTEM.md](./TERMINAL_SYSTEM.md) — терминал, тайминги команд, фоновые команды

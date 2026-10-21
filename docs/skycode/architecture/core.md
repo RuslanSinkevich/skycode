@@ -2,130 +2,127 @@
 
 # Модуль Core
 
-Входная точка: `extension.ts` → Controller → Task
+Путь запроса: `extension.ts` → `Controller` → `Task`. Все пути ниже относительно `extensions/skycode/src/`.
 
-## Структура директорий
-
-```
-src/core/
-├── controller/    # gRPC-обработчики, управление задачами
-├── task/          # AI-задачи: API-запросы + выполнение инструментов
-├── diff-v2/       # Inline Diff System v4 (на основе снапшотов)
-├── session/       # ApprovalGate (механизм ask/response)
-├── indexing/      # Семантическая индексация (Tree-sitter + эмбеддинги)
-├── prompts/       # Система промптов (TemplateEngine + PromptBuilder)
-├── api/           # API-провайдеры (OpenAI, Anthropic, Gemini, ...)
-├── workspace/     # Multi-root workspace resolver
-├── context/       # Управление контекстом (файлы, правила, цепочка фокуса)
-├── hooks/         # Хуки жизненного цикла (TaskStart, TaskComplete, ...)
-├── ignore/        # Контроллер .skycodeignore
-├── mentions/      # @-упоминания в чате
-└── permissions/   # Контроль доступа: CommandPermissionController + CommandSafetyClassifier
-```
-
-## Ключевые подсистемы
-
-### Жизненный цикл задачи
+## Структура `core/`
 
 ```
-Controller.initTask()
-    → new Task(taskId, ...)
-    → Task.startTask() / resumeTaskFromHistory()
-        → say("text", task) → startCheckpoint(messageTs)
-        → recursivelyMakeSkycodeRequests() — основной цикл AI
-            → attemptApiRequest() — потоковая передача чанков
-            → parseAssistantMessage()
-            → executeTool() — write_to_file, replace_text, bash и т.д.
-            → ask("completion_result") — ожидание пользователя
-        → Обратная связь → startCheckpoint(feedbackTs) — новая ResponseGroup
+core/
+├── api/             # Провайдеры моделей, повторные попытки, преобразование сообщений
+├── assistant-message/ # Разбор потока ответа модели (текст и вызовы инструментов)
+├── context/         # Управление контекстом, журнал сессии, правила и инструкции
+├── controller/      # Controller и обработчики запросов webview (по доменам)
+├── diff-v2/         # Просмотр изменений: хранилище, движок, декорации
+├── hooks/           # Хуки жизненного цикла (не работают на Windows)
+├── ignore/          # .skycodeignore
+├── indexing/        # Необязательный векторный индекс
+├── inline-edit/     # Правка выделенного кода по Ctrl+Shift+K
+├── mentions/        # @-упоминания в чате
+├── permissions/     # Классификатор команд и разрешения
+├── prompts/         # Системный промпт и ответы инструментов
+├── session/         # SessionManager, вкладки, ApprovalGate, ApiSlotLimiter
+├── slash-commands/  # Слэш-команды
+├── storage/         # StateManager, пути на диске
+├── task/            # Task, ToolExecutor, обработчики инструментов
+├── webview/         # WebviewProvider
+├── workflow/        # Многошаговые рабочие процессы
+└── workspace/       # Несколько корней рабочей области
 ```
 
-### DiffSystem v4 (`src/core/diff-v2/`)
+## Задача (Task)
 
-Cursor-подобные inline-диффы с per-message снапшотами. См. [Diff-система](../systems/diff-system.md).
-
-```
-DiffSystem (фасад)
-├── DiffStore — ResponseGroups, FileChanges, Hunks (workspaceState)
-├── FileSnapshotStorage — per-message снапшоты файлов (диск)
-├── HunkApplier — применяет изменения, читает реальный файл для removedLines
-├── HunkReverter — reject/accept с \n EOL, каскад статуса родителя
-├── PositionTracker — пересчёт позиций после правок
-├── SystemEditGuard — отличает системные правки от ручных
-├── InlineDiffRenderer — реактивные View Zones + зелёные декорации
-└── KeyboardNavigation — кросс-файловая навигация по хункам
-```
-
-### ApprovalGate (`src/core/session/ApprovalGate.ts`)
-
-Promise-based механизм ask/response, заменивший legacy pWaitFor-опрос. Включает очередь ранних ответов для обработки race condition при пересылке сообщений.
-
-### Controller (`src/core/controller/index.ts`)
-
-- `initTask()` — создание задачи, установка контекста DiffSystem
-- `cancelTask()` — прерывание + повторная инициализация из истории
-- `clearTask()` — завершение checkpoint + очистка
-- `deleteFromMessage()` — откат + обрезка истории
-- `retryFromMessage()` — откат + обрезка + автоматическая повторная отправка
-
-### ToolExecutor (`src/core/task/ToolExecutor.ts`)
-
-- Ограничения Lightweight-режима (XS-модели: без BASH, без FILE_EDIT)
-- Рантайм-блокировка инструментов для слабых моделей
-- EditNotebook — редактирование ячеек Jupyter `.ipynb` (вставка/замена)
-
-### Permissions (`src/core/permissions/`)
-
-Контроль доступа для действий агента:
-
-- **CommandPermissionController** — разрешения команд на основе среды
-- **CommandSafetyClassifier** — классификация shell-команд как safe/unsafe (подход whitelist):
-  - `safe` = только чтение (ls, cat, git status, npm test, grep, find, ...)
-  - `unsafe` = всё остальное (rm, npm install, git push, curl, sudo, ...)
-  - Пайпы/цепочки: ВСЕ сегменты должны быть safe
-  - Перенаправление (`>`, `>>`) = всегда unsafe
-
-### AutoApprove (`src/core/task/tools/autoApprove.ts`)
-
-Контролирует необходимость подтверждения пользователя перед выполнением инструмента.
-
-| Настройка | Тип | По умолчанию | Описание |
-|-----------|-----|-------------|----------|
-| `executeSafeCommands` | boolean | true | Безопасные команды (только чтение) |
-| `executeAllCommands` | boolean | false | Все команды |
-| `deleteFiles` | boolean | false | Удаление файлов |
-| `editNotebooks` | boolean | false | Jupyter-ноутбуки |
-| `useBrowser` | boolean | true | Автоматизация браузера |
-| `useMcp` | boolean | true | MCP-серверы |
-
-## Управление состоянием
-
-### GlobalState (сохраняется между сессиями)
-
-```typescript
-controller.stateManager.setGlobalState("key", value)
-controller.stateManager.getGlobalStateKey("key")
-```
-
-### Secrets (безопасное хранилище)
-
-```typescript
-context.secrets.store("apiKey", value)
-context.secrets.get("apiKey")
-```
-
-### Task State (по задаче, файловая система)
+`Controller.initTask()` создаёт `Task`. `Task.startTask()` или `Task.resumeTaskFromHistory()` запускает цикл:
 
 ```
-~/.skycode/tasks/{taskId}/
-├── api_conversation_history.json
-└── skycode_messages.json
+initiateTaskLoop()
+  → recursivelyMakeSkycodeRequests()
+      → attemptApiRequest()       # потоковый запрос к модели
+      → разбор потока             # текст, рассуждения, вызовы инструментов
+      → ToolExecutor              # выполнение инструментов
+      → следующий запрос или ask("completion_result")
 ```
 
-### DiffStore (по workspace, workspaceState)
+Перед первой правкой каждого сообщения пользователя вызывается `DiffSystem.startCheckpoint(...)`. Так формируется группа изменений, к которой привязан снимок для отката.
+
+### Защиты при разборе потока
+
+- **Зацикливание** (`task/repetitionLoop.ts`). Детектор получает текст ответа и рассуждения. Содержимое вызовов инструментов он не проверяет, чтобы не срабатывать на повторяющемся коде. Если один фрагмент повторяется много раз или короткий узор тянется очень долго, ответ прерывается, модель получает заметку.
+- **Оборванный вызов** (`task/truncatedToolCall.ts`). Если ответ обрезан внутри вызова `write_to_file`, `replace_in_file`, `apply_patch`, `edit_notebook`, `delete_block`, `replace_text`, `execute_command` и подобных, вызов не выполняется. Модель получает просьбу разбить работу на части.
+- **Повтор вызова.** Точный повтор того же вызова инструмента сопровождается мягкой заметкой (`toolCallSignature.ts`).
+- **Счётчик ошибок.** После `maxConsecutiveMistakes` подряд идущих ошибок (по умолчанию 3) агент останавливается и ждёт пользователя.
+- **Бюджет вызовов для слабых и средних моделей.** `ToolExecutor` считает вызовы за ход. При 80% лимита модель получает предупреждение, при исчерпании ей велено вызвать `attempt_completion`. Для сильных моделей лимита нет (классы моделей описаны в [Управлении контекстом](./context-management.md)). Лимиты: средний уровень 80 вызовов, слабый 25 (`src/shared/prompts.ts`).
+
+### Параметры выборки Qwen
+
+Для моделей, в имени которых есть `qwen`, `core/api/providers/qwenSampling.ts` задаёт температуру 0,6 (если в настройках 0 или пусто), `top_p` 0,95 и `top_k` 20. Если шлюз отвечает ошибкой 400 на неизвестные поля, эти два параметра больше не отправляются на этот адрес до перезапуска.
+
+## ToolExecutor
+
+`task/ToolExecutor.ts` регистрирует обработчики в `ToolExecutorCoordinator` и проверяет ограничения перед выполнением:
+
+- **Вопрос и Чат:** запись файлов, `apply_patch`, `edit_notebook`, `execute_command`, браузер и MCP заблокированы. Модель получает сообщение об ошибке.
+- **План:** при `strictPlanModeEnabled` (по умолчанию включено) инструменты записи заблокированы.
+- **Облегчённый режим** (`lightweightMode`, для слабых моделей): запрещены `execute_command`, `replace_in_file`, `apply_patch` и удаление файлов. Вместо них модель использует `replace_text`, `delete_block` и `write_to_file`.
+
+Обработчики лежат в `task/tools/handlers/`. Описания инструментов для промпта лежат в `prompts/system-prompt/tools/`. Как добавить инструмент: [Добавление инструментов](../development/adding-tools.md).
+
+## Разрешения и автоподтверждение
+
+`task/tools/autoApprove.ts` решает, нужно ли спрашивать пользователя. Настройки лежат в `autoApprovalSettings.actions` (вкладка «Разрешения»):
+
+| Настройка | По умолчанию | Смысл |
+|---|---|---|
+| `readFiles` | включено | Чтение файлов в рабочей папке |
+| `readFilesExternally` | выключено | Чтение вне рабочей папки |
+| `editFiles` | включено | Правка файлов в рабочей папке |
+| `editFilesExternally` | выключено | Правка вне рабочей папки |
+| `executeSafeCommands` | включено | Команды из белого списка (чтение) |
+| `executeNonDestructiveCommands` | выключено | Всё, кроме заведомо опасного |
+| `executeAllCommands` | выключено | Любые команды |
+| `deleteFiles` | выключено | Удаление файлов |
+| `editNotebooks` | выключено | Jupyter-ноутбуки |
+| `useBrowser` | включено | Браузер |
+| `useMcp` | включено | MCP, но каждый инструмент MCP подтверждается отдельно, пока для него не включено автоподтверждение |
+
+`permissions/CommandSafetyClassifier.ts` относит команду к одному из классов:
+
+- `safe`: команда из белого списка, только чтение;
+- `unsafe`: команда из чёрного списка (`rm`, `sudo`, `ssh`, установка пакетов и т. п.), опасный флаг или перенаправление вывода;
+- `unknown`: команда не опознана.
+
+Режим «безопасные команды» одобряет только `safe`. Режим «всё, кроме опасного» одобряет `safe` и `unknown`. В цепочках и пайпах оцениваются все сегменты.
+
+## Сессии и вкладки
+
+`session/SessionManager.ts` хранит сессии. Каждая вкладка в интерфейсе соответствует сессии. Статус вкладки (работает, ждёт подтверждения, завершена, в очереди, остановлена) выводится в `session/tabs.ts` из состояния задачи. `ApiSlotLimiter` пускает к модели не больше трёх запросов одновременно, остальные задачи ждут свободный слот.
+
+`ApprovalGate` — механизм ask/response на промисах. Он заменил опрос по таймеру и хранит очередь ответов, которые пришли раньше, чем задача дошла до ожидания.
+
+## Controller
+
+`controller/index.ts` создаёт и прерывает задачи (`initTask`, `cancelTask`, `clearTask`) и отправляет состояние в webview (`getStateToPostToWebview`). Остальные операции лежат в `controller/task/`: `deleteFromMessage`, `retryFromMessage`, `resendFromMessage`, `interruptAndSend` (прервать поток и сразу обработать сообщение пользователя), `newTab`, `switchTab`, `closeTab`. Удаление и повтор вызывают откат файлов через `DiffSystem`.
+
+## Состояние
+
+`storage/StateManager.ts` держит настройки в памяти и пишет их в `globalState` VS Code. Ключи API идут в SecretStorage. Состояние рабочей области (список непринятых правок) идёт в `workspaceState`. Каждое окно VS Code читает диск один раз при старте.
+
+Файлы задачи лежат в `tasks/<taskId>/` папки данных расширения:
 
 ```
-skycode.diff.v3.responseGroups  — ResponseGroup[]
-skycode.diff.v3.fileChanges     — FileChangeRecord[]
-skycode.diff.v3.hunks           — Hunk[]
+api_conversation_history.json   # история для модели
+ui_messages.json                # сообщения чата
+context_history.json            # правки контекста (заглушки, сжатие)
+task_metadata.json
 ```
+
+Снимки файлов и состояние непринятых правок описаны в [Просмотре изменений](../systems/diff-system.md).
+
+## Хуки
+
+`hooks/` запускает скрипты из `.skycoderules/hooks` на событиях жизненного цикла (`TaskStart`, `TaskComplete`, `PreToolUse`, `PostToolUse`, `PreCompact` и др.). На Windows хуки отключены (`getHooksEnabledSafe`).
+
+## См. также
+
+- [Управление контекстом](./context-management.md)
+- [Просмотр изменений](../systems/diff-system.md)
+- [Добавление инструментов](../development/adding-tools.md)

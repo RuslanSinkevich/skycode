@@ -2,12 +2,12 @@
 
 # Руководство по разработке
 
-Skycode — расширение VS Code, код лежит в `extensions/skycode/`. Репозиторий физически остаётся форком VS Code, но сборка VS Code целиком (`npm install` в корне, gulp, `scripts/code.*`) для Skycode не нужна. Все команды ниже — из `extensions/skycode`, пути в разделах ниже тоже относительно этой папки.
+Skycode — расширение VS Code, код лежит в `extensions/skycode/`. Репозиторий физически остаётся форком VS Code, но собирать VS Code целиком (`npm install` в корне, gulp, `scripts/code.*`) для Skycode не нужно. Все команды ниже запускаются из `extensions/skycode`. Пути в тексте относительно этой папки, если не сказано иное.
 
 ## Требования
 
-- VS Code 1.90+ (минимальная версия движка в `package.json`)
-- Node.js 22+ (версия, которой собирает CI) и npm
+- VS Code 1.90 или новее (минимальная версия движка в `package.json`).
+- Node.js 22 или новее (так собирает CI) и npm.
 
 ## Быстрый старт
 
@@ -18,53 +18,56 @@ cd skycode/extensions/skycode
 npm ci
 cd webview-ui && npm ci && cd ..
 
-npm run protos     # генерация типов из proto
-npm run package    # проверка типов + сборка webview + lint + esbuild (production)
+npm run protos     # типы из proto/skycode/*.proto
+npm run package    # типы + сборка webview + линт + продакшен-бандл
 ```
 
-Для разработки: `npm run dev` (protos + watch esbuild/tsc) и `npm run dev:webview` (Vite для webview).
+Сгенерированный код (`src/shared/proto/`, `src/generated/`, `webview-ui/src/services/grpc-client.ts`) в git не хранится. `npm run protos` нужен после клонирования и после любой правки `.proto`.
+
+Для разработки: `npm run dev` (protos и watch для esbuild и tsc), `npm run dev:webview` (dev-сервер Vite для webview), `node esbuild.mjs` (только бандл расширения).
 
 ## Запуск и проверка
 
-- Установить собранный `.vsix` в обычный VS Code («Установить из VSIX…») и выполнить **Developer: Reload Window**.
-- Либо открыть `extensions/skycode` в VS Code и запустить Extension Development Host (F5).
+- Собрать пакет (`npm run package:vsix`, результат `dist/skycode.vsix`), установить через «Установить из VSIX…» и выполнить **Developer: Reload Window**.
+- Или открыть `extensions/skycode` в VS Code и запустить конфигурацию «Run Extension (local)» из `.vscode/launch.json` (F5).
 
-## Тесты
+## Проверки
 
-```bash
-npm run test:unit                    # mocha, юнит-тесты расширения
-cd webview-ui && npx vitest run      # тесты webview
-```
+| Что | Команда |
+|---|---|
+| Типы расширения | `npx tsc --noEmit -p .` |
+| Типы тестов | `npx tsc --noEmit -p tsconfig.test.json` |
+| Типы webview | `cd webview-ui && npx tsc --noEmit -p tsconfig.app.json` |
+| Линт | `npx biome lint --diagnostic-level=error src webview-ui/src` |
+| Юнит-тесты расширения (mocha) | `npm run test:unit` |
+| Тесты webview (vitest) | `cd webview-ui && npx vitest run` |
+| Обновить снапшоты промптов | `UPDATE_SNAPSHOTS=true npm run test:unit` |
 
-## Сборка .vsix
+Тесты расширения используют mocha, chai и sinon. Файлы лежат в папках `__tests__` рядом с кодом.
+
+## Упаковка и релиз
 
 ```bash
 npx vsce package --readme-path MARKETPLACE.md
 ```
 
-`MARKETPLACE.md` — текст страницы в Marketplace; `README.md` в папке расширения — индекс для разработчиков.
+`MARKETPLACE.md` — текст страницы в Marketplace. `README.md` в папке расширения — индекс для разработчиков.
 
-## Релиз
+Релиз:
 
 1. Поднять `version` в `extensions/skycode/package.json`.
 2. Запушить тег `ext-vX.Y.Z` (версия в теге должна совпадать с `package.json`).
-3. Workflow `.github/workflows/skycode-extension.yml` соберёт расширение, прогонит юнит-тесты, опубликует в VS Code Marketplace (секрет `VSCE_PAT`; переход на trusted publishing через `vsce publish --oidc` запланирован, когда Marketplace его поддержит) и приложит `.vsix` к GitHub Release. В Open VSX публикуется только если задан секрет `OVSX_PAT`.
+3. Workflow `.github/workflows/skycode-extension.yml` соберёт расширение, прогонит юнит-тесты, опубликует в VS Code Marketplace (секрет `VSCE_PAT`; без него workflow пробует `vsce publish --oidc`, Marketplace его пока не поддерживает) и приложит `.vsix` к GitHub Release. В Open VSX публикуется только если задан секрет `OVSX_PAT`.
 
-Ручной запуск workflow (Actions → Skycode Extension → Run workflow) только собирает `.vsix` в артефакты.
+Ручной запуск workflow (Actions, Skycode Extension, Run workflow) только собирает `.vsix` в артефакты.
 
-## Проверка типов
+## Что не входит в .vsix
 
-```bash
-npm run check-types
-```
+По `.vscodeignore` в пакет не попадают `models/` (модели эмбеддингов) и `onnxruntime-node`. Поэтому локальный режим индексации в установленном расширении недоступен. Голосовые компоненты и headless-браузер тоже скачиваются при первом использовании.
 
-## gRPC / Protobuf коммуникация
+## gRPC и Protobuf
 
-Расширение и webview общаются через gRPC-подобный протокол.
-
-### Proto-файлы
-
-Расположение: `proto/skycode/*.proto`
+Расширение и webview общаются сообщениями, описанными в `proto/skycode/*.proto`.
 
 ```protobuf
 service MyService { }      // PascalCase
@@ -72,75 +75,49 @@ rpc myMethod() { }         // camelCase
 message MyMessage { }      // PascalCase
 ```
 
-### После изменения Proto-файлов
+Правила:
 
-```bash
-npm run protos
-```
+- номера полей не менять и не переиспользовать;
+- удалённое поле заменять на `reserved N;`;
+- после правки выполнить `npm run protos`;
+- `scripts/generate-state-proto.mjs` не запускать.
 
-Генерирует типы в:
+`npm run lint:proto` (входит в `npm run lint`) проверяет стиль имён.
 
-- `src/shared/proto/`
-- `src/generated/grpc-js/`
-- `src/generated/nice-grpc/`
-- `src/generated/hosts/`
+### Новый RPC-метод
 
-### Добавление нового RPC-метода
+1. Добавить метод в `.proto`.
+2. Создать обработчик в `src/core/controller/<домен>/`.
+3. Вызвать из webview: `UiServiceClient.myMethod(request)` (клиент соответствующего сервиса).
 
-1. Добавить в `.proto` файл
-2. Создать обработчик в `src/core/controller/<domain>/`
-3. Вызвать из webview: `UiServiceClient.myMethod(request)`
+## Состояние
 
-## GlobalState
+Настройки и состояние описаны в `src/shared/storage/state-keys.ts`:
 
-### Добавление нового ключа
+- `GLOBAL_STATE_FIELDS`: внутреннее состояние;
+- `USER_SETTINGS_FIELDS`: пользовательские настройки;
+- `API_HANDLER_SETTINGS_FIELDS`: параметры провайдеров;
+- секреты (ключи API) хранятся отдельно в SecretStorage.
 
-1. Добавить поле в `GLOBAL_STATE_FIELDS` в `src/shared/storage/state-keys.ts`:
+Чтение и запись: `controller.stateManager.getGlobalStateKey("key")`, `getGlobalSettingsKey("key")`, `setGlobalState("key", value)`. Полный порядок добавления настройки: [Добавление настроек](./adding-settings.md).
 
-   ```typescript
-   const GLOBAL_STATE_FIELDS = {
-     myKey: { default: undefined as string | undefined },
-   } satisfies FieldDefinitions
-   ```
+## Добавление провайдера моделей
 
-2. Считать в `getStateToPostToWebview`:
+Конвертация в proto есть в трёх местах. Если пропустить одно, выбор провайдера сбросится на значение по умолчанию.
 
-   ```typescript
-   myKey: stateManager.getGlobalStateKey("myKey"),
-   ```
-
-3. Использовать:
-
-   ```typescript
-   controller.stateManager.setGlobalState("myKey", value)
-   controller.stateManager.getGlobalStateKey("myKey")
-   ```
-
-## Добавление API-провайдера
-
-Три места для proto-конвертации (иначе сбросится на Anthropic):
-
-1. `proto/skycode/models.proto` — добавить в enum `ApiProvider`
-2. `convertApiProviderToProto()` в `src/shared/proto-conversions/models/api-configuration-conversion.ts`
-3. `convertProtoToApiProvider()` в том же файле
+1. `proto/skycode/models.proto`: добавить значение в `enum ApiProvider` (новый номер).
+2. `convertApiProviderToProto()` в `src/shared/proto-conversions/models/api-configuration-conversion.ts`.
+3. `convertProtoToApiProvider()` в том же файле.
 
 Дополнительно:
 
-- `src/shared/api.ts` — union type и модели
-- `src/shared/providers/providers.json` — для выпадающего списка
-- `src/core/api/index.ts` — обработчик в `createHandlerForProvider()`
-- Webview-компоненты
-
-## Регенерация снапшотов
-
-После изменения промптов:
-
-```bash
-UPDATE_SNAPSHOTS=true npm run test:unit
-```
+- `src/shared/api.ts`: тип `ApiProvider` и модели;
+- `src/shared/providers/providers.json`: список для выпадающего меню;
+- `src/core/api/providers/`: класс провайдера и ветка в `createHandlerForProvider()` в `src/core/api/index.ts`;
+- `webview-ui/src/components/settings/providers/`: форма настроек провайдера.
 
 ## См. также
 
 - [Добавление инструментов](./adding-tools.md)
-- [Сетевые запросы](./network.md)
 - [Добавление настроек](./adding-settings.md)
+- [Сетевые запросы](./network.md)

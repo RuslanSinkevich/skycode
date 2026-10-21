@@ -1,14 +1,14 @@
-# Skycode AI — Diff System v4
+# Skycode AI — система diff
 
 ## Обзор
 
-Cursor-like diff система. AI вносит изменения напрямую в файлы. В редакторе они подсвечиваются стандартными декорациями VS Code; принять или отклонить можно в панели Pending Changes в чате и командами `skycode.diff.*`. Разбор по кускам — в стандартном окне сравнения «до агента ↔ сейчас». Per-message snapshots обеспечивают точный откат.
+Агент пишет изменения прямо в файлы. Каждое изменение запоминается как hunk (кусок) с исходным текстом. В редакторе правки подсвечены стандартными декорациями VS Code. Принять или отменить их можно в панели изменений в чате, командами `skycode.diff.*` и горячими клавишами. Подробный разбор по кускам — в стандартном окне сравнения «до агента ↔ сейчас». Снимки файлов по сообщениям (per-message snapshots) нужны для отката.
 
 Расширение работает в обычном VS Code, поэтому закрытые (proposed) API, в том числе `editorInsets`, не используются: View Zones и кнопок Accept/Reject прямо в тексте редактора нет.
 
 ---
 
-## Архитектура v4
+## Архитектура
 
 ```
 DiffSystem (facade) — src/core/diff-v2/DiffSystem.ts
@@ -25,24 +25,6 @@ DiffSystem (facade) — src/core/diff-v2/DiffSystem.ts
     ├── HunkDecorations (зелёный фон добавленного, красная черта на месте удаления, hover «что было до агента»)
     └── KeyboardNavigation (кросс-файловая навигация по диффам)
 ```
-
----
-
-## Что нового в v4 (vs v3)
-
-| Фича | v3 | v4 |
-|---|---|---|
-| Снапшоты | Нет | Per-message: каждое сообщение = свой снапшот |
-| Rollback | Hunk-by-hunk | Snapshot-based + per-group hunk filtering |
-| Per-message rollback | Нет | Да: удаление msg2 не трогает msg1 |
-| Overlap detection | Strict (`<`/`>`) | Inclusive (`<=`/`>=`), adjacent тоже |
-| removedLines | Из diff computation | Из реального файла (MISMATCH protection) |
-| HunkReverter EOL | `\r\n` на Windows | Всегда `\n` (VS Code нормализует) |
-| No-op detection | Нет | Да: модель получает ошибку если файл не изменился |
-| Навигация | Только в файле | Кросс-файловая (`Alt+]` / `Alt+[` переходят между файлами) |
-| Chat preview | Только для write_to_file | Для всех tool types (fallback из hunk data) |
-| ApprovalGate | pWaitFor polling | Promise-based + early response queue |
-| Orphaned RGs | Накапливаются | Cleanup при старте |
 
 ---
 
@@ -85,9 +67,7 @@ Delete message 2:
   → RG1 hunks remain pending ✓
 ```
 
-Checkpoints создаются в двух местах:
-- `Task.startTask()` — первое сообщение
-- `AttemptCompletionHandler` + `Task.resumeTaskFromHistory()` — follow-up сообщения
+Checkpoint (`DiffSystem.startCheckpoint`) создаётся для сообщения пользователя: в `Task.startTask()` (первое сообщение), в `Task.resumeTaskFromHistory()` и при ответе пользователя в задаче, а также в `AttemptCompletionHandler` (ответ после завершения задачи). Ключ группы — id задачи, поэтому правки параллельных вкладок не смешиваются.
 
 ---
 
@@ -99,7 +79,28 @@ Checkpoints создаются в двух местах:
 - **Место удаления** — красная черта над следующей строкой (под последней, если удалено в конце файла) и метка на полосе прокрутки.
 - **Hover** — что было до агента (до 20 строк) и ссылка «открыть сравнение».
 - **Окно сравнения** — команда `skycode.diff.openBaselineDiff` открывает стандартный diff «до агента ↔ сейчас» (схема `skycode-base`), в нём у каждого куска есть стрелка отката.
-- **Принять/отклонить** — панель Pending Changes в чате (`PendingChangesBar`) и команды ниже.
+- **Кнопок «Принять»/«Отклонить» в тексте редактора нет.** Принять или отклонить можно в панели изменений в чате (`PendingChangesBar`), командами ниже и горячими клавишами.
+
+---
+
+## Панель изменений в чате
+
+`webview-ui/src/components/chat/pending-changes/PendingChangesBar.tsx`. Показывается, пока есть непринятые правки.
+
+- Заголовок: «N файлов +X −Y» (число файлов, добавленные и удалённые строки). Клик разворачивает список файлов.
+- Стрелки влево и вправо переходят к предыдущему и следующему куску (`navigatePrevHunk` / `navigateNextHunk`).
+- «Отменить» отклоняет все правки после подтверждения («Отклонить все изменения?»), «Принять» принимает все.
+- В списке у каждого файла свои кнопки принять и отклонить. Клик по файлу открывает окно сравнения «до агента ↔ сейчас» (`openPendingChangesDiff`), а если сравнивать не с чем, сам файл.
+
+## Горячие клавиши
+
+| Клавиши | Команда |
+|---|---|
+| `Ctrl+Shift+Y` (macOS `Cmd+Shift+Y`) | `skycode.diff.acceptCurrent`, принять кусок под курсором |
+| `Ctrl+Shift+N` (macOS `Cmd+Shift+N`) | `skycode.diff.rejectCurrent`, отклонить кусок под курсором |
+| `Alt+]` / `Alt+[` | `skycode.diff.nextHunk` / `skycode.diff.prevHunk`, следующий и предыдущий кусок, в том числе в другом файле |
+
+Клавиши работают в фокусе редактора, пока есть непринятые правки (контекст `skycode.hasPendingHunks`).
 
 Декорации не хранят состояния: при любом изменении хранилища или набора видимых редакторов они пересчитываются из ожидающих hunks.
 
@@ -114,6 +115,7 @@ Checkpoints создаются в двух местах:
 4. Snapshot cleanup если 0 pending hunks
 
 ### Reject
+0. Перед правкой `verifyHunkContent` сверяет текст в файле с ожидаемым. Если позиции «уехали» (файл правили вручную), файл целиком восстанавливается из снапшота, а все ожидающие куски файла помечаются отклонёнными.
 1. `HunkReverter.reject()` — `cleanLines = removedLines.map(l => l.replace(/\r$/, ''))`
 2. `applyEdit(uri, range, cleanLines.join('\n') + '\n')` — всегда `\n`
 3. `PositionTracker.recalculate()` сдвигает оставшиеся хунки
@@ -132,7 +134,7 @@ const overlapping = pendingHunks.filter(h =>
 );
 ```
 
-Overlapping/adjacent hunks auto-reject'ятся bottom-to-top перед применением нового.
+Overlapping/adjacent hunks auto-reject'ятся bottom-to-top перед применением нового. Если подряд больше 5 таких циклов на одном файле (`MAX_OVERLAP_CYCLES`), правка блокируется с ошибкой «Loop detected»: модель, которая переписывает одно и то же место, останавливается.
 
 ---
 
@@ -148,7 +150,7 @@ Overlapping/adjacent hunks auto-reject'ятся bottom-to-top перед при�
 ## Защита данных
 
 ### removedLines — из реального файла
-`HunkApplier.applyReplacement` читает `actualRemovedLines = lines.slice(startIdx, ...)` из файла, а не доверяет caller'у. Это гарантирует что красная зона показывает реальный оригинал.
+`HunkApplier.applyReplacement` читает `actualRemovedLines = lines.slice(startIdx, ...)` из файла, а не доверяет caller'у. Так в hover и при отклонении используется реальный оригинал. Если первая строка не совпала с ожидаемой, в лог пишется `removedLines MISMATCH`.
 
 ### SystemEditGuard
 Защищает от ложных `onDidChangeTextDocument`:

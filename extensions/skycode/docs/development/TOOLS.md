@@ -142,6 +142,7 @@ export const config = createVariant(ModelFamily.GENERIC)
 import { SkycodeDefaultTool } from "@shared/tools"
 import type { ToolUse, ToolResponse } from "../../index"
 import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
+import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import type { TaskConfig } from "../types/TaskConfig"
 
 export class MyToolHandler implements IFullyManagedTool {
@@ -159,12 +160,19 @@ export class MyToolHandler implements IFullyManagedTool {
 
     return result
   }
+
+  // Вызывается, пока блок инструмента ещё стримится
+  async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
+    // можно показать частичный ввод в чате или ничего не делать
+  }
 }
 ```
 
-> **Два типа хэндлеров:**
-> - `IFullyManagedTool` — хэндлер сам управляет UI (ask/say). Большинство инструментов.
-> - `IToolHandler` + `IPartialBlockHandler` — для инструментов, которые обрабатывают partial-блоки (streaming). Например: `PlanModeRespondHandler`, `AttemptCompletionHandler`.
+> **Интерфейсы** (`src/core/task/tools/ToolExecutorCoordinator.ts`):
+> - `IToolHandler` — `name`, `execute`, `getDescription`.
+> - `IPartialBlockHandler` — `handlePartialBlock` для стримящихся блоков.
+> - `IFullyManagedTool` — маркер: `IToolHandler` + `IPartialBlockHandler`, хэндлер сам ведёт весь approval flow (большинство инструментов: `ReadFileToolHandler`, `WriteToFileToolHandler`, `ExecuteCommandToolHandler`).
+> - Часть хэндлеров реализует `IToolHandler` и `IPartialBlockHandler` по отдельности, например `PlanModeRespondHandler`, `AttemptCompletionHandler`, `ShowChartToolHandler`.
 
 ### Шаг 7: Зарегистрировать хэндлер
 

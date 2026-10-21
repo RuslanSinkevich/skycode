@@ -19,7 +19,7 @@ npm run package    # типы + сборка webview + линт + продакш
 
 | Что | Команда |
 |---|---|
-| Юнит-тесты (mocha, ~1400 тестов) | `npm run test:unit` |
+| Юнит-тесты (mocha) | `npm run test:unit` |
 | Тесты webview | `cd webview-ui && npx vitest run` |
 | Типы расширения | `npx tsc --noEmit -p .` |
 | Типы тестов | `npx tsc --noEmit -p tsconfig.test.json` |
@@ -37,19 +37,23 @@ npm run package    # типы + сборка webview + линт + продакш
 
 ## Релиз
 
-1. Поднять `version` в `extensions/skycode/package.json`.
+1. Поднять `version` в `extensions/skycode/package.json` и дописать запись в `CHANGELOG.md` (его показывает вкладка «Изменения» в Marketplace).
 2. Запушить тег `ext-vX.Y.Z` (версия в теге должна совпадать с `package.json`).
 3. Workflow `.github/workflows/skycode-extension.yml` (корень репозитория) ставит зависимости, собирает, прогоняет юнит-тесты, пакует .vsix, публикует в Visual Studio Marketplace (расширение `skycode.skycode-ai`) и прикладывает .vsix к GitHub Release. Секрет `VSCE_PAT` задаёт токен публикации; без него workflow пробует trusted publishing (`vsce --oidc`), который Marketplace пока не поддерживает. Open VSX — только при заданном секрете `OVSX_PAT`.
 4. Ручной запуск workflow (Run workflow) только собирает .vsix в артефакты.
 
 ## Что не входит в .vsix
 
-По `.vscodeignore` в пакет не попадают `models/` (модель эмбеддингов) и `onnxruntime-node`, поэтому локальный режим индексации в установленном расширении недоступен. Индексация выключена по умолчанию, режим `remote` работает, `codebase_search` работает и без индекса. Подробнее: [INDEXING_SYSTEM.md](./INDEXING_SYSTEM.md).
+По `.vscodeignore` в пакет не попадает `models/` (модель эмбеддингов), а `onnxruntime-node` помечен как external в `esbuild.mjs` и не бандлится, поэтому локальный режим индексации в установленном расширении недоступен. Индексация выключена по умолчанию, режим `remote` работает, `codebase_search` работает и без индекса. Подробнее: [INDEXING_SYSTEM.md](./INDEXING_SYSTEM.md).
 
 ## Если сборка ломается
 
 - Ошибки типов, `Cannot find module` или странное состояние после слияний: удалить `node_modules`, `dist`, `src/generated`, `src/shared/proto`, затем заново `npm ci` и `npm run protos`.
 - На Windows `npm` иногда не скачивает `protoc.exe` в `node_modules/grpc-tools/bin`. Тогда скачать `protoc-3.20.3-win64.zip` с https://github.com/protocolbuffers/protobuf/releases, положить `bin/protoc.exe` в `node_modules/grpc-tools/bin/`, а папку `include` — рядом с ним, и повторить `npm run protos`.
+
+## Голосовой ввод
+
+Движок GigaAM, его модель и ffmpeg в .vsix не входят, они скачиваются при первом включении. См. [VOICE_INPUT.md](./VOICE_INPUT.md). Воркер диктовки собирается отдельной записью в `esbuild.mjs` (`dist/sherpa-dictation-worker.js`).
 
 ## Миграция с прежнего ID
 

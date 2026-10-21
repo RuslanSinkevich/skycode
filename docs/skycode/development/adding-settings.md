@@ -2,55 +2,61 @@
 
 # Добавление настроек
 
-Полное руководство по добавлению новой настройки в Skycode AI.
+Порядок добавления новой настройки в Skycode AI. Пути относительно `extensions/skycode/`.
 
-## Архитектура
-
-Настройки проходят через несколько уровней:
+## Путь настройки
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│  Webview UI (React)                                          │
-│  SettingsSection.tsx → updateSetting() → gRPC-клиент         │
-└──────────────────────────────────────────────────────────────┘
-                              ↓ gRPC
-┌──────────────────────────────────────────────────────────────┐
-│  Extension Host (Node.js)                                    │
-│  StateService → updateSettings.ts → StateManager / VS Code   │
-└──────────────────────────────────────────────────────────────┘
+Webview (React)                      Расширение (Node.js)
+SettingsSection.tsx                  updateSettings.ts
+  updateSetting("key", value)  ──►     StateManager.setGlobalState(...)
+                                       getStateToPostToWebview()  ──►  ExtensionState
+ExtensionStateContext  ◄──────────────────────────────────────────────┘
 ```
+
+Webview вызывает метод сервиса состояния (gRPC-сообщение `UpdateSettingsRequest`). Расширение сохраняет значение и отправляет обновлённое состояние обратно.
 
 ## Шаги
 
-### 1. Proto-файл
+### 1. Proto
 
-**Файл:** `proto/skycode/state.proto`
+`proto/skycode/state.proto`, сообщение `UpdateSettingsRequest`:
 
 ```protobuf
 message UpdateSettingsRequest {
-  optional bool my_new_setting = 42;  // следующий свободный номер
+  optional bool my_new_setting = 60;  // пример: возьмите следующий свободный номер в этом сообщении
 }
 ```
 
-### 2. Регенерация Proto
+Номер должен быть новым: не использовать номера, помеченные `reserved`, и не менять существующие.
+
+### 2. Генерация кода
 
 ```bash
 npm run protos
 ```
 
-### 3. Интерфейс состояния расширения
+### 3. Описание ключа
 
-**Файл:** `src/shared/ExtensionMessage.ts`
+`src/shared/storage/state-keys.ts`. Пользовательские настройки добавляются в `USER_SETTINGS_FIELDS` вместе со значением по умолчанию:
 
 ```typescript
-export interface ExtensionState {
-  myNewSetting?: boolean
-}
+myNewSetting: { default: true as boolean },
 ```
 
-### 4. Обработка в StateService
+Внутреннее состояние (не настройка пользователя) добавляется в `GLOBAL_STATE_FIELDS`.
 
-**Файл:** `src/core/controller/state/updateSettings.ts`
+### 4. Тип состояния для webview
+
+`src/shared/ExtensionMessage.ts`, интерфейс `ExtensionState`:
+
+```typescript
+myNewSetting?: boolean
+```
+
+### 5. Сохранение
+
+`src/core/controller/state/updateSettings.ts`:
 
 ```typescript
 if (request.myNewSetting !== undefined) {
@@ -58,47 +64,25 @@ if (request.myNewSetting !== undefined) {
 }
 ```
 
-### 5. (Опционально) VS Code Configuration
+### 6. Отправка в webview
 
-**Файл:** `package.json`
-
-```json
-{
-  "contributes": {
-    "configuration": {
-      "properties": {
-        "skycode.myNewSetting": {
-          "type": "boolean",
-          "default": true,
-          "description": "Описание настройки"
-        }
-      }
-    }
-  }
-}
-```
-
-### 6. Чтение в Controller
-
-**Файл:** `src/core/controller/index.ts` — `getStateToPostToWebview()`
+`src/core/controller/index.ts`, метод `getStateToPostToWebview()`:
 
 ```typescript
-myNewSetting: this.stateManager.getGlobalStateKey("myNewSetting"),
+myNewSetting: this.stateManager.getGlobalSettingsKey("myNewSetting"),
 ```
 
-### 7. Значение по умолчанию в Webview
+### 7. Значение по умолчанию в webview
 
-**Файл:** `webview-ui/src/context/ExtensionStateContext.tsx`
+`webview-ui/src/context/ExtensionStateContext.tsx`, начальное состояние `useState<ExtensionState>`:
 
 ```typescript
-const [state, setState] = useState<ExtensionState>({
-  myNewSetting: true,
-})
+myNewSetting: true,
 ```
 
-### 8. UI-компонент
+### 8. Интерфейс
 
-Выберите подходящий раздел в `webview-ui/src/components/settings/sections/`:
+Выберите раздел в `webview-ui/src/components/settings/sections/` (например `GeneralSettingsSection.tsx`, `EditingSection.tsx`, `ContextSection.tsx`, `PermissionsSection.tsx`) и добавьте элемент:
 
 ```tsx
 const { myNewSetting } = useExtensionState()
@@ -110,14 +94,20 @@ const { myNewSetting } = useExtensionState()
 </VSCodeCheckbox>
 ```
 
+Подписи берите из словарей `webview-ui/src/i18n/locales/ru.json` и `en.json` (функция `t("ключ")`).
+
+### 9. Настройка VS Code (необязательно)
+
+Если настройка должна быть видна в стандартном окне настроек VS Code, добавьте её в `contributes.configuration.properties` в `package.json` (примеры: `skycode.indexing.*`, `skycode.validateSyntaxBeforeApply`). Это отдельный механизм, он не заменяет шаги выше.
+
 ## Чеклист
 
-- [ ] Добавлено поле в `proto/skycode/state.proto`
-- [ ] Выполнена команда `npm run protos`
-- [ ] Добавлено поле в интерфейс `ExtensionState`
-- [ ] Добавлена обработка в `updateSettings.ts`
-- [ ] (Опционально) Добавлено в конфигурацию `package.json`
-- [ ] Добавлено чтение в `getStateToPostToWebview()`
-- [ ] Добавлено значение по умолчанию в `ExtensionStateContext.tsx`
-- [ ] Добавлен UI в соответствующий раздел настроек
-- [ ] Проверено: значение сохраняется между сессиями
+- [ ] Поле в `proto/skycode/state.proto` с новым номером
+- [ ] `npm run protos`
+- [ ] Ключ в `USER_SETTINGS_FIELDS` (или `GLOBAL_STATE_FIELDS`) в `state-keys.ts`
+- [ ] Поле в `ExtensionState`
+- [ ] Сохранение в `updateSettings.ts`
+- [ ] Отправка в `getStateToPostToWebview()`
+- [ ] Значение по умолчанию в `ExtensionStateContext.tsx`
+- [ ] Элемент интерфейса и подписи в `ru.json` и `en.json`
+- [ ] Проверено: значение сохраняется после перезагрузки окна

@@ -2,19 +2,37 @@
 
 # Adding Agent Tools
 
-Guide to adding new tools to the Skycode AI agent.
+A tool is an action the agent can perform: read a file, run a command, find code. Paths are relative to `extensions/skycode/src/`.
 
-## Overview
+## What you need
 
-Tools are actions the AI agent can perform: reading files, executing commands, editing code, searching the codebase, etc.
+1. A tool identifier.
+2. A prompt description (name, description, parameters).
+3. Wiring the description into the system prompt variants.
+4. A handler.
+5. Handler registration.
+6. Parameter names in the model response parser.
 
-## Tool Structure
+## Steps
+
+### 1. Identifier
 
 ```typescript
-// src/core/prompts/system-prompt/tools/my_tool.ts
+// shared/tools.ts
+export enum SkycodeDefaultTool {
+  MY_TOOL = "my_tool",
+}
+```
+
+### 2. Description
+
+Create `core/prompts/system-prompt/tools/my_tool.ts`.
+
+```typescript
 import { ModelFamily } from "@/shared/prompts"
 import { SkycodeDefaultTool } from "@/shared/tools"
 import type { SkycodeToolSpec } from "../spec"
+import { TASK_PROGRESS_PARAMETER } from "../types"
 
 const id = SkycodeDefaultTool.MY_TOOL
 
@@ -25,67 +43,49 @@ const generic: SkycodeToolSpec = {
   description: "Does X when Y is needed",
   parameters: [
     {
-      name: "required_param",
+      name: "input",
       required: true,
       instruction: "What this parameter is for",
-      usage: "example_value"
-    }
+      usage: "example_value",
+    },
+    TASK_PROGRESS_PARAMETER,
   ],
-  contextRequirements: (ctx) => ctx.someCondition // optional
+  // contextRequirements: (ctx) => ctx.someCondition,   // optional
 }
 
 export const my_tool_variants = [generic]
 ```
 
-## Step-by-Step
+If a model family has no variant of its own, the `GENERIC` variant is used. Add separate variants when the description must differ (for example for native tool calls: `NATIVE_GPT_5`, `NATIVE_NEXT_GEN`).
 
-### Step 1: Add ID to the enum
-
-```typescript
-// src/shared/tools.ts
-export enum SkycodeDefaultTool {
-  MY_TOOL = "my_tool"
-}
-```
-
-### Step 2: Create the tool spec file
-
-Create `src/core/prompts/system-prompt/tools/my_tool.ts` with the structure above.
-
-### Step 3: Export
+### 3. Export and register the description
 
 ```typescript
-// src/core/prompts/system-prompt/tools/index.ts
+// core/prompts/system-prompt/tools/index.ts
 export * from "./my_tool"
-```
 
-### Step 4: Register variants
-
-```typescript
-// src/core/prompts/system-prompt/tools/init.ts
+// core/prompts/system-prompt/tools/init.ts
 import { my_tool_variants } from "./my_tool"
-
-export function registerSkycodeToolSets(): void {
-  const allToolVariants = [
-    ...my_tool_variants
-  ]
-  allToolVariants.forEach((v) => SkycodeToolSet.register(v))
-}
+// ...and add ...my_tool_variants to the allToolVariants array in registerSkycodeToolSets()
 ```
 
-### Step 5: Add to model variant configs
+### 4. Wire into the prompt variants
+
+In `core/prompts/system-prompt/variants/<variant>/config.ts`, add the tool to the `.tools(...)` list of every variant where it should be available:
 
 ```typescript
-// src/core/prompts/system-prompt/variants/generic/config.ts
-export const config = createVariant(ModelFamily.GENERIC)
-  .tools(SkycodeDefaultTool.MY_TOOL)
-  .build()
+.tools(
+  SkycodeDefaultTool.FILE_READ,
+  SkycodeDefaultTool.MY_TOOL,
+)
 ```
 
-### Step 6: Create the handler
+Variants are in `variants/` (generic, qwen, xs, next-gen, native-next-gen, gpt-5 and others). After changing prompts, update the snapshots: `UPDATE_SNAPSHOTS=true npm run test:unit`.
+
+### 5. Handler
 
 ```typescript
-// src/core/task/tools/handlers/MyToolHandler.ts
+// core/task/tools/handlers/MyToolHandler.ts
 export class MyToolHandler implements IFullyManagedTool {
   readonly name = SkycodeDefaultTool.MY_TOOL
 
@@ -93,76 +93,63 @@ export class MyToolHandler implements IFullyManagedTool {
     return `[${block.name} for '${block.params.input}']`
   }
 
+  async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
+    // show the partially received call in the chat (may be minimal)
+  }
+
   async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
-    const input: string | undefined = block.params.input
-    const result = await doSomething(input)
-    return result
+    const input = block.params.input
+    return await doSomething(input)
   }
 }
 ```
 
-Two handler types:
-- **`IFullyManagedTool`** — handler manages its own UI (ask/say). Most tools use this.
-- **`IToolHandler` + `IPartialBlockHandler`** — for tools that process partial blocks during streaming.
+Interfaces (`core/task/tools/ToolExecutorCoordinator.ts`):
 
-### Step 7: Register the handler
+- `IToolHandler`: `name`, `execute`, `getDescription`;
+- `IPartialBlockHandler`: `handlePartialBlock` for showing the call while the stream is arriving;
+- `IFullyManagedTool` combines both. The handler itself is responsible for the approval request and chat messages.
+
+One handler can serve several names through `SharedToolHandler` (`replace_in_file`, `replace_text` and `delete_block` are built this way on top of `WriteToFileToolHandler`).
+
+### 6. Register the handler
 
 ```typescript
-// src/core/task/ToolExecutor.ts
+// core/task/ToolExecutor.ts, registerToolHandlers()
 this.coordinator.register(new MyToolHandler())
 ```
 
-### Step 8: Add parameters to the parser
+### 7. Parameter names
+
+Add new parameter names to `toolParamNames` in `core/assistant-message/index.ts` so the stream parser recognizes them.
+
+## Approving the action
+
+For actions with side effects, ask the user unless auto-approval is on:
 
 ```typescript
-// src/core/assistant-message/index.ts
-export const toolParamNames = [
-  "input",  // your new parameter
-] as const
-```
-
-## Approval Flow
-
-For tools that perform dangerous actions (delete, write, execute):
-
-```typescript
-const autoApproveResult = config.autoApprover
-  ? config.autoApprover.shouldAutoApproveTool(SkycodeDefaultTool.MY_TOOL)
-  : false
-
-if (!didAutoApprove) {
-  const didApprove = await ToolResultUtils.askApprovalAndPushFeedback(
-    "tool", message, config
-  )
-  if (!didApprove) return formatResponse.toolDenied()
+const autoApproved = config.callbacks.shouldAutoApproveTool(SkycodeDefaultTool.MY_TOOL)
+if (!autoApproved) {
+  const didApprove = await ToolResultUtils.askApprovalAndPushFeedback("tool", message, config)
+  if (!didApprove) {
+    return formatResponse.toolDenied()
+  }
 }
 ```
 
-## Model-Specific Variants
+Auto-approval rules are in `core/task/tools/autoApprove.ts`. Add the new tool there too, otherwise it counts as needing approval. Mode restrictions (Ask, Chat, Plan, lightweight mode) are lists in `core/task/ToolExecutor.ts`. If the tool writes to files, it must go through `DiffSystem`, like `WriteToFileToolHandler`.
 
-```typescript
-const generic: SkycodeToolSpec = {
-  variant: ModelFamily.GENERIC,
-  // base version
-}
+## Existing tools
 
-const nextGen: SkycodeToolSpec = {
-  ...generic,
-  variant: ModelFamily.NEXT_GEN,
-  description: "Extended description for capable models..."
-}
+Descriptions are in `core/prompts/system-prompt/tools/`, handlers in `core/task/tools/handlers/`.
 
-export const my_tool_variants = [generic, nextGen]
-```
-
-## Existing Tools
-
-| Tool | File | Purpose |
-|------|------|---------|
-| `read_file` | `read_file.ts` | Read files |
-| `write_to_file` | `write_to_file.ts` | Create files |
-| `replace_in_file` | `replace_in_file.ts` | Edit files |
-| `execute_command` | `execute_command.ts` | Run commands |
-| `delete_block` | `delete_block.ts` | Delete code blocks |
-| `codebase_search` | `codebase_search.ts` | Semantic search |
-| `edit_notebook` | `edit_notebook.ts` | Jupyter notebook editing |
+| Group | Tools |
+|---|---|
+| Files | `read_file`, `read_symbol`, `write_to_file`, `replace_in_file`, `replace_text`, `delete_block`, `apply_patch`, `edit_notebook` |
+| Search | `codebase_search`, `search_files`, `glob`, `list_files`, `list_code_definition_names`, `read_diagnostics` |
+| Commands | `execute_command`, `check_background_command` |
+| Web and browser | `web_search`, `web_fetch`, `browser_action` |
+| MCP | `use_mcp_tool`, `access_mcp_resource`, `load_mcp_documentation` |
+| Chat output | `show_chart`, `show_visual`, `generate_explanation` |
+| Flow control | `ask_followup_question`, `attempt_completion`, `plan_mode_respond`, `act_mode_respond`, `new_task`, `focus_chain`, `use_skill` |
+| Context | `condense`, `summarize_task` |

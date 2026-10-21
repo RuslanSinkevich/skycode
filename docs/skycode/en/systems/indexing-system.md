@@ -1,120 +1,85 @@
 > **Русская версия:** [indexing-system.md](../../systems/indexing-system.md)
 
-# Codebase Indexing System
+# Code Search and Indexing
 
-Optional semantic indexing for code search. Enables the AI agent to retrieve relevant context from the entire project before responding.
+This page describes two levels of search: the repository map (always on) and the optional vector index. Paths are relative to `extensions/skycode/src/`.
 
-Indexing is **off** by default (`skycode.indexing.mode = "off"`): `codebase_search` works without it, using a repo map (declarations via tree-sitter, `src/services/repo-map/`) and ripgrep text search. The working mode for Marketplace builds is `remote` (OpenAI-compatible embeddings API). The `local` mode (transformers.js / onnxruntime) does not work in Marketplace builds: the local model and onnxruntime-node are not bundled in the VSIX.
+## Search without an index
 
-## Architecture
+By default the `codebase_search` tool searches without an index and without downloading models:
 
-```
-IndexingService (orchestrator) — src/core/indexing/IndexingService.ts
-├── FileWalker (file traversal)
-│   └── Respects .gitignore, ignoredPatterns, maxFileSize, binary files
-├── CodeChunker (splitting into chunks)
-│   └── Tree-sitter chunking (with fallback to simple chunker)
-├── EmbeddingRouter → provider selection
-│   ├── LocalEmbeddingProvider (transformers.js WASM + multilingual MiniLM)
-│   └── RemoteEmbeddingProvider (OpenAI-compatible /v1/embeddings API)
-├── Storage
-│   ├── IndexStorage (SQLite by default, JSON fallback when native unavailable)
-│   └── VectorSearch (brute-force cosine similarity on in-memory vectors)
-└── SearchEngine (hybrid: semantic + keyword + rerank + prompt formatting)
-```
+1. **Repository map** (`services/repo-map/`). A list of project declarations (classes, methods, functions, SQL procedures and tables) with file and line. Files are listed with `rg --files` (which respects `.gitignore`), declarations are extracted with tree-sitter. The cache is `~/.skycode/repo-map/<hash>.json`; on the next run only changed files are parsed.
+2. **ripgrep text search** by the query words. Files are ranked by how many different query words they contain. Comments and strings are searched too.
 
-## Configuration
+Handler: `core/task/tools/handlers/CodebaseSearchToolHandler.ts`; search without an index: `services/repo-map/searchWithoutIndex.ts`. A short project overview from the map is also added to the first task message.
+
+## Vector index
+
+The index is optional and **off** by default (`skycode.indexing.mode = "off"`). When it is on and ready, `codebase_search` uses it together with keyword search.
+
+| Mode | What it does | Availability |
+|---|---|---|
+| `off` | No index | Default |
+| `remote` | Embeddings come from an OpenAI-compatible API (`/v1/embeddings`) | Works in the Marketplace build |
+| `local` | Embeddings come from a local model in a separate thread (transformers.js, onnxruntime) | Unavailable in the Marketplace build: the models and `onnxruntime-node` are not in the VSIX |
+
+In `remote` mode, code fragments are sent to the address you set. `remote` works with any server that has a compatible API (OpenAI, vLLM, HuggingFace TEI and others).
+
+### Settings
 
 | Setting | Type | Default | Description |
-|---------|------|---------|-------------|
-| `skycode.indexing.mode` | `"off" \| "local" \| "remote"` | `"off"` | Indexing mode (`local` is unavailable in Marketplace builds) |
-| `skycode.indexing.remoteApiUrl` | string | `""` | Remote API URL |
+|---|---|---|---|
+| `skycode.indexing.mode` | `"off" \| "local" \| "remote"` | `"off"` | Mode |
+| `skycode.indexing.remoteApiUrl` | string | `""` | Embeddings API URL |
 | `skycode.indexing.remoteApiKey` | string | `""` | API key |
-| `skycode.indexing.remoteModel` | string | `"text-embedding-3-small"` | Model name |
-| `skycode.indexing.maxFileSize` | number | `102400` | Max file size (bytes) |
-| `skycode.indexing.ignoredPatterns` | string[] | `[node_modules, .git, ...]` | Ignored patterns |
+| `skycode.indexing.remoteModel` | string | `"text-embedding-3-small"` | Embedding model |
+| `skycode.indexing.localModel` | `"mini" \| "base" \| "large"` | `"mini"` | Local model (`local` mode only) |
+| `skycode.indexing.maxFileSize` | number | `102400` | Maximum file size in bytes |
+| `skycode.indexing.ignoredPatterns` | string[] | `node_modules`, `.git`, `dist` and others | What not to index |
 
-## Index Storage
+The settings are also available in the "Indexing" («Индексация») tab of the Skycode settings.
 
-Stored locally in `~/.skycode/indexing/{workspace-hash}/`.
+Local models: `mini` (`paraphrase-multilingual-MiniLM-L12-v2`, dimension 384), `base` (`multilingual-e5-base`, 768), `large` (`multilingual-e5-large`, 1024). If the model files are not next to the extension, the worker downloads an archive from the project storage.
 
-Primary backend:
-- `index.db` (SQLite) — metadata, chunks, and vectors (BLOB)
+## Structure
 
-Fallback backend (when native SQLite is unavailable):
-- `index.json` — metadata
-- `chunks.json` — chunk metadata array
-- `vectors.bin` — Float32Array vectors
+```
+IndexingService — core/indexing/IndexingService.ts
+├── FileWalker          file walk: .gitignore, ignoredPatterns, maxFileSize, binary files
+├── CodeChunker         splits into chunks (tree-sitter, with a fallback without it)
+├── EmbeddingRouter     picks the provider
+│   ├── EmbeddingWorkerManager   local model, separate thread
+│   └── RemoteEmbeddingProvider  OpenAI-compatible API, up to 100 texts per request
+├── IndexStorage        index storage
+│   └── VectorSearch, KeywordSearch
+└── SearchEngine        hybrid search and result formatting
+```
 
-## Embedding Providers
+**Storage.** `~/.skycode/indexing/<workspace hash>/`. Main variant: `index.db` (built-in `node:sqlite`). If `node:sqlite` is not available in the VS Code runtime, the fallback is used: the files `index.json`, `chunks.json` and `vectors.bin`. It is slower on large repositories.
 
-### Local (does not work in Marketplace builds)
+**Pipeline.**
 
-The model and onnxruntime-node are not bundled in the VSIX; this mode only works in a build where they are supplied manually.
+1. `FileWalker` walks the workspace.
+2. `CodeChunker` splits files into chunks.
+3. Chunks go to embedding in batches of 16.
+4. The result is saved to the storage.
+5. `FileSystemWatcher` tracks changes. Events are grouped (700 ms), and the changed file is re-chunked. Change is detected by the MD5 of the content. A deleted file is removed from the index.
 
-- **Library:** `@xenova/transformers` (transformers.js)
-- **Backend:** WASM (no native modules, works in any environment)
-- **Model:** `paraphrase-multilingual-MiniLM-L12-v2` (multilingual, Russian support)
-- **Dimensions:** 384
-- **Speed:** ~50–100 chunks/sec
-
-### Remote
-
-- **Protocol:** OpenAI Embeddings API (`POST /v1/embeddings`)
-- **Compatible with:** OpenAI, Voyage AI, HuggingFace TEI, vLLM, any OpenAI-compatible endpoint
-- **Batching:** up to 100 texts per request
-
-## Indexing Pipeline
-
-1. **File traversal** — `FileWalker` recursively walks the workspace, skipping ignored/binary/oversized files
-2. **Chunking** — `CodeChunker` uses Tree-sitter for AST-aware chunking, falls back to simple chunker on error
-3. **Embedding** — batches of 32 chunks through the selected provider
-4. **Storage** — into SQLite (`index.db`) or JSON fallback
-5. **FileWatcher** — tracks changes and updates incrementally
-
-## Incremental Updates
-
-- `FileSystemWatcher` monitors create/change/delete events
-- Change/create events are debounced (burst-safe)
-- On file change: old chunks removed, file re-chunked and re-embedded
-- On file delete: chunks removed from index
-- Comparison by MD5 hash of file contents
-
-## Search
-
-- **Hybrid retrieval:** semantic (`VectorSearch`) + keyword (`KeywordSearch`)
-- **Rerank:** post-retrieval reranking rules for improved precision
-- Reduces noise on multilingual queries
-
-## Performance
-
-| Project | Files | Chunks | Indexing (local model) | Search |
-|---------|-------|--------|-----------------|--------|
-| Small (~100 files) | ~100 | ~500 | ~30 sec | <10ms |
-| Medium (~2000 files) | ~2000 | ~10K | ~5 min | ~30ms |
-| Large (~10000 files) | ~10K | ~50K | ~20 min | ~80ms |
-
-## Agent Integration
-
-The search is exposed as a `codebase_search` tool:
-- **Tool ID:** `SkycodeDefaultTool.CODEBASE_SEARCH`
-- **Handler:** `src/core/task/tools/handlers/CodebaseSearchToolHandler.ts`
-- Calls `SearchEngine.getContextForPrompt(query)` and returns `<codebase_context>` with relevant chunks
+**Search.** `SearchEngine` merges semantic search (`VectorSearch`), keyword search and path search, then reranks the results (`Reranker`). For non-Latin queries the semantic weight is higher. If embedding fails, search falls back to keywords. The tool answer is wrapped in a `<codebase_context>` block.
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `skycode.indexing.reindex` | Full re-indexing |
-| `skycode.indexing.clear` | Clear entire index |
-| `skycode.indexing.pause` | Pause indexing |
-| `skycode.indexing.resume` | Resume after pause |
+| Command | What it does |
+|---|---|
+| `skycode.indexing.reindex` | Full reindex |
+| `skycode.indexing.clear` | Clear the index |
+| `skycode.indexing.pause` | Pause |
+| `skycode.indexing.resume` | Resume |
+| `skycode.indexing.clearEmbeddingCache` | Delete local embedding model files |
 
-## Extending
+## Adding an embedding provider
 
-### Adding a new embedding provider
-
-1. Create a class implementing `EmbeddingProvider` from `src/core/indexing/types.ts`
-2. Add a variant in `EmbeddingRouter.ts`
-3. Add an option to `skycode.indexing.mode` enum in `package.json`
-4. Add UI in `IndexingSettingsSection.tsx`
+1. Implement `EmbeddingProvider` from `core/indexing/types.ts`.
+2. Add a branch to `EmbeddingRouter.ts`.
+3. Add a value to `skycode.indexing.mode` in `package.json`.
+4. Add the UI in `webview-ui/src/components/settings/sections/IndexingSettingsSection.tsx`.

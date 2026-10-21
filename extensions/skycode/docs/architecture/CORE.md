@@ -8,7 +8,7 @@
 src/core/
 ├── controller/    # gRPC обработчики, управление задачами
 ├── task/          # AI задачи: API запросы + выполнение инструментов
-├── diff-v2/       # Inline Diff System V4 (snapshot-based)
+├── diff-v2/       # Система diff: hunks, снимки файлов по сообщениям, декорации редактора
 ├── session/       # ApprovalGate, Pipeline, SessionManager, ApiSlotLimiter, tabs (вкладки)
 ├── indexing/      # Векторный индекс (необязателен; основной поиск — services/repo-map)
 ├── prompts/       # Система промптов (TemplateEngine + PromptBuilder)
@@ -42,11 +42,15 @@ Controller.initTask()
         → User feedback → startCheckpoint(feedbackTs) — new RG
 ```
 
-### DiffSystem V4 (`src/core/diff-v2/`)
-Cursor-like inline diffs с per-message snapshots. См. [DIFF_SYSTEM.md](../DIFF_SYSTEM.md).
+### Защита от сбоев модели (`src/core/task/`)
+- `truncatedToolCall.ts`: если ответ оборвался (лимит длины, разрыв) внутри вызова инструмента, который пишет файл или запускает команду (`write_to_file`, `replace_in_file`, `execute_command` и др.), и у начатого параметра нет закрывающего тега, вызов не исполняется. Модель получает заметку `[TRUNCATED]` с просьбой разбить работу на части.
+- `repetitionLoop.ts`: `RepetitionLoopDetector` проверяет поток каждые 1500 символов. Петлёй считается хвост в 200 символов, повторённый не менее 6 раз в последних 8000 символах, а также короткий узор, который тянется без отличий дольше 4000 символов. Ответ обрывается, недописанные вызовы инструментов не исполняются, модель получает заметку `[LOOP]`.
+
+### DiffSystem (`src/core/diff-v2/`)
+Агент пишет правки прямо в файлы, каждая правка хранится как hunk. Подсветка в редакторе — стандартные декорации, принять и отклонить — панель в чате и команды, откат — по снимкам файлов для каждого сообщения. См. [DIFF_SYSTEM.md](../DIFF_SYSTEM.md).
 
 > **Старые чекпоинты Cline удалены (октябрь 2026).** Shadow-git чекпоинты (теневой git-репозиторий
-> на каждую задачу) были выключены с 2026-02-25 и заменены DiffSystem V2 (snapshot-based, без git);
+> на каждую задачу) были выключены с 2026-02-25 и заменены DiffSystem (снимки файлов, без git);
 > в октябре 2026 удалены вместе с RPC `CheckpointsService`, `taskCompletionViewChanges`, `explainChanges`.
 > В старых историях остаются сообщения `checkpoint_created` и поле `shadowGitConfigWorkTree` —
 > чат и история их по-прежнему понимают.
@@ -54,13 +58,13 @@ Cursor-like inline diffs с per-message snapshots. См. [DIFF_SYSTEM.md](../DIF
 ```
 DiffSystem (facade)
 ├── DiffStore — ResponseGroups, FileChanges, Hunks (workspaceState)
-├── FileSnapshotStorage — per-message file snapshots (disk)
-├── HunkApplier — applies changes, reads actual file for removedLines
-├── HunkReverter — reject/accept with \n EOL, parent status cascade
-├── PositionTracker — recalculates positions after edits
-├── SystemEditGuard — distinguishes system edits from manual
+├── FileSnapshotStorage — снимки файлов по сообщениям (диск)
+├── HunkApplier — применяет правки, removedLines берёт из реального файла
+├── HunkReverter — accept/reject, перенос строк при отмене всегда LF, каскад статусов родителей
+├── PositionTracker — пересчёт позиций после правок
+├── SystemEditGuard — отличает правки агента от ручных
 ├── HunkDecorations — стандартные декорации редактора (зелёный фон, красная черта, hover)
-└── KeyboardNavigation — cross-file hunk navigation
+└── KeyboardNavigation — переход между кусками, в том числе между файлами
 ```
 
 ### ApprovalGate (`src/core/session/ApprovalGate.ts`)
@@ -76,7 +80,7 @@ Promise-based ask/response замена pWaitFor. Early response queue реша�
 
 ### ToolExecutor (`src/core/task/ToolExecutor.ts`)
 - Lightweight mode restrictions (`LIGHTWEIGHT_MODE_RESTRICTED_TOOLS`: execute_command, редактирование, apply_patch, удаление файлов)
-- Ограничения по режимам: Ask и Chat не могут менять файлы и запускать команды
+- Ограничения по режимам: Plan не может менять файлы; Ask и Chat не могут менять файлы, запускать команды, открывать браузер и вызывать MCP-инструменты (`PLAN_MODE_`/`ASK_MODE_`/`CHAT_MODE_RESTRICTED_TOOLS`)
 - Обработчики инструментов регистрируются в `registerToolHandlers()`, сами хэндлеры — `src/core/task/tools/handlers/`
 - EditNotebook (edit_notebook) — Jupyter .ipynb cell editing (insert/replace)
 
@@ -85,7 +89,7 @@ Promise-based ask/response замена pWaitFor. Early response queue реша�
 
 - Собирает `system + user` prompt (file path, язык, before/after context, выделение, инструкция).
 - Стримит ответ из текущего `ApiHandler`, накапливая текст.
-- Прокидывает результат через `DiffSystem.replaceLines()` — изменение появляется как обычный inline diff (Accept/Reject).
+- Прокидывает результат через `DiffSystem.replaceLines()`: изменение попадает в общий список правок (подсветка в редакторе, панель изменений в чате).
 - Независима от панели чата.
 
 ### Workflow (`src/core/workflow/`)
@@ -134,8 +138,11 @@ Promise-based ask/response замена pWaitFor. Early response queue реша�
 | Настройка | Тип | Default | Описание |
 |---|---|---|---|
 | `readFiles` | boolean | true | Чтение файлов |
+| `readFilesExternally` | boolean | false | Чтение файлов вне проекта |
 | `editFiles` | boolean | true | Редактирование файлов |
+| `editFilesExternally` | boolean | false | Редактирование файлов вне проекта |
 | `executeSafeCommands` | boolean | true | Безопасные команды |
+| `executeNonDestructiveCommands` | boolean | false | Неразрушающие команды |
 | `executeAllCommands` | boolean | false | Все команды |
 | `deleteFiles` | boolean | false | Удаление файлов |
 | `editNotebooks` | boolean | false | Jupyter блокноты |

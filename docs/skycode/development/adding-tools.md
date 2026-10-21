@@ -2,19 +2,37 @@
 
 # Добавление инструментов агента
 
-Руководство по добавлению новых инструментов в AI-агент Skycode.
+Инструмент — действие, которое может выполнить агент: прочитать файл, запустить команду, найти код. Пути относительно `extensions/skycode/src/`.
 
-## Обзор
+## Что нужно
 
-Инструменты — это действия, которые AI-агент может выполнять: чтение файлов, выполнение команд, редактирование кода, поиск по кодовой базе и т.д.
+1. Идентификатор инструмента.
+2. Описание для промпта (имя, описание, параметры).
+3. Подключение описания к вариантам системного промпта.
+4. Обработчик.
+5. Регистрация обработчика.
+6. Имена параметров в разборе ответа модели.
 
-## Структура инструмента
+## Шаги
+
+### 1. Идентификатор
 
 ```typescript
-// src/core/prompts/system-prompt/tools/my_tool.ts
+// shared/tools.ts
+export enum SkycodeDefaultTool {
+  MY_TOOL = "my_tool",
+}
+```
+
+### 2. Описание
+
+Создайте `core/prompts/system-prompt/tools/my_tool.ts`.
+
+```typescript
 import { ModelFamily } from "@/shared/prompts"
 import { SkycodeDefaultTool } from "@/shared/tools"
 import type { SkycodeToolSpec } from "../spec"
+import { TASK_PROGRESS_PARAMETER } from "../types"
 
 const id = SkycodeDefaultTool.MY_TOOL
 
@@ -25,67 +43,49 @@ const generic: SkycodeToolSpec = {
   description: "Делает X, когда нужно Y",
   parameters: [
     {
-      name: "required_param",
+      name: "input",
       required: true,
       instruction: "Для чего нужен этот параметр",
-      usage: "example_value"
-    }
+      usage: "example_value",
+    },
+    TASK_PROGRESS_PARAMETER,
   ],
-  contextRequirements: (ctx) => ctx.someCondition // необязательно
+  // contextRequirements: (ctx) => ctx.someCondition,   // необязательно
 }
 
 export const my_tool_variants = [generic]
 ```
 
-## Пошаговая инструкция
+Если для семейства модели нет своего варианта, берётся вариант `GENERIC`. Отдельные варианты нужны, когда описание должно отличаться (например, для нативных вызовов `NATIVE_GPT_5`, `NATIVE_NEXT_GEN`).
 
-### Шаг 1: Добавить ID в enum
-
-```typescript
-// src/shared/tools.ts
-export enum SkycodeDefaultTool {
-  MY_TOOL = "my_tool"
-}
-```
-
-### Шаг 2: Создать файл спецификации
-
-Создайте `src/core/prompts/system-prompt/tools/my_tool.ts` со структурой выше.
-
-### Шаг 3: Экспортировать
+### 3. Экспорт и регистрация описания
 
 ```typescript
-// src/core/prompts/system-prompt/tools/index.ts
+// core/prompts/system-prompt/tools/index.ts
 export * from "./my_tool"
-```
 
-### Шаг 4: Зарегистрировать варианты
-
-```typescript
-// src/core/prompts/system-prompt/tools/init.ts
+// core/prompts/system-prompt/tools/init.ts
 import { my_tool_variants } from "./my_tool"
-
-export function registerSkycodeToolSets(): void {
-  const allToolVariants = [
-    ...my_tool_variants
-  ]
-  allToolVariants.forEach((v) => SkycodeToolSet.register(v))
-}
+// ...и добавить ...my_tool_variants в массив allToolVariants в registerSkycodeToolSets()
 ```
 
-### Шаг 5: Добавить в конфиги вариантов моделей
+### 4. Подключение к вариантам промпта
+
+В `core/prompts/system-prompt/variants/<вариант>/config.ts` добавьте инструмент в список `.tools(...)` каждого варианта, где он должен быть доступен:
 
 ```typescript
-// src/core/prompts/system-prompt/variants/generic/config.ts
-export const config = createVariant(ModelFamily.GENERIC)
-  .tools(SkycodeDefaultTool.MY_TOOL)
-  .build()
+.tools(
+  SkycodeDefaultTool.FILE_READ,
+  SkycodeDefaultTool.MY_TOOL,
+)
 ```
 
-### Шаг 6: Создать обработчик
+Варианты лежат в `variants/` (generic, qwen, xs, next-gen, native-next-gen, gpt-5 и другие). После изменения промптов обновите снапшоты: `UPDATE_SNAPSHOTS=true npm run test:unit`.
+
+### 5. Обработчик
 
 ```typescript
-// src/core/task/tools/handlers/MyToolHandler.ts
+// core/task/tools/handlers/MyToolHandler.ts
 export class MyToolHandler implements IFullyManagedTool {
   readonly name = SkycodeDefaultTool.MY_TOOL
 
@@ -93,77 +93,63 @@ export class MyToolHandler implements IFullyManagedTool {
     return `[${block.name} for '${block.params.input}']`
   }
 
+  async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
+    // показать частично полученный вызов в чате (необязательно содержательно)
+  }
+
   async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
-    const input: string | undefined = block.params.input
-    const result = await doSomething(input)
-    return result
+    const input = block.params.input
+    return await doSomething(input)
   }
 }
 ```
 
-Два типа обработчиков:
+Интерфейсы (`core/task/tools/ToolExecutorCoordinator.ts`):
 
-- **`IFullyManagedTool`** — обработчик сам управляет UI (ask/say). Большинство инструментов.
-- **`IToolHandler` + `IPartialBlockHandler`** — для инструментов, обрабатывающих частичные блоки при стриминге.
+- `IToolHandler`: `name`, `execute`, `getDescription`;
+- `IPartialBlockHandler`: `handlePartialBlock` для показа вызова во время потока;
+- `IFullyManagedTool` объединяет оба. Обработчик сам отвечает за запрос подтверждения и сообщения в чате.
 
-### Шаг 7: Зарегистрировать обработчик
+Один обработчик может обслуживать несколько имён через `SharedToolHandler` (так сделаны `replace_in_file`, `replace_text` и `delete_block` поверх `WriteToFileToolHandler`).
+
+### 6. Регистрация обработчика
 
 ```typescript
-// src/core/task/ToolExecutor.ts
+// core/task/ToolExecutor.ts, registerToolHandlers()
 this.coordinator.register(new MyToolHandler())
 ```
 
-### Шаг 8: Добавить параметры в парсер
+### 7. Имена параметров
+
+Добавьте новые имена параметров в `toolParamNames` в `core/assistant-message/index.ts`, чтобы разбор потока их распознал.
+
+## Подтверждение действия
+
+Для действий с побочными эффектами спрашивайте пользователя, если автоподтверждение не включено:
 
 ```typescript
-// src/core/assistant-message/index.ts
-export const toolParamNames = [
-  "input",  // ваш новый параметр
-] as const
-```
-
-## Поток подтверждения (Approval Flow)
-
-Для инструментов, выполняющих опасные действия (удаление, запись, выполнение команд):
-
-```typescript
-const autoApproveResult = config.autoApprover
-  ? config.autoApprover.shouldAutoApproveTool(SkycodeDefaultTool.MY_TOOL)
-  : false
-
-if (!didAutoApprove) {
-  const didApprove = await ToolResultUtils.askApprovalAndPushFeedback(
-    "tool", message, config
-  )
-  if (!didApprove) return formatResponse.toolDenied()
+const autoApproved = config.callbacks.shouldAutoApproveTool(SkycodeDefaultTool.MY_TOOL)
+if (!autoApproved) {
+  const didApprove = await ToolResultUtils.askApprovalAndPushFeedback("tool", message, config)
+  if (!didApprove) {
+    return formatResponse.toolDenied()
+  }
 }
 ```
 
-## Варианты для разных моделей
-
-```typescript
-const generic: SkycodeToolSpec = {
-  variant: ModelFamily.GENERIC,
-  // базовая версия
-}
-
-const nextGen: SkycodeToolSpec = {
-  ...generic,
-  variant: ModelFamily.NEXT_GEN,
-  description: "Расширенное описание для более способных моделей..."
-}
-
-export const my_tool_variants = [generic, nextGen]
-```
+Правила автоподтверждения лежат в `core/task/tools/autoApprove.ts`. Новый инструмент нужно добавить и туда, иначе он будет считаться требующим подтверждения. Ограничения по режимам (Вопрос, Чат, План, облегчённый режим) заданы списками в `core/task/ToolExecutor.ts`. Если инструмент пишет в файлы, он должен идти через `DiffSystem`, как `WriteToFileToolHandler`.
 
 ## Существующие инструменты
 
-| Инструмент | Файл | Назначение |
-|------------|------|------------|
-| `read_file` | `read_file.ts` | Чтение файлов |
-| `write_to_file` | `write_to_file.ts` | Создание файлов |
-| `replace_in_file` | `replace_in_file.ts` | Редактирование файлов |
-| `execute_command` | `execute_command.ts` | Запуск команд |
-| `delete_block` | `delete_block.ts` | Удаление блоков кода |
-| `codebase_search` | `codebase_search.ts` | Семантический поиск |
-| `edit_notebook` | `edit_notebook.ts` | Редактирование Jupyter-ноутбуков |
+Описания лежат в `core/prompts/system-prompt/tools/`, обработчики в `core/task/tools/handlers/`.
+
+| Группа | Инструменты |
+|---|---|
+| Файлы | `read_file`, `read_symbol`, `write_to_file`, `replace_in_file`, `replace_text`, `delete_block`, `apply_patch`, `edit_notebook` |
+| Поиск | `codebase_search`, `search_files`, `glob`, `list_files`, `list_code_definition_names`, `read_diagnostics` |
+| Команды | `execute_command`, `check_background_command` |
+| Веб и браузер | `web_search`, `web_fetch`, `browser_action` |
+| MCP | `use_mcp_tool`, `access_mcp_resource`, `load_mcp_documentation` |
+| Вывод в чат | `show_chart`, `show_visual`, `generate_explanation` |
+| Управление ходом | `ask_followup_question`, `attempt_completion`, `plan_mode_respond`, `act_mode_respond`, `new_task`, `focus_chain`, `use_skill` |
+| Контекст | `condense`, `summarize_task` |

@@ -2,92 +2,65 @@
 
 # Model Context Protocol (MCP)
 
-MCP — протокол, который даёт AI-агенту доступ к внешним инструментам и ресурсам. MCP-сервер — это локальная программа, предоставляющая набор **инструментов** и **ресурсов** агенту.
+MCP — протокол, через который агент получает дополнительные **инструменты** и **ресурсы** от внешних серверов. Сервер может быть локальной программой (запускается как процесс) или удалённой службой по HTTP.
 
-Можно представить MCP как USB-порт для AI: подключаете сервер → AI получает новые возможности.
+Пути ниже относительно `extensions/skycode/src/`.
 
 ## Архитектура
 
 ```
-┌─────────────┐     gRPC      ┌─────────────┐    stdio/SSE    ┌─────────────┐
-│  Webview UI  │◄────────────►│   McpHub     │◄──────────────►│ MCP Server  │
-│  (React)     │              │  (Extension) │                │ (npx/node)  │
-└─────────────┘              └─────────────┘                └─────────────┘
+┌────────────┐  gRPC   ┌────────────┐  stdio / SSE / HTTP  ┌────────────┐
+│ Webview UI │◄───────►│   McpHub   │◄────────────────────►│ MCP-сервер │
+└────────────┘         │(расширение)│                      └────────────┘
+                       └────────────┘
 ```
 
 ## Ключевые файлы
 
 | Файл | Назначение |
-|------|-----------|
-| `skycode_mcp_settings.json` | Конфиг MCP-серверов (command, args, env) |
-| `services/mcp/McpHub.ts` | Управление подключениями, старт/стоп серверов |
-| `core/prompts/system-prompt/components/mcp.ts` | Инъекция MCP-инструментов в системный промпт AI |
-| `core/task/tools/handlers/UseMcpToolHandler.ts` | Обработка вызовов `use_mcp_tool` от AI |
-| `core/task/tools/handlers/AccessMcpResourceHandler.ts` | Обработка вызовов `access_mcp_resource` |
-| `core/controller/mcp/downloadMcp.ts` | Установка MCP-серверов из маркетплейса |
+|---|---|
+| `skycode_mcp_settings.json` | Конфигурация серверов. Лежит в папке `settings/` данных расширения |
+| `services/mcp/McpHub.ts` | Подключения, запуск и остановка серверов, наблюдение за файлом конфигурации |
+| `services/mcp/schemas.ts` | Схема конфигурации (zod) |
+| `services/mcp/McpTransportFactory.ts` | Создание транспорта: stdio, SSE, Streamable HTTP |
+| `services/mcp/McpOAuthManager.ts` | OAuth-авторизация удалённых серверов |
+| `core/prompts/system-prompt/components/mcp.ts` | Раздел системного промпта со списком серверов и инструментов |
+| `core/task/tools/handlers/UseMcpToolHandler.ts` | Вызов `use_mcp_tool` |
+| `core/task/tools/handlers/AccessMcpResourceHandler.ts` | Вызов `access_mcp_resource` |
+| `core/task/tools/handlers/LoadMcpDocumentationHandler.ts` | Вызов `load_mcp_documentation` |
+| `core/controller/mcp/` | Обработчики запросов из интерфейса: добавить, удалить, перезапустить, включить, автоподтверждение, таймаут |
 
 ## Как это работает
 
-### 1. Установка
+1. **Конфигурация.** `McpHub` читает `skycode_mcp_settings.json`, проверяет его схемой и следит за изменениями файла.
+2. **Подключение.** Для каждого включённого сервера создаётся транспорт и запрашиваются список инструментов и ресурсов. Для `stdio` запускается процесс (`command`, `args`, `env`, `cwd`).
+3. **Системный промпт.** Если серверы есть, в промпт добавляется раздел с их инструментами. В режимах «Вопрос» и «Чат» этот раздел скрыт, а вызовы MCP заблокированы.
+4. **Вызов.** Модель вызывает инструмент через `use_mcp_tool` с полями `server_name`, `tool_name` и `arguments` (JSON). `UseMcpToolHandler` проверяет подтверждение и вызывает `McpHub.callTool()`. Результат возвращается модели.
 
-При установке из маркетплейса, `downloadMcp.ts`:
-1. Получает информацию о сервере из каталога
-2. Парсит README для JSON-конфиг блока с `"mcpServers"`
-3. Записывает конфиг в `skycode_mcp_settings.json`
-4. McpHub подхватывает изменения через file watcher и запускает сервер
-
-### 2. Подключение
-
-McpHub при запуске (или через file watcher):
-1. Читает `skycode_mcp_settings.json`
-2. Запускает процесс для каждого сервера (напр. `npx -y @upstash/context7-mcp`)
-3. Устанавливает stdio-подключение (stdin/stdout)
-4. Запрашивает доступные инструменты и ресурсы
-5. Сохраняет подключение в `connections[]`
-
-### 3. Инъекция в промпт
-
-Когда пользователь отправляет сообщение, `mcp.ts` генерирует секцию системного промпта:
-```
-## Connected MCP Servers
-
-Server: github.com/upstash/context7-mcp
-
-### Tools
-- resolve-library-id: Resolves a package name to a Context7-compatible library ID
-  Parameters:
-    - query (required): The user's original question
-    - libraryName (required): Library name to search for
-```
-
-### 4. Вызов инструмента
-
-Когда AI решает использовать MCP-инструмент, он генерирует:
 ```xml
 <use_mcp_tool>
-  <server_name>github.com/upstash/context7-mcp</server_name>
-  <tool_name>resolve-library-id</tool_name>
-  <arguments>{"query": "React docs", "libraryName": "react"}</arguments>
+  <server_name>my-server</server_name>
+  <tool_name>search-docs</tool_name>
+  <arguments>{"query": "hooks"}</arguments>
 </use_mcp_tool>
 ```
 
-`UseMcpToolHandler` → проверяет auto-approve → вызывает `McpHub.callTool()` → возвращает результат AI.
-
 ## Типы транспорта
 
-| Тип | Описание | Когда использовать |
-|-----|---------|-------------------|
-| `stdio` | Локальный процесс, общение через stdin/stdout | Большинство серверов (npx, node, python) |
-| `sse` | Server-Sent Events по HTTP | Удалённые серверы |
-| `streamableHttp` | HTTP с потоковой передачей | Удалённые серверы (новый стандарт) |
+| Тип | `type` в конфигурации | Поля | Когда использовать |
+|---|---|---|---|
+| Локальный процесс | `stdio` | `command`, `args`, `env`, `cwd` | Большинство серверов (npx, node, python) |
+| Server-Sent Events | `sse` | `url`, `headers` | Удалённые серверы старого типа |
+| Streamable HTTP | `streamableHttp` | `url`, `headers` | Удалённые серверы нового типа |
 
-## Добавление MCP-сервера
+Если у записи есть `url`, но нет `type`, используется `sse`.
 
-### Через маркетплейс
-Настройки → вкладка MCP → Маркетплейс → Установить
+## Добавление сервера
 
-### Вручную
-Отредактируйте `skycode_mcp_settings.json`:
+**Через интерфейс.** Настройки Skycode, вкладка «MCP». Вкладка «Удаленные серверы» принимает имя, адрес и тип транспорта (Streamable HTTP или SSE). Вкладка «Настроить» показывает подключённые серверы и кнопку «Изменить конфигурацию», которая открывает файл `skycode_mcp_settings.json`. У сервера есть кнопки перезапуска, удаления и аутентификации.
+
+**Вручную.** Правка `skycode_mcp_settings.json`:
+
 ```json
 {
   "mcpServers": {
@@ -96,17 +69,25 @@ Server: github.com/upstash/context7-mcp
       "args": ["-y", "my-mcp-server"],
       "env": { "API_KEY": "your-key-here" },
       "disabled": false,
+      "timeout": 60,
       "autoApprove": ["tool-name-1"]
+    },
+    "remote-server": {
+      "type": "streamableHttp",
+      "url": "https://example.com/mcp",
+      "headers": { "Authorization": "Bearer ..." }
     }
   }
 }
 ```
 
-### Через UI
-Для SSE/HTTP серверов — введите URL в форме "Add Remote Server".
+`timeout` задаётся в секундах (по умолчанию 60). `disabled: true` отключает сервер, не удаляя запись.
 
-## Auto-Approve
+## Подтверждение вызовов
 
-Настройка для каждого инструмента:
-- **Выключено** (по умолчанию) — AI показывает кнопки Approve/Reject перед каждым вызовом
-- **Включено** — AI вызывает инструмент автоматически без подтверждения
+Вызов инструмента MCP выполняется без вопроса только если одновременно:
+
+- в настройках «Разрешения» включено автоподтверждение MCP (`useMcp`, по умолчанию включено);
+- для этого инструмента включено автоподтверждение (`autoApprove` в конфигурации или переключатель у инструмента в интерфейсе).
+
+По умолчанию `autoApprove` пуст, поэтому каждый вызов требует вашего подтверждения.

@@ -1,14 +1,26 @@
 ---
-name: Feature request
-about: Suggest an idea for this project
+name: Feature request / Предложение
+about: Suggest an idea for Skycode AI
 title: ''
-labels: ''
+labels: enhancement
 assignees: ''
 
 ---
 
-<!-- ⚠️⚠️ Do Not Delete This! feature_request_template ⚠️⚠️ -->
-<!-- Please read our Rules of Conduct: https://opensource.microsoft.com/codeofconduct/ -->
-<!-- Please search existing issues to avoid creating duplicates. -->
+Можно писать по-русски или по-английски.
 
-<!-- Describe the feature you'd like. -->
+## Задача
+
+Что вы пытаетесь сделать и что мешает сейчас?
+
+## Предложение
+
+Как это могло бы работать?
+
+## Альтернативы
+
+Что вы пробовали или чем обходитесь сейчас?
+
+## Контекст
+
+Какой провайдер и модель вы используете, работаете ли в закрытой сети. Это влияет на то, как лучше сделать функцию.

@@ -1,73 +1,73 @@
 > **Русская версия:** [network.md](../../development/network.md)
 
-# Network Requests & Proxy
+# Network Requests and Proxy
 
-## Important
+Extension code must go to the network through the wrappers in `src/shared/net.ts`. They honor the VS Code proxy settings. The global `fetch` and plain axios do not pick up the proxy in some environments.
 
-**Do NOT** use the global `fetch` or default `axios` in extension code. They don't pick up proxy settings in some environments.
+Paths are relative to `extensions/skycode/`.
 
 ## Rules
 
-### Using fetch
+### fetch
 
 ```typescript
-// ❌ Wrong
-const response = await fetch('https://api.example.com/data')
+// Wrong
+const response = await fetch("https://api.example.com/data")
 
-// ✅ Correct
-import { fetch } from '@/shared/net'
-const response = await fetch('https://api.example.com/data')
+// Right
+import { fetch } from "@/shared/net"
+const response = await fetch("https://api.example.com/data")
 ```
 
-### Using axios
+### axios
 
 ```typescript
-// ❌ Wrong
-import axios from 'axios'
-const response = await axios.get('https://api.example.com')
+import axios from "axios"
+import { getAxiosSettings } from "@/shared/net"
 
-// ✅ Correct
-import axios from 'axios'
-import { getAxiosSettings } from '@/shared/net'
-const response = await axios.get('https://api.example.com', {
-  headers: { 'Authorization': '...' },
-  ...getAxiosSettings()
+const response = await axios.get("https://api.example.com", {
+  headers: { Authorization: "..." },
+  ...getAxiosSettings(),
 })
 ```
 
-### Third-party clients (OpenAI, Anthropic, etc.)
+### Provider clients (OpenAI and others)
 
-Most API clients accept a custom `fetch`:
+Most clients accept their own `fetch` instance:
 
 ```typescript
 import OpenAI from "openai"
 import { fetch } from "@/shared/net"
 
-const client = new OpenAI({ apiKey: '...', fetch })
+const client = new OpenAI({ apiKey: "...", fetch })
 ```
 
-### In Webview
+### Webview
 
-In `webview-ui/`, the global `fetch` is fine — the browser handles proxy natively.
+In `webview-ui/` the global `fetch` is fine: the browser handles the proxy.
 
-## Testing
+## Tests
 
-Use `mockFetchForTesting` for mocking:
+Extension tests use mocha and sinon. To replace the network, use `mockFetchForTesting`. It swaps `fetch` for the duration of the callback and returns its result.
 
 ```typescript
+import sinon from "sinon"
 import { mockFetchForTesting } from "@/shared/net"
 
-test('my test', async () => {
-  const mockFetch = jest.fn().mockResolvedValue(new Response('{}'))
-  await mockFetchForTesting(mockFetch, async () => {
+it("my test", async () => {
+  const stubFetch = sinon.stub().resolves(new Response("{}"))
+  await mockFetchForTesting(stubFetch as unknown as typeof fetch, async () => {
     await myFunctionThatUsesFetch()
   })
 })
 ```
 
-## Checklist for New Network Calls
+An example in the code: `src/core/api/providers/__tests__/litellm.test.ts`.
 
-1. Imported `@/shared/net`
-2. Using `fetch` from `@/shared/net` (not global)
-3. For axios: using `getAxiosSettings()`
-4. Third-party clients receive custom `fetch`
+## Checklist for a new network call
+
+1. `@/shared/net` is imported.
+2. `fetch` comes from `@/shared/net`, not the global one.
+3. For axios, `...getAxiosSettings()` is added.
+4. Provider clients get `fetch` from `@/shared/net`.
+5. The address is not hard-coded without a reason: Skycode runs in closed networks where external addresses are often unreachable. If the call is needed, it should start from a user action and not happen silently.

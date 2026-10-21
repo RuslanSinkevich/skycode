@@ -66,14 +66,11 @@ Skycode AI — это расширение VS Code (`skycode.skycode-ai`, раб
 - Управление контекстом
 
 ### 5. API Handlers (`src/core/api/`)
-Провайдеры AI моделей (17, список — `src/shared/providers/providers.json`):
-- Anthropic (Claude), Claude Code
-- OpenAI (GPT-4o, o1, o3, GPT-5), OpenAI Codex
-- Google (Gemini 2.5/3)
-- OpenRouter (агрегатор 200+ моделей)
-- GigaChat, YandexGPT, DeepSeek, Qwen (API, Code, Web)
-- Ollama / LM Studio, LiteLLM, VS Code LM
-- OpenAI Compatible — любой совместимый эндпоинт
+Провайдеры AI моделей (17, список — `src/shared/providers/providers.json`, по умолчанию OpenAI Compatible):
+- OpenAI Compatible — любой совместимый эндпоинт (vLLM и др.), Ollama, LM Studio, LiteLLM
+- GigaChat, YandexGPT, DeepSeek, Alibaba Qwen, Qwen Code, Qwen Web
+- OpenRouter, Anthropic, OpenAI, Gemini
+- VS Code LM, Claude Code, OpenAI Codex
 
 ### 6. McpHub (`src/services/mcp/McpHub.ts`)
 Менеджер MCP серверов:
@@ -84,7 +81,7 @@ Skycode AI — это расширение VS Code (`skycode.skycode-ai`, раб
 ### 7. Inline Edit (`src/core/inline-edit/InlineEditController.ts`)
 Команда `Ctrl+Shift+K` (`Cmd+Shift+K`) для правки выделения без чата:
 - Собирается компактный prompt (file path, language, before/after context, selected code, instruction)
-- Стрим из текущего `ApiHandler` идёт в `DiffSystem.replaceLines()` → отображается как обычный inline diff (Accept/Reject)
+- Результат стрима из текущего `ApiHandler` применяется через `DiffSystem.replaceLines()` и попадает в общий список правок (подсветка в редакторе, панель изменений в чате)
 - Не зависит от панели чата
 
 ### 8. Workflow Orchestrator (`src/core/workflow/`)
@@ -101,6 +98,9 @@ Skycode AI — это расширение VS Code (`skycode.skycode-ai`, раб
 - **Workspace containment** — `openFileRelativePath` проверяет `path.resolve` против `workspaceFolders`; `downloadSkycodeChromium` защищает распаковку Chromium от Zip Slip.
 - **Webview channel hardening** — `VscodeWebviewProvider.executeVsCodeCommand` доступна только в `ExtensionMode.Development`; `updateIndexingConfig` работает через allowlist ключей.
 
+
+### 10. Голосовой ввод (`src/services/dictation/`)
+Диктовка в поле чата. Для русского по умолчанию работает GigaAM v3 на sherpa-onnx: текст появляется во время речи, офлайн. Для остальных языков — локальный whisper.cpp (`WhisperLocalService`). Подробности GigaAM — [../VOICE_INPUT.md](../VOICE_INPUT.md).
 
 ## Потоки данных
 
@@ -158,7 +158,7 @@ React Components Re-render
 
 ### Debug Mode
 - Систематическая отладка с runtime evidence
-- Read-only + execute_command
+- Полный доступ к инструментам, как в Act (в `getApiSettingsMode` режим Debug использует настройки модели Act)
 
 ### Ask Mode
 - Read-only, исследование кода
@@ -184,6 +184,7 @@ Chat UI использует **TurnBlock** архитектуру:
 - [CORE.md](./CORE.md) — Детали core модуля
 - [PROMPTS.md](./PROMPTS.md) — Система промптов
 - [CONTEXT_MANAGEMENT.md](./CONTEXT_MANAGEMENT.md) — Управление контекстом
-- [../DIFF_SYSTEM.md](../DIFF_SYSTEM.md) — Diff-система v4
+- [../DIFF_SYSTEM.md](../DIFF_SYSTEM.md) — система diff
+- [../VOICE_INPUT.md](../VOICE_INPUT.md) — голосовой ввод
 - [../INDEXING_SYSTEM.md](../INDEXING_SYSTEM.md) — Индексация
 - [../development/TOOLS.md](../development/TOOLS.md) — Добавление инструментов

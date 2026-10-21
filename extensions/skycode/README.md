@@ -1,6 +1,6 @@
 # Skycode AI
 
-AI-агент для VS Code. Расширение `skycode.skycode-ai` в Visual Studio Marketplace, работает в обычном VS Code 1.90+. Страница для пользователей — [MARKETPLACE.md](./MARKETPLACE.md). Сайт: https://ruslansinkevich.ru/skycode/ . Исходный код: https://github.com/RuslanSinkevich/skycode .
+AI-агент для VS Code. Расширение `skycode.skycode-ai` в Visual Studio Marketplace, работает в обычном VS Code 1.90+. Страница для пользователей — [MARKETPLACE.md](./MARKETPLACE.md), история версий — [CHANGELOG.md](./CHANGELOG.md). Сайт: https://ruslansinkevich.ru/skycode/ . Исходный код: https://github.com/RuslanSinkevich/skycode .
 
 Это индекс документации разработчика. Прежний форк VS Code (Skycode.exe, установщики) больше не выпускается.
 
@@ -16,7 +16,7 @@ npm run package     # типы + webview + линт + бандл
 npm run test:unit   # юнит-тесты (mocha)
 ```
 
-Попробовать: `npm run package:vsix`, поставить `dist/skycode.vsix` в VS Code, затем `Developer: Reload Window`. Проверки, упаковка и релиз (тег `ext-vX.Y.Z`) — в [docs/BUILD.md](./docs/BUILD.md).
+Попробовать: `npm run package:vsix`, поставить `dist/skycode.vsix` в VS Code, затем `Developer: Reload Window`. Проверки, упаковка и релиз (тег `ext-vX.Y.Z`, workflow `.github/workflows/skycode-extension.yml`) — в [docs/BUILD.md](./docs/BUILD.md). При релизе нужно поднять `version` в `package.json` и дописать запись в [CHANGELOG.md](./CHANGELOG.md).
 
 ## Документация
 
@@ -33,7 +33,8 @@ npm run test:unit   # юнит-тесты (mocha)
 - [docs/architecture/CONTEXT_MANAGEMENT.md](./docs/architecture/CONTEXT_MANAGEMENT.md) — управление контекстом
 
 ### Подсистемы
-- [docs/DIFF_SYSTEM.md](./docs/DIFF_SYSTEM.md) — diff-система v4
+- [docs/DIFF_SYSTEM.md](./docs/DIFF_SYSTEM.md) — система diff: подсветка в редакторе, панель изменений, откат
+- [docs/VOICE_INPUT.md](./docs/VOICE_INPUT.md) — голосовой ввод GigaAM (sherpa-onnx)
 - [docs/CODE_SEARCH.md](./docs/CODE_SEARCH.md) — поиск по коду (карта репозитория)
 - [docs/INDEXING_SYSTEM.md](./docs/INDEXING_SYSTEM.md) — векторный индекс (необязательно)
 - [docs/TERMINAL_SYSTEM.md](./docs/TERMINAL_SYSTEM.md) — терминал и фоновые команды

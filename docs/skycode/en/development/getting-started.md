@@ -2,14 +2,14 @@
 
 # Development Guide
 
-Skycode is a VS Code extension; its code lives in `extensions/skycode/`. The repository is still physically a VS Code fork, but building VS Code itself (root `npm install`, gulp, `scripts/code.*`) is not needed for Skycode. All commands below run from `extensions/skycode`, and paths in the sections below are relative to that folder.
+Skycode is a VS Code extension; its code is in `extensions/skycode/`. The repository is physically still a fork of VS Code, but you do not need to build VS Code itself (`npm install` in the root, gulp, `scripts/code.*`) for Skycode. All commands below run from `extensions/skycode`. Paths in the text are relative to that folder unless stated otherwise.
 
-## Prerequisites
+## Requirements
 
-- VS Code 1.90+ (minimum engine version in `package.json`)
-- Node.js 22+ (the version CI builds with) and npm
+- VS Code 1.90 or newer (the minimum engine version in `package.json`).
+- Node.js 22 or newer (what CI builds with) and npm.
 
-## Quick Start
+## Quick start
 
 ```bash
 git clone https://github.com/RuslanSinkevich/skycode.git
@@ -18,53 +18,56 @@ cd skycode/extensions/skycode
 npm ci
 cd webview-ui && npm ci && cd ..
 
-npm run protos     # generate types from proto
-npm run package    # type check + webview build + lint + esbuild (production)
+npm run protos     # types from proto/skycode/*.proto
+npm run package    # types + webview build + lint + production bundle
 ```
 
-For development: `npm run dev` (protos + esbuild/tsc watch) and `npm run dev:webview` (Vite for the webview).
+Generated code (`src/shared/proto/`, `src/generated/`, `webview-ui/src/services/grpc-client.ts`) is not stored in git. Run `npm run protos` after cloning and after any `.proto` change.
 
-## Running and Trying It
+For development: `npm run dev` (protos and watch for esbuild and tsc), `npm run dev:webview` (Vite dev server for the webview), `node esbuild.mjs` (extension bundle only).
 
-- Install the built `.vsix` into a regular VS Code ("Install from VSIX…") and run **Developer: Reload Window**.
-- Or open `extensions/skycode` in VS Code and launch an Extension Development Host (F5).
+## Running and trying
 
-## Tests
+- Build a package (`npm run package:vsix`, result `dist/skycode.vsix`), install it with "Install from VSIX…", and run **Developer: Reload Window**.
+- Or open `extensions/skycode` in VS Code and start the "Run Extension (local)" configuration from `.vscode/launch.json` (F5).
 
-```bash
-npm run test:unit                    # mocha, extension unit tests
-cd webview-ui && npx vitest run      # webview tests
-```
+## Checks
 
-## Packaging a .vsix
+| What | Command |
+|---|---|
+| Extension types | `npx tsc --noEmit -p .` |
+| Test types | `npx tsc --noEmit -p tsconfig.test.json` |
+| Webview types | `cd webview-ui && npx tsc --noEmit -p tsconfig.app.json` |
+| Lint | `npx biome lint --diagnostic-level=error src webview-ui/src` |
+| Extension unit tests (mocha) | `npm run test:unit` |
+| Webview tests (vitest) | `cd webview-ui && npx vitest run` |
+| Update prompt snapshots | `UPDATE_SNAPSHOTS=true npm run test:unit` |
+
+Extension tests use mocha, chai and sinon. Test files live in `__tests__` folders next to the code.
+
+## Packaging and release
 
 ```bash
 npx vsce package --readme-path MARKETPLACE.md
 ```
 
-`MARKETPLACE.md` is the Marketplace page text; `README.md` in the extension folder is the developer index.
+`MARKETPLACE.md` is the text of the Marketplace page. `README.md` in the extension folder is an index for developers.
 
-## Release
+Release:
 
-1. Bump `version` in `extensions/skycode/package.json`.
-2. Push the tag `ext-vX.Y.Z` (the tag version must match `package.json`).
-3. `.github/workflows/skycode-extension.yml` builds the extension, runs unit tests, publishes to the VS Code Marketplace (repo secret `VSCE_PAT`; trusted publishing via `vsce publish --oidc` is planned once the Marketplace supports it) and attaches the `.vsix` to a GitHub Release. Open VSX is published only if the `OVSX_PAT` secret exists.
+1. Raise `version` in `extensions/skycode/package.json`.
+2. Push the tag `ext-vX.Y.Z` (the version in the tag must equal `package.json`).
+3. The workflow `.github/workflows/skycode-extension.yml` builds the extension, runs unit tests, publishes to the VS Code Marketplace (secret `VSCE_PAT`; without it the workflow tries `vsce publish --oidc`, which the Marketplace does not support yet) and attaches the `.vsix` to a GitHub Release. Open VSX is used only if the secret `OVSX_PAT` is set.
 
-A manual workflow run (Actions → Skycode Extension → Run workflow) only builds the `.vsix` into artifacts.
+A manual run of the workflow (Actions, Skycode Extension, Run workflow) only builds the `.vsix` as an artifact.
 
-## Type Checking
+## What is not in the .vsix
 
-```bash
-npm run check-types
-```
+By `.vscodeignore`, `models/` (embedding models) and `onnxruntime-node` are left out of the package. So the local indexing mode is unavailable in the installed extension. Voice components and the headless browser are downloaded on first use as well.
 
-## gRPC / Protobuf Communication
+## gRPC and Protobuf
 
-The extension and webview communicate via a gRPC-like protocol.
-
-### Proto Files
-
-Location: `proto/skycode/*.proto`
+The extension and the webview talk through messages defined in `proto/skycode/*.proto`.
 
 ```protobuf
 service MyService { }      // PascalCase
@@ -72,70 +75,49 @@ rpc myMethod() { }         // camelCase
 message MyMessage { }      // PascalCase
 ```
 
-### After Changing Proto Files
+Rules:
 
-```bash
-npm run protos
-```
+- do not change or reuse field numbers;
+- replace a removed field with `reserved N;`;
+- run `npm run protos` after an edit;
+- do not run `scripts/generate-state-proto.mjs`.
 
-Generates types in:
-- `src/shared/proto/`
-- `src/generated/grpc-js/`
-- `src/generated/nice-grpc/`
-- `src/generated/hosts/`
+`npm run lint:proto` (part of `npm run lint`) checks naming style.
 
-### Adding a New RPC Method
+### New RPC method
 
-1. Add to the `.proto` file
-2. Create a handler in `src/core/controller/<domain>/`
-3. Call from webview: `UiServiceClient.myMethod(request)`
+1. Add the method to the `.proto` file.
+2. Create a handler in `src/core/controller/<domain>/`.
+3. Call it from the webview: `UiServiceClient.myMethod(request)` (the client of the matching service).
 
-## GlobalState
+## State
 
-### Adding a New Key
+Settings and state are described in `src/shared/storage/state-keys.ts`:
 
-1. Add a field to `GLOBAL_STATE_FIELDS` in `src/shared/storage/state-keys.ts`:
-   ```typescript
-   const GLOBAL_STATE_FIELDS = {
-     myKey: { default: undefined as string | undefined },
-   } satisfies FieldDefinitions
-   ```
+- `GLOBAL_STATE_FIELDS`: internal state;
+- `USER_SETTINGS_FIELDS`: user settings;
+- `API_HANDLER_SETTINGS_FIELDS`: provider parameters;
+- secrets (API keys) are stored separately in SecretStorage.
 
-2. Read in `getStateToPostToWebview`:
-   ```typescript
-   myKey: stateManager.getGlobalStateKey("myKey"),
-   ```
+Read and write: `controller.stateManager.getGlobalStateKey("key")`, `getGlobalSettingsKey("key")`, `setGlobalState("key", value)`. The full order of adding a setting: [Adding settings](./adding-settings.md).
 
-3. Use:
-   ```typescript
-   controller.stateManager.setGlobalState("myKey", value)
-   controller.stateManager.getGlobalStateKey("myKey")
-   ```
+## Adding a model provider
 
-## Adding an API Provider
+Proto conversion exists in three places. If you skip one, the provider choice resets to the default.
 
-Three places for proto conversion (otherwise it resets to Anthropic):
+1. `proto/skycode/models.proto`: add a value to `enum ApiProvider` (a new number).
+2. `convertApiProviderToProto()` in `src/shared/proto-conversions/models/api-configuration-conversion.ts`.
+3. `convertProtoToApiProvider()` in the same file.
 
-1. `proto/skycode/models.proto` — add to `ApiProvider` enum
-2. `convertApiProviderToProto()` in `src/shared/proto-conversions/models/api-configuration-conversion.ts`
-3. `convertProtoToApiProvider()` in the same file
+Also:
 
-Additionally:
-- `src/shared/api.ts` — union type and models
-- `src/shared/providers/providers.json` — for the dropdown
-- `src/core/api/index.ts` — handler in `createHandlerForProvider()`
-- Webview components
+- `src/shared/api.ts`: the `ApiProvider` type and models;
+- `src/shared/providers/providers.json`: the dropdown list;
+- `src/core/api/providers/`: the provider class and a branch in `createHandlerForProvider()` in `src/core/api/index.ts`;
+- `webview-ui/src/components/settings/providers/`: the provider settings form.
 
-## Regenerating Snapshots
+## See also
 
-After changing prompts:
-
-```bash
-UPDATE_SNAPSHOTS=true npm run test:unit
-```
-
-## See Also
-
-- [Adding Tools](./adding-tools.md)
-- [Network Requests](./network.md)
-- [Adding Settings](./adding-settings.md)
+- [Adding agent tools](./adding-tools.md)
+- [Adding settings](./adding-settings.md)
+- [Network requests](./network.md)
