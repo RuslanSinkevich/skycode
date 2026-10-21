@@ -25,6 +25,13 @@ describe("repetition loop", () => {
 		hasRepetitionLoop("The quick brown fox jumps. ".repeat(80)).should.be.false()
 	})
 
+	it("catches a short phrase repeated for thousands of characters (reasoning loop)", () => {
+		const loop = "The URL keeps going and going and going".concat(" and going".repeat(600))
+		hasRepetitionLoop("Let me write the table first. ".repeat(10) + loop).should.be.true()
+		// тот же узор, но коротко — не петля
+		hasRepetitionLoop("Some text. ".repeat(30) + " and going".repeat(100)).should.be.false()
+	})
+
 	it("detector fires while streaming a loop", () => {
 		const detector = new RepetitionLoopDetector()
 		let fired = false

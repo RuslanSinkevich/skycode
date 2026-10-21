@@ -334,7 +334,25 @@ table.md-table td {
 	padding: 6px 12px;
 	text-align: left;
 	border: 1px solid var(--vscode-editorGroup-border, #333);
-	white-space: nowrap;
+	/* [SKYCODE] Длинный текст в ячейке переносится: в узкой панели таблица иначе уезжала за правый край */
+	white-space: normal;
+	overflow-wrap: anywhere;
+	vertical-align: top;
+}
+
+/* [SKYCODE] Таблица не шире панели; если колонок слишком много — своя горизонтальная прокрутка, а не всего чата */
+.inline-markdown-block table,
+table.md-table {
+	max-width: 100%;
+}
+
+/* [SKYCODE] Длинные строки в блоках кода переносятся — в боковой панели прокрутка вбок неудобна */
+.inline-markdown-block pre {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+.inline-markdown-block pre code {
+	white-space: inherit;
 }
 
 .inline-markdown-block th,

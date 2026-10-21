@@ -9,9 +9,15 @@ const WINDOW = 8000
 const MIN_REPEATS = 6
 const MIN_DISTINCT_CHARS = 20
 const MIN_DISTINCT_WORDS = 4
+/**
+ * Короткий узор, который тянется без единого отличия дольше этого, — петля, а не данные:
+ * в рассуждениях Qwen бывало «and going and going…» на десятки тысяч символов
+ * (ответ не успевал начаться — «пустой ответ провайдера»). Таблицы и массивы так долго не тянутся.
+ */
+const LONG_PERIODIC_RUN = 4000
 
-/** Хвост — повтор короткого узора (таблица, ASCII-арт, «0, 0, 0,», одинаковые короткие строки), а не абзаца */
-function isShortPeriodic(tail: string): boolean {
+/** Период короткого узора в хвосте (таблица, ASCII-арт, «0, 0, 0,», одинаковые короткие строки) или 0, если это не узор */
+function shortPeriod(tail: string): number {
 	const maxPeriod = Math.floor(TAIL_LENGTH / 3)
 	for (let period = 1; period <= maxPeriod; period++) {
 		let periodic = true
@@ -22,10 +28,19 @@ function isShortPeriodic(tail: string): boolean {
 			}
 		}
 		if (periodic) {
-			return true
+			return period
 		}
 	}
-	return false
+	return 0
+}
+
+/** Сколько символов с конца текста узор с этим периодом повторяется без отличий */
+function periodicRunLength(text: string, period: number): number {
+	let i = text.length - 1 - period
+	while (i >= 0 && text[i] === text[i + period]) {
+		i--
+	}
+	return text.length - 1 - i
 }
 
 /** true — хвост текста встречается в последнем окне (без пересечений) не меньше MIN_REPEATS раз */
@@ -37,15 +52,13 @@ export function hasRepetitionLoop(text: string): boolean {
 	if (!tail.trim()) {
 		return false
 	}
-	// Однообразный хвост (мало разных символов/слов или короткий период) — форматирование/данные, не зацикливание
-	if (new Set(tail).size < MIN_DISTINCT_CHARS) {
-		return false
-	}
-	if (new Set(tail.split(/\s+/).filter(Boolean)).size < MIN_DISTINCT_WORDS) {
-		return false
-	}
-	if (isShortPeriodic(tail)) {
-		return false
+	// Однообразный хвост (мало разных символов/слов или короткий период) — обычно форматирование/данные.
+	// Петлёй считаем, только если короткий узор тянется без отличий очень долго
+	const period = shortPeriod(tail)
+	const lowVariety =
+		new Set(tail).size < MIN_DISTINCT_CHARS || new Set(tail.split(/\s+/).filter(Boolean)).size < MIN_DISTINCT_WORDS
+	if (period > 0 || lowVariety) {
+		return period > 0 && periodicRunLength(text, period) >= LONG_PERIODIC_RUN
 	}
 	const window = text.slice(-WINDOW)
 	let count = 0
