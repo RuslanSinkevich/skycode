@@ -22,7 +22,7 @@ Skycode AI is a VS Code extension. It works with a corporate OpenAI-compatible g
 
 ## About this repository
 
-The repository is physically a fork of VS Code, so it holds many Microsoft files and a long commit history. The product lives only in [`extensions/skycode/`](./extensions/skycode). Everything else (`src/vs/`, `product.json`, gulp builds, `.github/workflows/skycode-release.yml`) belongs to the legacy Skycode desktop fork, which is no longer shipped.
+The repository is physically a fork of VS Code, so it holds many Microsoft files and a long commit history. The product lives only in [`extensions/skycode/`](./extensions/skycode). Everything else (`src/vs/`, `product.json`, gulp builds) belongs to the legacy Skycode desktop fork, which is no longer shipped.
 
 ## Installation
 

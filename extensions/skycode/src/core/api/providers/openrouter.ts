@@ -55,7 +55,7 @@ export class OpenRouterHandler implements ApiHandler {
 					baseURL: "https://openrouter.ai/api/v1",
 					apiKey: this.options.openRouterApiKey,
 					defaultHeaders: {
-						"HTTP-Referer": "https://skycode-ai.local", // Optional, for including your app on openrouter.ai rankings.
+						"HTTP-Referer": "https://ruslansinkevich.ru/skycode/", // Optional, for including your app on openrouter.ai rankings.
 						"X-Title": "Skycode", // Optional. Shows in rankings on openrouter.ai.
 					},
 					fetch, // Use configured fetch with proxy support

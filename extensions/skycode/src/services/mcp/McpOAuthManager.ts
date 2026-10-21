@@ -84,7 +84,7 @@ class SkycodeOAuthClientProvider implements OAuthClientProvider {
 			grant_types: ["authorization_code", "refresh_token"],
 			response_types: ["code"],
 			client_name: "Skycode",
-			client_uri: "https://skycode-ai.local", // TODO: заменить на свой домен
+			client_uri: "https://ruslansinkevich.ru/skycode/",
 			software_id: "skycode",
 		}
 	}
