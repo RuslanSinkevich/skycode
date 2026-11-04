@@ -110,6 +110,10 @@ Details: [Context management](./docs/en/architecture/context-management.md).
 
 Connect servers over Model Context Protocol: `stdio`, SSE and Streamable HTTP. MCP tool calls require approval by default. See [MCP](./docs/en/systems/mcp.md).
 
+### Long-term memory
+
+The agent remembers what matters on its own: about you (name, how to work with you) in the shared memory for all projects, about the project in this project's memory. It saves only from your own words, at most 3 entries per task; every save shows up in the chat as a service row with "Undo". A new entry stays unconfirmed until it survives two other tasks. The list, editing and deletion are in the "Memory" settings tab. See [Context management](./docs/en/architecture/context-management.md).
+
 ### Voice input
 
 Russian uses GigaAM v3 with punctuation on sherpa-onnx. Text appears while you speak. Recognition is local. A one-time download of about 230 MB is needed from the "Voice" («Голос») settings tab. Other languages use whisper.cpp. See [Voice input](./docs/en/systems/voice-input.md).
