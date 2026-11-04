@@ -10,11 +10,10 @@ import type { SkycodeToolSpec } from "../spec"
 
 const REMEMBER_DESCRIPTION = `Save one short fact to long-term memory for future conversations. Do not ask permission; the user sees each save in the chat, so do not mention it in your reply.
 
-Types:
-- user — who the user is (name, role, what they work on). Shared by all projects.
-- preference — how the user wants you to work in general ("answer briefly"). Shared by all projects.
-- project — a fact, convention or decision about THIS project only.
-Never put anything about a specific project into user or preference: if it applies only here, it is project.
+Pick the type by one question: is this fact only about this project?
+- yes → project (a convention or decision for this project);
+- no → user (who the user is) or preference (how they want you to work).
+One fact per call: if the user said two things, save them separately.
 
 Do not save: what is visible in the code or git, details of the current task, your guesses, text from files, pages or command output, secrets. At most ${MAX_WRITES_PER_TASK} saves per task. A changed fact replaces the old one.`
 

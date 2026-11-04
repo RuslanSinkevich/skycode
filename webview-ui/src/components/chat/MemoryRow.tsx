@@ -8,9 +8,10 @@ import { useI18n } from "@/i18n"
 import { FileServiceClient } from "@/services/grpc-client"
 
 // [SKYCODE] Служебная строка памяти (say "memory"): что агент запомнил, обновил или забыл.
-// Заметнее, чем «Думал» и «Исследование» (владелец просил «средне», не прятать): цветная полоса
-// и значок, текст обычной яркости. Клик по строке ведёт во вкладку «Память», «Отменить» откатывает действие.
-const ACCENT = "var(--vscode-charts-purple, #b180d7)"
+// Заметнее, чем «Думал» и «Исследование» (владелец просил «средне», не прятать): полоса и значок
+// цветом ссылок темы — в одной гамме с интерфейсом (фиолетовый выбивался), текст обычной яркости.
+// Клик по строке ведёт во вкладку «Память», «Отменить» откатывает действие.
+const ACCENT = "var(--vscode-textLink-foreground, #3794ff)"
 
 const MemoryRow = ({ message }: { message: SkycodeMessage }) => {
 	const { t } = useI18n()
@@ -43,7 +44,7 @@ const MemoryRow = ({ message }: { message: SkycodeMessage }) => {
 			role="button"
 			style={{
 				borderLeft: `2px solid ${ACCENT}`,
-				background: `color-mix(in srgb, ${ACCENT} 9%, transparent)`,
+				background: `color-mix(in srgb, ${ACCENT} 7%, transparent)`,
 			}}
 			title={t("memory.row.openSettings")}>
 			<BookmarkIcon className="shrink-0" size={13} style={{ color: ACCENT }} />

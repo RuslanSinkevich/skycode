@@ -157,7 +157,7 @@ const MemorySection = ({ renderSectionHeader }: MemorySectionProps) => {
 					<VSCodeCheckbox
 						checked={memoryEnabled ?? true}
 						onChange={(e: any) => updateSetting("memoryEnabled", e.target.checked === true)}>
-						{t("features.memory")}
+						{t("memory.settings.enable")}
 					</VSCodeCheckbox>
 					<p className="text-xs text-(--vscode-descriptionForeground)">{t("features.memoryDescription")}</p>
 				</div>
