@@ -3,7 +3,9 @@ import "should"
 import * as fs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
+import { parseMemorySayPayload } from "@shared/memory"
 import {
+	applyEdit,
 	applyForget,
 	applyRemember,
 	applyRestore,
@@ -296,5 +298,46 @@ describe("MemoryStore", () => {
 				"## MEMORY\n\nNothing remembered yet",
 			)
 		})
+	})
+
+	it("edit changes the text in whichever memory holds the entry", async () => {
+		await withDir(async (dir) => {
+			const store = MemoryStore.forDirectory(dir)
+			const r = await store.remember(
+				{ fact: "Отступы табами", type: "project", evidence: "в этом проекте отступы табами" },
+				{ taskId: "a", cwd: "D:/proj", userTexts: texts },
+			)
+			if (!r.ok) throw new Error("not saved")
+			const edited = await store.edit(r.entry.id, "Отступы — табы, ширина 4", "D:/proj")
+			edited.ok.should.equal(true)
+			;(await store.list("D:/proj")).project[0].text.should.equal("Отступы — табы, ширина 4")
+			;(await store.edit("missing", "x", "D:/proj")).should.eql({ ok: false, reason: "not found" })
+		})
+	})
+})
+
+describe("memory: user edits and chat payload", () => {
+	it("applyEdit validates length and secrets and confirms the entry", () => {
+		const r = remember(emptyMemoryFile(), "Предпочитает короткие ответы", "отвечай коротко")
+		if (!r.ok) throw new Error("not saved")
+		const ok = applyEdit(r.file, r.entry.id, "  Коротко  и по делу ")
+		if (!ok.ok) throw new Error(ok.reason)
+		ok.entry.text.should.equal("Коротко и по делу")
+		ok.entry.status.should.equal("stable")
+		applyEdit(r.file, r.entry.id, "a".repeat(161)).should.eql({ ok: false, reason: "too long" })
+		applyEdit(r.file, r.entry.id, "password: hunter2hunter").should.eql({ ok: false, reason: "secret" })
+		applyEdit(r.file, r.entry.id, "   ").should.eql({ ok: false, reason: "empty" })
+	})
+
+	it("parseMemorySayPayload accepts the row payload and rejects garbage", () => {
+		const payload = {
+			action: "added",
+			scope: "global",
+			entry: { id: "m1", type: "user", text: "Зовут Руслан", status: "probation" },
+		}
+		parseMemorySayPayload(JSON.stringify(payload))!.entry.text.should.equal("Зовут Руслан")
+		;(parseMemorySayPayload("{oops") === null).should.equal(true)
+		;(parseMemorySayPayload(JSON.stringify({ action: "added" })) === null).should.equal(true)
+		;(parseMemorySayPayload(undefined) === null).should.equal(true)
 	})
 })

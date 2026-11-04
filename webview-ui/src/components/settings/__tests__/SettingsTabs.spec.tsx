@@ -10,6 +10,7 @@ describe("SETTINGS_TABS", () => {
 			"permissions",
 			"editing",
 			"context",
+			"memory",
 			"terminal",
 			"web",
 			"voice",

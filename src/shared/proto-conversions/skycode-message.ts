@@ -111,6 +111,7 @@ function convertSkycodeSayToProtoEnum(say: AppSkycodeSay | undefined): SkycodeSa
 		workflow_step_start: SkycodeSay.WORKFLOW_STEP_START,
 		visual: SkycodeSay.VISUAL,
 		chart: SkycodeSay.CHART,
+		memory: SkycodeSay.MEMORY,
 	}
 
 	const result = mapping[say]
@@ -162,6 +163,7 @@ function convertProtoEnumToSkycodeSay(say: SkycodeSay): AppSkycodeSay | undefine
 		[SkycodeSay.WORKFLOW_STEP_START]: "workflow_step_start",
 		[SkycodeSay.VISUAL]: "visual",
 		[SkycodeSay.CHART]: "chart",
+		[SkycodeSay.MEMORY]: "memory",
 	}
 
 	return mapping[say]

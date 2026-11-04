@@ -8,7 +8,7 @@ import type { SkycodeToolSpec } from "../spec"
 // см. core/memory/memory.ts. Куда пишется факт (общая память или проект), задаёт тип.
 // Описание короткое: оно уходит в каждый запрос, а окно у целевых моделей ~120 тыс. токенов.
 
-const REMEMBER_DESCRIPTION = `Save one short fact to long-term memory for future conversations. Do not ask permission; after saving, tell the user in one line ("Запомнил: …").
+const REMEMBER_DESCRIPTION = `Save one short fact to long-term memory for future conversations. Do not ask permission; the user sees each save in the chat, so do not mention it in your reply.
 
 Types:
 - user — who the user is (name, role, what they work on). Shared by all projects.

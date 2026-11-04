@@ -2,6 +2,7 @@ import type { ExtensionMessage } from "@shared/ExtensionMessage"
 import { ResetStateRequest } from "@shared/proto/skycode/state"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import {
+	Bookmark,
 	DatabaseZap,
 	Ellipsis,
 	FlaskConical,
@@ -35,6 +36,7 @@ import EditingSection from "./sections/EditingSection"
 import GeneralSettingsSection from "./sections/GeneralSettingsSection"
 import IndexingSettingsSection from "./sections/IndexingSettingsSection"
 import McpSection from "./sections/McpSection"
+import MemorySection from "./sections/MemorySection"
 import PermissionsSection from "./sections/PermissionsSection"
 import TerminalSettingsSection from "./sections/TerminalSettingsSection"
 import VoiceSection from "./sections/VoiceSection"
@@ -86,6 +88,13 @@ export const SETTINGS_TABS: SettingsTab[] = [
 		tooltipKey: "settings.tabs.context.tooltip",
 		headerKey: "settings.tabs.context.header",
 		icon: Layers,
+	},
+	{
+		id: "memory",
+		nameKey: "settings.tabs.memory.name",
+		tooltipKey: "settings.tabs.memory.tooltip",
+		headerKey: "settings.tabs.memory.header",
+		icon: Bookmark,
 	},
 	{
 		id: "terminal",
@@ -167,6 +176,7 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 			permissions: PermissionsSection,
 			editing: EditingSection,
 			context: ContextSection,
+			memory: MemorySection,
 			general: GeneralSettingsSection,
 			web: BrowserSettingsSection,
 			terminal: TerminalSettingsSection,

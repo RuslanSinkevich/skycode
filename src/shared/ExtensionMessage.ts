@@ -227,6 +227,7 @@ export type SkycodeSay =
 	| "workflow_step_start"
 	| "visual"
 	| "chart"
+	| "memory" // [SKYCODE] служебная строка памяти: JSON MemorySayPayload
 
 export interface SkycodeSayTool {
 	tool:

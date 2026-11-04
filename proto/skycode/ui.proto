@@ -74,6 +74,7 @@ enum SkycodeSay {
   WORKFLOW_STEP_START = 34;
   VISUAL = 35;
   CHART = 36;
+  MEMORY = 37; // [SKYCODE] service row: remember/forget result with undo
 }
 
 // Enum for SkycodeSayTool tool types

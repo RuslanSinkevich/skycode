@@ -1,11 +1,9 @@
 import type { ToolUse } from "@core/assistant-message"
-import { extractUserWords } from "@core/memory/memory"
+import { extractUserWords, type MemoryEntry, scopeOfType } from "@core/memory/memory"
 import { MemoryStore } from "@core/memory/MemoryStore"
 import { formatResponse } from "@core/prompts/responses"
-import { HostProvider } from "@hosts/host-provider"
-import { ShowMessageType } from "@shared/proto/host/window"
+import type { MemorySayAction, MemorySayPayload } from "@shared/memory"
 import { SkycodeDefaultTool } from "@shared/tools"
-import { t } from "@/i18n/backend-i18n"
 import { Logger } from "@/shared/services/Logger"
 import type { ToolResponse } from "../../index"
 import type { IPartialBlockHandler, IToolHandler } from "../ToolExecutorCoordinator"
@@ -48,13 +46,24 @@ function userTextsOf(config: TaskConfig): string[] {
 	return extractUserWords(raw)
 }
 
+/** Служебная строка в чате: что сделано с памятью, с «Отменить» (core/controller/file/undoMemory.ts). */
+async function sayMemory(config: TaskConfig, action: MemorySayAction, entry: MemoryEntry, previous?: MemoryEntry): Promise<void> {
+	const payload: MemorySayPayload = {
+		action,
+		scope: scopeOfType(entry.type),
+		entry: { ...entry },
+		previous: previous ? { ...previous } : undefined,
+	}
+	await config.callbacks.say("memory", JSON.stringify(payload), undefined, undefined, false)
+}
+
 function memoryEnabled(config: TaskConfig): boolean {
 	return config.services.stateManager.getGlobalSettingsKey("memoryEnabled") === true
 }
 
 /**
  * [SKYCODE] remember: модель сама решает, что запомнить; одобрение не спрашиваем, но после записи
- * показываем уведомление с «Отменить». Все рамки — в core/memory/memory.ts (applyRemember).
+ * в чате появляется служебная строка с «Отменить». Все рамки — в core/memory/memory.ts (applyRemember).
  */
 export class RememberToolHandler implements IToolHandler, IPartialBlockHandler {
 	readonly name = SkycodeDefaultTool.MEMORY_REMEMBER
@@ -86,8 +95,7 @@ export class RememberToolHandler implements IToolHandler, IPartialBlockHandler {
 		}
 		config.taskState.consecutiveMistakeCount = 0
 
-		const store = MemoryStore.get()
-		const result = await store.remember(
+		const result = await MemoryStore.get().remember(
 			{ fact, type, evidence },
 			{ taskId: config.taskId, cwd: config.cwd, userTexts: userTextsOf(config) },
 		)
@@ -98,23 +106,7 @@ export class RememberToolHandler implements IToolHandler, IPartialBlockHandler {
 		}
 
 		const { entry, previous, action } = result
-		void HostProvider.window
-			.showMessage({
-				type: ShowMessageType.INFORMATION,
-				message: t(action === "added" ? "memory.saved" : "memory.updated", { fact: entry.text }),
-				options: { items: [t("memory.undo")] },
-			})
-			.then(async (choice) => {
-				if (choice?.selectedOption !== t("memory.undo")) {
-					return
-				}
-				if (previous) {
-					await store.restore(previous, config.cwd)
-				} else {
-					await store.forget(entry.id, config.cwd)
-				}
-			})
-			.catch((error) => Logger.error("[Memory] notification failed", error))
+		await sayMemory(config, action, entry, previous)
 
 		const how =
 			action === "added"
@@ -122,7 +114,8 @@ export class RememberToolHandler implements IToolHandler, IPartialBlockHandler {
 				: action === "confirmed"
 					? `This repeats unconfirmed memory [${entry.id}], which is now confirmed.`
 					: `Updated memory [${entry.id}].`
-		return formatResponse.toolResult(`${how} Tell the user in one short line what you remembered.`)
+		// Строка в чате уже показала запись — модели не нужно пересказывать её текстом.
+		return formatResponse.toolResult(`${how} The user sees this in the chat; do not repeat it in your reply.`)
 	}
 }
 
@@ -149,6 +142,7 @@ export class ForgetToolHandler implements IToolHandler, IPartialBlockHandler {
 		if (!removed) {
 			return formatResponse.toolResult(`No memory entry with id ${id}.`)
 		}
+		await sayMemory(config, "forgot", removed)
 		return formatResponse.toolResult(`Forgot [${id}]: ${removed.text}`)
 	}
 }

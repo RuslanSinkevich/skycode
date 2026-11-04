@@ -4,6 +4,7 @@ import fs from "fs/promises"
 import * as path from "path"
 import { Logger } from "@/shared/services/Logger"
 import {
+	applyEdit,
 	applyForget,
 	applyRemember,
 	applyRestore,
@@ -271,6 +272,26 @@ export class MemoryStore {
 				}
 			}
 			return undefined
+		})
+	}
+
+	/** Правка текста записи пользователем; ищет запись в обеих памятях. */
+	edit(id: string, text: string, cwd: string): Promise<{ ok: true; entry: MemoryEntry } | { ok: false; reason: string }> {
+		return this.serialize(async () => {
+			await this.migrate()
+			for (const filePath of [await this.globalPath(), await this.projectPath(cwd)]) {
+				const file = await this.load(filePath)
+				if (!file.entries.some((e) => e.id === id)) {
+					continue
+				}
+				const result = applyEdit(file, id, text)
+				if (result.ok) {
+					await this.write(filePath, result.file)
+					return { ok: true as const, entry: result.entry }
+				}
+				return result
+			}
+			return { ok: false as const, reason: "not found" }
 		})
 	}
 }

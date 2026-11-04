@@ -282,6 +282,34 @@ export function applyRemember(file: MemoryFile, input: RememberInput, ctx: Remem
 	return { ok: true, action: "added", entry, file: { ...file, entries: [...entries, entry] } }
 }
 
+/**
+ * Правка текста записи пользователем (вкладка «Память»). Цитата не нужна — это его собственные слова,
+ * но длина и секреты проверяются так же, как у модели. Правка руками считается подтверждением.
+ */
+export function applyEdit(
+	file: MemoryFile,
+	id: string,
+	text: string,
+	now?: Date,
+): { ok: true; file: MemoryFile; entry: MemoryEntry } | { ok: false; reason: string } {
+	const clean = text.trim().replace(/\s+/g, " ")
+	const prev = file.entries.find((e) => e.id === id)
+	if (!prev) {
+		return { ok: false, reason: "not found" }
+	}
+	if (!clean) {
+		return { ok: false, reason: "empty" }
+	}
+	if (clean.length > MAX_FACT_CHARS) {
+		return { ok: false, reason: "too long" }
+	}
+	if (containsSecret(clean)) {
+		return { ok: false, reason: "secret" }
+	}
+	const entry: MemoryEntry = { ...prev, text: clean, updated: today(now), status: "stable" }
+	return { ok: true, entry, file: { ...file, entries: file.entries.map((e) => (e.id === id ? entry : e)) } }
+}
+
 /** Возвращает запись к прежнему виду (отмена обновления); если записи уже нет — добавляет обратно. */
 export function applyRestore(file: MemoryFile, previous: MemoryEntry): MemoryFile {
 	const exists = file.entries.some((e) => e.id === previous.id)

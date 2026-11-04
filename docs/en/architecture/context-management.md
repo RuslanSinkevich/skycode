@@ -57,9 +57,9 @@ If the context still overflows, `context-error-handling.ts` recognizes provider 
 
 ## Long-term memory
 
-There are two memories: the **shared** one, about the user, for all projects, and the **project** memory for the current workspace folder. It is turned on in settings ("Context" → "Long-term memory", on by default). Files live in `Documents/Skycode/Memory/`: the shared one is `global.json`, projects are `projects/<folder>-<hash>.json`. The "Open memory" button opens both in the editor; manual edits are picked up on the next request. The first-version file `memory.json` is split into the new files on first read and kept next to them as `memory.json.migrated`.
+There are two memories: the **shared** one, about the user, for all projects, and the **project** memory for the current workspace folder. It is turned on and reviewed in the "Memory" settings tab (on by default): it lists the entries of both memories and lets you edit or delete them. Files live in `Documents/Skycode/Memory/`: the shared one is `global.json`, projects are `projects/<folder>-<hash>.json`. The "Open memory" button opens both in the editor; manual edits are picked up on the next request. The first-version file `memory.json` is split into the new files on first read and kept next to them as `memory.json.migrated`.
 
-The agent decides what to remember on its own with the `remember` tool and removes a fact with `forget`. It does not ask for approval, but after a save VS Code shows a notification with an "Undo" button. Where a fact goes is set by its type, not by the model: `user` (who the user is) and `preference` (how to work with them) go to the shared memory, `project` goes to the project memory. The tool description explicitly forbids putting project details into the shared memory. The other limits are also checked by code (`core/memory/memory.ts`):
+The agent decides what to remember on its own with the `remember` tool and removes a fact with `forget`. It does not ask for approval, but every action shows up in the chat as a service row "Memory · remembered "…"" with an "Undo" button; clicking the row opens the "Memory" tab. The model does not mention it in its reply. Where a fact goes is set by its type, not by the model: `user` (who the user is) and `preference` (how to work with them) go to the shared memory, `project` goes to the project memory. The tool description explicitly forbids putting project details into the shared memory. The other limits are also checked by code (`core/memory/memory.ts`):
 
 - at most 3 saves per task, a fact of up to 160 characters;
 - a quote from the user's messages in this task is required (taken from the `<task>`, `<feedback>`, `<answer>` and `<user_message>` tags); without it the fact is not saved. Text from files, pages and command output does not count;
@@ -86,3 +86,6 @@ When memory is empty, the `## MEMORY` block is still present: one line on when t
 | `core/memory/memory.ts` | Checks, duplicates, confirmation, the `## MEMORY` block |
 | `core/memory/MemoryStore.ts` | Shared and project memory files, queue for writes from different tabs |
 | `core/task/tools/handlers/MemoryToolHandler.ts` | The `remember` and `forget` tools |
+| `core/controller/file/undoMemory.ts` | "Undo" in the chat row |
+| `webview-ui/src/components/chat/MemoryRow.tsx` | The chat service row |
+| `webview-ui/src/components/settings/sections/MemorySection.tsx` | The "Memory" tab |

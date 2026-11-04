@@ -75,6 +75,13 @@ service FileService {
   // [SKYCODE] Opens the long-term memory file (Documents/Skycode/Memory/memory.json), creating it if needed
   rpc openMemoryFile(EmptyRequest) returns (Empty);
 
+  // [SKYCODE] Long-term memory: list entries (JSON), undo a chat memory row by its ts,
+  // delete an entry by id, edit an entry's text (JSON {id, text})
+  rpc getMemory(EmptyRequest) returns (String);
+  rpc undoMemory(Int64Request) returns (Empty);
+  rpc deleteMemoryEntry(StringRequest) returns (Empty);
+  rpc updateMemoryEntry(StringRequest) returns (String);
+
   // Refreshes all hook toggles (discovers hooks and their enabled state)
   rpc refreshHooks(EmptyRequest) returns (HooksToggles);
 
