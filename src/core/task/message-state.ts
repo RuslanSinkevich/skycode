@@ -1,0 +1,251 @@
+import getFolderSize from "get-folder-size"
+import Mutex from "p-mutex"
+import { findLastIndex } from "@/shared/array"
+import { combineApiRequests } from "@/shared/combineApiRequests"
+import { combineCommandSequences } from "@/shared/combineCommandSequences"
+import { SkycodeMessage } from "@/shared/ExtensionMessage"
+import { getApiMetrics } from "@/shared/getApiMetrics"
+import { HistoryItem } from "@/shared/HistoryItem"
+import { SkycodeStorageMessage } from "@/shared/messages/content"
+import { Logger } from "@/shared/services/Logger"
+import { getCwd, getDesktopDir } from "@/utils/path"
+import { ensureTaskDirectoryExists, saveApiConversationHistory, saveSkycodeMessages } from "../storage/disk"
+import { TaskState } from "./TaskState"
+
+interface MessageStateHandlerParams {
+	taskId: string
+	ulid: string
+	taskIsFavorited?: boolean
+	updateTaskHistory: (historyItem: HistoryItem) => Promise<HistoryItem[]>
+	taskState: TaskState
+}
+
+/** Как часто пересчитывать размер папки задачи (значение только для отображения). */
+const TASK_DIR_SIZE_TTL_MS = 30_000
+
+export class MessageStateHandler {
+	private apiConversationHistory: SkycodeStorageMessage[] = []
+	private skycodeMessages: SkycodeMessage[] = []
+	private taskIsFavorited: boolean
+	private updateTaskHistory: (historyItem: HistoryItem) => Promise<HistoryItem[]>
+	private taskId: string
+	private ulid: string
+	private taskState: TaskState
+
+	// Mutex to prevent concurrent state modifications (RC-4)
+	// Protects against data loss from race conditions when multiple
+	// operations try to modify message state simultaneously
+	// This follows the same pattern as Task.stateMutex for consistency
+	private stateMutex = new Mutex()
+
+	// [SKYCODE] Размер папки задачи нужен только для подписи в истории, а считался рекурсивным
+	// обходом на КАЖДОЕ сохранение сообщения — на большой задаче это заметная лишняя работа.
+	// Держим последнее значение и пересчитываем не чаще, чем раз в TASK_DIR_SIZE_TTL_MS.
+	private lastTaskDirSize = 0
+	private lastTaskDirSizeAt = 0
+
+	constructor(params: MessageStateHandlerParams) {
+		this.taskId = params.taskId
+		this.ulid = params.ulid
+		this.taskState = params.taskState
+		this.taskIsFavorited = params.taskIsFavorited ?? false
+		this.updateTaskHistory = params.updateTaskHistory
+	}
+
+	/**
+	 * Execute function with exclusive lock on message state
+	 * Use this for ANY state modification to prevent race conditions
+	 * This follows the same pattern as Task.withStateLock for consistency
+	 */
+	private async withStateLock<T>(fn: () => T | Promise<T>): Promise<T> {
+		return await this.stateMutex.withLock(fn)
+	}
+
+	getApiConversationHistory(): SkycodeStorageMessage[] {
+		return this.apiConversationHistory
+	}
+
+	setApiConversationHistory(newHistory: SkycodeStorageMessage[]): void {
+		this.apiConversationHistory = newHistory
+	}
+
+	getSkycodeMessages(): SkycodeMessage[] {
+		return this.skycodeMessages
+	}
+
+	setSkycodeMessages(newMessages: SkycodeMessage[]) {
+		this.skycodeMessages = newMessages
+	}
+
+	/**
+	 * Internal method to save messages and update history (without mutex protection)
+	 * This is used by methods that already hold the stateMutex lock
+	 * Should NOT be called directly - use saveSkycodeMessagesAndUpdateHistory() instead
+	 */
+	private async saveSkycodeMessagesAndUpdateHistoryInternal(): Promise<void> {
+		try {
+			await saveSkycodeMessages(this.taskId, this.skycodeMessages)
+
+			// combined as they are in ChatView
+			const apiMetrics = getApiMetrics(combineApiRequests(combineCommandSequences(this.skycodeMessages.slice(1))))
+			// [SKYCODE] Первая реплика пользователя, а не служебная статистика запроса ({"tokensIn":…}):
+			// задача может начаться без say("text"), и тогда первым стоит api_req_started
+			const taskMessage =
+				this.skycodeMessages.find(
+					(m) =>
+						m.type === "say" &&
+						(m.say === "text" || m.say === "task" || m.say === "user_feedback") &&
+						!!m.text?.trim() &&
+						!m.text.trimStart().startsWith('{"'),
+				) ?? this.skycodeMessages[0]
+			const lastRelevantMessage =
+				this.skycodeMessages[
+					findLastIndex(
+						this.skycodeMessages,
+						(message) => !(message.ask === "resume_task" || message.ask === "resume_completed_task"),
+					)
+				]
+			const lastModelInfo = [...this.apiConversationHistory].reverse().find((msg) => msg.modelInfo !== undefined)
+			const taskDirSize = await this.getTaskDirSize()
+			const cwd = await getCwd(getDesktopDir())
+			await this.updateTaskHistory({
+				id: this.taskId,
+				ulid: this.ulid,
+				ts: lastRelevantMessage.ts,
+				task: taskMessage.text?.trimStart().startsWith('{"') ? "" : (taskMessage.text ?? ""),
+				tokensIn: apiMetrics.totalTokensIn,
+				tokensOut: apiMetrics.totalTokensOut,
+				cacheWrites: apiMetrics.totalCacheWrites,
+				cacheReads: apiMetrics.totalCacheReads,
+				totalCost: apiMetrics.totalCost,
+				size: taskDirSize,
+				cwdOnTaskInitialization: cwd,
+				conversationHistoryDeletedRange: this.taskState.conversationHistoryDeletedRange,
+				isFavorited: this.taskIsFavorited,
+				modelId: lastModelInfo?.modelInfo?.modelId,
+			})
+		} catch (error) {
+			Logger.error("Failed to save skycode messages:", error)
+		}
+	}
+
+	/**
+	 * Размер папки задачи с коротким кэшем: значение идёт в подпись в истории, поэтому
+	 * небольшая неточность между пересчётами роли не играет.
+	 */
+	private async getTaskDirSize(): Promise<number> {
+		if (Date.now() - this.lastTaskDirSizeAt < TASK_DIR_SIZE_TTL_MS) {
+			return this.lastTaskDirSize
+		}
+		const taskDir = await ensureTaskDirectoryExists(this.taskId)
+		try {
+			// getFolderSize.loose silently ignores errors
+			// returns # of bytes, size/1000/1000 = MB
+			this.lastTaskDirSize = await getFolderSize.loose(taskDir)
+			this.lastTaskDirSizeAt = Date.now()
+		} catch (error) {
+			Logger.error("Failed to get task directory size:", taskDir, error)
+		}
+		return this.lastTaskDirSize
+	}
+
+	/**
+	 * Save skycode messages and update task history (public API with mutex protection)
+	 * This is the main entry point for saving message state from external callers
+	 */
+	async saveSkycodeMessagesAndUpdateHistory(): Promise<void> {
+		return await this.withStateLock(async () => {
+			await this.saveSkycodeMessagesAndUpdateHistoryInternal()
+		})
+	}
+
+	async addToApiConversationHistory(message: SkycodeStorageMessage) {
+		// Protect with mutex to prevent concurrent modifications from corrupting data (RC-4)
+		return await this.withStateLock(async () => {
+			this.apiConversationHistory.push(message)
+			await saveApiConversationHistory(this.taskId, this.apiConversationHistory)
+		})
+	}
+
+	async overwriteApiConversationHistory(newHistory: SkycodeStorageMessage[]): Promise<void> {
+		// Protect with mutex to prevent concurrent modifications from corrupting data (RC-4)
+		return await this.withStateLock(async () => {
+			this.apiConversationHistory = newHistory
+			// [SKYCODE] История переписана — кэши, завязанные на прежний контекст, недействительны
+			this.taskState.historyGeneration++
+			await saveApiConversationHistory(this.taskId, this.apiConversationHistory)
+		})
+	}
+
+	/**
+	 * Add a new message to skycodeMessages array with proper index tracking
+	 * CRITICAL: This entire operation must be atomic to prevent race conditions (RC-4)
+	 * The conversationHistoryIndex must be set correctly based on the current state,
+	 * and the message must be added and saved without any interleaving operations
+	 */
+	async addToSkycodeMessages(message: SkycodeMessage) {
+		return await this.withStateLock(async () => {
+			// these values allow us to reconstruct the conversation history at the time this skycode message was created
+			// it's important that apiConversationHistory is initialized before we add skycode messages
+			message.conversationHistoryIndex = this.apiConversationHistory.length - 1 // NOTE: this is the index of the last added message which is the user message, and once the skycodemessages have been presented we update the apiconversationhistory with the completed assistant message. This means when resetting to a message, we need to +1 this index to get the correct assistant message that this tool use corresponds to
+			message.conversationHistoryDeletedRange = this.taskState.conversationHistoryDeletedRange
+			this.skycodeMessages.push(message)
+			await this.saveSkycodeMessagesAndUpdateHistoryInternal()
+		})
+	}
+
+	/**
+	 * Replace the entire skycodeMessages array with new messages
+	 * Protected by mutex to prevent concurrent modifications (RC-4)
+	 */
+	async overwriteSkycodeMessages(newMessages: SkycodeMessage[]) {
+		return await this.withStateLock(async () => {
+			this.skycodeMessages = newMessages
+			await this.saveSkycodeMessagesAndUpdateHistoryInternal()
+		})
+	}
+
+	/**
+	 * Update a specific message in the skycodeMessages array
+	 * The entire operation (validate, update, save) is atomic to prevent races (RC-4)
+	 */
+	async updateSkycodeMessage(
+		index: number,
+		updates: Partial<SkycodeMessage>,
+		options: { persist?: boolean } = {},
+	): Promise<void> {
+		return await this.withStateLock(async () => {
+			if (index < 0 || index >= this.skycodeMessages.length) {
+				throw new Error(`Invalid message index: ${index}`)
+			}
+
+			// Apply updates to the message
+			Object.assign(this.skycodeMessages[index], updates)
+
+			if (options.persist === false) {
+				return
+			}
+
+			// Save changes and update history
+			await this.saveSkycodeMessagesAndUpdateHistoryInternal()
+		})
+	}
+
+	/**
+	 * Delete a specific message from the skycodeMessages array
+	 * The entire operation (validate, delete, save) is atomic to prevent races (RC-4)
+	 */
+	async deleteSkycodeMessage(index: number): Promise<void> {
+		return await this.withStateLock(async () => {
+			if (index < 0 || index >= this.skycodeMessages.length) {
+				throw new Error(`Invalid message index: ${index}`)
+			}
+
+			// Remove the message at the specified index
+			this.skycodeMessages.splice(index, 1)
+
+			// Save changes and update history
+			await this.saveSkycodeMessagesAndUpdateHistoryInternal()
+		})
+	}
+}

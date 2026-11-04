@@ -1,0 +1,115 @@
+# Default
+.vscode/**
+.vscode-test/**
+.worktrees/**
+CLAUDE.local.md
+out/
+node_modules/
+src/**
+.gitignore
+.yarnrc
+esbuild.js
+vsc-extension-quickstart.md
+tsconfig*.json
+**/.eslintrc.json
+**/*.map
+**/*.ts
+**/.vscode-test.*
+eslint-rules/**
+.github/**
+.husky/**
+.env
+
+# cli
+cli/**
+
+# Custom
+**/demo.gif
+.nvmrc
+.gitattributes
+.prettierignore
+.husky/
+.github/
+eslint-rules/
+old_docs/
+evals/
+.changie.yaml
+.codespellrc
+.mocharc.json
+buf.yaml
+.changeset/
+.clinerules/
+
+# Ignore all webview-ui files except the build directory (https://github.com/microsoft/vscode-webview-ui-toolkit-samples/blob/main/frameworks/hello-world-react-cra/.vscodeignore)
+webview-ui/src/**
+webview-ui/public/**
+webview-ui/index.html
+webview-ui/README.md
+webview-ui/package.json
+webview-ui/package-lock.json
+webview-ui/node_modules/**
+**/.gitignore
+
+# Ignore docs
+docs/**
+old_docs/**
+
+# Fix issue where codicons don't get packaged (https://github.com/microsoft/vscode-extension-samples/issues/692)
+!node_modules/@vscode/codicons/dist/codicon.css
+!node_modules/@vscode/codicons/dist/codicon.ttf
+
+# [SKYCODE] Модель эмбеддингов и нативный ONNX (≈360 МБ под все ОС) не кладём в пакет: индексация
+# по умолчанию выключена; режим local в собранном пакете недоступен, remote (OpenAI-совместимый API) работает.
+models/**
+
+# Include default themes JSON files used in getTheme
+!src/integrations/theme/default-themes/**
+
+# Include icons
+!assets/icons/**
+
+# Ignore Storybook files
+**/*.stories.tsx
+*storybook.log
+storybook-static
+**/StorybookDecorator.tsx
+
+# Dev tools — not needed at runtime
+bin/**
+proto/**
+scripts/**
+esbuild.mjs
+vendor/whisper/**
+vendor/**/.cache/**
+biome.jsonc
+knip.json
+test-setup.js
+.nycrc.unit.json
+.worktreeinclude
+
+# Build/dev artefacts not needed inside the VSIX
+lint.txt
+lint-parsed.json
+parse-lint.ps1
+parse-out.txt
+fix-lint.mjs
+fix-out.txt
+build-out.txt
+tsc-out.txt
+tsc-webview-out.txt
+vsce-out.txt
+TODO_LINT_FIXES.md
+
+test-unit-out.txt
+webview-ui/tsconfig*.json
+webview-ui/tailwind.config.mjs
+webview-ui/components.json
+assets/icons/svg-src/**
+README.md
+
+# [SKYCODE] Файлы репозитория, не нужные в пакете расширения
+README.en.md
+CONTRIBUTING.md
+SECURITY.md
+.github/**
+.gitattributes

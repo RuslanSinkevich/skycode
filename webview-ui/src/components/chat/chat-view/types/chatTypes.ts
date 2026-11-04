@@ -1,0 +1,170 @@
+/**
+ * Shared types and interfaces for the chat view components
+ */
+
+import { SkycodeAsk, SkycodeMessage } from "@shared/ExtensionMessage"
+import { ButtonActionType } from "../shared/buttonConfig"
+
+/**
+ * Main ChatView component props
+ */
+export interface ChatViewProps {
+	isHidden: boolean
+}
+
+/**
+ * Chat state interface
+ */
+export interface ChatState {
+	// State values
+	inputValue: string
+	setInputValue: React.Dispatch<React.SetStateAction<string>>
+	isTextAreaFocused: boolean
+	setIsTextAreaFocused: React.Dispatch<React.SetStateAction<boolean>>
+	selectedImages: string[]
+	setSelectedImages: React.Dispatch<React.SetStateAction<string[]>>
+	selectedFiles: string[]
+	setSelectedFiles: React.Dispatch<React.SetStateAction<string[]>>
+	sendingDisabled: boolean
+	setSendingDisabled: React.Dispatch<React.SetStateAction<boolean>>
+	enableButtons: boolean
+	setEnableButtons: React.Dispatch<React.SetStateAction<boolean>>
+	primaryButtonText: string | undefined
+	setPrimaryButtonText: React.Dispatch<React.SetStateAction<string | undefined>>
+	secondaryButtonText: string | undefined
+	setSecondaryButtonText: React.Dispatch<React.SetStateAction<string | undefined>>
+	expandedRows: Record<number, boolean>
+	setExpandedRows: React.Dispatch<React.SetStateAction<Record<number, boolean>>>
+
+	// Refs
+	textAreaRef: React.RefObject<HTMLTextAreaElement>
+
+	// Derived values
+	lastMessage: SkycodeMessage | undefined
+	secondLastMessage: SkycodeMessage | undefined
+	skycodeAsk: SkycodeAsk | undefined
+	task: SkycodeMessage | undefined
+
+	// Handlers
+	handleFocusChange: (isFocused: boolean) => void
+	clearExpandedRows: () => void
+	resetState: () => void
+
+	// Scroll-related state (will be moved to scroll hook)
+	showScrollToBottom?: boolean
+	isAtBottom?: boolean
+	pendingScrollToMessage?: number | null
+}
+
+/**
+ * Message handlers interface
+ */
+export interface MessageHandlers {
+	executeButtonAction: (action: ButtonActionType, text?: string, images?: string[], files?: string[]) => Promise<void>
+	handleSendMessage: (text: string, images: string[], files: string[]) => Promise<void>
+	startNewTask: () => Promise<void>
+}
+
+/**
+ * Why a row is being expanded or collapsed.
+ *
+ * Expanding by hand means the user wants to read something, so auto-scroll
+ * steps aside. When the app expands a row on its own (a command that runs
+ * long enough to be worth showing), auto-scroll must stay on — otherwise the
+ * chat silently stops following mid-answer.
+ */
+export interface RowExpansionOptions {
+	userInitiated?: boolean
+}
+
+export type ToggleRowExpansion = (ts: number, options?: RowExpansionOptions) => void
+
+/**
+ * Scroll behavior interface
+ */
+export interface ScrollBehavior {
+	scrollContainerRef: React.RefObject<HTMLDivElement>
+	disableAutoScrollRef: React.MutableRefObject<boolean>
+	scrollToBottomSmooth: () => void
+	keepAtBottom: () => void
+	scrollToMessage: (messageIndex: number) => void
+	toggleRowExpansion: ToggleRowExpansion
+	showScrollToBottom: boolean
+	setShowScrollToBottom: React.Dispatch<React.SetStateAction<boolean>>
+	isAtBottom: boolean
+	setIsAtBottom: React.Dispatch<React.SetStateAction<boolean>>
+	pendingScrollToMessage: number | null
+	setPendingScrollToMessage: React.Dispatch<React.SetStateAction<number | null>>
+	onScrollerRef: (ref: HTMLElement | null) => void
+	onFooterRef: (ref: HTMLElement | null) => void
+}
+
+/**
+ * Button state interface
+ */
+export interface ButtonState {
+	enableButtons: boolean
+	primaryButtonText: string | undefined
+	secondaryButtonText: string | undefined
+}
+
+/**
+ * Input state interface
+ */
+export interface InputState {
+	inputValue: string
+	selectedImages: string[]
+	selectedFiles: string[]
+	isTextAreaFocused: boolean
+}
+
+/**
+ * Task section props
+ */
+export interface TaskSectionProps {
+	task: SkycodeMessage
+	messages: SkycodeMessage[]
+	scrollBehavior: ScrollBehavior
+	buttonState: ButtonState
+	messageHandlers: MessageHandlers
+	chatState: ChatState
+	apiMetrics: {
+		totalTokensIn: number
+		totalTokensOut: number
+		totalCacheWrites?: number
+		totalCacheReads?: number
+		totalCost: number
+	}
+	lastApiReqTotalTokens?: number
+	selectedModelInfo: {
+		supportsPromptCache: boolean
+		supportsImages: boolean
+	}
+	isStreaming: boolean
+	skycodeAsk?: SkycodeAsk
+	modifiedMessages: SkycodeMessage[]
+}
+
+/**
+ * Welcome section props
+ */
+export interface WelcomeSectionProps {
+	showHistoryView: () => void
+	taskHistory: any[]
+}
+
+/**
+ * Input section props
+ */
+export interface InputSectionProps {
+	chatState: ChatState
+	messageHandlers: MessageHandlers
+	textAreaRef: React.RefObject<HTMLTextAreaElement>
+	onFocusChange: (isFocused: boolean) => void
+	onInputChange: (value: string) => void
+	onImagesChange: (images: string[]) => void
+	onFilesChange: (files: string[]) => void
+	placeholderText: string
+	shouldDisableFilesAndImages: boolean
+	selectFilesAndImages: () => Promise<void>
+}

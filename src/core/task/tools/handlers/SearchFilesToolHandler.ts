@@ -1,0 +1,401 @@
+import type { ToolUse } from "@core/assistant-message"
+import { regexSearchFiles } from "@services/ripgrep"
+import { arePathsEqual, getReadablePath, isLocatedInWorkspace } from "@utils/path"
+import * as path from "path"
+import { formatResponse } from "@/core/prompts/responses"
+import { getSearchEngine } from "@/core/indexing/searchEngineInstance"
+import { parseWorkspaceInlinePath } from "@/core/workspace/utils/parseWorkspaceInlinePath"
+import { WorkspacePathAdapter } from "@/core/workspace/WorkspacePathAdapter"
+import { resolveWorkspacePath } from "@/core/workspace/WorkspaceResolver"
+import { SkycodeSayTool } from "@/shared/ExtensionMessage"
+import { Logger } from "@/shared/services/Logger"
+import { SkycodeDefaultTool } from "@/shared/tools"
+import type { ToolResponse } from "../../index"
+import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
+import type { ToolValidator } from "../ToolValidator"
+import type { TaskConfig } from "../types/TaskConfig"
+import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
+
+export class SearchFilesToolHandler implements IFullyManagedTool {
+	readonly name = SkycodeDefaultTool.SEARCH
+	private static readonly SAFE_FILE_PATTERN = "*.{ts,tsx,js,jsx,mjs,cjs,py,go,rs,java,cs,rb,php,vue,svelte,c,cpp,h,hpp}"
+	private static readonly INDEX_SHORTLIST_LIMIT = 8
+
+	constructor(_validator: ToolValidator) {}
+
+	getDescription(block: ToolUse): string {
+		return `[${block.name} for '${block.params.regex}'${
+			block.params.file_pattern ? ` in '${block.params.file_pattern}'` : ""
+		}]`
+	}
+
+	/**
+	 * Determines which paths to search based on workspace configuration and hints
+	 */
+	private determineSearchPaths(
+		config: TaskConfig,
+		parsedPath: string,
+		workspaceHint: string | undefined,
+		originalPath: string,
+	): Array<{ absolutePath: string; workspaceName?: string; workspaceRoot?: string }> {
+		if (config.isMultiRootEnabled && config.workspaceManager) {
+			const adapter = new WorkspacePathAdapter({
+				cwd: config.cwd,
+				isMultiRootEnabled: true,
+				workspaceManager: config.workspaceManager,
+			})
+
+			if (workspaceHint) {
+				// Search only in the specified workspace
+				const absolutePath = adapter.resolvePath(parsedPath, workspaceHint)
+				const workspaceRoots = adapter.getWorkspaceRoots()
+				const root = workspaceRoots.find((r) => r.name === workspaceHint)
+				return [{ absolutePath, workspaceName: workspaceHint, workspaceRoot: root?.path }]
+			} else {
+				// As a fallback, perform the search across all available workspaces.
+				// Typically, models should provide explicit hints to target specific workspaces for searching.
+				const allPaths = adapter.getAllPossiblePaths(parsedPath)
+				const workspaceRoots = adapter.getWorkspaceRoots()
+				return allPaths.map((absPath, index) => ({
+					absolutePath: absPath,
+					workspaceName: workspaceRoots[index]?.name || path.basename(workspaceRoots[index]?.path || absPath),
+					workspaceRoot: workspaceRoots[index]?.path,
+				}))
+			}
+		} else {
+			// Single-workspace mode (backward compatible)
+			const pathResult = resolveWorkspacePath(config, originalPath, "SearchFilesTool.execute")
+			const absolutePath = typeof pathResult === "string" ? pathResult : pathResult.absolutePath
+			return [{ absolutePath, workspaceRoot: config.cwd }]
+		}
+	}
+
+	/**
+	 * Executes a single search operation in a workspace
+	 */
+	private async executeSearch(
+		config: TaskConfig,
+		absolutePath: string,
+		workspaceName: string | undefined,
+		workspaceRoot: string | undefined,
+		regex: string,
+		filePattern: string | undefined,
+	) {
+		try {
+			// Use workspace root for relative path calculation, fallback to cwd
+			const basePathForRelative = workspaceRoot || config.cwd
+
+			const workspaceResults = await regexSearchFiles(
+				basePathForRelative,
+				absolutePath,
+				regex,
+				filePattern,
+				config.services.skycodeIgnoreController,
+			)
+
+			// Parse the result count from the first line
+			const firstLine = workspaceResults.split("\n")[0]
+			const resultMatch = firstLine.match(/Found (\d+) result/)
+			const resultCount = resultMatch ? parseInt(resultMatch[1], 10) : 0
+
+			return {
+				workspaceName,
+				workspaceResults,
+				resultCount,
+				success: true,
+				errorType: undefined as "timeout" | "error" | undefined,
+				errorMessage: undefined as string | undefined,
+				searchPath: absolutePath,
+			}
+		} catch (error) {
+			// If search fails in one workspace, return error info
+			Logger.error(`Search failed in ${absolutePath}:`, error)
+			const rawMessage = error instanceof Error ? error.message : String(error)
+			return {
+				workspaceName,
+				workspaceResults: "",
+				resultCount: 0,
+				success: false,
+				errorType: rawMessage.toLowerCase().includes("timed out") ? ("timeout" as const) : ("error" as const),
+				errorMessage: rawMessage,
+				searchPath: absolutePath,
+			}
+		}
+	}
+
+	/**
+	 * Formats search results based on workspace configuration
+	 */
+	private formatSearchResults(
+		config: TaskConfig,
+		searchResults: Array<{
+			workspaceName?: string
+			workspaceResults: string
+			resultCount: number
+			success: boolean
+			errorType?: "timeout" | "error"
+			errorMessage?: string
+			searchPath?: string
+		}>,
+		searchPaths: Array<{ absolutePath: string; workspaceName?: string }>,
+	): string {
+		const allResults: string[] = []
+		let totalResultCount = 0
+
+		// [SKYCODE] Упавший поиск раньше молча превращался в "Found 0 results" — модель делала
+		// вывод, что кода нет, и шла править вслепую. Теперь провал виден и отличим от пустоты.
+		const failures = searchResults.filter((result) => !result.success)
+		const failureNote = failures
+			.map((failure) => {
+				const where = failure.workspaceName || failure.searchPath || "the search path"
+				const reason = failure.errorType === "timeout" ? "timed out" : failure.errorMessage || "unknown error"
+				return `[SEARCH FAILED] ${where}: ${reason}`
+			})
+			.join("\n")
+
+		if (failures.length === searchResults.length) {
+			return `${failureNote}\n\nThe search did not run, so this is NOT a statement about whether the pattern exists. Retry with a narrower path, or use another tool (list_files, read_file) before drawing conclusions.`
+		}
+
+		for (const { workspaceName, workspaceResults, resultCount, success } of searchResults) {
+			if (!success || !workspaceResults) {
+				continue
+			}
+
+			totalResultCount += resultCount
+
+			// If multi-workspace and we have results, annotate with workspace name
+			if (config.isMultiRootEnabled && searchPaths.length > 1 && workspaceName) {
+				// Check if this workspace has results (resultCount > 0)
+				if (resultCount > 0) {
+					// Skip the "Found X results" line and add workspace annotation
+					const lines = workspaceResults.split("\n")
+					// Skip first two lines (count and empty line) if they exist
+					const resultsWithoutHeader = lines.length > 2 ? lines.slice(2).join("\n") : workspaceResults
+
+					if (resultsWithoutHeader.trim()) {
+						allResults.push(`## Workspace: ${workspaceName}\n${resultsWithoutHeader}`)
+					}
+				}
+				// Don't add anything for workspaces with 0 results in multi-workspace mode
+			} else if (!config.isMultiRootEnabled || searchPaths.length === 1) {
+				// Single workspace mode or single workspace search
+				allResults.push(workspaceResults)
+			}
+		}
+
+		// Combine results. A partial failure is prepended so the model knows the answer is incomplete.
+		const partialFailurePrefix = failureNote
+			? `${failureNote}\n(results below cover only the paths that were searched)\n\n`
+			: ""
+
+		if (config.isMultiRootEnabled && searchPaths.length > 1) {
+			// Multi-workspace search result
+			if (totalResultCount === 0) {
+				return `${partialFailurePrefix}Found 0 results.`
+			} else {
+				return `${partialFailurePrefix}Found ${totalResultCount === 1 ? "1 result" : `${totalResultCount.toLocaleString()} results`} across ${searchPaths.length} workspace${searchPaths.length > 1 ? "s" : ""}.\n\n${allResults.join("\n\n")}`
+			}
+		} else {
+			// Single workspace result
+			return `${partialFailurePrefix}${allResults[0] || "Found 0 results."}`
+		}
+	}
+
+	private pathScope(
+		config: TaskConfig,
+		searchPaths: Array<{ absolutePath: string; workspaceRoot?: string }>,
+	): "workspace_root" | "subdir" | "multi_root" {
+		if (config.isMultiRootEnabled && searchPaths.length > 1) {
+			return "multi_root"
+		}
+		const rootPath = searchPaths[0]?.workspaceRoot || config.cwd
+		return searchPaths.some(({ absolutePath }) => arePathsEqual(absolutePath, rootPath)) ? "workspace_root" : "subdir"
+	}
+
+	private async buildIndexShortlistPaths(
+		config: TaskConfig,
+		searchPaths: Array<{ absolutePath: string; workspaceName?: string; workspaceRoot?: string }>,
+		query: string,
+	): Promise<Array<{ absolutePath: string; workspaceName?: string; workspaceRoot?: string }>> {
+		const engine = getSearchEngine()
+		if (!engine || !engine.isReady()) {
+			return []
+		}
+
+		try {
+			const candidates = await engine.search(query, SearchFilesToolHandler.INDEX_SHORTLIST_LIMIT)
+			if (candidates.length === 0) {
+				return []
+			}
+			const shortlist = new Map<string, { absolutePath: string; workspaceName?: string; workspaceRoot?: string }>()
+			for (const candidate of candidates) {
+				const relDir = path.dirname(candidate.filePath)
+				for (const base of searchPaths) {
+					const workspaceRoot = base.workspaceRoot || config.cwd
+					const resolved = path.resolve(workspaceRoot, relDir)
+					if (!resolved.startsWith(workspaceRoot)) {
+						continue
+					}
+					shortlist.set(`${base.workspaceName || "root"}:${resolved}`, {
+						absolutePath: resolved,
+						workspaceName: base.workspaceName,
+						workspaceRoot: base.workspaceRoot,
+					})
+				}
+			}
+			return Array.from(shortlist.values())
+		} catch (error) {
+			Logger.error("Failed to build search shortlist from index:", error)
+			return []
+		}
+	}
+
+	private isBroadRegex(regex: string): boolean {
+		const trimmed = regex.trim()
+		if (!trimmed) { return true }
+		if (trimmed.length < 3) { return true }
+		// Simple literals without anchors/context are usually too broad on workspace root.
+		const hasRegexMetachar = /[\\^$.|?*+()[\]{}]/.test(trimmed)
+		return !hasRegexMetachar && trimmed.length < 6
+	}
+
+	private isWeakModel(config: TaskConfig): boolean {
+		const modelId = config.api.getModel().id.toLowerCase()
+		return (
+			modelId.includes("xs") ||
+			modelId.includes("compact") ||
+			modelId.includes("glm") ||
+			modelId.includes("hermes") ||
+			modelId.includes("qwen2") ||
+			modelId.includes("phi-")
+		)
+	}
+
+	async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
+		const relPath = block.params.path
+		const regex = block.params.regex
+
+		const config = uiHelpers.getConfig()
+
+		// Create and show partial UI message
+		const filePattern = block.params.file_pattern
+
+		const sharedMessageProps = {
+			tool: "searchFiles",
+			path: getReadablePath(config.cwd, uiHelpers.removeClosingTag(block, "path", relPath)),
+			content: "",
+			regex: uiHelpers.removeClosingTag(block, "regex", regex),
+			filePattern: uiHelpers.removeClosingTag(block, "file_pattern", filePattern),
+			operationIsLocatedInWorkspace: await isLocatedInWorkspace(relPath),
+		} satisfies SkycodeSayTool
+
+		const partialMessage = JSON.stringify(sharedMessageProps)
+
+		// [SKYCODE-SKYCODE] Cursor-style: always auto-execute, show as info (no ask)
+		await uiHelpers.removeLastPartialMessageIfExistsWithType("ask", "tool")
+		await uiHelpers.say("tool", partialMessage, undefined, undefined, block.partial)
+	}
+
+	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
+		const relDirPath: string = (block.params.path ?? "").trim() || "."
+		const regex: string | undefined = block.params.regex
+		const filePattern: string | undefined = block.params.file_pattern
+
+
+		if (!regex?.trim()) {
+			config.taskState.consecutiveMistakeCount++
+			return await config.callbacks.sayAndCreateMissingParamError(this.name, "regex")
+		}
+
+		config.taskState.consecutiveMistakeCount = 0
+
+		// Parse workspace hint from the path
+		const { workspaceHint, relPath: parsedPath } = parseWorkspaceInlinePath(relDirPath)
+
+		// Determine which paths to search
+		const searchPaths = this.determineSearchPaths(config, parsedPath, workspaceHint, relDirPath)
+
+
+		let effectiveFilePattern = filePattern
+		let guardrailPrefix = ""
+		const missingPattern = !effectiveFilePattern || effectiveFilePattern.trim().length === 0
+		const broadRegex = this.isBroadRegex(regex)
+		const searchesWorkspaceRoot = searchPaths.some(({ absolutePath, workspaceRoot }) =>
+			workspaceRoot ? arePathsEqual(absolutePath, workspaceRoot) : arePathsEqual(absolutePath, config.cwd),
+		)
+		let effectiveSearchPaths = searchPaths
+		if (missingPattern && broadRegex && searchesWorkspaceRoot) {
+			const shortlistPaths = await this.buildIndexShortlistPaths(config, searchPaths, regex)
+			if (shortlistPaths.length > 0) {
+				effectiveSearchPaths = shortlistPaths
+				guardrailPrefix =
+					`[Guardrail] Wide search detected. Discover->inspect mode enabled with ${shortlistPaths.length} shortlist path(s).\n\n`
+			}
+			effectiveFilePattern = SearchFilesToolHandler.SAFE_FILE_PATTERN
+			guardrailPrefix += `[Guardrail] Applied safe file pattern: ${effectiveFilePattern}\n\n`
+		}
+		if (this.isWeakModel(config) && searchesWorkspaceRoot && missingPattern) {
+			const blockedResults = `[Guardrail] Your search is too broad for the workspace root. Please:\n1. Use codebase_search first to find relevant directories.\n2. Then call search_files with a specific path and file_pattern.\nExample: search_files with path="src/core" and file_pattern="*.ts"`
+			const blockedMessage = JSON.stringify({
+				tool: "searchFiles",
+				path: getReadablePath(config.cwd, relDirPath),
+				content: blockedResults,
+				regex: regex,
+				filePattern: effectiveFilePattern,
+				operationIsLocatedInWorkspace: await isLocatedInWorkspace(parsedPath),
+			} satisfies SkycodeSayTool)
+			await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
+			await config.callbacks.say("tool", blockedMessage, undefined, undefined, false)
+			return blockedResults
+		}
+
+		// Execute searches in all relevant workspaces in parallel
+		const searchPromises = effectiveSearchPaths.map(({ absolutePath, workspaceName, workspaceRoot }) =>
+			this.executeSearch(config, absolutePath, workspaceName, workspaceRoot, regex, effectiveFilePattern),
+		)
+
+		// Wait for all searches to complete
+		const searchStartTime = performance.now()
+		const searchResults = await Promise.all(searchPromises)
+		const searchDurationMs = performance.now() - searchStartTime
+		if (searchDurationMs > 5000) {
+			Logger.warn(
+				`[Search] Slow search_files: ${Math.round(searchDurationMs)}ms, regex="${regex}", path="${relDirPath}", pattern="${effectiveFilePattern || ""}"`,
+			)
+		}
+
+		// Format and combine results
+		const results = guardrailPrefix + this.formatSearchResults(config, searchResults, effectiveSearchPaths)
+
+		const sharedMessageProps = {
+			tool: "searchFiles",
+			path: getReadablePath(config.cwd, relDirPath),
+			content: results,
+			regex: regex,
+			filePattern: effectiveFilePattern,
+			operationIsLocatedInWorkspace: await isLocatedInWorkspace(parsedPath),
+		} satisfies SkycodeSayTool
+
+		const completeMessage = JSON.stringify(sharedMessageProps)
+
+		// [SKYCODE-SKYCODE] Cursor-style: always auto-execute (no ask)
+		await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
+		await config.callbacks.say("tool", completeMessage, undefined, undefined, false)
+
+
+		// Run PreToolUse hook after approval but before execution
+		try {
+			const { ToolHookUtils } = await import("../utils/ToolHookUtils")
+			await ToolHookUtils.runPreToolUseIfEnabled(config, block)
+		} catch (error) {
+			const { PreToolUseHookCancellationError } = await import("@core/hooks/PreToolUseHookCancellationError")
+			if (error instanceof PreToolUseHookCancellationError) {
+				return formatResponse.toolDenied()
+			}
+			throw error
+		}
+
+		return results
+	}
+}

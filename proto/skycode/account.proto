@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package skycode;
+
+import "skycode/common.proto";
+
+option go_package = "github.com/skycode/grpc-go/skycode";
+option java_multiple_files = true;
+option java_package = "bot.skycode.proto";
+
+// Service for provider sign-in flows (OpenRouter, OpenAI Codex).
+// The Skycode account (login, credits, organizations) lived on skycode-ai.ru and was removed with it.
+service AccountService {
+  rpc openrouterAuthClicked(EmptyRequest) returns (Empty);
+
+  // Returns a link the webview can use to redirect back to the user's IDE.
+  rpc getRedirectUrl(EmptyRequest) returns (String);
+
+  // OpenAI Codex OAuth authentication
+  // Starts the OAuth flow and opens browser for user to sign in with ChatGPT Plus/Pro
+  rpc openAiCodexSignIn(EmptyRequest) returns (Empty);
+
+  // Signs out of OpenAI Codex and clears stored credentials
+  rpc openAiCodexSignOut(EmptyRequest) returns (Empty);
+}

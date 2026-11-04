@@ -1,0 +1,331 @@
+import { ApiHandlerModel, ApiProviderInfo } from "@core/api"
+import { AnthropicModelId, anthropicModels } from "@/shared/api"
+import { ModelCapabilityTier, MODEL_SESSION_LIMITS, WeakModelSessionLimits } from "@/shared/prompts"
+
+const CLAUDE_VERSION_MATCH_REGEX = /[-_ ]([\d](?:\.[05])?)[-_ ]?/
+
+export function isNextGenModelProvider(providerInfo: ApiProviderInfo): boolean {
+	const providerId = normalize(providerInfo.providerId)
+	return [
+		"anthropic",
+		"gemini",
+		"openrouter",
+		"openai",
+		"openai-native",
+		"openai-compatible",
+		"openai-codex",
+	].some((id) => providerId === id)
+}
+
+export function modelDoesntSupportWebp(apiHandlerModel: ApiHandlerModel): boolean {
+	const modelId = apiHandlerModel.id.toLowerCase()
+	return modelId.includes("grok")
+}
+
+/**
+ * Determines if reasoning content should be skipped for a given model
+ * Currently skips reasoning for:
+ * - Grok-4 models since they only display "thinking" without useful information
+ * - Devstral models since they don't support reasoning_details field
+ */
+export function shouldSkipReasoningForModel(modelId?: string): boolean {
+	if (!modelId) {
+		return false
+	}
+	return modelId.includes("grok-4") || modelId.includes("devstral") || modelId.includes("glm")
+}
+
+export function isAnthropicModelId(modelId: string): modelId is AnthropicModelId {
+	const CLAUDE_MODELS = ["sonnet", "opus", "haiku"]
+	return modelId in anthropicModels || CLAUDE_MODELS.some((substring) => modelId.includes(substring))
+}
+
+export function isClaude4PlusModelFamily(id: string): boolean {
+	const modelId = normalize(id)
+	// Claude Code short aliases are always Claude 4+
+	// These are used by ClaudeCodeHandler.getModel() when user selects "sonnet" or "opus"
+	// Check before isAnthropicModelId to avoid type guard narrowing issues
+	if (modelId === "sonnet" || modelId === "opus") {
+		return true
+	}
+	if (!isAnthropicModelId(modelId)) {
+		return false
+	}
+	// Get model version number
+	const versionMatch = modelId.match(CLAUDE_VERSION_MATCH_REGEX)
+	if (!versionMatch) {
+		return false
+	}
+	const version = parseFloat(versionMatch[1])
+	// Check if version is 4.0 or higher
+	return version >= 4
+}
+
+export function isGemini2dot5ModelFamily(id: string): boolean {
+	const modelId = normalize(id)
+	return modelId.includes("gemini-2.5")
+}
+
+export function isGrok4ModelFamily(id: string): boolean {
+	const modelId = normalize(id)
+	return modelId.includes("grok-4")
+}
+
+export function isGPT5ModelFamily(id: string): boolean {
+	const modelId = normalize(id)
+	return modelId.includes("gpt-5") || modelId.includes("gpt5")
+}
+
+export function isGPT51Model(id: string): boolean {
+	const modelId = normalize(id)
+	return modelId.includes("gpt-5.1") || modelId.includes("gpt-5-1")
+}
+
+export function isGPT52Model(id: string): boolean {
+	const modelId = normalize(id)
+	return modelId.includes("gpt-5.2") || modelId.includes("gpt-5-2")
+}
+
+export function isGLMModelFamily(id: string): boolean {
+	const modelId = normalize(id)
+	return (
+		modelId.includes("glm-4.6") ||
+		modelId.includes("glm-4.5") ||
+		modelId.includes("z-ai/glm") ||
+		modelId.includes("zai-org/glm")
+	)
+}
+
+export function isMinimaxModelFamily(id: string): boolean {
+	const modelId = normalize(id)
+	return modelId.includes("minimax")
+}
+
+export function isQwenModelFamily(id: string): boolean {
+	const modelId = normalize(id)
+	return modelId.includes("qwen")
+}
+
+// Flagship Qwen models with strong reasoning, large context (>=131k) and high parameter count.
+// These deserve "strong" tier session limits, otherwise they get unnecessarily throttled
+// (e.g. qwen3-coder-plus has a 1M context but would only use 65% of it as medium tier).
+const STRONG_QWEN_MODEL_IDS = ["qwen3-max", "qwen3-coder-plus", "qwen3-235b-a22b"]
+
+export function isStrongQwenModel(id: string): boolean {
+	const modelId = normalize(id)
+	return STRONG_QWEN_MODEL_IDS.some((m) => modelId === m || modelId.endsWith(`/${m}`))
+}
+
+// Flagship GLM models with comparable capability to next-gen flagships.
+// Without this, glm-4.6 (sonnet-class coding model) would be throttled to medium.
+const STRONG_GLM_MODEL_IDS = ["glm-4.6", "glm-4-6"]
+
+export function isStrongGlmModel(id: string): boolean {
+	const modelId = normalize(id)
+	return STRONG_GLM_MODEL_IDS.some((m) => modelId === m || modelId.endsWith(`/${m}`) || modelId.includes(m))
+}
+
+// Flagship Hermes — Hermes-4 405B is on par with strong-tier reasoning.
+export function isStrongHermesModel(id: string): boolean {
+	const modelId = normalize(id)
+	return modelId.includes("hermes-4-405b") || modelId.includes("hermes4-405b")
+}
+
+export function isHermesModelFamily(id: string): boolean {
+	const modelId = normalize(id)
+	return (
+		modelId.includes("hermes-4") ||
+		modelId.includes("hermes4") ||
+		modelId.includes("nous/hermes-4") ||
+		modelId.includes("nous/hermes4") ||
+		modelId.includes("nous-hermes-4") ||
+		modelId.includes("nous/hermes4") ||
+		modelId.includes("nousresearch/hermes-4") ||
+		modelId.includes("nousresearch/hermes4")
+	)
+}
+
+export function isNextGenOpenSourceModelFamily(id: string): boolean {
+	const modelId = normalize(id)
+	return ["kimi-k2"].some((substring) => modelId.includes(substring))
+}
+
+export function isDevstralModelFamily(id: string): boolean {
+	const modelId = normalize(id)
+	return modelId.includes("devstral")
+}
+
+export function isGemini3ModelFamily(id: string): boolean {
+	const modelId = normalize(id)
+	return modelId.includes("gemini3") || modelId.includes("gemini-3")
+}
+
+function isDeepSeek32ModelFamily(id: string): boolean {
+	const modelId = normalize(id)
+	return modelId.includes("deepseek") && modelId.includes("3.2") && !modelId.includes("speciale")
+}
+
+export function isNextGenModelFamily(id: string): boolean {
+	const modelId = normalize(id)
+	return (
+		isClaude4PlusModelFamily(modelId) ||
+		isGemini2dot5ModelFamily(modelId) ||
+		isGrok4ModelFamily(modelId) ||
+		isGPT5ModelFamily(modelId) ||
+		isMinimaxModelFamily(modelId) ||
+		isGemini3ModelFamily(modelId) ||
+		isNextGenOpenSourceModelFamily(modelId) ||
+		isDeepSeek32ModelFamily(modelId)
+	)
+}
+
+export function isLocalModel(providerInfo: ApiProviderInfo): boolean {
+	const localProviders = ["lmstudio", "ollama"]
+	return localProviders.includes(normalize(providerInfo.providerId))
+}
+
+/** Свой OpenAI-совместимый эндпоинт: модель раздаёт сам пользователь, id произвольный. */
+export function isSelfHostedCompatibleProvider(providerInfo: ApiProviderInfo): boolean {
+	return normalize(providerInfo.providerId) === "openai"
+}
+
+/**
+ * Parses a price string and converts it from per-token to per-million-tokens
+ * @param priceString The price string to parse (e.g. from API responses)
+ * @returns The price multiplied by 1,000,000 for per-million-token pricing, or 0 if invalid
+ */
+export function parsePrice(priceString: string | undefined): number {
+	if (!priceString || priceString === "" || priceString === "0") {
+		return 0
+	}
+	const parsed = parseFloat(priceString)
+	if (Number.isNaN(parsed)) {
+		return 0
+	}
+	// Convert from per-token to per-million-tokens (multiply by 1,000,000)
+	return parsed * 1_000_000
+}
+
+/**
+ * Determines if the given provider and model combination will use native tool calling.
+ * Helpful if we need to quickly check this for prompts or other logic.
+ * @param providerInfo The provider and model information
+ * @param enableNativeToolCalls Whether the native tool calls setting is enabled
+ * @returns true if the model will use native tool calling, false otherwise
+ */
+export function isNativeToolCallingConfig(providerInfo: ApiProviderInfo, enableNativeToolCalls: boolean): boolean {
+	if (!enableNativeToolCalls) {
+		return false
+	}
+	if (!isNextGenModelProvider(providerInfo)) {
+		return false
+	}
+	const modelId = providerInfo.model.id.toLowerCase()
+	return isNextGenModelFamily(modelId)
+}
+
+/**
+ * Determines capability tier based on model family and provider.
+ * Quantized local models and weak cloud models get stricter session limits.
+ *
+ * Tier override (set via the "Session Budget" setting) wins over auto-detect.
+ */
+export function getModelCapabilityTier(
+	modelId: string,
+	providerInfo?: ApiProviderInfo,
+	tierOverride?: ModelCapabilityTier | "auto",
+): ModelCapabilityTier {
+	if (tierOverride && tierOverride !== "auto") {
+		return tierOverride
+	}
+
+	const id = normalize(modelId)
+
+	if (isNextGenModelFamily(id)) {
+		return "strong"
+	}
+
+	// Flagship open-source models that previously sat in medium and got
+	// throttled at 40 tool calls. Promote them to strong.
+	if (isStrongQwenModel(id) || isStrongGlmModel(id) || isStrongHermesModel(id)) {
+		return "strong"
+	}
+
+	// [SKYCODE] Сильно квантованные веса — признак слабой модели независимо от того, кто их
+	// раздаёт: локальный рантайм или свой OpenAI-совместимый шлюз. Раньше проверка работала
+	// только для ollama/lmstudio, хотя self-hosted vLLM — самый частый способ раздать q4-сборку.
+	if (providerInfo && isQuantizedModel(id) && (isLocalModel(providerInfo) || isSelfHostedCompatibleProvider(providerInfo))) {
+		return "weak"
+	}
+
+	// Non-quantized local models — medium
+	if (providerInfo && isLocalModel(providerInfo)) {
+		return "medium"
+	}
+
+	// Qwen, Hermes, Devstral cloud — medium tier
+	if (isQwenModelFamily(id) || isHermesModelFamily(id) || isDevstralModelFamily(id)) {
+		return "medium"
+	}
+
+	// GLM — medium
+	if (isGLMModelFamily(id)) {
+		return "medium"
+	}
+
+	return "strong"
+}
+
+/**
+ * Detects lossy-quantized models by common naming patterns (q4, gguf, awq, int4, ...).
+ *
+ * [SKYCODE] fp16 и fp8 здесь намеренно отсутствуют: это варианты точности, а не сжатие с
+ * потерями. Тег fp16 у локальной сборки обычно означает лучшую из доступных, а не худшую,
+ * и прежний список записывал её в "weak" вместе с q2.
+ */
+function isQuantizedModel(modelId: string): boolean {
+	return /[_-](q[2-8][_-]|gguf|gptq|awq|exl2|int[48])/.test(modelId)
+}
+
+export interface CustomSessionBudgetSettings {
+	/** "auto" — auto-detect tier from model id.
+	 *  "strong" / "medium" / "weak" — force that preset tier (recommended).
+	 *  "custom" — fully custom limits below. */
+	sessionBudgetMode: "auto" | "strong" | "medium" | "weak" | "custom"
+	customMaxToolCallsPerTurn: number
+	customMaxConsecutiveReadOnlyTools: number
+	customForceCompactAfterSteps: number
+}
+
+export function getSessionLimitsForModel(
+	modelId: string,
+	providerInfo?: ApiProviderInfo,
+	customSettings?: CustomSessionBudgetSettings,
+): WeakModelSessionLimits {
+	const mode = customSettings?.sessionBudgetMode ?? "auto"
+
+	// Preset tier override — easiest knob for "this model is stronger than
+	// auto-detect thinks, give it more rope".
+	if (mode === "strong" || mode === "medium" || mode === "weak") {
+		return MODEL_SESSION_LIMITS[mode]
+	}
+
+	const tier = getModelCapabilityTier(modelId, providerInfo)
+
+	// Fully custom limits — power-user mode.
+	if (mode === "custom") {
+		const base = MODEL_SESSION_LIMITS[tier]
+		return {
+			maxToolCallsPerTurn: customSettings!.customMaxToolCallsPerTurn,
+			maxConsecutiveReadOnlyTools: customSettings!.customMaxConsecutiveReadOnlyTools,
+			forceCompactAfterSteps: customSettings!.customForceCompactAfterSteps,
+			contextWindowUsageRatio: base.contextWindowUsageRatio,
+		}
+	}
+
+	return MODEL_SESSION_LIMITS[tier]
+}
+
+function normalize(text: string): string {
+	return text.trim().toLowerCase()
+}

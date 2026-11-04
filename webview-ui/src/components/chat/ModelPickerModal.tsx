@@ -1,0 +1,780 @@
+import type { ModelInfo as ModelInfoType } from "@shared/api"
+import { ANTHROPIC_MIN_THINKING_BUDGET, ApiProvider } from "@shared/api"
+import { StringRequest } from "@shared/proto/skycode/common"
+import { UpdateSettingsRequest } from "@shared/proto/skycode/state"
+import { Mode } from "@shared/storage/types"
+import { ArrowLeftRight, Brain, Check, ChevronDownIcon, Search, Settings } from "lucide-react"
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { createPortal } from "react-dom"
+import { useWindowSize } from "react-use"
+import PopupModalContainer from "@/components/common/PopupModalContainer"
+import {
+	SearchContainer,
+	SearchInput,
+	SettingsSection,
+	IconToggle,
+	ProviderRow,
+	ProviderDropdownPortal,
+	ProviderDropdownItem,
+	ModelListContainer,
+	ModelItemContainer,
+	ModelInfoRow,
+	ModelName,
+	ModelProvider,
+	EmptyState,
+	CurrentModelRow,
+	SplitModeRow,
+	SplitModeCell,
+	SplitModeLabel,
+	SplitModeModel,
+	SettingsOnlyContainer,
+	ConfiguredModelName,
+	SettingsOnlyLink,
+} from "./ModelPickerModal.styles"
+import { SUPPORTED_ANTHROPIC_THINKING_MODELS } from "@/components/settings/providers/AnthropicProvider"
+import {
+	getModelsForProvider,
+	getModeSpecificFields,
+	getProviderInfo,
+	normalizeApiConfiguration,
+	syncModeConfigurations,
+} from "@/components/settings/utils/providerUtils"
+import { useApiConfigurationHandlers } from "@/components/settings/utils/useApiConfigurationHandlers"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { useExtensionState } from "@/context/ExtensionStateContext"
+import { useI18n } from "@/i18n"
+import { StateServiceClient } from "@/services/grpc-client"
+import { getConfiguredProviders, getProviderLabel } from "@/utils/getConfiguredProviders"
+import ThinkingBudgetSlider from "../settings/ThinkingBudgetSlider"
+
+const SETTINGS_ONLY_PROVIDERS: ApiProvider[] = [
+	"openai",
+	"ollama",
+	"lmstudio",
+	"vscode-lm",
+]
+
+const OPENROUTER_MODEL_PROVIDERS: ApiProvider[] = ["openrouter"]
+
+interface ModelPickerModalProps {
+	isOpen: boolean
+	onOpenChange: (open: boolean) => void
+	currentMode: Mode
+	children: React.ReactNode
+}
+
+interface ModelItem {
+	id: string
+	name: string
+	provider?: string
+	description?: string
+	label?: string
+	info?: ModelInfoType
+}
+
+// Star icon for favorites (only for the OpenRouter provider)
+const StarIcon = ({ isFavorite, onClick }: { isFavorite: boolean; onClick: (e: React.MouseEvent) => void }) => {
+	return (
+		<div
+			onClick={onClick}
+			style={{
+				cursor: "pointer",
+				color: isFavorite ? "var(--vscode-terminal-ansiYellow)" : "var(--vscode-descriptionForeground)",
+				marginLeft: "8px",
+				fontSize: "14px",
+				display: "flex",
+				alignItems: "center",
+				justifyContent: "center",
+				userSelect: "none",
+				WebkitUserSelect: "none",
+			}}>
+			{/* allow-any-unicode-next-line */}
+			{isFavorite ? "★" : "☆"}
+		</div>
+	)
+}
+
+const ModelPickerModal: React.FC<ModelPickerModalProps> = ({ isOpen, onOpenChange, currentMode, children }) => {
+	const { t } = useI18n()
+	const {
+		apiConfiguration,
+		openRouterModels,
+		navigateToSettings,
+		planActSeparateModelsSetting,
+		showSettings,
+		showMcp,
+		showAccount,
+		favoritedModelIds,
+		liteLlmModels,
+	} = useExtensionState()
+	const { handleModeFieldChange, handleModeFieldsChange, handleFieldsChange } = useApiConfigurationHandlers()
+
+	const [searchQuery, setSearchQuery] = useState("")
+	const [activeEditMode, setActiveEditMode] = useState<Mode>(currentMode) // which mode we're editing in split view
+	const [menuPosition, setMenuPosition] = useState(0)
+	const [arrowPosition, setArrowPosition] = useState(0)
+	const [isProviderExpanded, setIsProviderExpanded] = useState(false)
+	const [providerDropdownPosition, setProviderDropdownPosition] = useState({ top: 0, left: 0, width: 0, maxHeight: 200 })
+	const [selectedIndex, setSelectedIndex] = useState(-1) // For keyboard navigation
+	const searchInputRef = useRef<HTMLInputElement>(null)
+	const triggerRef = useRef<HTMLDivElement>(null)
+	const modalRef = useRef<HTMLDivElement>(null)
+	const providerRowRef = useRef<HTMLDivElement>(null)
+	const providerDropdownRef = useRef<HTMLDivElement>(null)
+	const itemRefs = useRef<(HTMLDivElement | null)[]>([]) // For scrollIntoView
+	const { width: viewportWidth, height: viewportHeight } = useWindowSize()
+
+	// Get current provider from config - use activeEditMode when in split mode
+	const effectiveMode = planActSeparateModelsSetting ? activeEditMode : currentMode
+	const { selectedProvider, selectedModelId, selectedModelInfo } = normalizeApiConfiguration(apiConfiguration, effectiveMode)
+
+	// Get both Plan and Act models for split view
+	const planModel = useMemo(() => normalizeApiConfiguration(apiConfiguration, "plan"), [apiConfiguration])
+	const actModel = useMemo(() => normalizeApiConfiguration(apiConfiguration, "act"), [apiConfiguration])
+
+	// Use the setting for split mode
+	const isSplit = planActSeparateModelsSetting
+
+	// Check if model supports thinking (token-based budget)
+	// OpenAI Codex uses discrete reasoning effort levels controlled via global settings, not token budgets
+	const supportsThinking = useMemo(() => {
+		if (selectedProvider === "openai-codex") {
+			return false
+		}
+		if (selectedProvider === "anthropic" || selectedProvider === "claude-code") {
+			return SUPPORTED_ANTHROPIC_THINKING_MODELS.includes(selectedModelId)
+		}
+		return selectedModelInfo?.supportsReasoning || !!selectedModelInfo?.thinkingConfig
+	}, [selectedProvider, selectedModelId, selectedModelInfo])
+
+	// Get thinking budget from current mode config
+	const modeFields = getModeSpecificFields(apiConfiguration, currentMode)
+	const thinkingBudget = modeFields.thinkingBudgetTokens || 0
+	const thinkingEnabled = thinkingBudget > 0
+
+	// Handle thinking toggle - uses ANTHROPIC_MIN_THINKING_BUDGET as default when enabling
+	const handleThinkingToggle = useCallback(
+		(enabled: boolean) => {
+			const budget = enabled ? ANTHROPIC_MIN_THINKING_BUDGET : 0
+			handleModeFieldChange(
+				{ plan: "planModeThinkingBudgetTokens", act: "actModeThinkingBudgetTokens" },
+				budget,
+				currentMode,
+			)
+		},
+		[handleModeFieldChange, currentMode],
+	)
+
+	// Get configured providers
+	const configuredProviders = useMemo(() => getConfiguredProviders(apiConfiguration), [apiConfiguration])
+
+	// Get models for current provider
+	const allModels = useMemo((): ModelItem[] => {
+		if (OPENROUTER_MODEL_PROVIDERS.includes(selectedProvider)) {
+			return Object.keys(openRouterModels || {}).map((id) => ({
+				id,
+				name: id.split("/").pop() || id,
+				provider: id.split("/")[0],
+				info: openRouterModels[id],
+			}))
+		}
+
+		// Use centralized helper for static provider models
+		const models = getModelsForProvider(selectedProvider, apiConfiguration, {
+			liteLlmModels,
+		})
+		if (models) {
+			return Object.entries(models).map(([id, info]) => ({
+				id,
+				name: id,
+				provider: selectedProvider,
+				info,
+			}))
+		}
+
+		return []
+	}, [selectedProvider, openRouterModels, apiConfiguration, liteLlmModels])
+
+	// Multi-word substring search - all words must match somewhere in id/name/provider
+	const matchesSearch = useCallback((model: ModelItem, query: string): boolean => {
+		if (!query.trim()) {
+			return true
+		}
+		const queryWords = query.toLowerCase().trim().split(/\s+/)
+		const searchText = `${model.id} ${model.name} ${model.provider || ""}`.toLowerCase()
+		return queryWords.every((word) => searchText.includes(word))
+	}, [])
+
+	// Filtered models - all by default, narrowed by the search query
+	const filteredModels = useMemo(() => {
+		let models: ModelItem[]
+		if (searchQuery) {
+			models = allModels.filter((m) => matchesSearch(m, searchQuery))
+		} else {
+			models = [...allModels]
+		}
+
+		// Filter out current model
+		models = models.filter((m) => m.id !== selectedModelId)
+
+		// For OpenRouter: put favorites first
+		if (selectedProvider === "openrouter") {
+			const favoriteSet = new Set(favoritedModelIds || [])
+			const favoritedModels = models.filter((m) => favoriteSet.has(m.id))
+			const nonFavoritedModels = models.filter((m) => !favoriteSet.has(m.id))
+			// Sort non-favorited alphabetically by provider
+			nonFavoritedModels.sort((a, b) => (a.provider || "").localeCompare(b.provider || ""))
+			return [...favoritedModels, ...nonFavoritedModels]
+		}
+
+		// Sort alphabetically by provider
+		models = models.sort((a, b) => (a.provider || "").localeCompare(b.provider || ""))
+		return models
+	}, [searchQuery, matchesSearch, selectedModelId, selectedProvider, allModels, favoritedModelIds])
+
+	// Handle model selection - in split mode uses activeEditMode, otherwise closes modal
+	const handleSelectModel = useCallback(
+		(modelId: string, modelInfo?: ModelInfoType) => {
+			const modeToUse = isSplit ? activeEditMode : currentMode
+
+			if (OPENROUTER_MODEL_PROVIDERS.includes(selectedProvider)) {
+				const modelInfoToUse = modelInfo || openRouterModels[modelId]
+				handleModeFieldsChange(
+					{
+						openRouterModelId: { plan: "planModeOpenRouterModelId", act: "actModeOpenRouterModelId" },
+						openRouterModelInfo: { plan: "planModeOpenRouterModelInfo", act: "actModeOpenRouterModelInfo" },
+					},
+					{
+						openRouterModelId: modelId,
+						openRouterModelInfo: modelInfoToUse,
+					},
+					modeToUse,
+				)
+			} else if (selectedProvider === "litellm") {
+				// LiteLLM uses provider-specific model ID and info fields
+				handleModeFieldsChange(
+					{
+						liteLlmModelId: { plan: "planModeLiteLlmModelId", act: "actModeLiteLlmModelId" },
+						liteLlmModelInfo: { plan: "planModeLiteLlmModelInfo", act: "actModeLiteLlmModelInfo" },
+					},
+					{
+						liteLlmModelId: modelId,
+						liteLlmModelInfo: modelInfo,
+					},
+					modeToUse,
+				)
+			} else {
+				// Static model providers use apiModelId
+				handleModeFieldChange({ plan: "planModeApiModelId", act: "actModeApiModelId" }, modelId, modeToUse)
+			}
+			// Reset lightweight mode when model changes
+			StateServiceClient.updateSettings(
+				UpdateSettingsRequest.create({ lightweightMode: false }),
+			).catch((err) => console.error("Failed to reset lightweightMode:", err))
+
+			// Only close modal if not in split mode
+			if (!isSplit) {
+				onOpenChange(false)
+			}
+		},
+		[
+			selectedProvider,
+			handleModeFieldsChange,
+			handleModeFieldChange,
+			currentMode,
+			isSplit,
+			activeEditMode,
+			openRouterModels,
+			onOpenChange,
+		],
+	)
+
+	// Handle provider selection from inline list
+	const handleProviderSelect = useCallback(
+		(provider: ApiProvider) => {
+			const modeToUse = isSplit ? activeEditMode : currentMode
+			handleModeFieldChange({ plan: "planModeApiProvider", act: "actModeApiProvider" }, provider, modeToUse)
+			setIsProviderExpanded(false)
+		},
+		[handleModeFieldChange, currentMode, isSplit, activeEditMode],
+	)
+
+	// Handle split toggle - should NOT close modal
+	const handleSplitToggle = useCallback(
+		async (enabled: boolean) => {
+			// Update the setting
+			await StateServiceClient.updateSettings(
+				UpdateSettingsRequest.create({
+					planActSeparateModelsSetting: enabled,
+				}),
+			)
+			// If disabling split mode, sync configurations
+			if (!enabled) {
+				syncModeConfigurations(apiConfiguration, currentMode, handleFieldsChange)
+			}
+		},
+		[apiConfiguration, currentMode, handleFieldsChange],
+	)
+
+	// Handle configure link click
+	const handleConfigureClick = useCallback(
+		(e: React.MouseEvent) => {
+			e.stopPropagation()
+			e.preventDefault()
+			onOpenChange(false)
+			navigateToSettings?.()
+		},
+		[onOpenChange, navigateToSettings],
+	)
+
+	// Keyboard navigation handler
+	const handleKeyDown = useCallback(
+		(e: React.KeyboardEvent<HTMLInputElement>) => {
+			const totalItems = filteredModels.length
+			if (totalItems === 0) {
+				return
+			}
+
+			switch (e.key) {
+				case "ArrowDown":
+					e.preventDefault()
+					setSelectedIndex((prev) => (prev < totalItems - 1 ? prev + 1 : prev))
+					break
+				case "ArrowUp":
+					e.preventDefault()
+					setSelectedIndex((prev) => (prev > 0 ? prev - 1 : prev))
+					break
+				case "Enter":
+					e.preventDefault()
+					if (selectedIndex >= 0) {
+						const model = filteredModels[selectedIndex]
+						handleSelectModel(model.id, model.info)
+					}
+					break
+				case "Escape":
+					e.preventDefault()
+					onOpenChange(false)
+					break
+			}
+		},
+		[filteredModels, selectedIndex, handleSelectModel, onOpenChange],
+	)
+
+	// Reset selectedIndex and clear refs when search/provider changes
+	useEffect(() => {
+		setSelectedIndex(-1)
+		itemRefs.current = []
+	}, [searchQuery, selectedProvider])
+
+	// Scroll selected item into view
+	useEffect(() => {
+		if (selectedIndex >= 0) {
+			// Use requestAnimationFrame to ensure DOM is updated
+			requestAnimationFrame(() => {
+				const element = itemRefs.current[selectedIndex]
+				if (element) {
+					element.scrollIntoView({
+						block: "nearest",
+						behavior: "smooth",
+					})
+				}
+			})
+		}
+	}, [selectedIndex])
+
+	// Reset states when opening/closing
+	useEffect(() => {
+		if (isOpen) {
+			setIsProviderExpanded(false)
+			setSelectedIndex(-1)
+			setTimeout(() => searchInputRef.current?.focus(), 100)
+		} else {
+			setSearchQuery("")
+			setSelectedIndex(-1)
+		}
+	}, [isOpen])
+
+	// Calculate positions for modal and arrow (update on viewport resize)
+	useEffect(() => {
+		if (isOpen && triggerRef.current) {
+			const rect = triggerRef.current.getBoundingClientRect()
+			const buttonCenter = rect.left + rect.width / 2
+			const rightPosition = document.documentElement.clientWidth - buttonCenter - 5
+			setMenuPosition(rect.top + 1)
+			setArrowPosition(rightPosition)
+		}
+	}, [isOpen, viewportWidth, viewportHeight])
+
+	// Handle click outside to close
+	useEffect(() => {
+		if (!isOpen) {
+			return
+		}
+
+		const handleClickOutside = (e: MouseEvent) => {
+			// Don't close if clicking inside modal, trigger, or provider dropdown portal
+			if (
+				modalRef.current &&
+				!modalRef.current.contains(e.target as Node) &&
+				triggerRef.current &&
+				!triggerRef.current.contains(e.target as Node) &&
+				(!providerDropdownRef.current || !providerDropdownRef.current.contains(e.target as Node))
+			) {
+				onOpenChange(false)
+			}
+		}
+
+		// Delay adding listener to avoid immediate close
+		const timeoutId = setTimeout(() => {
+			document.addEventListener("mousedown", handleClickOutside)
+		}, 0)
+
+		return () => {
+			clearTimeout(timeoutId)
+			document.removeEventListener("mousedown", handleClickOutside)
+		}
+	}, [isOpen, onOpenChange])
+
+	// Handle escape key
+	useEffect(() => {
+		if (!isOpen) {
+			return
+		}
+
+		const handleEscape = (e: KeyboardEvent) => {
+			if (e.key === "Escape") {
+				onOpenChange(false)
+			}
+		}
+
+		document.addEventListener("keydown", handleEscape)
+		return () => document.removeEventListener("keydown", handleEscape)
+	}, [isOpen, onOpenChange])
+
+	// Close modal when navigating to other views (settings, MCP, history, account)
+	useEffect(() => {
+		if (isOpen && (showSettings || showMcp || showAccount)) {
+			onOpenChange(false)
+		}
+	}, [isOpen, showSettings, showMcp, showAccount, onOpenChange])
+
+	// Check if current model actually belongs to current provider (not auto-selected fallback)
+	const modelBelongsToProvider = useMemo(() => {
+		if (!selectedModelId) {
+			return false
+		}
+		return allModels.some((m) => m.id === selectedModelId)
+	}, [selectedModelId, allModels])
+
+	// Handle trigger click
+	const handleTriggerClick = useCallback(() => {
+		onOpenChange(!isOpen)
+	}, [isOpen, onOpenChange])
+
+	const isSearching = !!searchQuery
+
+	return (
+		<>
+			{/* Trigger wrapper */}
+			<div onClick={handleTriggerClick} ref={triggerRef} style={{ cursor: "pointer", display: "inline", minWidth: 0 }}>
+				{children}
+			</div>
+
+			{/* Modal - rendered via portal with fixed positioning */}
+			{isOpen &&
+				createPortal(
+					<PopupModalContainer
+						$arrowPosition={arrowPosition}
+						$bottomOffset={5}
+						$maxHeight="18em"
+						$menuPosition={menuPosition}
+						ref={modalRef}>
+						{/* Search */}
+						<SearchContainer>
+							<Search size={14} style={{ color: "var(--vscode-descriptionForeground)", flexShrink: 0 }} />
+							<SearchInput
+								onChange={(e) => {
+									setSearchQuery(e.target.value)
+									setIsProviderExpanded(false)
+								}}
+								onKeyDown={handleKeyDown}
+								placeholder={`${t("chat.search")} ${allModels.length} ${t("chat.models")}`}
+								ref={searchInputRef as any}
+								value={searchQuery}
+							/>
+						</SearchContainer>
+
+						{/* Settings section - provider + icon toggles */}
+						<SettingsSection onClick={(e) => e.stopPropagation()}>
+							<div className="flex items-center justify-between">
+								{/* Provider - collapsible with dropdown portal */}
+								<Tooltip>
+									<TooltipTrigger asChild>
+										<ProviderRow
+											onClick={() => {
+												if (providerRowRef.current) {
+													const rect = providerRowRef.current.getBoundingClientRect()
+													const viewportHeight = window.innerHeight
+													const spaceBelow = viewportHeight - rect.bottom
+													const itemHeight = 28 // approximate height per item
+													const numItems = configuredProviders.length + 1 // +1 for "Add provider"
+													const dropdownHeight = Math.min(numItems * itemHeight + 8, 200) // 8px for padding
+
+													// If not enough space below, position above
+													const shouldFlipUp = spaceBelow < dropdownHeight + 10 && rect.top > spaceBelow
+
+													setProviderDropdownPosition({
+														top: shouldFlipUp ? rect.top - dropdownHeight - 4 : rect.bottom + 4,
+														left: rect.left,
+														width: modalRef.current?.getBoundingClientRect().width || rect.width,
+														maxHeight: shouldFlipUp ? rect.top - 10 : spaceBelow - 10,
+													})
+												}
+												setIsProviderExpanded(!isProviderExpanded)
+											}}
+											ref={providerRowRef}>
+											<div className="text-[11px] text-description">{t("apiOptions.provider")}:</div>
+											<span className="text-[11px] text-description">
+												{getProviderLabel(selectedProvider)}
+											</span>
+											<ChevronDownIcon className="text-description" size={12} />
+										</ProviderRow>
+									</TooltipTrigger>
+									{!isProviderExpanded && (
+										<TooltipContent side="top" style={{ zIndex: 9999 }}>
+											{t("chat.configuredProviders")}
+										</TooltipContent>
+									)}
+								</Tooltip>
+
+								{/* Icon toggles */}
+								<div className="flex items-center gap-2">
+									<Tooltip>
+										<TooltipTrigger asChild>
+											<IconToggle
+												$isActive={thinkingEnabled}
+												$isHidden={!supportsThinking}
+												onClick={(e) => {
+													e.stopPropagation()
+													supportsThinking && handleThinkingToggle(!thinkingEnabled)
+												}}>
+												<Brain size={14} />
+											</IconToggle>
+										</TooltipTrigger>
+										{supportsThinking && (
+											<TooltipContent side="top" style={{ zIndex: 9999 }}>
+												{thinkingEnabled
+													? t("chat.extendedThinkingEnabled")
+													: t("chat.enableExtendedThinking")}
+											</TooltipContent>
+										)}
+									</Tooltip>
+									<Tooltip>
+										<TooltipTrigger asChild>
+											<IconToggle
+												$isActive={isSplit}
+												onClick={(e) => {
+													e.stopPropagation()
+													handleSplitToggle(!isSplit)
+												}}>
+												<ArrowLeftRight size={14} />
+											</IconToggle>
+										</TooltipTrigger>
+										<TooltipContent side="top" style={{ zIndex: 9999 }}>
+											{t("chat.useDifferentModelsPlanAct")}
+										</TooltipContent>
+									</Tooltip>
+								</div>
+							</div>
+							{/* Thinking budget slider - shown when model supports thinking, greyed out when disabled */}
+							{supportsThinking && (
+								<div className="flex items-center gap-2 py-1.5 px-0 mt-0.5 w-full">
+									<div className="text-description whitespace-nowrap min-w-[130px] text-[10px]">
+										{t("chat.thinking")} ({(thinkingBudget ?? 0).toLocaleString()} {t("chat.tokens")})
+									</div>
+									<ThinkingBudgetSlider currentMode={currentMode} showEnableToggle={false} />
+								</div>
+							)}
+						</SettingsSection>
+
+						{/* Scrollable content */}
+						<ModelListContainer>
+							{/* Current model - inside scroll area for seamless scrolling */}
+							{isSplit ? (
+								<SplitModeRow onClick={(e) => e.stopPropagation()}>
+									<Tooltip>
+										<TooltipTrigger asChild>
+											<SplitModeCell
+												$isActive={activeEditMode === "plan"}
+												onClick={() => setActiveEditMode("plan")}>
+												<SplitModeLabel $mode="plan">P</SplitModeLabel>
+												<SplitModeModel>
+													{planModel.selectedModelId?.split("/").pop() || t("chat.notSet")}
+												</SplitModeModel>
+											</SplitModeCell>
+										</TooltipTrigger>
+										<TooltipContent side="top" style={{ zIndex: 9999 }}>
+											{t("chat.planMode")}
+										</TooltipContent>
+									</Tooltip>
+									<Tooltip>
+										<TooltipTrigger asChild>
+											<SplitModeCell
+												$isActive={activeEditMode === "act"}
+												onClick={() => setActiveEditMode("act")}>
+												<SplitModeLabel $mode="act">A</SplitModeLabel>
+												<SplitModeModel>
+													{actModel.selectedModelId?.split("/").pop() || t("chat.notSet")}
+												</SplitModeModel>
+											</SplitModeCell>
+										</TooltipTrigger>
+										<TooltipContent side="top" style={{ zIndex: 9999 }}>
+											{t("chat.actMode")}
+										</TooltipContent>
+									</Tooltip>
+								</SplitModeRow>
+							) : selectedModelId && modelBelongsToProvider ? (
+								<CurrentModelRow onClick={() => onOpenChange(false)}>
+									<ModelInfoRow>
+										<div className="text-[11px] text-foreground whitespace-nowrap overflow-hidden text-ellipsis">
+											{selectedModelId.split("/").pop() || selectedModelId}
+										</div>
+										<ModelProvider>
+											{OPENROUTER_MODEL_PROVIDERS.includes(selectedProvider)
+												? selectedModelId.split("/")[0]
+												: selectedProvider}
+										</ModelProvider>
+									</ModelInfoRow>
+									<Check
+										size={14}
+										style={{
+											color: "var(--vscode-foreground)",
+											flexShrink: 0,
+										}}
+									/>
+								</CurrentModelRow>
+							) : null}
+
+							{/* Model list */}
+							{filteredModels.map((model, index) => {
+								const isFavorite = (favoritedModelIds || []).includes(model.id)
+								const showStar = selectedProvider === "openrouter"
+								return (
+									<ModelItemContainer
+										$isSelected={index === selectedIndex}
+										key={model.id}
+										onClick={() => handleSelectModel(model.id, model.info)}
+										onMouseEnter={() => setSelectedIndex(index)}
+										ref={(el) => {
+											itemRefs.current[index] = el
+										}}>
+										<ModelInfoRow>
+											<ModelName>{model.name}</ModelName>
+											<ModelProvider>{model.provider}</ModelProvider>
+										</ModelInfoRow>
+										{showStar && (
+											<StarIcon
+												isFavorite={isFavorite}
+												onClick={(e) => {
+													e.stopPropagation()
+													StateServiceClient.toggleFavoriteModel(
+														StringRequest.create({ value: model.id }),
+													).catch((error: Error) =>
+														console.error("Failed to toggle favorite model:", error),
+													)
+												}}
+											/>
+										)}
+									</ModelItemContainer>
+								)
+							})}
+
+							{/* Settings-only providers: show configured model info and help text */}
+							{SETTINGS_ONLY_PROVIDERS.includes(selectedProvider) &&
+								(() => {
+									const providerInfo = getProviderInfo(selectedProvider, apiConfiguration, effectiveMode === "plan" || effectiveMode === "ask" ? "plan" : "act")
+									return (
+										<SettingsOnlyContainer>
+											{/* Show configured model if exists */}
+											{providerInfo.modelId && (
+												<div className="flex items-center gap-1.5">
+													<div className="text-[10px] text-description shrink-0">
+														{t("chat.currentModel")}:
+													</div>
+													<ConfiguredModelName>{providerInfo.modelId}</ConfiguredModelName>
+												</div>
+											)}
+											{/* Show base URL if configured */}
+											{providerInfo.baseUrl && (
+												<div className="flex items-center gap-1.5">
+													<div className="text-[10px] text-description shrink-0">
+														{t("chat.endpoint")}:
+													</div>
+													<div className="text-[10px] text-description whitespace-nowrap overflow-hidden text-ellipsis font-editor">
+														{providerInfo.baseUrl}
+													</div>
+												</div>
+											)}
+											{/* Help text / empty state guidance */}
+											{!providerInfo.modelId && (
+												<div className="text-center text-[11px] text-description py-1 px-0">
+													{providerInfo.helpText}
+												</div>
+											)}
+											{/* Configure link */}
+											<SettingsOnlyLink onClick={handleConfigureClick}>
+												<Settings size={12} />
+												<span>
+													{providerInfo.modelId
+														? t("chat.editInSettings")
+														: t("chat.configureInSettings")}
+												</span>
+											</SettingsOnlyLink>
+										</SettingsOnlyContainer>
+									)
+								})()}
+
+							{/* Empty state */}
+							{isSearching &&
+								filteredModels.length === 0 &&
+								!SETTINGS_ONLY_PROVIDERS.includes(selectedProvider) && (
+									<EmptyState>{t("chat.noModelsFound")}</EmptyState>
+								)}
+						</ModelListContainer>
+					</PopupModalContainer>,
+					document.body,
+				)}
+
+			{/* Provider dropdown - rendered via portal to avoid clipping */}
+			{isOpen &&
+				isProviderExpanded &&
+				createPortal(
+					<ProviderDropdownPortal
+						onClick={(e) => e.stopPropagation()}
+						ref={providerDropdownRef}
+						style={{
+							top: providerDropdownPosition.top,
+							left: providerDropdownPosition.left,
+							width: providerDropdownPosition.width - 20, // Account for modal padding
+							maxHeight: providerDropdownPosition.maxHeight,
+						}}>
+						{configuredProviders.map((provider) => (
+							<ProviderDropdownItem
+								$isSelected={provider === selectedProvider}
+								key={provider}
+								onClick={() => handleProviderSelect(provider)}>
+								{provider === selectedProvider && <span style={{ marginRight: 4 }}>✓</span>}
+								<span>{getProviderLabel(provider)}</span>
+							</ProviderDropdownItem>
+						))}
+						<ProviderDropdownItem $isSelected={false} onClick={handleConfigureClick}>
+							<span style={{ color: "var(--vscode-textLink-foreground)" }}>+ {t("chat.addProvider")}</span>
+						</ProviderDropdownItem>
+					</ProviderDropdownPortal>,
+					document.body,
+				)}
+		</>
+	)
+}
+
+export default ModelPickerModal

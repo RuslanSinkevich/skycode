@@ -1,0 +1,16 @@
+import { SystemPromptSection } from "../templates/placeholders"
+import { TemplateEngine } from "../templates/TemplateEngine"
+import type { PromptVariant, SystemPromptContext } from "../types"
+
+const FEEDBACK_TEMPLATE_TEXT = `
+When the user directly asks about Skycode (eg 'can Skycode do...', 'does Skycode have...') or asks in second person (eg 'are you able...', 'can you do...'), answer based on your knowledge of Skycode AI capabilities and available tools.`
+
+export async function getFeedbackSection(variant: PromptVariant, context: SystemPromptContext): Promise<string | undefined> {
+	if (!context.focusChainSettings?.enabled) {
+		return undefined
+	}
+
+	const template = variant.componentOverrides?.[SystemPromptSection.FEEDBACK]?.template || FEEDBACK_TEMPLATE_TEXT
+
+	return new TemplateEngine().resolve(template, context, {})
+}

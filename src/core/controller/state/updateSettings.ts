@@ -1,0 +1,577 @@
+import * as vscode from "vscode"
+import { buildApiHandler } from "@core/api"
+import { GIGAAM_MODEL_ID } from "@shared/DictationSettings"
+import { Empty } from "@shared/proto/skycode/common"
+import {
+	PlanActMode,
+	McpDisplayMode as ProtoMcpDisplayMode,
+	OpenaiReasoningEffort as ProtoOpenaiReasoningEffort,
+	UpdateSettingsRequest,
+} from "@shared/proto/skycode/state"
+import { getBackendLocaleForPreferredLanguage, setBackendLocale } from "../../../i18n/backend-i18n"
+import { convertProtoToApiProvider } from "@shared/proto-conversions/models/api-configuration-conversion"
+import { OpenaiReasoningEffort } from "@shared/storage/types"
+import { SkycodeEnv } from "@/config"
+import { HostProvider } from "@/hosts/host-provider"
+import { McpDisplayMode } from "@/shared/McpDisplayMode"
+import { ShowMessageType } from "@/shared/proto/host/window"
+import { Logger } from "@/shared/services/Logger"
+import { BrowserSettings as SharedBrowserSettings } from "../../../shared/BrowserSettings"
+import { Controller } from ".."
+
+/**
+ * Updates multiple extension settings in a single request
+ * @param controller The controller instance
+ * @param request The request containing the settings to update
+ * @returns An empty response
+ */
+export async function updateSettings(controller: Controller, request: UpdateSettingsRequest): Promise<Empty> {
+	try {
+		if (request.skycodeEnv !== undefined) {
+			SkycodeEnv.setEnvironment(request.skycodeEnv)
+		}
+
+		if (request.apiConfiguration) {
+			const protoApiConfiguration = request.apiConfiguration
+
+			const convertedApiConfigurationFromProto = {
+				...protoApiConfiguration,
+				// Convert proto ApiProvider enums to native string types
+				planModeApiProvider: protoApiConfiguration.planModeApiProvider
+					? convertProtoToApiProvider(protoApiConfiguration.planModeApiProvider)
+					: undefined,
+				actModeApiProvider: protoApiConfiguration.actModeApiProvider
+					? convertProtoToApiProvider(protoApiConfiguration.actModeApiProvider)
+					: undefined,
+			}
+
+			controller.stateManager.setApiConfiguration(convertedApiConfigurationFromProto)
+
+			if (controller.activeTask) {
+				const currentMode = controller.getCurrentMode()
+				const apiConfigForHandler = {
+					...convertedApiConfigurationFromProto,
+					ulid: controller.activeTask.ulid,
+				}
+				controller.activeTask.api = buildApiHandler(apiConfigForHandler, currentMode)
+			}
+		}
+
+		// Update plan/act separate models setting
+		if (request.planActSeparateModelsSetting !== undefined) {
+			controller.stateManager.setGlobalState("planActSeparateModelsSetting", request.planActSeparateModelsSetting)
+		}
+
+		// Update MCP responses collapsed setting
+		if (request.mcpResponsesCollapsed !== undefined) {
+			controller.stateManager.setGlobalState("mcpResponsesCollapsed", request.mcpResponsesCollapsed)
+		}
+
+		// Update MCP display mode setting
+		if (request.mcpDisplayMode !== undefined) {
+			// Convert proto enum to string type
+			let displayMode: McpDisplayMode
+			switch (request.mcpDisplayMode) {
+				case ProtoMcpDisplayMode.RICH:
+					displayMode = "rich"
+					break
+				case ProtoMcpDisplayMode.PLAIN:
+					displayMode = "plain"
+					break
+				case ProtoMcpDisplayMode.MARKDOWN:
+					displayMode = "markdown"
+					break
+				default:
+					throw new Error(`Invalid MCP display mode value: ${request.mcpDisplayMode}`)
+			}
+			controller.stateManager.setGlobalState("mcpDisplayMode", displayMode)
+		}
+
+		if (request.mode !== undefined) {
+			let mode: import("@shared/storage/types").Mode
+			switch (request.mode) {
+				case PlanActMode.PLAN:
+					mode = "plan"
+					break
+				case PlanActMode.ACT:
+					mode = "act"
+					break
+				case PlanActMode.PAM_ASK:
+					mode = "ask"
+					break
+				case PlanActMode.DEBUG:
+					mode = "debug"
+					break
+				case PlanActMode.CHAT:
+					mode = "chat"
+					break
+				default:
+					mode = "act"
+			}
+			controller.stateManager.setGlobalState("mode", mode)
+			// [SKYCODE] Режим у задачи свой: глобальный — «последний выбранный», активной задаче ставим тот же
+			controller.activeTask?.setMode(mode)
+		}
+
+		if (request.openaiReasoningEffort !== undefined) {
+			// Convert proto enum to string type
+			let reasoningEffort: OpenaiReasoningEffort
+			switch (request.openaiReasoningEffort) {
+				case ProtoOpenaiReasoningEffort.LOW:
+					reasoningEffort = "low"
+					break
+				case ProtoOpenaiReasoningEffort.MEDIUM:
+					reasoningEffort = "medium"
+					break
+				case ProtoOpenaiReasoningEffort.HIGH:
+					reasoningEffort = "high"
+					break
+				case ProtoOpenaiReasoningEffort.MINIMAL:
+					reasoningEffort = "minimal"
+					break
+				default:
+					throw new Error(`Invalid OpenAI reasoning effort value: ${request.openaiReasoningEffort}`)
+			}
+
+			controller.stateManager.setGlobalState("openaiReasoningEffort", reasoningEffort)
+		}
+
+		if (request.preferredLanguage !== undefined) {
+			controller.stateManager.setGlobalState("preferredLanguage", request.preferredLanguage)
+			// Sync backend i18n locale based on preferred language selection.
+			setBackendLocale(getBackendLocaleForPreferredLanguage(request.preferredLanguage))
+		}
+
+		if (request.alwaysThinkInPreferredLanguage !== undefined) {
+			controller.stateManager.setGlobalState("alwaysThinkInPreferredLanguage", request.alwaysThinkInPreferredLanguage)
+		}
+
+		// Update terminal timeout setting
+		if (request.shellIntegrationTimeout !== undefined) {
+			controller.stateManager.setGlobalState("shellIntegrationTimeout", Number(request.shellIntegrationTimeout))
+		}
+
+		// Update terminal reuse setting
+		if (request.terminalReuseEnabled !== undefined) {
+			controller.stateManager.setGlobalState("terminalReuseEnabled", request.terminalReuseEnabled)
+		}
+
+		// Update terminal output line limit
+		if (request.terminalOutputLineLimit !== undefined) {
+			controller.stateManager.setGlobalState("terminalOutputLineLimit", Number(request.terminalOutputLineLimit))
+		}
+
+		if (request.vscodeTerminalExecutionMode !== undefined && request.vscodeTerminalExecutionMode !== "") {
+			controller.stateManager.setGlobalState(
+				"vscodeTerminalExecutionMode",
+				request.vscodeTerminalExecutionMode === "backgroundExec" ? "backgroundExec" : "vscodeTerminal",
+			)
+		}
+
+		// Update max consecutive mistakes
+		if (request.maxConsecutiveMistakes !== undefined) {
+			controller.stateManager.setGlobalState("maxConsecutiveMistakes", Number(request.maxConsecutiveMistakes))
+		}
+
+		// Update strict plan mode setting
+		if (request.strictPlanModeEnabled !== undefined) {
+			controller.stateManager.setGlobalState("strictPlanModeEnabled", request.strictPlanModeEnabled)
+		}
+		// Update yolo mode setting
+		if (request.yoloModeToggled !== undefined) {
+			controller.stateManager.setGlobalState("yoloModeToggled", request.yoloModeToggled)
+		}
+
+		// Update skycode web tools setting
+		if (request.skycodeWebToolsEnabled !== undefined) {
+			controller.stateManager.setGlobalState("skycodeWebToolsEnabled", request.skycodeWebToolsEnabled)
+
+			if (request.skycodeWebToolsEnabled) {
+				preloadChromiumIfNeeded()
+			}
+		}
+
+		if (request.dictationSettings !== undefined) {
+			const incoming = request.dictationSettings as any
+			const dictationLanguage = incoming.dictationLanguage ?? "ru"
+			// [SKYCODE] GigaAM работает только с русским: при смене языка переключаемся на whisper "tiny"
+			let whisperModel = incoming.whisperModel ?? "tiny"
+			if (whisperModel === GIGAAM_MODEL_ID && dictationLanguage !== "ru") {
+				whisperModel = "tiny"
+			}
+			const useGigaAm = whisperModel === GIGAAM_MODEL_ID
+			const wantReinstall = incoming.voiceReinstall === true
+			const wantDownload = incoming.voiceDownloading === true
+
+			// Check if selected model is already downloaded
+			let voiceReady = false
+			if (useGigaAm) {
+				try {
+					const { getSherpaLocalService } = await import("@/services/dictation/SherpaLocalService")
+					const { getSherpaDictationService } = await import("@/services/dictation/SherpaDictationService")
+					const { HostProvider: HP } = await import("@/hosts/host-provider")
+					const sherpa = getSherpaLocalService(HP.get().globalStorageFsPath)
+					if (sherpa?.isSupported) {
+						if (wantReinstall) {
+							// Воркер держит файлы модели открытыми (на Windows их нельзя удалить) — выгружаем перед удалением
+							await getSherpaDictationService().dispose()
+							sherpa.reset()
+						} else {
+							voiceReady = sherpa.isReady()
+						}
+					}
+				} catch {
+					// SherpaLocalService not available
+				}
+			} else {
+				try {
+					const { getWhisperLocalService } = await import("@/services/dictation/WhisperLocalService")
+					const { HostProvider: HP } = await import("@/hosts/host-provider")
+					const svc = getWhisperLocalService(HP.get().globalStorageFsPath, whisperModel, HP.get().extensionFsPath)
+					if (svc) {
+						if (wantReinstall) {
+							svc.resetModel()
+						} else {
+							voiceReady = svc.isReady
+						}
+					}
+				} catch {
+					// WhisperLocalService not available
+				}
+				// Движок GigaAM не выбран — модель из памяти выгружаем (если сейчас не идёт запись)
+				try {
+					const { getSherpaDictationService } = await import("@/services/dictation/SherpaDictationService")
+					const dictation = getSherpaDictationService()
+					if (!dictation.isActive) {
+						await dictation.dispose()
+					}
+				} catch {
+					// ignore
+				}
+			}
+
+			const shouldDownload = !voiceReady && (wantDownload || wantReinstall)
+
+			const dictationSettings = {
+				featureEnabled: incoming.featureEnabled ?? true,
+				dictationEnabled: incoming.dictationEnabled ?? true,
+				dictationLanguage,
+				whisperModel,
+				voiceReady,
+				voiceDownloading: shouldDownload,
+				voiceDownloadProgress: 0,
+				audioDeviceId: incoming.audioDeviceId ?? "",
+			}
+			controller.stateManager.setGlobalState("dictationSettings", dictationSettings)
+			controller.postStateToWebview().catch(() => {})
+
+			if (shouldDownload && useGigaAm) {
+				// [SKYCODE] Установка GigaAM: рантайм sherpa-onnx, модель, VAD и (при необходимости) ffmpeg
+				import("@/services/dictation/SherpaLocalService")
+					.then(async ({ getSherpaLocalService }) => {
+						const { HostProvider: HP } = await import("@/hosts/host-provider")
+						const { ShowMessageType } = await import("@/shared/proto/host/window")
+						const { t: t2 } = await import("@/i18n/backend-i18n")
+						const sherpa = getSherpaLocalService(HP.get().globalStorageFsPath)
+						if (!sherpa) {
+							return
+						}
+						let lastPosted = 0
+						try {
+							await sherpa.install((percent) => {
+								// Не засыпаем webview обновлениями: не чаще раза в 400 мс
+								const now = Date.now()
+								if (percent < 100 && now - lastPosted < 400) {
+									return
+								}
+								lastPosted = now
+								controller.stateManager.setGlobalState("dictationSettings", {
+									...controller.stateManager.getGlobalSettingsKey("dictationSettings"),
+									voiceDownloadProgress: percent,
+								})
+								controller.postStateToWebview().catch(() => {})
+							})
+							// Берём актуальные настройки, а не снимок на начало загрузки: пользователь мог что-то поменять
+							const updated = {
+								...controller.stateManager.getGlobalSettingsKey("dictationSettings"),
+								voiceReady: true,
+								voiceDownloading: false,
+								voiceDownloadProgress: 100,
+							}
+							controller.stateManager.setGlobalState("dictationSettings", updated)
+							await controller.postStateToWebview()
+							HP.window.showMessage({ type: ShowMessageType.INFORMATION, message: t2("voice.ready") })
+						} catch (err) {
+							Logger.error("[VoiceDownload] GigaAM install failed:", err)
+							const updated = {
+								...controller.stateManager.getGlobalSettingsKey("dictationSettings"),
+								voiceDownloading: false,
+								voiceDownloadProgress: 0,
+							}
+							controller.stateManager.setGlobalState("dictationSettings", updated)
+							await controller.postStateToWebview()
+							HP.window.showMessage({
+								type: ShowMessageType.ERROR,
+								message: t2("voice.downloadFailed", { error: err instanceof Error ? err.message : String(err) }),
+							})
+						}
+					})
+					.catch((err) => Logger.error("[VoiceDownload] Import failed:", err))
+			} else if (shouldDownload) {
+				import("@/services/dictation/WhisperLocalService")
+					.then(async ({ getWhisperLocalService }) => {
+						const { HostProvider: HP } = await import("@/hosts/host-provider")
+						const { ShowMessageType } = await import("@/shared/proto/host/window")
+						const { t: t2 } = await import("@/i18n/backend-i18n")
+						const whisper = getWhisperLocalService(
+							HP.get().globalStorageFsPath,
+							whisperModel,
+							HP.get().extensionFsPath,
+						)
+						if (!whisper) {
+							return
+						}
+
+						const DOWNLOAD_TIMEOUT = 20 * 60 * 1000 // 20 minutes
+						const isBundled = !!(whisper as any).bundledArchivePath
+						try {
+							const downloadPromise = whisper.ensureReady((msg: string) => Logger.info(`[VoiceDownload] ${msg}`))
+
+							if (isBundled) {
+								await downloadPromise
+							} else {
+								const timeoutPromise = new Promise<never>((_, reject) =>
+									setTimeout(() => reject(new Error(t2("voice.downloadTimeout"))), DOWNLOAD_TIMEOUT),
+								)
+								await Promise.race([downloadPromise, timeoutPromise])
+							}
+
+							const updated = { ...dictationSettings, voiceReady: true, voiceDownloading: false }
+							controller.stateManager.setGlobalState("dictationSettings", updated)
+							await controller.postStateToWebview()
+							HP.window.showMessage({ type: ShowMessageType.INFORMATION, message: t2("voice.ready") })
+						} catch (err) {
+							Logger.error("[VoiceDownload] Failed:", err)
+							const updated = { ...dictationSettings, voiceDownloading: false }
+							controller.stateManager.setGlobalState("dictationSettings", updated)
+							await controller.postStateToWebview()
+							HP.window.showMessage({
+								type: ShowMessageType.ERROR,
+								message: err instanceof Error ? err.message : String(err),
+							})
+						}
+					})
+					.catch((err) => Logger.error("[VoiceDownload] Import failed:", err))
+			}
+		}
+		// Update auto-condense setting
+		if (request.useAutoCondense !== undefined) {
+			controller.stateManager.setGlobalState("useAutoCondense", request.useAutoCondense)
+		}
+
+		// Update focus chain settings
+		if (request.focusChainSettings !== undefined) {
+			controller.stateManager.setGlobalState("focusChainSettings", {
+				enabled: request.focusChainSettings.enabled,
+				remindSkycodeInterval: request.focusChainSettings.remindSkycodeInterval,
+			})
+		}
+
+		// Update custom prompt choice
+		if (request.customPrompt !== undefined) {
+			const value = request.customPrompt === "compact" ? "compact" : undefined
+			controller.stateManager.setGlobalState("customPrompt", value)
+		}
+
+		// Update browser settings
+		if (request.browserSettings !== undefined) {
+			// Get current browser settings to preserve fields not in the request
+			const currentSettings = controller.stateManager.getGlobalSettingsKey("browserSettings")
+
+			// Convert from protobuf format to shared format, merging with existing settings
+			const newBrowserSettings: SharedBrowserSettings = {
+				...currentSettings, // Start with existing settings (and defaults)
+				viewport: {
+					// Apply updates from request
+					width: request.browserSettings.viewport?.width || currentSettings.viewport.width,
+					height: request.browserSettings.viewport?.height || currentSettings.viewport.height,
+				},
+				// Explicitly handle optional boolean and string fields from the request
+				remoteBrowserEnabled:
+					request.browserSettings.remoteBrowserEnabled === undefined
+						? currentSettings.remoteBrowserEnabled
+						: request.browserSettings.remoteBrowserEnabled,
+				remoteBrowserHost:
+					request.browserSettings.remoteBrowserHost === undefined
+						? currentSettings.remoteBrowserHost
+						: request.browserSettings.remoteBrowserHost,
+				chromeExecutablePath:
+					// If chromeExecutablePath is explicitly in the request (even as ""), use it.
+					// Otherwise, fall back to mergedWithDefaults.
+					"chromeExecutablePath" in request.browserSettings
+						? request.browserSettings.chromeExecutablePath
+						: currentSettings.chromeExecutablePath,
+				disableToolUse:
+					request.browserSettings.disableToolUse === undefined
+						? currentSettings.disableToolUse
+						: request.browserSettings.disableToolUse,
+				customArgs:
+					"customArgs" in request.browserSettings ? request.browserSettings.customArgs : currentSettings.customArgs,
+			}
+
+			// Update global state with new settings
+			controller.stateManager.setGlobalState("browserSettings", newBrowserSettings)
+		}
+
+		// Update default terminal profile
+		if (request.defaultTerminalProfile !== undefined) {
+			const profileId = request.defaultTerminalProfile
+
+			// Update the terminal profile in the state
+			controller.stateManager.setGlobalState("defaultTerminalProfile", profileId)
+
+			let closedCount = 0
+			let busyTerminalsCount = 0
+
+			// Update the terminal manager of the current task if it exists
+			if (controller.activeTask) {
+				// Call the updated setDefaultTerminalProfile method that returns closed terminal info
+				// Use `as any` to handle type incompatibility between VSCode's TerminalInfo and standalone TerminalInfo
+				const result = controller.activeTask.terminalManager.setDefaultTerminalProfile(profileId) as any
+				closedCount = result.closedCount
+				busyTerminalsCount = result.busyTerminals?.length ?? 0
+
+				// Show information message if terminals were closed
+				if (closedCount > 0) {
+					const message = `Closed ${closedCount} ${closedCount === 1 ? "terminal" : "terminals"} with different profile.`
+					HostProvider.window.showMessage({
+						type: ShowMessageType.INFORMATION,
+						message,
+					})
+				}
+
+				// Show warning if there are busy terminals that couldn't be closed
+				if (busyTerminalsCount > 0) {
+					const message =
+						`${busyTerminalsCount} busy ${busyTerminalsCount === 1 ? "terminal has" : "terminals have"} a different profile. ` +
+						`Close ${busyTerminalsCount === 1 ? "it" : "them"} to use the new profile for all commands.`
+					HostProvider.window.showMessage({
+						type: ShowMessageType.WARNING,
+						message,
+					})
+				}
+			}
+		}
+
+		if (request.backgroundEditEnabled !== undefined) {
+			controller.stateManager.setGlobalState("backgroundEditEnabled", !!request.backgroundEditEnabled)
+		}
+
+		if (request.autoCondenseThreshold !== undefined) {
+			const threshold = Math.min(1, Math.max(0, request.autoCondenseThreshold)) // Clamp to 0-1 range
+			controller.stateManager.setGlobalState("autoCondenseThreshold", threshold)
+		}
+
+		if (request.multiRootEnabled !== undefined) {
+			controller.stateManager.setGlobalState("multiRootEnabled", !!request.multiRootEnabled)
+		}
+
+		if (request.skillsEnabled !== undefined) {
+			controller.stateManager.setGlobalState("skillsEnabled", !!request.skillsEnabled)
+		}
+
+		if (request.nativeToolCallEnabled !== undefined) {
+			controller.stateManager.setGlobalState("nativeToolCallEnabled", !!request.nativeToolCallEnabled)
+		}
+
+		if (request.enableParallelToolCalling !== undefined) {
+			controller.stateManager.setGlobalState("enableParallelToolCalling", !!request.enableParallelToolCalling)
+		}
+
+		if (request.lightweightMode !== undefined) {
+			controller.stateManager.setGlobalState("lightweightMode", !!request.lightweightMode)
+		}
+
+		// Session budget tier override + custom limits
+		if (request.sessionBudgetMode !== undefined && request.sessionBudgetMode !== "") {
+			const valid = ["auto", "strong", "medium", "weak", "custom"] as const
+			const m = request.sessionBudgetMode as (typeof valid)[number]
+			if ((valid as readonly string[]).includes(m)) {
+				controller.stateManager.setGlobalState("sessionBudgetMode", m)
+			}
+		}
+		if (request.customMaxToolCallsPerTurn !== undefined) {
+			controller.stateManager.setGlobalState(
+				"customMaxToolCallsPerTurn",
+				Math.max(1, Number(request.customMaxToolCallsPerTurn)),
+			)
+		}
+		if (request.customMaxConsecutiveReadOnlyTools !== undefined) {
+			controller.stateManager.setGlobalState(
+				"customMaxConsecutiveReadOnlyTools",
+				Math.max(1, Number(request.customMaxConsecutiveReadOnlyTools)),
+			)
+		}
+		if (request.customForceCompactAfterSteps !== undefined) {
+			controller.stateManager.setGlobalState(
+				"customForceCompactAfterSteps",
+				Math.max(1, Number(request.customForceCompactAfterSteps)),
+			)
+		}
+
+		// Skycode AI: syntax checks before applying edits (stored in VS Code configuration)
+		const skycodeConfig = vscode.workspace.getConfiguration("skycode")
+		if (request.validateSyntaxBeforeApply !== undefined) {
+			await skycodeConfig.update(
+				"validateSyntaxBeforeApply",
+				!!request.validateSyntaxBeforeApply,
+				vscode.ConfigurationTarget.Global,
+			)
+		}
+		if (request.blockOnSyntaxErrors !== undefined) {
+			await skycodeConfig.update("blockOnSyntaxErrors", !!request.blockOnSyntaxErrors, vscode.ConfigurationTarget.Global)
+		}
+
+		// Post updated state to webview
+		await controller.postStateToWebview()
+
+		return Empty.create()
+	} catch (error) {
+		Logger.error("Failed to update settings:", error)
+		throw error
+	}
+}
+
+function preloadChromiumIfNeeded(): void {
+	vscode.window.withProgress(
+		{
+			location: vscode.ProgressLocation.Notification,
+			title: "Chromium",
+			cancellable: false,
+		},
+		async (progress) => {
+			try {
+				progress.report({ message: "Downloading... 0%", increment: 0 })
+				const { ensureChromiumExists } = await import("@/services/browser/utils")
+				let lastPercent = 0
+				await ensureChromiumExists((percent) => {
+					const increment = percent - lastPercent
+					lastPercent = percent
+					if (percent < 100) {
+						progress.report({ message: `Downloading... ${percent}%`, increment })
+					} else {
+						progress.report({ message: "Extracting...", increment })
+					}
+				})
+				progress.report({ message: "Ready!", increment: 0 })
+				Logger.info("Chromium preloaded successfully for web tools")
+			} catch (error) {
+				Logger.error("Failed to preload Chromium:", error)
+				await HostProvider.window.showMessage({
+					type: ShowMessageType.ERROR,
+					message: `Failed to download Chromium: ${(error as Error).message}`,
+				})
+			}
+		},
+	)
+}

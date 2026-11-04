@@ -1,0 +1,300 @@
+/**
+ * Backend i18n module for translating strings in Extension Host.
+ *
+ * Detects locale via vscode.env.language, defaults to "ru".
+ *
+ * Used for:
+ * - showMessage notifications (native VS Code popups)
+ * - Inline diff buttons (Accept/Reject)
+ *
+ * Supports interpolation: t("key", { error: "text" })
+ * Substitution syntax: {{param_name}}
+ */
+
+import * as vscode from "vscode"
+
+type Locale = "ru" | "en"
+const RUSSIAN_PREFERRED_LANGUAGE_PREFIX = "russian"
+
+// --- English translations ---
+const en: Record<string, string> = {
+	"diff.accept": "Accept",
+	"diff.reject": "Reject",
+	"voice.preparing": "Preparing voice input... Downloading required components (~170 MB). This only happens on first launch. Please try again in a couple of minutes.",
+	"voice.ready": "Voice input is ready! Click the microphone again.",
+	"voice.downloadFailed": "Failed to download voice input components: {{error}}",
+	"voice.downloadTimeout": "Download timed out. Please check your internet connection and try again.",
+	"voice.gigaamNotReady": "Russian GigaAM components are not installed. Open Voice settings and click Download.",
+	"voice.gigaamUnavailable": "Russian GigaAM dictation is not available on this platform. Choose a Whisper model in Voice settings.",
+	"auth.success.title": "Skycode - Authorization",
+	"auth.success.heading": "Done!",
+	"auth.success.body": "You are authorized. Return to Skycode.",
+
+	"auth.codex.signInSuccess": "Successfully signed in to OpenAI Codex",
+	"auth.codex.signInFailed": "OpenAI Codex sign in failed: {{error}}",
+
+	"file.notFound": "File no longer exists: {{path}}",
+
+	"mcp.authSuccess": "Successfully authenticated MCP server",
+	"mcp.authFailed": "Failed to authenticate MCP server",
+	"mcp.installSuccess": "MCP server \"{{name}}\" installed successfully.",
+	"mcp.downloadFailed": "Failed to download MCP",
+
+	"diff.allCleared": "All pending diffs cleared.",
+	"diff.baselineDiffTitle": "{{file}} (before agent ↔ now)",
+	"diff.hoverBefore": "Before the agent ({{count}} lines):",
+	"diff.hoverOpenDiff": "Open comparison",
+	"diff.noPendingForFile": "No unaccepted agent changes in this file.",
+	"diff.gitAutoAccepted": "Skycode: changes in {{files}} confirmed automatically — committed in git.",
+	"diff.gitOverwritten": "Skycode: pending changes in {{files}} were overwritten by git — diff closed.",
+
+	"inlineEdit.selectCode": "Select code to edit",
+	"inlineEdit.emptyResponse": "Skycode: empty response from model",
+	"inlineEdit.noChanges": "Skycode: model found nothing to change",
+	"inlineEdit.inputPrompt": "What to do with selected code?",
+	"inlineEdit.inputPlaceholder": "Add error handling, rename, refactor...",
+	"inlineEdit.progress": "Skycode: Inline Edit...",
+	"inlineEdit.error": "Skycode Inline Edit: {{error}}",
+
+	"commands.selectCodeToImprove": "Please select some code to improve.",
+	"commands.selectCodeToExplain": "Please select some code to explain.",
+
+	"history.deletePrompt": "What would you like to delete?",
+	"history.deleteAll": "Delete Everything",
+	"history.deleteExceptFavorites": "Delete All Except Favorites",
+	"history.noFavorites": "No favorited tasks found. Would you like to delete all tasks anyway?",
+	"history.deleteAllTasks": "Delete All Tasks",
+	"history.deleteError": "Encountered error while deleting task history, there may be some files left behind. Error: {{error}}",
+
+	"state.resettingGlobal": "Resetting global state...",
+	"state.resettingWorkspace": "Resetting workspace state...",
+	"state.resetDone": "State reset",
+	"state.resetFailed": "Failed to reset state: {{error}}",
+
+	"dictation.installCopied": "Installation command copied to clipboard: {{command}}",
+	"dictation.error": "Voice recording error: {{error}}",
+	"dictation.missingDep": "{{name}} is required for voice recording. {{description}}",
+	"dictation.installWithSkycode": "Install with Skycode",
+	"dictation.copyCommand": "Copy Command",
+	"dictation.dismiss": "Dismiss",
+
+	"gigachat.error.authRequired": "GigaChat Authorization Key is required",
+	"gigachat.error.oauthInvalidResponse": "GigaChat OAuth: invalid server response: {{details}}",
+	"gigachat.error.oauthFailed": "GigaChat OAuth error ({{status}}): {{details}}",
+	"gigachat.error.oauthRequest": "GigaChat OAuth request error: {{error}}",
+	"gigachat.error.apiFailed": "GigaChat API error ({{status}}): {{details}}",
+	"gigachat.error.noResponseBody": "GigaChat API returned no response body",
+	"gigachat.log.oauthStarting": "Starting OAuth token request...",
+	"gigachat.log.oauthStatus": "OAuth response status: {{status}}",
+	"gigachat.log.oauthTokenReceived": "OAuth token received, expires_at: {{expiresAt}}",
+	"gigachat.log.chatRequest": "Chat request: model={{model}}, messages={{count}}, stream=true",
+
+	"yandexgpt.error.apiKeyRequired": "YandexGPT API key is required",
+	"yandexgpt.error.folderIdRequired": "Yandex Cloud folder ID is required",
+	"yandexgpt.error.apiFailed": "YandexGPT API error ({{status}}): {{details}}",
+	"yandexgpt.error.noResponseBody": "YandexGPT API returned no response body",
+}
+
+// --- Russian translations ---
+const ru: Record<string, string> = {
+	// allow-any-unicode-next-line
+	"diff.accept": "Принять",
+	// allow-any-unicode-next-line
+	"diff.reject": "Отклонить",
+	// allow-any-unicode-next-line
+	"voice.preparing": "Подготовка голосового ввода... Загружаются необходимые компоненты (~170 МБ). Это происходит только при первом запуске. Попробуйте через пару минут.",
+	// allow-any-unicode-next-line
+	"voice.ready": "Голосовой ввод готов к работе! Нажмите на микрофон ещё раз.",
+	// allow-any-unicode-next-line
+	"voice.downloadFailed": "Не удалось загрузить компоненты голосового ввода: {{error}}",
+	// allow-any-unicode-next-line
+	"voice.downloadTimeout": "Загрузка прервана по таймауту. Проверьте подключение к интернету и попробуйте снова.",
+	// allow-any-unicode-next-line
+	"voice.gigaamNotReady": "Компоненты русского GigaAM не установлены. Откройте настройки голоса и нажмите «Загрузить».",
+	// allow-any-unicode-next-line
+	"voice.gigaamUnavailable": "Русская диктовка GigaAM недоступна на этой платформе. Выберите модель Whisper в настройках голоса.",
+	// allow-any-unicode-next-line
+	"auth.success.title": "Skycode — Авторизация",
+	// allow-any-unicode-next-line
+	"auth.success.heading": "Готово!",
+	// allow-any-unicode-next-line
+	"auth.success.body": "Вы авторизованы. Вернитесь в Skycode.",
+
+	// allow-any-unicode-next-line
+	"auth.codex.signInSuccess": "Вход в OpenAI Codex выполнен",
+	// allow-any-unicode-next-line
+	"auth.codex.signInFailed": "Не удалось войти в OpenAI Codex: {{error}}",
+
+	// allow-any-unicode-next-line
+	"file.notFound": "Файла больше нет: {{path}}",
+
+	// allow-any-unicode-next-line
+	"mcp.authSuccess": "MCP-сервер успешно авторизован",
+	// allow-any-unicode-next-line
+	"mcp.authFailed": "Не удалось авторизовать MCP-сервер",
+	// allow-any-unicode-next-line
+	"mcp.installSuccess": "MCP-сервер «{{name}}» установлен.",
+	// allow-any-unicode-next-line
+	"mcp.downloadFailed": "Не удалось загрузить MCP",
+
+	// allow-any-unicode-next-line
+	"diff.allCleared": "Все ожидающие изменения очищены.",
+	"diff.baselineDiffTitle": "{{file}} (до агента ↔ сейчас)",
+	"diff.hoverBefore": "Было до агента ({{count}} стр.):",
+	"diff.hoverOpenDiff": "Открыть сравнение",
+	"diff.noPendingForFile": "В этом файле нет непринятых правок агента.",
+	// allow-any-unicode-next-line
+	"diff.gitAutoAccepted": "Skycode: изменения в {{files}} подтверждены автоматически — закоммичены в git.",
+	// allow-any-unicode-next-line
+	"diff.gitOverwritten": "Skycode: ожидающие изменения в {{files}} перезаписаны git — диф закрыт.",
+
+	// allow-any-unicode-next-line
+	"inlineEdit.selectCode": "Выделите код для редактирования",
+	// allow-any-unicode-next-line
+	"inlineEdit.emptyResponse": "Skycode: пустой ответ от модели",
+	// allow-any-unicode-next-line
+	"inlineEdit.noChanges": "Skycode: модель не нашла что менять",
+	// allow-any-unicode-next-line
+	"inlineEdit.inputPrompt": "Что сделать с выделенным кодом?",
+	// allow-any-unicode-next-line
+	"inlineEdit.inputPlaceholder": "Добавь обработку ошибок, переименуй, рефакторинг...",
+	// allow-any-unicode-next-line
+	"inlineEdit.progress": "Skycode: Инлайн-редактирование...",
+	// allow-any-unicode-next-line
+	"inlineEdit.error": "Skycode Inline Edit: {{error}}",
+
+	// allow-any-unicode-next-line
+	"commands.selectCodeToImprove": "Выделите код для улучшения.",
+	// allow-any-unicode-next-line
+	"commands.selectCodeToExplain": "Выделите код для объяснения.",
+
+	// allow-any-unicode-next-line
+	"history.deletePrompt": "Что вы хотите удалить?",
+	// allow-any-unicode-next-line
+	"history.deleteAll": "Удалить всё",
+	// allow-any-unicode-next-line
+	"history.deleteExceptFavorites": "Удалить всё кроме избранного",
+	// allow-any-unicode-next-line
+	"history.noFavorites": "Избранных задач не найдено. Удалить все задачи?",
+	// allow-any-unicode-next-line
+	"history.deleteAllTasks": "Удалить все задачи",
+	// allow-any-unicode-next-line
+	"history.deleteError": "Ошибка при удалении истории задач, некоторые файлы могли остаться. Ошибка: {{error}}",
+
+	// allow-any-unicode-next-line
+	"state.resettingGlobal": "Сброс глобального состояния...",
+	// allow-any-unicode-next-line
+	"state.resettingWorkspace": "Сброс состояния рабочей области...",
+	// allow-any-unicode-next-line
+	"state.resetDone": "Состояние сброшено",
+	// allow-any-unicode-next-line
+	"state.resetFailed": "Не удалось сбросить состояние: {{error}}",
+
+	// allow-any-unicode-next-line
+	"dictation.installCopied": "Команда установки скопирована в буфер обмена: {{command}}",
+	// allow-any-unicode-next-line
+	"dictation.error": "Ошибка записи голоса: {{error}}",
+	// allow-any-unicode-next-line
+	"dictation.missingDep": "{{name}} необходим для записи голоса. {{description}}",
+	// allow-any-unicode-next-line
+	"dictation.installWithSkycode": "Установить через Skycode",
+	// allow-any-unicode-next-line
+	"dictation.copyCommand": "Скопировать команду",
+	// allow-any-unicode-next-line
+	"dictation.dismiss": "Закрыть",
+
+	// allow-any-unicode-next-line
+	"gigachat.error.authRequired": "Требуется ключ авторизации GigaChat",
+	// allow-any-unicode-next-line
+	"gigachat.error.oauthInvalidResponse": "Ошибка авторизации GigaChat: некорректный ответ сервера: {{details}}",
+	// allow-any-unicode-next-line
+	"gigachat.error.oauthFailed": "Ошибка авторизации GigaChat ({{status}}): {{details}}",
+	// allow-any-unicode-next-line
+	"gigachat.error.oauthRequest": "Ошибка запроса авторизации GigaChat: {{error}}",
+	// allow-any-unicode-next-line
+	"gigachat.error.apiFailed": "Ошибка API GigaChat ({{status}}): {{details}}",
+	// allow-any-unicode-next-line
+	"gigachat.error.noResponseBody": "API GigaChat не вернул тело ответа",
+	// allow-any-unicode-next-line
+	"gigachat.log.oauthStarting": "Запрос OAuth токена...",
+	// allow-any-unicode-next-line
+	"gigachat.log.oauthStatus": "OAuth статус ответа: {{status}}",
+	// allow-any-unicode-next-line
+	"gigachat.log.oauthTokenReceived": "OAuth токен получен, expires_at: {{expiresAt}}",
+	// allow-any-unicode-next-line
+	"gigachat.log.chatRequest": "Запрос к чату: модель={{model}}, сообщений={{count}}, stream=true",
+
+	// allow-any-unicode-next-line
+	"yandexgpt.error.apiKeyRequired": "Требуется API-ключ YandexGPT",
+	// allow-any-unicode-next-line
+	"yandexgpt.error.folderIdRequired": "Требуется идентификатор каталога Yandex Cloud (Folder ID)",
+	// allow-any-unicode-next-line
+	"yandexgpt.error.apiFailed": "Ошибка API YandexGPT ({{status}}): {{details}}",
+	// allow-any-unicode-next-line
+	"yandexgpt.error.noResponseBody": "API YandexGPT не вернул тело ответа",
+}
+
+const dictionaries: Record<Locale, Record<string, string>> = { en, ru }
+
+/** Module-level override — set by updateSettings when user changes interface language */
+let _overrideLocale: Locale | null = null
+
+/**
+ * Sets the backend locale explicitly.
+ * Called from updateSettings handler when preferredLanguage changes,
+ * and from controller init to restore the setting on startup.
+ */
+export function setBackendLocale(locale: Locale): void {
+	_overrideLocale = locale
+}
+
+/**
+ * Maps preferred language display value to backend locale.
+ * Preferred language values are formatted as "English" or "Russian - Русский".
+ * We resolve by stable English prefix to avoid locale-dependent string matching.
+ */
+export function getBackendLocaleForPreferredLanguage(preferredLanguage: string): Locale {
+	const normalized = preferredLanguage.trim().toLowerCase()
+	return normalized.startsWith(RUSSIAN_PREFERRED_LANGUAGE_PREFIX) ? "ru" : "en"
+}
+
+/**
+ * Detects current locale.
+ * Priority: explicit override → vscode.env.language → default "ru"
+ */
+function getLocale(): Locale {
+	if (_overrideLocale) { return _overrideLocale }
+	try {
+		if (vscode.env.language.startsWith("ru")) {
+			return "ru"
+		}
+	} catch {
+		// ignore
+	}
+	return "ru"
+}
+
+/**
+ * Substitutes params into string: {{key}} -> value
+ */
+function interpolate(value: string, params?: Record<string, string | number>): string {
+	if (!params) {
+		return value
+	}
+	let result = value
+	for (const [key, paramValue] of Object.entries(params)) {
+		result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), String(paramValue))
+	}
+	return result
+}
+
+/**
+ * Translates key to current language with parameter substitution.
+ * If key not found returns the key itself (fallback).
+ */
+export function t(key: string, params?: Record<string, string | number>): string {
+	const locale = getLocale()
+	const current = dictionaries[locale]?.[key]
+	const fallback = dictionaries["en"]?.[key]
+	return interpolate(current ?? fallback ?? key, params)
+}

@@ -1,0 +1,607 @@
+import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
+import { findLastIndex } from "@shared/array"
+import { DEFAULT_BROWSER_SETTINGS } from "@shared/BrowserSettings"
+import { DEFAULT_DICTATION_SETTINGS, DictationSettings } from "@shared/DictationSettings"
+import { DEFAULT_PLATFORM, type ExtensionState } from "@shared/ExtensionMessage"
+import { DEFAULT_FOCUS_CHAIN_SETTINGS } from "@shared/FocusChainSettings"
+import { DEFAULT_MCP_DISPLAY_MODE } from "@shared/McpDisplayMode"
+import { EmptyRequest } from "@shared/proto/skycode/common"
+import type { OpenRouterCompatibleModelInfo } from "@shared/proto/skycode/models"
+import type { TerminalProfile } from "@shared/proto/skycode/state"
+import { convertProtoMcpServersToMcpServers } from "@shared/proto-conversions/mcp/mcp-server-conversion"
+import { fromProtobufModels } from "@shared/proto-conversions/models/typeConversion"
+import { convertProtoToSkycodeMessage } from "@shared/proto-conversions/skycode-message"
+import type React from "react"
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
+import { useNavigation } from "./useNavigation"
+import { Environment } from "../../../src/config"
+import { type ModelInfo, openRouterDefaultModelId, openRouterDefaultModelInfo } from "../../../src/shared/api"
+import type { McpServer, McpViewTab } from "../../../src/shared/mcp"
+import { McpServiceClient, ModelsServiceClient, StateServiceClient, UiServiceClient } from "../services/grpc-client"
+
+export interface ExtensionStateContextType extends ExtensionState {
+	didHydrateState: boolean
+	openRouterModels: Record<string, ModelInfo>
+	liteLlmModels: Record<string, ModelInfo>
+	openAiModels: string[]
+	mcpServers: McpServer[]
+	totalTasksSize: number | null
+
+	availableTerminalProfiles: TerminalProfile[]
+
+	// View state
+	showMcp: boolean
+	mcpTab?: McpViewTab
+	showSettings: boolean
+	settingsTargetSection?: string
+	showAccount: boolean
+	showChatModelSelector: boolean
+
+	// Setters
+	setDictationSettings: (value: DictationSettings) => void
+	setShowChatModelSelector: (value: boolean) => void
+	setMcpServers: (value: McpServer[]) => void
+	setGlobalSkycodeRulesToggles: (toggles: Record<string, boolean>) => void
+	setLocalSkycodeRulesToggles: (toggles: Record<string, boolean>) => void
+	setLocalCursorRulesToggles: (toggles: Record<string, boolean>) => void
+	setLocalWindsurfRulesToggles: (toggles: Record<string, boolean>) => void
+	setLocalAgentsRulesToggles: (toggles: Record<string, boolean>) => void
+	setLocalWorkflowToggles: (toggles: Record<string, boolean>) => void
+	setGlobalWorkflowToggles: (toggles: Record<string, boolean>) => void
+	setGlobalSkillsToggles: (toggles: Record<string, boolean>) => void
+	setLocalSkillsToggles: (toggles: Record<string, boolean>) => void
+	setTotalTasksSize: (value: number | null) => void
+
+	// Refresh functions
+	refreshOpenRouterModels: () => void
+	refreshLiteLlmModels: () => void
+
+	// Navigation state setters
+	setShowMcp: (value: boolean) => void
+	setMcpTab: (tab?: McpViewTab) => void
+
+	// Navigation functions
+	navigateToMcp: (tab?: McpViewTab) => void
+	navigateToSettings: (targetSection?: string) => void
+	navigateToAccount: () => void
+	navigateToChat: () => void
+
+	// Hide functions
+	hideSettings: () => void
+	hideAccount: () => void
+	hideChatModelSelector: () => void
+	closeMcpView: () => void
+
+	// Event callbacks
+	onRelinquishControl: (callback: () => void) => () => void
+}
+
+export const ExtensionStateContext = createContext<ExtensionStateContextType | undefined>(undefined)
+
+export const ExtensionStateContextProvider: React.FC<{
+	children: React.ReactNode
+}> = ({ children }) => {
+	const {
+		showMcp,
+		mcpTab,
+		showSettings,
+		settingsTargetSection,
+		showAccount,
+		showChatModelSelector,
+		setShowMcp,
+		setMcpTab,
+		closeMcpView,
+		hideSettings,
+		hideAccount,
+		hideChatModelSelector,
+		navigateToMcp,
+		navigateToSettings,
+		navigateToAccount,
+		navigateToChat,
+		setShowChatModelSelector,
+	} = useNavigation()
+
+	const [state, setState] = useState<ExtensionState>({
+		version: "",
+		skycodeMessages: [],
+		tabs: [],
+		taskHistory: [],
+		autoApprovalSettings: DEFAULT_AUTO_APPROVAL_SETTINGS,
+		browserSettings: DEFAULT_BROWSER_SETTINGS,
+		dictationSettings: DEFAULT_DICTATION_SETTINGS,
+		focusChainSettings: DEFAULT_FOCUS_CHAIN_SETTINGS,
+		preferredLanguage: "English",
+		openaiReasoningEffort: "medium",
+		mode: "act",
+		platform: DEFAULT_PLATFORM,
+		environment: Environment.production,
+		planActSeparateModelsSetting: true,
+		mcpDisplayMode: DEFAULT_MCP_DISPLAY_MODE,
+		globalSkycodeRulesToggles: {},
+		localSkycodeRulesToggles: {},
+		localCursorRulesToggles: {},
+		localWindsurfRulesToggles: {},
+		localAgentsRulesToggles: {},
+		localWorkflowToggles: {},
+		globalWorkflowToggles: {},
+		shellIntegrationTimeout: 4000,
+		terminalReuseEnabled: true,
+		vscodeTerminalExecutionMode: "vscodeTerminal",
+		terminalOutputLineLimit: 500,
+		maxConsecutiveMistakes: 3,
+		defaultTerminalProfile: "default",
+		mcpResponsesCollapsed: false, // Default value (expanded), will be overwritten by extension state
+		strictPlanModeEnabled: false,
+		yoloModeToggled: false,
+		customPrompt: undefined,
+		useAutoCondense: false,
+		skycodeWebToolsEnabled: { user: true, featureFlag: true },
+		autoCondenseThreshold: undefined,
+		favoritedModelIds: [],
+		backgroundCommandRunning: false,
+		backgroundCommandTaskId: undefined,
+		backgroundEditEnabled: true,
+		pendingChanges: [],
+		skillsEnabled: false,
+		globalSkillsToggles: {},
+		localSkillsToggles: {},
+
+		// NEW: Add workspace information with defaults
+		workspaceRoots: [],
+		primaryRootIndex: 0,
+		isMultiRootWorkspace: false,
+		multiRootSetting: { user: false, featureFlag: false },
+		hooksEnabled: false,
+		nativeToolCallSetting: false,
+		enableParallelToolCalling: false,
+		// Skycode AI: Codebase indexing
+		indexingConfig: undefined,
+		indexingProgress: undefined,
+		indexingPromptDismissed: false,
+		// Skycode AI: Lightweight mode for weak models
+		lightweightMode: false,
+		// Skycode AI: Session budget defaults
+		sessionBudgetMode: "auto",
+		customMaxToolCallsPerTurn: 80,
+		customMaxConsecutiveReadOnlyTools: 12,
+		customForceCompactAfterSteps: 40,
+		promptProfile: undefined,
+		// Skycode AI: Edit tools settings
+		validateSyntaxBeforeApply: false,
+		blockOnSyntaxErrors: false,
+	})
+	const [didHydrateState, setDidHydrateState] = useState(false)
+
+	const [openRouterModels, setOpenRouterModels] = useState<Record<string, ModelInfo>>({
+		[openRouterDefaultModelId]: openRouterDefaultModelInfo,
+	})
+	const [liteLlmModels, setLiteLlmModels] = useState<Record<string, ModelInfo>>({})
+	const [totalTasksSize, setTotalTasksSize] = useState<number | null>(null)
+	const [availableTerminalProfiles, setAvailableTerminalProfiles] = useState<TerminalProfile[]>([])
+
+	const [openAiModels, _setOpenAiModels] = useState<string[]>([])
+	const [mcpServers, setMcpServers] = useState<McpServer[]>([])
+
+	// References to store subscription cancellation functions
+	const stateSubscriptionRef = useRef<(() => void) | null>(null)
+
+	const chatButtonUnsubscribeRef = useRef<(() => void) | null>(null)
+	const accountButtonClickedSubscriptionRef = useRef<(() => void) | null>(null)
+	const settingsButtonClickedSubscriptionRef = useRef<(() => void) | null>(null)
+	const partialMessageUnsubscribeRef = useRef<(() => void) | null>(null)
+	const openRouterModelsUnsubscribeRef = useRef<(() => void) | null>(null)
+	const liteLlmModelsUnsubscribeRef = useRef<(() => void) | null>(null)
+	const workspaceUpdatesUnsubscribeRef = useRef<(() => void) | null>(null)
+	const relinquishControlUnsubscribeRef = useRef<(() => void) | null>(null)
+
+	// Add ref for callbacks
+	const relinquishControlCallbacks = useRef<Set<() => void>>(new Set())
+
+	// Create hook function
+	const onRelinquishControl = useCallback((callback: () => void) => {
+		relinquishControlCallbacks.current.add(callback)
+		return () => {
+			relinquishControlCallbacks.current.delete(callback)
+		}
+	}, [])
+	const mcpServersSubscriptionRef = useRef<(() => void) | null>(null)
+
+	// [SKYCODE-SKYCODE] Listen for lightweight direct messages from extension (bypasses gRPC for fast updates)
+	useEffect(() => {
+		const handler = (event: MessageEvent) => {
+			const msg = event.data
+			if (msg?.type === "indexingProgress" && msg.data) {
+				setState((prev) => ({ ...prev, indexingProgress: msg.data }))
+			}
+		}
+		window.addEventListener("message", handler)
+		return () => window.removeEventListener("message", handler)
+	}, [])
+
+	// Subscribe to state updates and UI events using the gRPC streaming API
+	useEffect(() => {
+		// Set up state subscription
+		stateSubscriptionRef.current = StateServiceClient.subscribeToState(EmptyRequest.create({}), {
+			onResponse: (response) => {
+				if (response.stateJson) {
+					try {
+						const stateData = JSON.parse(response.stateJson) as ExtensionState
+						setState((prevState) => {
+							// Versioning logic for autoApprovalSettings
+							const incomingVersion = stateData.autoApprovalSettings?.version ?? 1
+							const currentVersion = prevState.autoApprovalSettings?.version ?? 1
+							const shouldUpdateAutoApproval = incomingVersion > currentVersion
+							// HACK: Preserve skycodeMessages if currentTaskItem is the same
+							if (stateData.currentTaskItem?.id === prevState.currentTaskItem?.id) {
+								stateData.skycodeMessages = stateData.skycodeMessages?.length
+									? stateData.skycodeMessages
+									: prevState.skycodeMessages
+							}
+
+							const newState = {
+								...stateData,
+								autoApprovalSettings: shouldUpdateAutoApproval
+									? stateData.autoApprovalSettings
+									: prevState.autoApprovalSettings,
+							}
+
+							setDidHydrateState(true)
+
+							return newState
+						})
+					} catch (error) {
+						console.error("Error parsing state JSON:", error)
+					}
+				}
+				// [SKYCODE-PERF] Removed noisy per-state-update log that was spamming console
+			},
+			onError: (error) => {
+				console.error("Error in state subscription:", error)
+			},
+			onComplete: () => {},
+		})
+
+		// Subscribe to chat button clicked events with webview type
+		chatButtonUnsubscribeRef.current = UiServiceClient.subscribeToChatButtonClicked(
+			{},
+			{
+				onResponse: () => {
+					// When chat button is clicked, navigate to chat
+				navigateToChat()
+				},
+				onError: (error) => {
+					console.error("Error in chat button subscription:", error)
+				},
+				onComplete: () => {},
+			},
+		)
+
+		// Subscribe to MCP servers updates
+		mcpServersSubscriptionRef.current = McpServiceClient.subscribeToMcpServers(EmptyRequest.create(), {
+			onResponse: (response) => {
+			if (response.mcpServers) {
+					setMcpServers(convertProtoMcpServersToMcpServers(response.mcpServers))
+				}
+			},
+			onError: (error) => {
+				console.error("Error in MCP servers subscription:", error)
+			},
+			onComplete: () => {},
+		})
+
+		// Set up settings button clicked subscription
+		settingsButtonClickedSubscriptionRef.current = UiServiceClient.subscribeToSettingsButtonClicked(EmptyRequest.create({}), {
+			onResponse: () => {
+				// When settings button is clicked, navigate to settings
+				navigateToSettings()
+			},
+			onError: (error) => {
+				console.error("Error in settings button clicked subscription:", error)
+			},
+			onComplete: () => {},
+		})
+
+		// [SKYCODE-PERF] Coalesce partial-message updates to ~30 fps via rAF.
+		// During streaming the backend sends a partial for every token; without
+		// throttling React re-renders the whole chat for each token and that is
+		// the main reason long sessions drift to ~50% CPU. We keep the latest
+		// patch per `ts` in a Map and flush them once per animation frame.
+		type PartialPatch = ReturnType<typeof convertProtoToSkycodeMessage>
+		const pendingPatches = new Map<number, PartialPatch>()
+		let pendingFlushHandle: number | null = null
+		const flushPartials = () => {
+			pendingFlushHandle = null
+			if (pendingPatches.size === 0) { return }
+			const batch: PartialPatch[] = Array.from(pendingPatches.values())
+			pendingPatches.clear()
+			setState((prevState) => {
+				let next: typeof prevState.skycodeMessages | null = null
+				for (const partial of batch) {
+					const arr: typeof prevState.skycodeMessages = next ?? prevState.skycodeMessages
+					const lastIndex = findLastIndex(arr, (msg) => msg.ts === partial.ts)
+					if (lastIndex !== -1) {
+						if (next === null) {
+							next = arr.slice()
+						}
+						next[lastIndex] = { ...next[lastIndex], ...partial }
+					}
+				}
+				if (next === null) { return prevState }
+				return { ...prevState, skycodeMessages: next }
+			})
+		}
+		const scheduleFlush = () => {
+			if (pendingFlushHandle !== null) { return }
+			// rAF naturally throttles to ~60fps and pauses when the webview is hidden,
+			// which exactly matches "don't burn CPU when the user is in another window".
+			pendingFlushHandle = requestAnimationFrame(flushPartials)
+		}
+
+		partialMessageUnsubscribeRef.current = UiServiceClient.subscribeToPartialMessage(EmptyRequest.create({}), {
+			onResponse: (protoMessage) => {
+				try {
+					if (!protoMessage.ts || protoMessage.ts <= 0) {
+						console.error("Invalid timestamp in partial message:", protoMessage)
+						return
+					}
+					const partialMessage = convertProtoToSkycodeMessage(protoMessage)
+					pendingPatches.set(partialMessage.ts, partialMessage)
+					scheduleFlush()
+				} catch (error) {
+					console.error("Failed to process partial message:", error, protoMessage)
+				}
+			},
+			onError: (error) => {
+				console.error("Error in partialMessage subscription:", error)
+			},
+			onComplete: () => {},
+		})
+
+		// Subscribe to OpenRouter models updates
+		openRouterModelsUnsubscribeRef.current = ModelsServiceClient.subscribeToOpenRouterModels(EmptyRequest.create({}), {
+			onResponse: (response: OpenRouterCompatibleModelInfo) => {
+				const models = fromProtobufModels(response.models)
+				setOpenRouterModels({
+					[openRouterDefaultModelId]: openRouterDefaultModelInfo, // in case the extension sent a model list without the default model
+					...models,
+				})
+			},
+			onError: (error) => {
+				console.error("Error in OpenRouter models subscription:", error)
+			},
+			onComplete: () => {},
+		})
+
+		// Subscribe to LiteLLM models updates
+		liteLlmModelsUnsubscribeRef.current = ModelsServiceClient.subscribeToLiteLlmModels(EmptyRequest.create({}), {
+			onResponse: (response: OpenRouterCompatibleModelInfo) => {
+				const models = fromProtobufModels(response.models)
+				setLiteLlmModels(models)
+			},
+			onError: (error) => {
+				console.error("Error in LiteLLM models subscription:", error)
+			},
+			onComplete: () => {},
+		})
+
+		// Initialize webview using gRPC
+		UiServiceClient.initializeWebview(EmptyRequest.create({}))
+			.then(() => {})
+			.catch((error) => {
+				console.error("Failed to initialize webview via gRPC:", error)
+			})
+
+		// [SKYCODE] Кнопка «О проекте» в заголовке (внутреннее имя — accountButtonClicked)
+		accountButtonClickedSubscriptionRef.current = UiServiceClient.subscribeToAccountButtonClicked(EmptyRequest.create(), {
+			onResponse: () => {
+				// При нажатии «О проекте» открываем экран About
+				navigateToAccount()
+			},
+			onError: (error) => {
+				console.error("Error in account button clicked subscription:", error)
+			},
+			onComplete: () => {},
+		})
+
+		// Fetch available terminal profiles on launch
+		StateServiceClient.getAvailableTerminalProfiles(EmptyRequest.create({}))
+			.then((response) => {
+				setAvailableTerminalProfiles(response.profiles)
+			})
+			.catch((error) => {
+				console.error("Failed to fetch available terminal profiles:", error)
+			})
+
+		// Subscribe to relinquish control events
+		relinquishControlUnsubscribeRef.current = UiServiceClient.subscribeToRelinquishControl(EmptyRequest.create({}), {
+			onResponse: () => {
+				// Call all registered callbacks
+				relinquishControlCallbacks.current.forEach((callback) => {
+					callback()
+				})
+			},
+			onError: (error) => {
+				console.error("Error in relinquishControl subscription:", error)
+			},
+			onComplete: () => {},
+		})
+
+		// Clean up subscriptions when component unmounts
+		return () => {
+			// [SKYCODE-PERF] Cancel any scheduled flush + drop any leftover patches.
+			if (pendingFlushHandle !== null) {
+				cancelAnimationFrame(pendingFlushHandle)
+				pendingFlushHandle = null
+			}
+			pendingPatches.clear()
+
+			if (stateSubscriptionRef.current) {
+				stateSubscriptionRef.current()
+				stateSubscriptionRef.current = null
+			}
+			if (chatButtonUnsubscribeRef.current) {
+				chatButtonUnsubscribeRef.current()
+				chatButtonUnsubscribeRef.current = null
+			}
+			if (accountButtonClickedSubscriptionRef.current) {
+				accountButtonClickedSubscriptionRef.current()
+				accountButtonClickedSubscriptionRef.current = null
+			}
+			if (settingsButtonClickedSubscriptionRef.current) {
+				settingsButtonClickedSubscriptionRef.current()
+				settingsButtonClickedSubscriptionRef.current = null
+			}
+			if (partialMessageUnsubscribeRef.current) {
+				partialMessageUnsubscribeRef.current()
+				partialMessageUnsubscribeRef.current = null
+			}
+			if (openRouterModelsUnsubscribeRef.current) {
+				openRouterModelsUnsubscribeRef.current()
+				openRouterModelsUnsubscribeRef.current = null
+			}
+			if (liteLlmModelsUnsubscribeRef.current) {
+				liteLlmModelsUnsubscribeRef.current()
+				liteLlmModelsUnsubscribeRef.current = null
+			}
+			if (workspaceUpdatesUnsubscribeRef.current) {
+				workspaceUpdatesUnsubscribeRef.current()
+				workspaceUpdatesUnsubscribeRef.current = null
+			}
+			if (relinquishControlUnsubscribeRef.current) {
+				relinquishControlUnsubscribeRef.current()
+				relinquishControlUnsubscribeRef.current = null
+			}
+			if (mcpServersSubscriptionRef.current) {
+				mcpServersSubscriptionRef.current()
+				mcpServersSubscriptionRef.current = null
+			}
+		}
+	}, [])
+
+	const refreshOpenRouterModels = useCallback(() => {
+		ModelsServiceClient.refreshOpenRouterModelsRpc(EmptyRequest.create({}))
+			.then((response: OpenRouterCompatibleModelInfo) => {
+				const models = fromProtobufModels(response.models)
+				setOpenRouterModels({
+					[openRouterDefaultModelId]: openRouterDefaultModelInfo, // in case the extension sent a model list without the default model
+					...models,
+				})
+			})
+			.catch((error: Error) => console.error("Failed to refresh OpenRouter models:", error))
+	}, [])
+
+	const refreshLiteLlmModels = useCallback(() => {
+		ModelsServiceClient.refreshLiteLlmModelsRpc(EmptyRequest.create({}))
+			.then((response: OpenRouterCompatibleModelInfo) => {
+				const models = fromProtobufModels(response.models)
+				setLiteLlmModels(models)
+			})
+			.catch((error: Error) => console.error("Failed to refresh LiteLLM models:", error))
+	}, [])
+
+	// Auto-refresh model lists on API key availability
+	useEffect(() => {
+		if (!openRouterModels || Object.keys(openRouterModels).length <= 1) {
+			refreshOpenRouterModels()
+		}
+		if (state.apiConfiguration?.liteLlmApiKey) {
+			refreshLiteLlmModels()
+		}
+	}, [
+		refreshOpenRouterModels,
+		state?.apiConfiguration?.liteLlmApiKey,
+		refreshLiteLlmModels,
+	])
+
+	const stableSetters = useRef({
+		setGlobalSkycodeRulesToggles: (toggles: Record<string, boolean>) =>
+			setState((prev) => ({ ...prev, globalSkycodeRulesToggles: toggles })),
+		setLocalSkycodeRulesToggles: (toggles: Record<string, boolean>) =>
+			setState((prev) => ({ ...prev, localSkycodeRulesToggles: toggles })),
+		setLocalCursorRulesToggles: (toggles: Record<string, boolean>) =>
+			setState((prev) => ({ ...prev, localCursorRulesToggles: toggles })),
+		setLocalWindsurfRulesToggles: (toggles: Record<string, boolean>) =>
+			setState((prev) => ({ ...prev, localWindsurfRulesToggles: toggles })),
+		setLocalAgentsRulesToggles: (toggles: Record<string, boolean>) =>
+			setState((prev) => ({ ...prev, localAgentsRulesToggles: toggles })),
+		setLocalWorkflowToggles: (toggles: Record<string, boolean>) =>
+			setState((prev) => ({ ...prev, localWorkflowToggles: toggles })),
+		setGlobalWorkflowToggles: (toggles: Record<string, boolean>) =>
+			setState((prev) => ({ ...prev, globalWorkflowToggles: toggles })),
+		setGlobalSkillsToggles: (toggles: Record<string, boolean>) =>
+			setState((prev) => ({ ...prev, globalSkillsToggles: toggles })),
+		setLocalSkillsToggles: (toggles: Record<string, boolean>) =>
+			setState((prev) => ({ ...prev, localSkillsToggles: toggles })),
+		setDictationSettings: (value: DictationSettings) =>
+			setState((prev) => ({ ...prev, dictationSettings: value })),
+	}).current
+
+	const contextValue = useMemo<ExtensionStateContextType>(() => ({
+		...state,
+		didHydrateState,
+		openRouterModels,
+		liteLlmModels,
+		openAiModels,
+		mcpServers,
+		totalTasksSize,
+		availableTerminalProfiles,
+		showMcp,
+		mcpTab,
+		showSettings,
+		settingsTargetSection,
+		showAccount,
+		showChatModelSelector,
+		globalSkycodeRulesToggles: state.globalSkycodeRulesToggles || {},
+		localSkycodeRulesToggles: state.localSkycodeRulesToggles || {},
+		localCursorRulesToggles: state.localCursorRulesToggles || {},
+		localWindsurfRulesToggles: state.localWindsurfRulesToggles || {},
+		localAgentsRulesToggles: state.localAgentsRulesToggles || {},
+		localWorkflowToggles: state.localWorkflowToggles || {},
+		globalWorkflowToggles: state.globalWorkflowToggles || {},
+		currentFocusChainChecklist: state.currentFocusChainChecklist,
+
+		// Navigation functions
+		navigateToMcp,
+		navigateToSettings,
+		navigateToAccount,
+		navigateToChat,
+
+		// Hide functions
+		hideSettings,
+		hideAccount,
+		hideChatModelSelector,
+		setShowChatModelSelector,
+		setMcpServers,
+		setShowMcp,
+		closeMcpView,
+		setMcpTab,
+		setTotalTasksSize,
+		refreshOpenRouterModels,
+		refreshLiteLlmModels,
+		onRelinquishControl,
+		...stableSetters,
+	}), [
+		state, didHydrateState,
+		openRouterModels, liteLlmModels, openAiModels,
+		mcpServers, totalTasksSize,
+		availableTerminalProfiles, showMcp, mcpTab, showSettings,
+		settingsTargetSection, showAccount,
+		showChatModelSelector,
+		navigateToMcp, navigateToSettings,
+		navigateToAccount, navigateToChat,
+		hideSettings, hideAccount,
+		hideChatModelSelector, closeMcpView,
+		setShowChatModelSelector,
+		refreshOpenRouterModels, refreshLiteLlmModels, onRelinquishControl,
+	])
+
+	return <ExtensionStateContext.Provider value={contextValue}>{children}</ExtensionStateContext.Provider>
+}
+
+export const useExtensionState = () => {
+	const context = useContext(ExtensionStateContext)
+	if (context === undefined) {
+		throw new Error("useExtensionState must be used within an ExtensionStateContextProvider")
+	}
+	return context
+}

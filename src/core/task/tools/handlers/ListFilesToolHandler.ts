@@ -1,0 +1,108 @@
+
+import type { ToolUse } from "@core/assistant-message"
+import { formatResponse } from "@core/prompts/responses"
+import { resolveWorkspacePath } from "@core/workspace"
+import { listFiles } from "@services/glob/list-files"
+import { getReadablePath, isLocatedInWorkspace } from "@utils/path"
+import { SkycodeDefaultTool } from "@/shared/tools"
+import type { ToolResponse } from "../../index"
+import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
+import type { ToolValidator } from "../ToolValidator"
+import type { TaskConfig } from "../types/TaskConfig"
+import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
+
+export class ListFilesToolHandler implements IFullyManagedTool {
+	readonly name = SkycodeDefaultTool.LIST_FILES
+
+	constructor(private validator: ToolValidator) {}
+
+	getDescription(block: ToolUse): string {
+		return `[${block.name} for '${block.params.path}']`
+	}
+
+	async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
+		const relPath = block.params.path
+
+		// Get config access for services
+		const config = uiHelpers.getConfig()
+
+		// Create and show partial UI message
+		const recursiveRaw = block.params.recursive
+		const recursive = recursiveRaw?.toLowerCase() === "true"
+		const sharedMessageProps = {
+			tool: recursive ? "listFilesRecursive" : "listFilesTopLevel",
+			path: getReadablePath(config.cwd, uiHelpers.removeClosingTag(block, "path", relPath)),
+			content: "",
+			operationIsLocatedInWorkspace: await isLocatedInWorkspace(relPath),
+		}
+
+		const partialMessage = JSON.stringify(sharedMessageProps)
+
+		// [SKYCODE-SKYCODE] Cursor-style: always auto-execute, show as info (no ask)
+		await uiHelpers.removeLastPartialMessageIfExistsWithType("ask", "tool")
+		await uiHelpers.say("tool", partialMessage, undefined, undefined, block.partial)
+	}
+
+	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
+		const relDirPath: string | undefined = block.params.path
+		const recursiveRaw: string | undefined = block.params.recursive
+		const recursive = recursiveRaw?.toLowerCase() === "true"
+
+
+		// Validate required parameters
+		const pathValidation = this.validator.assertRequiredParams(block, "path")
+		if (!pathValidation.ok) {
+			config.taskState.consecutiveMistakeCount++
+			return await config.callbacks.sayAndCreateMissingParamError(this.name, "path")
+		}
+
+		config.taskState.consecutiveMistakeCount = 0
+
+		// Resolve the absolute path based on multi-workspace configuration
+		const pathResult = resolveWorkspacePath(config, relDirPath!, "ListFilesToolHandler.execute")
+		const { absolutePath, displayPath } =
+			typeof pathResult === "string" ? { absolutePath: pathResult, displayPath: relDirPath! } : pathResult
+
+
+		// Check skycodeignore access
+		const accessValidation = this.validator.checkSkycodeIgnorePath(relDirPath!)
+		if (!accessValidation.ok) {
+			await config.callbacks.say("skycodeignore_error", relDirPath)
+			return formatResponse.toolError(formatResponse.skycodeIgnoreError(relDirPath!))
+		}
+
+		// Execute the actual list files operation
+		const [files, didHitLimit] = await listFiles(absolutePath, recursive, 200)
+
+		const result = formatResponse.formatFilesList(absolutePath, files, didHitLimit, config.services.skycodeIgnoreController)
+
+		// Handle approval flow
+		const sharedMessageProps = {
+			tool: recursive ? "listFilesRecursive" : "listFilesTopLevel",
+			path: getReadablePath(config.cwd, displayPath),
+			content: result,
+			operationIsLocatedInWorkspace: await isLocatedInWorkspace(relDirPath!),
+		}
+
+		const completeMessage = JSON.stringify(sharedMessageProps)
+
+		// [SKYCODE-SKYCODE] Cursor-style: always auto-execute (no ask)
+		await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
+		await config.callbacks.say("tool", completeMessage, undefined, undefined, false)
+
+
+		// Run PreToolUse hook after approval but before execution
+		try {
+			const { ToolHookUtils } = await import("../utils/ToolHookUtils")
+			await ToolHookUtils.runPreToolUseIfEnabled(config, block)
+		} catch (error) {
+			const { PreToolUseHookCancellationError } = await import("@core/hooks/PreToolUseHookCancellationError")
+			if (error instanceof PreToolUseHookCancellationError) {
+				return formatResponse.toolDenied()
+			}
+			throw error
+		}
+
+		return result
+	}
+}

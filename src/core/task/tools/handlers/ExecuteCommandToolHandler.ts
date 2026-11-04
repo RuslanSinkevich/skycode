@@ -1,0 +1,218 @@
+import type { ToolUse } from "@core/assistant-message"
+import { formatResponse } from "@core/prompts/responses"
+import { WorkspacePathAdapter } from "@core/workspace/WorkspacePathAdapter"
+import { showSystemNotification } from "@integrations/notifications"
+import { SkycodeDefaultTool } from "@/shared/tools"
+import { CommandSafetyClassifier } from "@core/permissions/CommandSafetyClassifier"
+import type { ToolResponse } from "../../index"
+import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
+import type { ToolValidator } from "../ToolValidator"
+import type { TaskConfig } from "../types/TaskConfig"
+import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
+import { findAllowedCommandPattern, getEffectiveAllowedCommandPatterns } from "@shared/AllowedCommands"
+import { applyModelContentFixes } from "../utils/ModelContentProcessor"
+import { showNotificationForApproval } from "../../utils"
+import { ToolResultUtils } from "../utils/ToolResultUtils"
+
+export class ExecuteCommandToolHandler implements IFullyManagedTool {
+	readonly name = SkycodeDefaultTool.BASH
+
+	constructor(_validator: ToolValidator) {}
+
+	getDescription(block: ToolUse): string {
+		return `[${block.name} for '${block.params.command}']`
+	}
+
+	async handlePartialBlock(_block: ToolUse, _uiHelpers: StronglyTypedUIHelpers): Promise<void> {
+		// [SKYCODE-SKYCODE] Cursor-style: no partial preview for commands (auto-execute)
+		return
+	}
+
+	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
+		let command: string | undefined = block.params.command?.trim()
+		const timeoutParam: string | undefined = block.params.timeout
+
+
+		// Validate required parameters
+		if (!command) {
+			config.taskState.consecutiveMistakeCount++
+			return await config.callbacks.sayAndCreateMissingParamError(this.name, "command")
+		}
+
+		// [SKYCODE] `requires_approval` is intentionally not validated: nothing in the execution
+		// path reads it (approval is decided by auto-approve settings), and weaker models omit it
+		// often enough that enforcing it burned whole turns and pushed tasks into the mistake limit.
+
+		config.taskState.consecutiveMistakeCount = 0
+
+		// [SKYCODE-SKYCODE] Hard Block for redundant 'open' commands
+		// We move this to the very top to prevent ANY confirmation or terminal spam.
+		const openCommands = ["code ", "code-insiders ", "cursor ", "open ", "xdg-open ", "notepad "]
+		const trimmedCommand = command.trim()
+		if (openCommands.some((cmd) => trimmedCommand.startsWith(cmd))) {
+			await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "command")
+			await config.callbacks.say("command", command, undefined, undefined, false)
+			return "Command executed (simulated). File should be open in the editor."
+		}
+
+		// [SKYCODE] Таймаут берём только если модель задала его явно — тогда он отменяет
+		// 20-секундный auto-proceed видимого терминала. Иначе решение принимает
+		// resolveCommandTiming (20s для терминала VS Code, 120s для backgroundExec).
+		// В любом случае по истечении агент не блокируется: команда уходит в background
+		// и её можно проверить через check_background_command.
+		const parsedTimeout = timeoutParam ? parseInt(timeoutParam, 10) : NaN
+		const timeoutSeconds: number | undefined = parsedTimeout > 0 ? parsedTimeout : undefined
+
+		// Pre-process command for certain models
+		if (config.api.getModel().id.includes("gemini")) {
+			command = applyModelContentFixes(command)
+		}
+
+		// Handle multi-workspace command execution
+		let executionDir: string = config.cwd
+		let actualCommand: string = command
+
+		let workspaceHint: string | undefined
+
+		if (config.isMultiRootEnabled && config.workspaceManager) {
+			const commandMatch = command.match(/^@(\w+):(.+)$/)
+			if (commandMatch) {
+				workspaceHint = commandMatch[1]
+				actualCommand = commandMatch[2].trim()
+				const adapter = new WorkspacePathAdapter({
+					cwd: config.cwd,
+					isMultiRootEnabled: true,
+					workspaceManager: config.workspaceManager,
+				})
+				executionDir = adapter.resolvePath(".", workspaceHint)
+				command = actualCommand
+			}
+		}
+
+		// Check command permission validation (SKYCODE_COMMAND_PERMISSIONS env var)
+		// [SKYCODE-SKYCODE] Security check stays active!
+		const permissionResult = config.services.commandPermissionController.validateCommand(actualCommand)
+		if (!permissionResult.allowed) {
+			let errorMessage: string
+			if (permissionResult.failedSegment) {
+				errorMessage =
+					`Command "${actualCommand}" was denied by SKYCODE_COMMAND_PERMISSIONS. ` +
+					`Segment "${permissionResult.failedSegment}" ${permissionResult.reason}.`
+			} else {
+				const matchedPattern = permissionResult.matchedPattern
+					? ` (matched pattern: ${permissionResult.matchedPattern})`
+					: ""
+				errorMessage =
+					`Command "${actualCommand}" was denied by SKYCODE_COMMAND_PERMISSIONS. ` +
+					`Reason: ${permissionResult.reason}${matchedPattern}`
+			}
+			await config.callbacks.say("command_permission_denied", errorMessage)
+			return formatResponse.toolError(formatResponse.permissionDeniedError(errorMessage))
+		}
+
+		// Check skycodeignore validation for command
+		const ignoredFileAttemptedToAccess = config.services.skycodeIgnoreController.validateCommand(actualCommand)
+		if (ignoredFileAttemptedToAccess) {
+			await config.callbacks.say("skycodeignore_error", ignoredFileAttemptedToAccess)
+			return formatResponse.toolError(formatResponse.skycodeIgnoreError(ignoredFileAttemptedToAccess))
+		}
+
+		// [SKYCODE] Command approval logic
+		// Determine if this command can be auto-approved based on user settings:
+		//   - YOLO mode: always auto-approve (handled by autoApprover)
+		//   - executeSafeCommands enabled: auto-approve only safe (read-only) commands
+		//   - executeAllCommands enabled: auto-approve all commands
+		//   - Neither enabled: always ask for approval
+		let didAutoApprove = false
+
+		const autoApproveResult = config.autoApprover
+			? config.autoApprover.shouldAutoApproveTool(SkycodeDefaultTool.BASH)
+			: false
+
+		// autoApproveResult for BASH is [executeSafeCommands, executeAllCommands, executeNonDestructiveCommands]
+		const [executeSafeCommands, executeAllCommands, executeNonDestructiveCommands] = Array.isArray(autoApproveResult)
+			? autoApproveResult
+			: [false, false, false]
+
+		if (executeAllCommands) {
+			// User opted in to auto-approve ALL commands
+			didAutoApprove = true
+		} else if (executeNonDestructiveCommands) {
+			// [SKYCODE] «Всё, кроме опасного»: пропускаем и незнакомые команды, спрашиваем только
+			// про те, что в чёрном списке, с опасным флагом или с перенаправлением вывода.
+			const safety = new CommandSafetyClassifier().classify(actualCommand)
+			didAutoApprove = safety.safety !== "unsafe"
+		} else if (executeSafeCommands) {
+			// Check if the command is safe (read-only)
+			const classifier = new CommandSafetyClassifier()
+			const safety = classifier.classify(actualCommand)
+			didAutoApprove = safety.safety === "safe"
+		}
+
+		// [SKYCODE] Whitelist: built-in safe commands plus the ones the user added
+		if (!didAutoApprove) {
+			const patterns = getEffectiveAllowedCommandPatterns(config.autoApprovalSettings.actions)
+			didAutoApprove = findAllowedCommandPattern(actualCommand, patterns) !== undefined
+		}
+
+
+		if (didAutoApprove) {
+			// Auto-approve: show as info message (no ask)
+			await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "command")
+			await config.callbacks.say("command", actualCommand, undefined, undefined, false)
+		} else {
+			// Manual approval: ask user
+			showNotificationForApproval(
+				`Skycode wants to execute: ${actualCommand}`,
+				config.autoApprovalSettings.enableNotifications,
+			)
+			await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "command")
+			const didApprove = await ToolResultUtils.askApprovalAndPushFeedback("command", actualCommand, config)
+			if (!didApprove) {
+				return formatResponse.toolDenied()
+			}
+		}
+
+
+		// Run PreToolUse hook after approval but before execution
+		try {
+			const { ToolHookUtils } = await import("../utils/ToolHookUtils")
+			await ToolHookUtils.runPreToolUseIfEnabled(config, block)
+		} catch (error) {
+			const { PreToolUseHookCancellationError } = await import("@core/hooks/PreToolUseHookCancellationError")
+			if (error instanceof PreToolUseHookCancellationError) {
+				return formatResponse.toolDenied()
+			}
+			throw error
+		}
+
+		// Setup timeout notification
+		let timeoutId: NodeJS.Timeout | undefined
+		if (didAutoApprove && config.autoApprovalSettings.enableNotifications) {
+			timeoutId = setTimeout(() => {
+				showSystemNotification({
+					subtitle: "Command is still running",
+					message: "An auto-approved command has been running for 30s, and may need your attention.",
+				})
+			}, 30_000)
+		}
+
+		// Execute the command
+		let finalCommand: string = actualCommand
+		if (executionDir !== config.cwd) {
+			finalCommand = `cd "${executionDir}" && ${actualCommand}`
+		}
+
+		const [userRejected, result] = await config.callbacks.executeCommandTool(finalCommand, timeoutSeconds)
+
+		if (timeoutId) {
+			clearTimeout(timeoutId)
+		}
+
+		if (userRejected) {
+			config.taskState.didRejectTool = true
+		}
+
+		return result
+	}
+}

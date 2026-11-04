@@ -1,0 +1,1387 @@
+import type { Anthropic } from "@anthropic-ai/sdk"
+import { buildApiHandler } from "@core/api"
+import { sanitizeTruncatedPlaceholder } from "@shared/proto-conversions/skycode-message"
+import { getHooksEnabledSafe } from "@core/hooks/hooks-utils"
+import { detectWorkspaceRoots } from "@core/workspace/detection"
+import { setupWorkspaceManager } from "@core/workspace/setup"
+import type { WorkspaceRootManager } from "@core/workspace/WorkspaceRootManager"
+import { McpHub } from "@services/mcp/McpHub"
+import type { ApiProvider, ModelInfo } from "@shared/api"
+import { GIGAAM_MODEL_ID, isGigaAmActive } from "@shared/DictationSettings"
+import type { ChatContent } from "@shared/ChatContent"
+import type { ExtensionState, PendingChangeInfo, Platform, TabInfo } from "@shared/ExtensionMessage"
+import { getPendingChangesStorage } from "@core/diff-v2/storage/PendingChangesStorage"
+import { getDiffSystem } from "@core/diff-v2"
+import { getBackendLocaleForPreferredLanguage, setBackendLocale, t } from "../../i18n/backend-i18n"
+import type { HistoryItem } from "@shared/HistoryItem"
+import { getApiSettingsMode, type Mode } from "@shared/storage/types"
+import { fileExistsAtPath } from "@utils/fs"
+import axios from "axios"
+import fs from "fs/promises"
+import open from "open"
+import pWaitFor from "p-wait-for"
+import * as path from "path"
+import * as vscode from "vscode"
+import { SkycodeEnv } from "@/config"
+import { HostProvider } from "@/hosts/host-provider"
+import { getSherpaLocalService } from "@/services/dictation/SherpaLocalService"
+import { ExtensionRegistryInfo } from "@/registry"
+import PROVIDERS from "@/shared/providers/providers.json"
+import { DEFAULT_INDEXING_CONFIG, type IndexingConfig, type IndexingMode, type LocalModelId } from "@/shared/IndexingTypes"
+import { getAxiosSettings } from "@/shared/net"
+import { ShowMessageType } from "@/shared/proto/host/window"
+import { Logger } from "@/shared/services/Logger"
+import { getCwd, getDesktopDir } from "@/utils/path"
+import { PromptRegistry } from "../prompts/system-prompt"
+import { getModelCapabilityTier, getSessionLimitsForModel } from "@utils/model-utils"
+import {
+	ensureCacheDirectoryExists,
+	ensureMcpServersDirectoryExists,
+	ensureSettingsDirectoryExists,
+	GlobalFileNames,
+} from "../storage/disk"
+import { type PersistenceErrorEvent, StateManager } from "../storage/StateManager"
+import { getContextUsageLimits } from "../context/context-management/context-window-utils"
+import { type ContextBreakdownItem, estimateContextBreakdown } from "../context/context-management/contextBreakdown"
+import { Task } from "../task"
+import { ApiSlotLimiter, type Session, SessionManager } from "../session"
+import { buildTabs, deriveTabStatus, deriveTabTitle, normalizeTabTitle, planRestoredTabs, toPersistedTabs } from "../session/tabs"
+import { appendSkycodeStealthModels } from "./models/refreshOpenRouterModels"
+import { sendStateUpdate } from "./state/subscribeToState"
+import { sendChatButtonClickedEvent } from "./ui/subscribeToChatButtonClicked"
+
+/*
+https://github.com/microsoft/vscode-webview-ui-toolkit-samples/blob/main/default/weather-webview/src/providers/WeatherViewProvider.ts
+
+https://github.com/KumarVariable/vscode-extension-sidebar-html/blob/master/src/customSidebarViewProvider.ts
+*/
+
+export class Controller {
+	/** [SKYCODE] Вкладки восстановлены (до этого сохранять список нельзя — затрём сохранённое пустым). */
+	private _tabsRestored = false
+	private _restoreTabsPromise?: Promise<void>
+	private _disposed = false
+	private _lastPersistedTabsJson = ""
+	/** Сессии, у которых прямо сейчас создаётся Task из заглушки */
+	private readonly materializing = new Set<string>()
+
+	/**
+	 * SessionManager - управление сессиями. [SKYCODE] Задачи живут в сессиях (одна задача на сессию),
+	 * отдельного поля в контроллере больше нет.
+	 */
+	readonly sessionManager = new SessionManager()
+
+	/** [SKYCODE] Общий лимит параллельных запросов к модели для всех задач. */
+	readonly apiSlotLimiter = new ApiSlotLimiter()
+
+	/** Задача активной сессии (то, что видит UI). */
+	get activeTask(): Task | undefined {
+		return this.sessionManager.currentSession?.task ?? undefined
+	}
+
+	/** Сбрасывает ссылку активной сессии на задачу без abort (для resetState). */
+	detachActiveTask(): void {
+		this.sessionManager.currentSession?.setTask(null)
+	}
+
+	mcpHub: McpHub
+	readonly stateManager: StateManager
+
+	// NEW: Add workspace manager (optional initially)
+	private workspaceManager?: WorkspaceRootManager
+	private backgroundCommandRunning = false
+	private backgroundCommandTaskId?: string
+
+	// Задачи, для которых отмена уже идёт (защита от повторных кликов); по задаче, не общий флаг
+	private readonly cancelInProgress = new Set<string>()
+
+	// Public getter for workspace manager with lazy initialization - To get workspaces when task isn't initialized (Used by file mentions)
+	async ensureWorkspaceManager(): Promise<WorkspaceRootManager | undefined> {
+		if (!this.workspaceManager) {
+			try {
+				this.workspaceManager = await setupWorkspaceManager({
+					stateManager: this.stateManager,
+					detectRoots: detectWorkspaceRoots,
+				})
+			} catch (error) {
+				Logger.error("[Controller] Failed to initialize workspace manager:", error)
+			}
+		}
+		return this.workspaceManager
+	}
+
+	// Synchronous getter for workspace manager
+	getWorkspaceManager(): WorkspaceRootManager | undefined {
+		return this.workspaceManager
+	}
+
+	constructor(readonly context: vscode.ExtensionContext) {
+		PromptRegistry.getInstance() // Ensure prompts and tools are registered
+		HostProvider.get().logToChannel("SkycodeProvider instantiated")
+		this.stateManager = StateManager.get()
+		StateManager.get().registerCallbacks({
+			onPersistenceError: async ({ error }: PersistenceErrorEvent) => {
+				// Just log - don't call reInitialize() (that sets isInitialized=false which
+				// breaks running tasks) and don't show a warning (data is safe in memory
+				// and will be retried automatically on the next debounced persistence).
+				Logger.error("[Controller] Storage persistence failed (will retry):", error)
+			},
+			onSyncExternalChange: async () => {
+				await this.postStateToWebview()
+			},
+		})
+		// Migrate away from removed providers (Skycode, Bedrock, Vertex, OCA and others): fall back to OpenAI Compatible
+		const initConfig = this.stateManager.getApiConfiguration()
+		const known = new Set<string>(PROVIDERS.list.map((p) => p.value))
+		const isRemoved = (p?: string) => !!p && !known.has(p)
+		if (isRemoved(initConfig.planModeApiProvider) || isRemoved(initConfig.actModeApiProvider)) {
+			const migrated = { ...initConfig }
+			if (isRemoved(migrated.planModeApiProvider)) {
+				migrated.planModeApiProvider = "openai" as ApiProvider
+			}
+			if (isRemoved(migrated.actModeApiProvider)) {
+				migrated.actModeApiProvider = "openai" as ApiProvider
+			}
+			this.stateManager.setApiConfiguration(migrated)
+		}
+
+		this.mcpHub = new McpHub(
+			() => ensureMcpServersDirectoryExists(),
+			() => ensureSettingsDirectoryExists(),
+			ExtensionRegistryInfo.version,
+		)
+	}
+
+	/*
+	VSCode extensions use the disposable pattern to clean up resources when the sidebar/editor tab is closed by the user or system. This applies to event listening, commands, interacting with the UI, etc.
+	- https://vscode-docs.readthedocs.io/en/stable/extensions/patterns-and-principles/
+	- https://github.com/microsoft/vscode-extension-samples/blob/main/webview-sample/src/extension.ts
+	*/
+	async dispose() {
+		this._disposed = true // [SKYCODE] закрытие сессий при выходе не должно ни пересохранять вкладки, ни поднимать заглушки
+		// [SKYCODE-PERF] Clear postState throttle timer + drain any pending resolvers
+		// Otherwise the timer fires after dispose and tries to send state to a dead webview,
+		// and pending promises stay forever in memory.
+		if (this._postStateThrottleTimer) {
+			clearTimeout(this._postStateThrottleTimer)
+			this._postStateThrottleTimer = null
+		}
+		if (this._postStatePromiseResolvers.length > 0) {
+			const resolvers = this._postStatePromiseResolvers
+			this._postStatePromiseResolvers = []
+			for (const r of resolvers) {
+				r()
+			}
+		}
+		this._postStatePending = false
+
+		// [SKYCODE-PERF] Drop heavy caches so GC can collect them
+		this._voiceReadyCache = null
+		this._codexAuthCache = null
+		this._lastDictationSettingsJson = ""
+
+		// [SKYCODE] Закрываем все сессии, не только активную
+		for (const session of this.sessionManager.getAll()) {
+			await this.closeSession(session.id)
+		}
+		await this.clearTask()
+		this.mcpHub.dispose()
+
+		Logger.error("Controller disposed")
+	}
+
+	/**
+	 * Запускает задачу.
+	 * - без options: закрывает активную сессию (abort) и создаёт новую активную — как раньше;
+	 * - inNewSession: остальные сессии продолжают работать, новая становится активной;
+	 * - sessionId: новая Task встаёт в существующую сессию (старая задача этой сессии останавливается),
+	 *   активность не меняется. Если такой сессии уже нет — создаётся новая.
+	 */
+	async initTask(
+		task?: string,
+		images?: string[],
+		files?: string[],
+		historyItem?: HistoryItem,
+		options?: { inNewSession?: boolean; sessionId?: string },
+	) {
+		// [SKYCODE] Активная сессия без задачи (создана через newTab) занимается новой задачей, другие вкладки не трогаем
+		if (!options?.inNewSession && !options?.sessionId) {
+			const active = this.sessionManager.currentSession
+			if (active && !active.task && !active.placeholder) {
+				options = { ...options, sessionId: active.id }
+			}
+		}
+		const requestedSessionId = options?.sessionId
+		let targetSession = requestedSessionId ? this.sessionManager.get(requestedSessionId) : undefined
+		if (targetSession) {
+			// Заменяем задачу только в этой сессии; чекпоинт завершаем, если она активная (как раньше в clearTask)
+			// [SKYCODE] Завершаем группу правок только заменяемой задачи — группы остальных вкладок не трогаем
+			const replacedTaskId = targetSession.task?.taskId
+			await targetSession.task?.abortTask()
+			if (replacedTaskId) {
+				await this.finishDiffCheckpoint(undefined, replacedTaskId)
+			}
+		} else if (!options?.inNewSession && !requestedSessionId) {
+			await this.clearTask() // ensures that an existing task doesn't exist before starting a new one, although this shouldn't be possible since user must clear task before starting a new one
+		}
+
+		const autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
+		const shellIntegrationTimeout = this.stateManager.getGlobalSettingsKey("shellIntegrationTimeout")
+		const terminalReuseEnabled = this.stateManager.getGlobalStateKey("terminalReuseEnabled")
+		const vscodeTerminalExecutionMode = this.stateManager.getGlobalStateKey("vscodeTerminalExecutionMode")
+		const terminalOutputLineLimit = this.stateManager.getGlobalSettingsKey("terminalOutputLineLimit")
+		const defaultTerminalProfile = this.stateManager.getGlobalSettingsKey("defaultTerminalProfile")
+
+		if (autoApprovalSettings) {
+			const updatedAutoApprovalSettings = {
+				...autoApprovalSettings,
+				version: (autoApprovalSettings.version ?? 1) + 1,
+			}
+			this.stateManager.setGlobalState("autoApprovalSettings", updatedAutoApprovalSettings)
+		}
+
+		// Initialize and persist the workspace manager (multi-root or single-root) with fallback
+		this.workspaceManager = await setupWorkspaceManager({
+			stateManager: this.stateManager,
+			detectRoots: detectWorkspaceRoots,
+		})
+
+		const cwd = this.workspaceManager?.getPrimaryRoot()?.path || (await getCwd(getDesktopDir()))
+
+		const taskId = historyItem?.id || Date.now().toString()
+		const taskSessionId = targetSession?.id ?? requestedSessionId ?? taskId
+
+		// [SKYCODE] Эта задача из истории уже открыта в другой вкладке — закрываем ту, чтобы не было двух копий
+		const duplicate = historyItem ? this.findSessionByTaskId(taskId) : undefined
+		if (duplicate && duplicate.id !== targetSession?.id) {
+			await this.closeSession(duplicate.id)
+		}
+
+		// Та же задача уже открыта в другой сессии — закрываем её, чтобы не было двух копий
+		if (!targetSession && this.sessionManager.get(taskSessionId)) {
+			await this.closeSession(taskSessionId)
+		}
+
+		const newTask = new Task({
+			controller: this,
+			mcpHub: this.mcpHub,
+			updateTaskHistory: (historyItem) => this.updateTaskHistory(historyItem),
+			postStateToWebview: () => this.postStateToWebview(),
+			reinitExistingTaskFromId: (id) => this.reinitExistingTaskFromId(id, taskSessionId),
+			cancelTask: () => this.cancelTask(taskId),
+			shellIntegrationTimeout,
+			terminalReuseEnabled: terminalReuseEnabled ?? true,
+			terminalOutputLineLimit: terminalOutputLineLimit ?? 500,
+			defaultTerminalProfile: defaultTerminalProfile ?? "default",
+			vscodeTerminalExecutionMode,
+			cwd,
+			stateManager: this.stateManager,
+			workspaceManager: this.workspaceManager,
+			task,
+			images,
+			files,
+			historyItem,
+			taskId,
+			apiSlotLimiter: this.apiSlotLimiter,
+		})
+
+		// --- SESSION SYNC: привязываем Task <-> Session двусторонне ---
+		let session = targetSession
+		if (!session) {
+			session = this.sessionManager.create(taskSessionId)
+			if (!requestedSessionId) {
+				// Новая задача из UI всегда становится активной (create делает активной только первую)
+				this.sessionManager.switchTo(session.id)
+			}
+		}
+		session.setTask(newTask)
+		newTask.setSession(session)
+
+		// v4: привязываем DiffSystem к активной задаче (для бара UI и scoped rollback)
+		if (this.sessionManager.activeSessionId === session.id) {
+			try {
+				const diffSystem = getDiffSystem()
+				diffSystem.setCurrentTaskId(taskId)
+			} catch {
+				// DiffSystem may not be initialized yet
+			}
+		}
+
+		if (historyItem) {
+			newTask.resumeTaskFromHistory()
+		} else if (task || images || files) {
+			newTask.startTask(task, images, files)
+		}
+
+		return newTask.taskId
+	}
+
+	async reinitExistingTaskFromId(taskId: string, sessionId?: string) {
+		const history = await this.getTaskWithId(taskId)
+		if (history) {
+			await this.initTask(undefined, undefined, undefined, history.historyItem, sessionId ? { sessionId } : undefined)
+		}
+	}
+
+	/**
+	 * [SKYCODE] Режим для UI и пересборки api: у открытой задачи свой, иначе последний выбранный глобальный.
+	 */
+	getCurrentMode(): Mode {
+		return this.activeTask?.getMode() ?? this.stateManager.getGlobalSettingsKey("mode")
+	}
+
+	async toggleActModeForYoloMode(): Promise<boolean> {
+		const modeToSwitchTo: Mode = "act"
+
+		// Switch to act mode
+		this.stateManager.setGlobalState("mode", modeToSwitchTo)
+
+		// Update API handler with new mode (buildApiHandler now selects provider based on mode)
+		if (this.activeTask) {
+			this.activeTask.setMode(modeToSwitchTo)
+			const apiConfiguration = this.stateManager.getApiConfiguration()
+			this.activeTask.replaceApiHandler(
+				buildApiHandler({ ...apiConfiguration, ulid: this.activeTask.ulid }, modeToSwitchTo),
+			)
+		}
+
+		await this.postStateToWebview()
+
+		// Additional safety
+		if (this.activeTask) {
+			return true
+		}
+		return false
+	}
+
+	async togglePlanActMode(modeToSwitchTo: Mode, chatContent?: ChatContent): Promise<boolean> {
+		// Both "act" and "debug" modes have full tool access, so switching to either
+		// should auto-approve a pending plan response
+		const didSwitchToWriteMode = modeToSwitchTo === "act" || modeToSwitchTo === "debug"
+
+		// Store mode to global state
+		this.stateManager.setGlobalState("mode", modeToSwitchTo)
+
+		// Update API handler with new mode (buildApiHandler now selects provider based on mode)
+		if (this.activeTask) {
+			this.activeTask.setMode(modeToSwitchTo)
+			const apiConfiguration = this.stateManager.getApiConfiguration()
+			this.activeTask.replaceApiHandler(
+				buildApiHandler({ ...apiConfiguration, ulid: this.activeTask.ulid }, modeToSwitchTo),
+			)
+		}
+
+		await this.postStateToWebview()
+
+		if (this.activeTask) {
+			if (this.activeTask.taskState.isAwaitingPlanResponse && didSwitchToWriteMode) {
+				this.activeTask.taskState.didRespondToPlanAskBySwitchingMode = true
+				// Use chatContent if provided, otherwise use default message
+				await this.activeTask.handleWebviewAskResponse(
+					"messageResponse",
+					chatContent?.message || "PLAN_MODE_TOGGLE_RESPONSE",
+					chatContent?.images || [],
+					chatContent?.files || [],
+				)
+
+				return true
+			}
+			// [SKYCODE] Раньше смена режима обрывала работающую задачу, а при возобновлении модель
+			// заново пересказывала план. Режим и обработчик API уже заменены выше — новый режим
+			// действует со следующего запроса, обрывать ничего не нужно.
+			return false
+		}
+
+		return false
+	}
+
+	/** Сессия, в которой лежит задача с этим id. */
+	private findSessionByTaskId(taskId: string): Session | undefined {
+		return this.sessionManager.getAll().find((s) => s.task?.taskId === taskId || s.placeholder?.taskId === taskId)
+	}
+
+	/**
+	 * Отмена задачи (по умолчанию — активной). Работает только с сессией этой задачи;
+	 * после abort задача пересоздаётся из истории в той же сессии (остаётся видимой с кнопкой «продолжить»).
+	 */
+	async cancelTask(taskId?: string) {
+		const session = taskId ? this.findSessionByTaskId(taskId) : (this.sessionManager.currentSession ?? undefined)
+		const taskToCancel = session?.task ?? undefined
+		if (!session || !taskToCancel) {
+			return
+		}
+		const cancelledTaskId = taskToCancel.taskId
+		const sessionId = session.id
+
+		// Prevent duplicate cancellations from spam clicking
+		if (this.cancelInProgress.has(cancelledTaskId)) {
+			Logger.log(`[Controller.cancelTask] Cancellation already in progress, ignoring duplicate request`)
+			return
+		}
+
+		// Set flag to prevent concurrent cancellations
+		this.cancelInProgress.add(cancelledTaskId)
+
+		try {
+			// Фоновая команда одна на контроллер и привязана к активной задаче: сбрасываем, если это она
+			if (this.backgroundCommandTaskId === undefined || this.backgroundCommandTaskId === cancelledTaskId) {
+				this.updateBackgroundCommandState(false)
+			}
+
+			try {
+				await taskToCancel.abortTask()
+			} catch (error) {
+				Logger.error("Failed to abort task", error)
+			}
+
+			await pWaitFor(
+				() =>
+					this.sessionManager.get(sessionId)?.task !== taskToCancel ||
+					taskToCancel.taskState.isStreaming === false ||
+					taskToCancel.taskState.didFinishAbortingStream ||
+					taskToCancel.taskState.isWaitingForFirstChunk,
+				{
+					timeout: 800,
+				},
+			).catch(() => {
+				Logger.warn("[Controller.cancelTask] Timed out waiting for stream abort — force-continuing")
+			})
+
+			if (this.sessionManager.get(sessionId)?.task === taskToCancel) {
+				// 'abandoned' will prevent this skycode instance from affecting future skycode instance gui. this may happen if its hanging on a streaming request
+				taskToCancel.taskState.abandoned = true
+			}
+
+			// NOW try to get history after abort has finished (hook may have saved messages)
+			let historyItem: HistoryItem | undefined
+			try {
+				const result = await this.getTaskWithId(cancelledTaskId)
+				historyItem = result.historyItem
+			} catch (error) {
+				// Task not in history yet (new task with no messages); catch the
+				// error to enable the agent to continue making progress.
+				Logger.log(`[Controller.cancelTask] Task not found in history: ${error}`)
+			}
+
+			// Only re-initialize if we found a history item, otherwise just clear
+			if (historyItem) {
+				// Re-initialize task to keep it visible in UI with resume button
+				await this.initTask(undefined, undefined, undefined, historyItem, { sessionId })
+			} else {
+				await this.closeSession(sessionId)
+			}
+
+			await this.postStateToWebview()
+		} finally {
+			// Always clear the flag, even if cancellation fails
+			this.cancelInProgress.delete(cancelledTaskId)
+		}
+	}
+
+	updateBackgroundCommandState(running: boolean, taskId?: string) {
+		const nextTaskId = running ? taskId : undefined
+		if (this.backgroundCommandRunning === running && this.backgroundCommandTaskId === nextTaskId) {
+			return
+		}
+		this.backgroundCommandRunning = running
+		this.backgroundCommandTaskId = nextTaskId
+		void this.postStateToWebview()
+	}
+
+	async cancelBackgroundCommand(): Promise<void> {
+		const didCancel = await this.activeTask?.cancelBackgroundCommand()
+		if (!didCancel) {
+			this.updateBackgroundCommandState(false)
+		}
+	}
+
+	async handleMcpOAuthCallback(serverHash: string, code: string, state: string | null) {
+		try {
+			await this.mcpHub.completeOAuth(serverHash, code, state)
+			await this.postStateToWebview()
+			HostProvider.window.showMessage({
+				type: ShowMessageType.INFORMATION,
+				message: t("mcp.authSuccess"),
+			})
+		} catch (error) {
+			Logger.error("Failed to complete MCP OAuth:", error)
+			HostProvider.window.showMessage({
+				type: ShowMessageType.ERROR,
+				message: t("mcp.authFailed"),
+			})
+		}
+	}
+
+	async handleTaskCreation(prompt: string) {
+		await sendChatButtonClickedEvent()
+		await this.initTask(prompt)
+	}
+
+	// OpenRouter
+
+	async handleOpenRouterCallback(code: string) {
+		let apiKey: string
+		try {
+			const response = await axios.post("https://openrouter.ai/api/v1/auth/keys", { code }, getAxiosSettings())
+			if (response.data && response.data.key) {
+				apiKey = response.data.key
+			} else {
+				throw new Error("Invalid response from OpenRouter API")
+			}
+		} catch (error) {
+			Logger.error("Error exchanging code for API key:", error)
+			throw error
+		}
+
+		const openrouter: ApiProvider = "openrouter"
+		const currentMode = this.getCurrentMode()
+
+		// Update API configuration through cache service
+		const currentApiConfiguration = this.stateManager.getApiConfiguration()
+		const updatedConfig = {
+			...currentApiConfiguration,
+			planModeApiProvider: openrouter,
+			actModeApiProvider: openrouter,
+			openRouterApiKey: apiKey,
+		}
+		this.stateManager.setApiConfiguration(updatedConfig)
+
+		await this.postStateToWebview()
+		if (this.activeTask) {
+			this.activeTask.replaceApiHandler(buildApiHandler({ ...updatedConfig, ulid: this.activeTask.ulid }, currentMode))
+		}
+		// Dont send settingsButtonClicked because its bad ux if user is on welcome
+	}
+
+	// Read OpenRouter models from disk cache
+	async readOpenRouterModels(): Promise<Record<string, ModelInfo> | undefined> {
+		const openRouterModelsFilePath = path.join(await ensureCacheDirectoryExists(), GlobalFileNames.openRouterModels)
+		try {
+			if (await fileExistsAtPath(openRouterModelsFilePath)) {
+				const fileContents = await fs.readFile(openRouterModelsFilePath, "utf8")
+				const models = JSON.parse(fileContents)
+				// Append stealth models
+				return appendSkycodeStealthModels(models)
+			}
+		} catch (error) {
+			Logger.error("Error reading cached OpenRouter models:", error)
+		}
+		return undefined
+	}
+
+	// Task history
+
+	async getTaskWithId(id: string): Promise<{
+		historyItem: HistoryItem
+		taskDirPath: string
+		apiConversationHistoryFilePath: string
+		uiMessagesFilePath: string
+		contextHistoryFilePath: string
+		taskMetadataFilePath: string
+		apiConversationHistory: Anthropic.MessageParam[]
+	}> {
+		const history = this.stateManager.getGlobalStateKey("taskHistory")
+		const historyItem = history.find((item) => item.id === id)
+		if (historyItem) {
+			const taskDirPath = path.join(HostProvider.get().globalStorageFsPath, "tasks", id)
+			const apiConversationHistoryFilePath = path.join(taskDirPath, GlobalFileNames.apiConversationHistory)
+			const uiMessagesFilePath = path.join(taskDirPath, GlobalFileNames.uiMessages)
+			const contextHistoryFilePath = path.join(taskDirPath, GlobalFileNames.contextHistory)
+			const taskMetadataFilePath = path.join(taskDirPath, GlobalFileNames.taskMetadata)
+			const fileExists = await fileExistsAtPath(apiConversationHistoryFilePath)
+			if (fileExists) {
+				const apiConversationHistory = JSON.parse(await fs.readFile(apiConversationHistoryFilePath, "utf8"))
+				return {
+					historyItem,
+					taskDirPath,
+					apiConversationHistoryFilePath,
+					uiMessagesFilePath,
+					contextHistoryFilePath,
+					taskMetadataFilePath,
+					apiConversationHistory,
+				}
+			}
+		}
+		// if we tried to get a task that doesn't exist, remove it from state
+		// FIXME: this seems to happen sometimes when the json file doesn't save to disk for some reason
+		await this.deleteTaskFromState(id)
+		throw new Error("Task not found")
+	}
+
+	async exportTaskWithId(id: string) {
+		const { taskDirPath } = await this.getTaskWithId(id)
+		Logger.log(`[EXPORT] Opening task directory: ${taskDirPath}`)
+		await open(taskDirPath)
+	}
+
+	async deleteTaskFromState(id: string) {
+		// Remove the task from history
+		const taskHistory = this.stateManager.getGlobalStateKey("taskHistory")
+		const updatedTaskHistory = taskHistory.filter((task) => task.id !== id)
+		this.stateManager.setGlobalState("taskHistory", updatedTaskHistory)
+
+		// Notify the webview that the task has been deleted
+		await this.postStateToWebview()
+
+		return updatedTaskHistory
+	}
+
+	// [SKYCODE-PERF] Throttle postStateToWebview to prevent extension host overload.
+	// Multiple callers (indexing, task updates, settings changes) can trigger this
+	// dozens of times per second. We coalesce into at most one call per 300ms.
+	private _postStateThrottleTimer: ReturnType<typeof setTimeout> | null = null
+	private _postStatePending = false
+	private _postStatePromiseResolvers: Array<() => void> = []
+
+	async postStateToWebview() {
+		// If a throttled call is already pending, just mark that we need another update
+		if (this._postStateThrottleTimer) {
+			this._postStatePending = true
+			return new Promise<void>((resolve) => {
+				this._postStatePromiseResolvers.push(resolve)
+			})
+		}
+
+		// Execute immediately
+		await this._doPostStateToWebview()
+
+		// Set up throttle window — any calls during this window will be coalesced
+		this._postStateThrottleTimer = setTimeout(async () => {
+			this._postStateThrottleTimer = null
+			if (this._postStatePending) {
+				this._postStatePending = false
+				const resolvers = this._postStatePromiseResolvers
+				this._postStatePromiseResolvers = []
+				await this._doPostStateToWebview()
+				for (const r of resolvers) {
+					r()
+				}
+			}
+		}, 300)
+	}
+
+	private async _doPostStateToWebview() {
+		const state = await this.getStateToPostToWebview()
+		await sendStateUpdate(state)
+	}
+
+	// [SKYCODE-PERF] Cache voice readiness to avoid 3× fs.existsSync on every state push.
+	// Invalidated only when dictation settings change or on explicit refresh.
+	private _voiceReadyCache: { ready: boolean; model: string; checkedAt: number } | null = null
+	// [SKYCODE] Сброс «идёт загрузка голоса» после перезапуска — один раз за сеанс
+	private _voiceFlagsResetDone = false
+	private _lastDictationSettingsJson = ""
+
+	private _checkVoiceReadiness(dictationSettings: any): boolean {
+		const selectedModel = dictationSettings?.whisperModel ?? "tiny"
+		const settingsJson = JSON.stringify({
+			model: selectedModel,
+			language: dictationSettings?.dictationLanguage,
+			downloading: dictationSettings?.voiceDownloading,
+		})
+
+		// Return cached value if settings haven't changed and cache is fresh (< 10s)
+		if (
+			this._voiceReadyCache &&
+			this._lastDictationSettingsJson === settingsJson &&
+			Date.now() - this._voiceReadyCache.checkedAt < 10_000
+		) {
+			return this._voiceReadyCache.ready
+		}
+
+		// [SKYCODE] GigaAM (только русский): готовность считает SherpaLocalService
+		if (isGigaAmActive(dictationSettings)) {
+			const sherpa = getSherpaLocalService(HostProvider.get().globalStorageFsPath)
+			const gigaReady = !!sherpa?.isSupported && sherpa.isReady()
+			this._voiceReadyCache = { ready: gigaReady, model: selectedModel, checkedAt: Date.now() }
+			this._lastDictationSettingsJson = settingsJson
+			return gigaReady
+		}
+
+		const _fs = require("fs") as typeof import("fs")
+		const _path = require("path") as typeof import("path")
+		const whisperDir = _path.join(HostProvider.get().globalStorageFsPath, "whisper")
+		const modelFileMap: Record<string, string> = { tiny: "ggml-tiny.bin", base: "ggml-base.bin", small: "ggml-small.bin" }
+		const modelFile = modelFileMap[selectedModel] || (selectedModel === GIGAAM_MODEL_ID ? "ggml-tiny.bin" : "ggml-base.bin")
+		const binaryName = process.platform === "win32" ? "whisper-cli.exe" : "whisper-cli"
+		const ffmpegName = process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg"
+
+		const hasModel = _fs.existsSync(_path.join(whisperDir, modelFile))
+		const hasBinary = _fs.existsSync(_path.join(whisperDir, binaryName))
+		const hasFfmpeg = _fs.existsSync(_path.join(whisperDir, ffmpegName))
+		const voiceReady = hasModel && hasBinary && hasFfmpeg
+
+		this._voiceReadyCache = { ready: voiceReady, model: selectedModel, checkedAt: Date.now() }
+		this._lastDictationSettingsJson = settingsJson
+		return voiceReady
+	}
+
+	// [SKYCODE-PERF] Cache OpenAI Codex auth status (refreshed at most every 30s)
+	private _codexAuthCache: { authenticated: boolean; checkedAt: number } | null = null
+
+	private async _getCodexAuthStatus(): Promise<boolean> {
+		if (this._codexAuthCache && Date.now() - this._codexAuthCache.checkedAt < 30_000) {
+			return this._codexAuthCache.authenticated
+		}
+		try {
+			const { openAiCodexOAuthManager } = await import("@/integrations/openai-codex/oauth")
+			const authenticated = await openAiCodexOAuthManager.isAuthenticated()
+			this._codexAuthCache = { authenticated, checkedAt: Date.now() }
+			return authenticated
+		} catch {
+			return this._codexAuthCache?.authenticated ?? false
+		}
+	}
+
+	// [SKYCODE-PERF] Initialize WhisperLocalService once, not on every state push
+	private _whisperInitialized = false
+
+	private async _ensureWhisperInitialized(selectedModel: string): Promise<void> {
+		if (this._whisperInitialized) {
+			return
+		}
+		try {
+			const { getWhisperLocalService } = await import("@/services/dictation/WhisperLocalService")
+			// [SKYCODE] Для GigaAM инициализируем whisper как "tiny": его ffmpeg может пригодиться записи
+			const whisperModel = selectedModel === GIGAAM_MODEL_ID ? "tiny" : selectedModel
+			getWhisperLocalService(HostProvider.get().globalStorageFsPath, whisperModel, HostProvider.get().extensionFsPath)
+			this._whisperInitialized = true
+		} catch (err) {
+			Logger.warn("Failed to initialize WhisperLocalService:", err)
+		}
+	}
+
+	private contextBreakdownCache?: { key: string; value: ContextBreakdownItem[] }
+
+	/**
+	 * [SKYCODE] Разбивка контекста активной задачи по категориям. Кэш по (taskId, длина истории,
+	 * удалённый диапазон, реальный итог, размер промпта) — state постится часто, пересчёт нужен редко.
+	 */
+	private getContextBreakdown(skycodeMessages: { say?: string; text?: string }[]): ContextBreakdownItem[] | undefined {
+		const task = this.activeTask
+		if (!task) {
+			return undefined
+		}
+		try {
+			let realTotal = 0
+			for (let i = skycodeMessages.length - 1; i >= 0 && !realTotal; i--) {
+				const msg = skycodeMessages[i]
+				if (msg.say !== "api_req_started" || !msg.text) {
+					continue
+				}
+				try {
+					const info = JSON.parse(msg.text)
+					realTotal = (info.tokensIn || 0) + (info.tokensOut || 0) + (info.cacheWrites || 0) + (info.cacheReads || 0)
+				} catch {
+					// битое сообщение — смотрим предыдущее
+				}
+			}
+			const history = task.messageStateHandler.getApiConversationHistory()
+			const range = task.taskState.conversationHistoryDeletedRange
+			const key = [
+				task.taskId,
+				history.length,
+				range ? `${range[0]}-${range[1]}` : "none",
+				realTotal,
+				task.lastSystemPromptChars,
+				task.lastToolsChars,
+			].join("|")
+			if (this.contextBreakdownCache?.key === key) {
+				return this.contextBreakdownCache.value
+			}
+			// Модели уходят первые два сообщения и всё после удалённого диапазона
+			const sent = range ? [...history.slice(0, range[0]), ...history.slice(range[1] + 1)] : history
+			const value = estimateContextBreakdown({
+				messages: sent,
+				systemPromptChars: task.lastSystemPromptChars,
+				toolsChars: task.lastToolsChars,
+				realTotalTokens: realTotal || undefined,
+			})
+			this.contextBreakdownCache = { key, value }
+			return value
+		} catch {
+			return undefined
+		}
+	}
+
+	async getStateToPostToWebview(): Promise<ExtensionState> {
+		// [SKYCODE-SKYCODE] Capture indexing progress IMMEDIATELY before any awaits.
+		// getStateToPostToWebview has multiple awaits (openAiCodex, etc.)
+		// that yield to the event loop. During those yields, indexing continues and
+		// progress advances. If we read progress after the awaits, we miss intermediate states.
+		let indexingProgressSnapshot: import("@shared/IndexingTypes").IndexingProgress | undefined
+		try {
+			const { getIndexingProgress } = require("../indexing/progressCache")
+			indexingProgressSnapshot =
+				getIndexingProgress() ?? this.context.workspaceState.get("skycode.indexingProgress") ?? undefined
+		} catch {
+			indexingProgressSnapshot = this.context.workspaceState.get("skycode.indexingProgress") ?? undefined
+		}
+
+		// Get API configuration from cache for immediate access
+		const apiConfiguration = this.stateManager.getApiConfiguration()
+		const taskHistory = this.stateManager.getGlobalStateKey("taskHistory")
+		const autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
+		const browserSettings = this.stateManager.getGlobalSettingsKey("browserSettings")
+		const focusChainSettings = this.stateManager.getGlobalSettingsKey("focusChainSettings")
+		let dictationSettings = this.stateManager.getGlobalSettingsKey("dictationSettings")
+		const preferredLanguage = this.stateManager.getGlobalSettingsKey("preferredLanguage")
+		// Sync backend i18n locale on every state push (covers startup + runtime changes)
+		if (preferredLanguage) {
+			setBackendLocale(getBackendLocaleForPreferredLanguage(preferredLanguage))
+		}
+		const alwaysThinkInPreferredLanguage = this.stateManager.getGlobalSettingsKey("alwaysThinkInPreferredLanguage")
+		const openaiReasoningEffort = this.stateManager.getGlobalSettingsKey("openaiReasoningEffort")
+		const mode = this.getCurrentMode()
+		const strictPlanModeEnabled = this.stateManager.getGlobalSettingsKey("strictPlanModeEnabled")
+		const yoloModeToggled = this.stateManager.getGlobalSettingsKey("yoloModeToggled")
+		const useAutoCondense = this.stateManager.getGlobalSettingsKey("useAutoCondense")
+		const mcpDisplayMode = this.stateManager.getGlobalStateKey("mcpDisplayMode")
+		const planActSeparateModelsSetting = this.stateManager.getGlobalSettingsKey("planActSeparateModelsSetting")
+		const globalSkycodeRulesToggles = this.stateManager.getGlobalSettingsKey("globalSkycodeRulesToggles")
+		const globalWorkflowToggles = this.stateManager.getGlobalSettingsKey("globalWorkflowToggles")
+		const globalSkillsToggles = this.stateManager.getGlobalSettingsKey("globalSkillsToggles")
+		const localSkillsToggles = this.stateManager.getWorkspaceStateKey("localSkillsToggles")
+		const shellIntegrationTimeout = this.stateManager.getGlobalSettingsKey("shellIntegrationTimeout")
+		const terminalReuseEnabled = this.stateManager.getGlobalStateKey("terminalReuseEnabled")
+		const vscodeTerminalExecutionMode = this.stateManager.getGlobalStateKey("vscodeTerminalExecutionMode")
+		const defaultTerminalProfile = this.stateManager.getGlobalSettingsKey("defaultTerminalProfile")
+
+		const customPrompt = this.stateManager.getGlobalSettingsKey("customPrompt")
+		const mcpResponsesCollapsed = this.stateManager.getGlobalStateKey("mcpResponsesCollapsed")
+		const terminalOutputLineLimit = this.stateManager.getGlobalSettingsKey("terminalOutputLineLimit")
+		const maxConsecutiveMistakes = this.stateManager.getGlobalSettingsKey("maxConsecutiveMistakes")
+		const favoritedModelIds = this.stateManager.getGlobalStateKey("favoritedModelIds")
+		const skillsEnabled = this.stateManager.getGlobalSettingsKey("skillsEnabled")
+
+		const localSkycodeRulesToggles = this.stateManager.getWorkspaceStateKey("localSkycodeRulesToggles")
+		const localWindsurfRulesToggles = this.stateManager.getWorkspaceStateKey("localWindsurfRulesToggles")
+		const localCursorRulesToggles = this.stateManager.getWorkspaceStateKey("localCursorRulesToggles")
+		const localAgentsRulesToggles = this.stateManager.getWorkspaceStateKey("localAgentsRulesToggles")
+		const workflowToggles = this.stateManager.getWorkspaceStateKey("workflowToggles")
+		const autoCondenseThreshold = this.stateManager.getGlobalSettingsKey("autoCondenseThreshold")
+
+		const currentTaskItem = this.activeTask?.taskId
+			? (taskHistory || []).find((item) => item.id === this.activeTask?.taskId)
+			: undefined
+		const skycodeMessages = (this.activeTask?.messageStateHandler.getSkycodeMessages() || []).map(
+			sanitizeTruncatedPlaceholder,
+		)
+		const currentSessionId = this.sessionManager.activeSessionId ?? undefined
+		// [SKYCODE] Окно контекста и порог автосжатия активной задачи — для кольца контекста
+		let contextLimits: { contextWindow: number; autoCompactThresholdTokens: number } | undefined
+		try {
+			const activeApi = this.activeTask?.api
+			contextLimits = activeApi ? getContextUsageLimits(activeApi, autoCondenseThreshold) : undefined
+		} catch {
+			contextLimits = undefined
+		}
+		const contextBreakdown = this.getContextBreakdown(skycodeMessages)
+		const tabs = this.getTabs(taskHistory || [])
+		this.persistTabs(tabs, currentSessionId)
+
+		const processedTaskHistory = (taskHistory || [])
+			.filter((item) => item.ts && item.task)
+			.sort((a, b) => b.ts - a.ts)
+			.slice(0, 100) // for now we're only getting the latest 100 tasks, but a better solution here is to only pass in 3 for recent task history, and then get the full task history on demand when going to the task history view (maybe with pagination?)
+
+		const platform = process.platform as Platform
+		const version = ExtensionRegistryInfo.version
+		const environment = SkycodeEnv.config().environment
+
+		// [SKYCODE-PERF] Use cached auth status instead of dynamic import + async check on every call
+		const openAiCodexIsAuthenticated = await this._getCodexAuthStatus()
+
+		// [SKYCODE] Один раз переводим русскую диктовку со старого умолчания whisper "tiny" на GigaAM
+		// (у тех, кто ставил расширение до появления GigaAM, в настройках сохранён "tiny")
+		if (!dictationSettings?.gigaamDefaultApplied) {
+			const supported = getSherpaLocalService(HostProvider.get().globalStorageFsPath)?.isSupported ?? false
+			const oldDefault = !dictationSettings?.whisperModel || dictationSettings.whisperModel === "tiny"
+			dictationSettings = {
+				...dictationSettings,
+				...(supported && oldDefault && dictationSettings?.dictationLanguage === "ru"
+					? { whisperModel: GIGAAM_MODEL_ID }
+					: {}),
+				gigaamDefaultApplied: true,
+			}
+			this.stateManager.setGlobalState("dictationSettings", dictationSettings)
+		}
+
+		// [SKYCODE-PERF] Voice readiness — cached, no fs.existsSync on every call
+		// [SKYCODE] GigaAM годится только для русского: для другого языка показываем whisper "tiny"
+		const storedModel = (dictationSettings as any)?.whisperModel ?? "tiny"
+		const selectedModel =
+			storedModel === GIGAAM_MODEL_ID && (dictationSettings as any)?.dictationLanguage !== "ru" ? "tiny" : storedModel
+
+		// Initialize WhisperLocalService once (not on every state push)
+		void this._ensureWhisperInitialized(selectedModel)
+
+		// Reset transient download flags on startup (they don't survive restarts).
+		// [SKYCODE] Только один раз за сеанс: раньше сброс шёл на каждой отправке состояния и гасил
+		// индикатор начавшейся загрузки — кнопка сразу возвращалась в «Загрузить»
+		if (!this._voiceFlagsResetDone && (dictationSettings as any).voiceDownloading) {
+			dictationSettings = {
+				...dictationSettings,
+				voiceDownloading: false,
+				voiceDownloadProgress: 0,
+				voiceReinstall: false,
+			}
+			this.stateManager.setGlobalState("dictationSettings", dictationSettings)
+		}
+		this._voiceFlagsResetDone = true
+
+		const voiceReady = this._checkVoiceReadiness({ ...dictationSettings, whisperModel: selectedModel })
+
+		const updatedDictationSettings = {
+			...dictationSettings,
+			voiceReady,
+			gigaamAvailable: getSherpaLocalService(HostProvider.get().globalStorageFsPath)?.isSupported ?? false,
+			voiceDownloading: (dictationSettings as any).voiceDownloading ?? false,
+			whisperModel: selectedModel,
+		}
+
+		return {
+			version,
+			apiConfiguration,
+			currentTaskItem,
+			currentSessionId,
+			tabs,
+			activeTabId: currentSessionId,
+			contextWindowTokens: contextLimits?.contextWindow,
+			autoCompactThresholdTokens: contextLimits?.autoCompactThresholdTokens,
+			contextBreakdown,
+			skycodeMessages,
+			currentFocusChainChecklist: this.activeTask?.taskState.currentFocusChainChecklist || null,
+			autoApprovalSettings,
+			browserSettings,
+			focusChainSettings,
+			dictationSettings: updatedDictationSettings,
+			preferredLanguage,
+			alwaysThinkInPreferredLanguage,
+			openaiReasoningEffort,
+			mode,
+			strictPlanModeEnabled,
+			yoloModeToggled,
+			useAutoCondense,
+			mcpDisplayMode,
+			planActSeparateModelsSetting,
+			platform,
+			environment,
+			globalSkycodeRulesToggles: globalSkycodeRulesToggles || {},
+			localSkycodeRulesToggles: localSkycodeRulesToggles || {},
+			localWindsurfRulesToggles: localWindsurfRulesToggles || {},
+			localCursorRulesToggles: localCursorRulesToggles || {},
+			localAgentsRulesToggles: localAgentsRulesToggles || {},
+			localWorkflowToggles: workflowToggles || {},
+			globalWorkflowToggles: globalWorkflowToggles || {},
+			globalSkillsToggles: globalSkillsToggles || {},
+			localSkillsToggles: localSkillsToggles || {},
+			shellIntegrationTimeout,
+			terminalReuseEnabled,
+			vscodeTerminalExecutionMode: vscodeTerminalExecutionMode,
+			defaultTerminalProfile,
+			mcpResponsesCollapsed,
+			terminalOutputLineLimit,
+			maxConsecutiveMistakes,
+			customPrompt,
+			taskHistory: processedTaskHistory,
+			favoritedModelIds,
+			autoCondenseThreshold,
+			backgroundCommandRunning: this.backgroundCommandRunning,
+			backgroundCommandTaskId: this.backgroundCommandTaskId,
+			// NEW: Add workspace information
+			workspaceRoots: this.workspaceManager?.getRoots() ?? [],
+			primaryRootIndex: this.workspaceManager?.getPrimaryIndex() ?? 0,
+			isMultiRootWorkspace: (this.workspaceManager?.getRoots().length ?? 0) > 1,
+			multiRootSetting: {
+				user: this.stateManager.getGlobalStateKey("multiRootEnabled"),
+				featureFlag: true, // Multi-root workspace is now always enabled
+			},
+			skycodeWebToolsEnabled: {
+				user: this.stateManager.getGlobalSettingsKey("skycodeWebToolsEnabled"),
+				featureFlag: true, // Web tools are always available, gated by authentication
+			},
+			hooksEnabled: getHooksEnabledSafe(),
+			nativeToolCallSetting: this.stateManager.getGlobalStateKey("nativeToolCallEnabled"),
+			enableParallelToolCalling: this.stateManager.getGlobalSettingsKey("enableParallelToolCalling"),
+			backgroundEditEnabled: this.stateManager.getGlobalSettingsKey("backgroundEditEnabled"),
+			skillsEnabled,
+			// Skycode AI: Lightweight mode for weak models
+			lightweightMode: this.stateManager.getGlobalSettingsKey("lightweightMode"),
+			// Skycode AI: Session budget — tier override + custom limits
+			sessionBudgetMode: this.stateManager.getGlobalSettingsKey("sessionBudgetMode"),
+			customMaxToolCallsPerTurn: this.stateManager.getGlobalSettingsKey("customMaxToolCallsPerTurn"),
+			customMaxConsecutiveReadOnlyTools: this.stateManager.getGlobalSettingsKey("customMaxConsecutiveReadOnlyTools"),
+			customForceCompactAfterSteps: this.stateManager.getGlobalSettingsKey("customForceCompactAfterSteps"),
+			// Skycode AI: Active prompt profile (variant + tier + limits)
+			promptProfile: (() => {
+				try {
+					const apiConfig = this.stateManager.getApiConfiguration()
+					const mode = this.getCurrentMode()
+					const isPlan = getApiSettingsMode(mode) === "plan"
+					const providerId = (isPlan ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
+					const modeKey = isPlan ? "planMode" : "actMode"
+					const providerModelSuffix: Record<string, string> = {
+						openrouter: "OpenRouterModelId",
+						openai: "OpenAiModelId",
+						ollama: "OllamaModelId",
+						lmstudio: "LmStudioModelId",
+						litellm: "LiteLlmModelId",
+					}
+					const configModelId = (apiConfig as Record<string, unknown>)[
+						`${modeKey}${providerModelSuffix[providerId] ?? "ApiModelId"}`
+					] as string | undefined
+					const modelId = this.activeTask?.api?.getModel()?.id ?? configModelId ?? "unknown"
+					const providerInfo = { model: { id: modelId, info: {} as ModelInfo }, providerId, mode }
+					// Read user's session budget override (auto / strong / medium / weak / custom).
+					// Without this, the prompt profile pill always shows the auto-detected tier
+					// even after the user explicitly chose a different one in Settings.
+					const sessionBudgetMode = this.stateManager.getGlobalSettingsKey("sessionBudgetMode") ?? "auto"
+					const customSettings = {
+						sessionBudgetMode,
+						customMaxToolCallsPerTurn: this.stateManager.getGlobalSettingsKey("customMaxToolCallsPerTurn") ?? 80,
+						customMaxConsecutiveReadOnlyTools:
+							this.stateManager.getGlobalSettingsKey("customMaxConsecutiveReadOnlyTools") ?? 12,
+						customForceCompactAfterSteps:
+							this.stateManager.getGlobalSettingsKey("customForceCompactAfterSteps") ?? 40,
+					}
+					const tierOverride =
+						sessionBudgetMode === "strong" || sessionBudgetMode === "medium" || sessionBudgetMode === "weak"
+							? sessionBudgetMode
+							: "auto"
+					const detectedTier = getModelCapabilityTier(modelId, providerInfo, tierOverride)
+					const limits = getSessionLimitsForModel(modelId, providerInfo, customSettings)
+					// Show "custom" explicitly in the UI when limits are user-defined.
+					const tier = sessionBudgetMode === "custom" ? "custom" : detectedTier
+					const registry = PromptRegistry.getInstance()
+					const variant = registry.getModelFamily({
+						providerInfo,
+						lightweightMode: this.stateManager.getGlobalSettingsKey("lightweightMode") === true,
+					} as any)
+					return {
+						variant,
+						tier,
+						maxToolCalls: limits.maxToolCallsPerTurn,
+						maxReadOnly: limits.maxConsecutiveReadOnlyTools,
+						compactEvery: limits.forceCompactAfterSteps,
+					}
+				} catch {
+					return undefined
+				}
+			})(),
+			// Skycode AI: Edit tools settings
+			validateSyntaxBeforeApply: vscode.workspace
+				.getConfiguration("skycode")
+				.get<boolean>("validateSyntaxBeforeApply", false),
+			blockOnSyntaxErrors: vscode.workspace.getConfiguration("skycode").get<boolean>("blockOnSyntaxErrors", false),
+			// Skycode AI: Codebase indexing config (read from VS Code settings)
+			indexingConfig: (() => {
+				const cfg = vscode.workspace.getConfiguration("skycode.indexing")
+				return {
+					mode: cfg.get("mode", DEFAULT_INDEXING_CONFIG.mode) as IndexingMode,
+					localModel: cfg.get<LocalModelId>("localModel", DEFAULT_INDEXING_CONFIG.localModel),
+					remoteApiUrl: cfg.get("remoteApiUrl", DEFAULT_INDEXING_CONFIG.remoteApiUrl),
+					remoteApiKey: cfg.get("remoteApiKey", DEFAULT_INDEXING_CONFIG.remoteApiKey),
+					remoteModel: cfg.get("remoteModel", DEFAULT_INDEXING_CONFIG.remoteModel),
+					maxFileSize: cfg.get("maxFileSize", DEFAULT_INDEXING_CONFIG.maxFileSize),
+					ignoredPatterns: cfg.get("ignoredPatterns", DEFAULT_INDEXING_CONFIG.ignoredPatterns),
+				} satisfies IndexingConfig
+			})(),
+			// allow-any-unicode-next-line
+			// Indexing progress — captured at start of function before any awaits (see top of getStateToPostToWebview)
+			indexingProgress: indexingProgressSnapshot,
+			indexingPromptDismissed: this.context.globalState.get<boolean>("skycode.indexingPromptDismissed", false),
+			// Skycode AI: Pending changes for inline diffs
+			pendingChanges: this.getPendingChangesInfo(),
+			openAiCodexIsAuthenticated,
+		}
+	}
+
+	/**
+	 * Get pending changes info for webview display
+	 */
+	private getPendingChangesInfo(): PendingChangeInfo[] {
+		try {
+			const storage = getPendingChangesStorage()
+			// [SKYCODE] Бар внизу показывает изменения ТЕКУЩЕЙ задачи. Раньше он брал все правки
+			// workspace, поэтому в новой вкладке висели файлы, изменённые агентом в прошлой.
+			const fileStats = storage.getFileStats(this.activeTask?.taskId)
+			return fileStats.map((stats) => ({
+				id: stats.fsPath, // Use fsPath as id for grouping
+				fileName: stats.fileName,
+				fsPath: stats.fsPath,
+				addedCount: stats.addedCount,
+				removedCount: stats.removedCount,
+			}))
+		} catch {
+			return []
+		}
+	}
+
+	/** Закрывает активную сессию (имя сохранено для существующих вызовов). */
+	async clearTask() {
+		const activeId = this.sessionManager.activeSessionId
+		if (activeId) {
+			await this.closeSession(activeId)
+		} else {
+			await this.finishDiffCheckpoint(null)
+		}
+	}
+
+	/**
+	 * [SKYCODE] Закрывает сессию: останавливает её задачу и удаляет сессию.
+	 * Если сессия была активной, SessionManager выбирает другую, а DiffSystem переключается на её задачу (или null).
+	 * Задача остаётся в истории.
+	 */
+	async closeSession(sessionId: string): Promise<void> {
+		const session = this.sessionManager.get(sessionId)
+		if (!session) {
+			return
+		}
+		const wasActive = this.sessionManager.activeSessionId === sessionId
+
+		const closedTaskId = session.task?.taskId
+		await session.task?.abortTask()
+		// [SKYCODE] Завершаем группу правок закрываемой задачи (и только её)
+		if (closedTaskId) {
+			await this.finishDiffCheckpoint(undefined, closedTaskId)
+		}
+
+		// removes reference to the task, so once promises end it will be garbage collected
+		this.sessionManager.remove(sessionId)
+
+		if (wasActive) {
+			// [SKYCODE] Снимаем привязку к закрытой задаче: иначе правки между задачами (например inline edit) уедут в её бар.
+			await this.finishDiffCheckpoint(this.activeTask?.taskId ?? null)
+			// [SKYCODE] Новой активной стала восстановленная вкладка-заглушка — поднимаем её задачу
+			const next = this.sessionManager.currentSession
+			if (next?.placeholder && !this._disposed) {
+				await this.materializePlaceholder(next)
+			}
+		}
+	}
+
+	/** [SKYCODE] Делает сессию активной (вкладку видимой); остальные продолжают работать. */
+	async switchSession(sessionId: string): Promise<void> {
+		const session = this.sessionManager.get(sessionId)
+		if (!session) {
+			return
+		}
+		this.sessionManager.switchTo(sessionId)
+		try {
+			getDiffSystem().setCurrentTaskId(session.task?.taskId ?? session.placeholder?.taskId ?? null)
+		} catch {
+			// DiffSystem may not be initialized
+		}
+		if (session.placeholder) {
+			await this.materializePlaceholder(session)
+		}
+		await this.postStateToWebview()
+	}
+
+	/** [SKYCODE] Создаёт Task восстановленной вкладки из истории (при первом переключении на неё). Нет в истории — вкладка закрывается. */
+	private async materializePlaceholder(session: Session): Promise<void> {
+		const placeholder = session.placeholder
+		if (!placeholder || session.task || this.materializing.has(session.id)) {
+			return
+		}
+		this.materializing.add(session.id)
+		try {
+			let historyItem: HistoryItem | undefined
+			try {
+				historyItem = (await this.getTaskWithId(placeholder.taskId)).historyItem
+			} catch (error) {
+				Logger.log(`[Controller.materializePlaceholder] Task ${placeholder.taskId} is gone from history: ${error}`)
+			}
+			if (!historyItem) {
+				await this.closeSession(session.id)
+				return
+			}
+			await this.initTask(undefined, undefined, undefined, historyItem, { sessionId: session.id })
+		} finally {
+			this.materializing.delete(session.id)
+		}
+	}
+
+	/** [SKYCODE] Список вкладок для вебвью: статус выводится из задачи (см. session/tabs.ts). */
+	getTabs(taskHistory: HistoryItem[]): TabInfo[] {
+		return buildTabs(
+			this.sessionManager.getAll().map((session) => {
+				const task = session.task
+				const taskId = task?.taskId ?? session.placeholder?.taskId
+				const historyItem = taskId ? taskHistory.find((item) => item.id === taskId) : undefined
+				const messages = task?.messageStateHandler.getSkycodeMessages() ?? []
+				return {
+					sessionId: session.id,
+					taskId,
+					placeholderTitle: normalizeTabTitle(session.placeholder?.title),
+					title: deriveTabTitle(messages, historyItem?.task),
+					status: deriveTabStatus({
+						hasTask: !!task,
+						isPlaceholder: !!session.placeholder && !task,
+						isWaitingForApiSlot: task?.taskState.isWaitingForApiSlot,
+						aborted: task ? task.taskState.abort || task.taskState.abandoned : false,
+						messages,
+					}),
+					ts: historyItem?.ts ?? messages[0]?.ts ?? session.createdAt,
+				}
+			}),
+		)
+	}
+
+	/** [SKYCODE] Сохраняет открытые вкладки в global state, если они изменились (вызывается при каждой отправке состояния). */
+	private persistTabs(tabs: TabInfo[], activeTabId: string | undefined): void {
+		if (!this._tabsRestored || this._disposed) {
+			return
+		}
+		const persisted = toPersistedTabs(tabs, activeTabId)
+		const json = JSON.stringify(persisted)
+		if (json === this._lastPersistedTabsJson) {
+			return
+		}
+		this._lastPersistedTabsJson = json
+		this.stateManager.setGlobalState("openTabs", persisted.openTabs)
+		this.stateManager.setGlobalState("activeTabId", persisted.activeTabId)
+	}
+
+	/**
+	 * [SKYCODE] Восстанавливает вкладки прошлого запуска: активная — настоящая задача из истории (в состоянии «остановлена»),
+	 * остальные — заглушки, их Task создаётся при переключении. Задачи, которых нет в истории, пропускаются.
+	 * Идемпотентно; вызывается при инициализации вебвью.
+	 */
+	restoreTabs(): Promise<void> {
+		if (!this._restoreTabsPromise) {
+			this._restoreTabsPromise = this.doRestoreTabs().finally(() => {
+				this._tabsRestored = true
+			})
+		}
+		return this._restoreTabsPromise
+	}
+
+	private async doRestoreTabs(): Promise<void> {
+		try {
+			if (this.sessionManager.size > 0) {
+				return // уже что-то открыто (например задача запущена до инициализации вебвью)
+			}
+			const history = this.stateManager.getGlobalStateKey("taskHistory") || []
+			const plan = planRestoredTabs(
+				this.stateManager.getGlobalStateKey("openTabs"),
+				this.stateManager.getGlobalStateKey("activeTabId"),
+				new Set(history.map((item) => item.id)),
+			)
+			if (plan.tabs.length === 0 || !plan.activeId) {
+				return
+			}
+			for (const tab of plan.tabs) {
+				const session = this.sessionManager.create(tab.sessionId)
+				const item = history.find((h) => h.id === tab.taskId)
+				session.setPlaceholder({ taskId: tab.taskId, title: normalizeTabTitle(item?.task) })
+			}
+			this.sessionManager.switchTo(plan.activeId)
+			const active = this.sessionManager.get(plan.activeId)
+			if (active) {
+				await this.materializePlaceholder(active)
+			}
+		} catch (error) {
+			Logger.error("[Controller] Failed to restore tabs:", error)
+		}
+	}
+
+	/** [SKYCODE] Новая пустая вкладка (активная). Если активная и так пустая — переиспользуем её. */
+	async newTab(): Promise<string> {
+		const active = this.sessionManager.currentSession
+		if (active && !active.task && !active.placeholder) {
+			return active.id
+		}
+		const session = this.sessionManager.create()
+		this.sessionManager.switchTo(session.id)
+		// [SKYCODE] Только отвязываем активную задачу: группа правок фоновой задачи остаётся её собственной
+		await this.finishDiffCheckpoint(null)
+		return session.id
+	}
+
+	/** [SKYCODE] Открывает задачу из истории во вкладке: уже открыта — переключаемся, иначе новая вкладка (или пустая активная). */
+	async openTaskInTab(historyTaskId: string): Promise<void> {
+		const existing = this.findSessionByTaskId(historyTaskId)
+		if (existing) {
+			// Пустую вкладку, с которой уходим (например после «+»), закрываем — иначе копятся пустые вкладки
+			const previous = this.sessionManager.currentSession
+			await this.switchSession(existing.id)
+			if (previous && previous.id !== existing.id && !previous.task && !previous.placeholder) {
+				this.sessionManager.remove(previous.id)
+				await this.postStateToWebview()
+			}
+			return
+		}
+		const { historyItem } = await this.getTaskWithId(historyTaskId)
+		const active = this.sessionManager.currentSession
+		const reuseEmpty = active && !active.task && !active.placeholder
+		await this.initTask(
+			undefined,
+			undefined,
+			undefined,
+			historyItem,
+			reuseEmpty ? { sessionId: active.id } : { inNewSession: true },
+		)
+	}
+
+	/** [SKYCODE] Список сессий для будущих вкладок. */
+	getSessions(): Array<{ id: string; taskId: string | undefined; isActive: boolean; session: Session }> {
+		const activeId = this.sessionManager.activeSessionId
+		return this.sessionManager.getAll().map((session) => ({
+			id: session.id,
+			taskId: session.task?.taskId,
+			isActive: session.id === activeId,
+			session,
+		}))
+	}
+
+	/**
+	 * v4: переключает привязку «активной задачи» DiffSystem (nextTaskId) и завершает checkpoint
+	 * закрываемой задачи (closedTaskId). Группы остальных задач не затрагиваются.
+	 */
+	private async finishDiffCheckpoint(nextTaskId?: string | null, closedTaskId?: string): Promise<void> {
+		try {
+			const diffSystem = getDiffSystem()
+			if (closedTaskId) {
+				await diffSystem.finishCheckpoint(closedTaskId)
+			}
+			if (nextTaskId !== undefined) {
+				diffSystem.setCurrentTaskId(nextTaskId)
+			}
+		} catch {
+			// DiffSystem may not be initialized
+		}
+	}
+
+	// Caching mechanism to keep track of webview messages + API conversation history per provider instance
+
+	/*
+	Now that we use retainContextWhenHidden, we don't have to store a cache of skycode messages in the user's state, but we could to reduce memory footprint in long conversations.
+
+	- We have to be careful of what state is shared between SkycodeProvider instances since there could be multiple instances of the extension running at once. For example when we cached skycode messages using the same key, two instances of the extension could end up using the same key and overwriting each other's messages.
+	- Some state does need to be shared between the instances, i.e. the API key--however there doesn't seem to be a good way to notify the other instances that the API key has changed.
+
+	We need to use a unique identifier for each SkycodeProvider instance's message cache since we could be running several instances of the extension outside of just the sidebar i.e. in editor panels.
+
+	// conversation history to send in API requests
+
+	/*
+	It seems that some API messages do not comply with vscode state requirements. Either the Anthropic library is manipulating these values somehow in the backend in a way that's creating cyclic references, or the API returns a function or a Symbol as part of the message content.
+	// allow-any-unicode-next-line
+	VSCode docs about state: "The value must be JSON-stringifyable ... value — A value. MUST not contain cyclic references."
+	For now we'll store the conversation history in memory, and if we need to store in state directly we'd need to do a manual conversion to ensure proper json stringification.
+	*/
+
+	async updateTaskHistory(item: HistoryItem): Promise<HistoryItem[]> {
+		const history = this.stateManager.getGlobalStateKey("taskHistory")
+		const existingItemIndex = history.findIndex((h) => h.id === item.id)
+		if (existingItemIndex !== -1) {
+			history[existingItemIndex] = item
+		} else {
+			history.push(item)
+		}
+		this.stateManager.setGlobalState("taskHistory", history)
+		return history
+	}
+}

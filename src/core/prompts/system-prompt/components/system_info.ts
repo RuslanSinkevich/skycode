@@ -1,0 +1,91 @@
+import osModule from "node:os"
+import { getBackgroundShell, getShell, isWindowsPowerShell } from "@utils/shell"
+import osName from "os-name"
+import { getWorkspacePaths } from "@/hosts/vscode/hostbridge/workspace/getWorkspacePaths"
+import { SystemPromptSection } from "../templates/placeholders"
+import { TemplateEngine } from "../templates/TemplateEngine"
+import type { PromptVariant, SystemPromptContext } from "../types"
+
+const SYSTEM_INFO_TEMPLATE_TEXT = `SYSTEM INFORMATION
+
+Operating System: {{os}}
+IDE: {{ide}}
+Default Shell: {{shell}}
+Home Directory: {{homeDir}}
+{{WORKSPACE_TITLE}}: {{workingDir}}`
+
+/**
+ * Get the shell that will actually be used for command execution.
+ * Background exec mode runs commands in getBackgroundShell() (Windows PowerShell on Windows),
+ * the VS Code terminal mode uses the VS Code configured shell.
+ * Windows PowerShell 5.x gets a hint about command chaining, since models default to `&&`.
+ */
+function getEffectiveShell(context: SystemPromptContext): string {
+	const shell = context.terminalExecutionMode === "backgroundExec" ? getBackgroundShell() : getShell()
+	return isWindowsPowerShell(shell)
+		? `${shell} (Windows PowerShell 5.1: chain commands with ";", the "&&" and "||" operators are not supported)`
+		: shell
+}
+
+export async function getSystemEnv(context: SystemPromptContext, isTesting = false) {
+	const currentWorkDir = context.cwd || process.cwd()
+	const workspaces = (await getWorkspacePaths({}))?.paths || [currentWorkDir]
+	return isTesting
+		? {
+				os: "macOS",
+				ide: "TestIde",
+				shell: "/bin/zsh",
+				homeDir: "/Users/tester",
+				workingDir: "/Users/tester/dev/project",
+				// Multi-root workspace example: ["/Users/tester/dev/project", "/Users/tester/dev/foo", "/Users/tester/bar"],
+				workspaces: ["/Users/tester/dev/project"],
+			}
+		: {
+				os: osName(),
+				ide: context.ide,
+				shell: getEffectiveShell(context),
+				homeDir: osModule.homedir(),
+				workingDir: currentWorkDir,
+				workspaces: workspaces,
+			}
+}
+
+export async function getSystemInfo(variant: PromptVariant, context: SystemPromptContext): Promise<string> {
+	const testMode = !!process?.env?.CI || !!process?.env?.IS_TEST || context.isTesting || false
+	const info = await getSystemEnv(context, testMode)
+
+	// Check if multi-root is enabled and we have workspace roots
+	const isMultiRoot = context.isMultiRootEnabled && context.workspaceRoots && context.workspaceRoots.length > 1
+
+	let WORKSPACE_TITLE: string
+	let workingDirInfo: string
+
+	if (isMultiRoot && context.workspaceRoots) {
+		// Multi-root workspace with feature flag enabled
+		WORKSPACE_TITLE = "Workspace Roots"
+		const rootsInfo = context.workspaceRoots
+			.map((root) => {
+				const vcsInfo = root.vcs ? ` (${root.vcs})` : ""
+				return `\n  - ${root.name}: ${root.path}${vcsInfo}`
+			})
+			.join("")
+		workingDirInfo = rootsInfo + `\n\nPrimary Working Directory: ${context.cwd}`
+	} else {
+		// Single workspace
+		WORKSPACE_TITLE = "Current Working Directory"
+		workingDirInfo = info.workingDir
+	}
+
+	const template = variant.componentOverrides?.[SystemPromptSection.SYSTEM_INFO]?.template || SYSTEM_INFO_TEMPLATE_TEXT
+
+	// [SKYCODE] Карта проекта — в первом сообщении задачи (services/repo-map, tree-sitter),
+	// а не здесь: системный промпт остаётся стабильным и кэшируется провайдером.
+	return new TemplateEngine().resolve(template, context, {
+		os: info.os,
+		ide: info.ide,
+		shell: info.shell,
+		homeDir: info.homeDir,
+		WORKSPACE_TITLE,
+		workingDir: workingDirInfo,
+	})
+}
