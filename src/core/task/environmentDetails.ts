@@ -64,6 +64,8 @@ export interface EnvironmentDetailsContext {
 	 * выбирала то, что ближе. Теперь критичные правила так же близко.
 	 */
 	criticalRulesReminder?: string
+	/** [SKYCODE] Напоминание про remember — только в сообщениях с новыми словами пользователя */
+	memoryReminder?: string
 }
 
 function formatWorkspaceRootsSection(ctx: EnvironmentDetailsContext): string {
@@ -399,6 +401,9 @@ export async function buildEnvironmentDetails(
 	// должно стоять ПОСЛЕ названия режима, чтобы при конфликте последним прочитанным было оно.
 	if (ctx.criticalRulesReminder) {
 		details += `\n\n# User's Critical Rules (always apply, including in the mode above)\n${ctx.criticalRulesReminder}`
+	}
+	if (ctx.memoryReminder) {
+		details += `\n\n${ctx.memoryReminder}`
 	}
 
 	addAlways(details)

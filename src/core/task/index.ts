@@ -70,6 +70,7 @@ import * as path from "path"
 import { ulid } from "ulid"
 import type { SystemPromptContext } from "@/core/prompts/system-prompt"
 import { getSystemPrompt } from "@/core/prompts/system-prompt"
+import { MEMORY_REMINDER } from "@core/memory/memory"
 import { MemoryStore } from "@core/memory/MemoryStore"
 import { HostProvider } from "@/hosts/host-provider"
 import { FileEditProvider } from "@/integrations/editor/FileEditProvider"
@@ -3519,7 +3520,7 @@ export class Task {
 		// (Note: this caused the @/ import alias bug where file contents were being parsed as well, since v2 converted tool results to text blocks)
 		const [processedUserContent, environmentDetails] = await Promise.all([
 			Promise.all(userContent.map(processContentBlock)),
-			this.getEnvironmentDetails(includeFileDetails),
+			this.getEnvironmentDetails(includeFileDetails, hasNewUserWords(userContent)),
 		])
 
 		// Check skycoderulesData if needed
@@ -3603,7 +3604,7 @@ export class Task {
 		}
 	}
 
-	async getEnvironmentDetails(includeFileDetails: boolean = false) {
+	async getEnvironmentDetails(includeFileDetails: boolean = false, hasUserWords: boolean = false) {
 		let backgroundCommandSummary: string | undefined
 		if (this.commandExecutor.hasActiveBackgroundCommand()) {
 			try {
@@ -3628,10 +3629,22 @@ export class Task {
 				api: this.api,
 				backgroundCommandSummary,
 				criticalRulesReminder: this.criticalRulesReminder,
+				memoryReminder:
+					hasUserWords && this.stateManager.getGlobalSettingsKey("memoryEnabled") ? MEMORY_REMINDER : undefined,
 			},
 			includeFileDetails,
 		)
 	}
+}
+
+/**
+ * [SKYCODE] Есть ли в этом сообщении новые слова пользователя: задача, ответ на вопрос, отзыв
+ * или продолжение задачи. Результаты инструментов сюда не относятся.
+ */
+function hasNewUserWords(userContent: SkycodeContent[]): boolean {
+	return userContent.some(
+		(block) => block.type === "text" && /<(task|feedback|answer|user_message)>/.test((block as { text?: string }).text ?? ""),
+	)
 }
 
 /**

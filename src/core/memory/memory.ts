@@ -294,7 +294,20 @@ export function noteTaskStarted(file: MemoryFile, taskId: string): MemoryFile | 
 	return changed ? { ...file, entries } : null
 }
 
-/** Блок для конца системного промпта. Пусто — значит, блока нет. */
+/**
+ * Раздел для пустой памяти. Без него слабая модель вспоминает о remember только по описанию
+ * инструмента в длинном списке — и не вспоминает: в первом тесте Qwen отметил имя пользователя
+ * в рассуждениях, но так и не записал.
+ */
+export const EMPTY_MEMORY_BLOCK = `## MEMORY
+
+Nothing remembered yet. When the user tells you something lasting about themselves or how they want you to work, save it with remember.`
+
+/** Одна строка рядом с новым сообщением пользователя: там модель её точно прочтёт. */
+export const MEMORY_REMINDER = `# Memory
+If the user's latest message says something lasting about them (name, role, how they want you to work, a decision or a date), save it with remember before you finish: one short fact, evidence copied from their words. Otherwise ignore this.`
+
+/** Блок для конца системного промпта. Пусто — значит, записей нет. */
 export function renderMemoryForPrompt(file: MemoryFile, cwd: string): string {
 	const visible = visibleEntries(file, cwd)
 	const stable = visible.filter((e) => e.status === "stable").slice(-MAX_STABLE_ENTRIES)

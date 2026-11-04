@@ -6,6 +6,7 @@ import {
 	applyForget,
 	applyRemember,
 	applyRestore,
+	EMPTY_MEMORY_BLOCK,
 	emptyMemoryFile,
 	type MemoryEntry,
 	type MemoryFile,
@@ -103,7 +104,7 @@ export class MemoryStore {
 	async renderForPrompt(cwd: string): Promise<string> {
 		try {
 			const { file } = await this.load()
-			return renderMemoryForPrompt(file, cwd)
+			return renderMemoryForPrompt(file, cwd) || EMPTY_MEMORY_BLOCK
 		} catch (error) {
 			Logger.error("[Memory] render failed", error)
 			return ""

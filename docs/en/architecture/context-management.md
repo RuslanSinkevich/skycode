@@ -68,6 +68,8 @@ The agent decides what to remember on its own with the `remember` tool and remov
 
 A new entry is unconfirmed. It becomes confirmed when two other tasks start and the entry is not deleted, or when the same fact comes up again in another task. At the end of the system prompt, the `## MEMORY` block lists confirmed entries (up to 30) and, separately, unconfirmed ones (up to 10) marked as lower confidence. When there are more than 10 unconfirmed entries, the oldest one is dropped. Entries with the `project` scope are visible only in their own workspace folder.
 
+When memory is empty, the `## MEMORY` block is still present: one line on when to call `remember`. In addition, messages with new words from the user (task, answer, feedback) get a short `# Memory` reminder next to `# Current Mode`. Without it, Qwen noticed a fact in its reasoning but did not save it.
+
 ## Key files
 
 | File | Purpose |
