@@ -197,4 +197,4 @@ service SessionService {
 | 5 | Frontend (`useSession`, `ApprovalBar`) | Частично: используются в `ChatView`, но `useMessageQueue.ts` и `buttonConfig.ts` ещё живы |
 | 6 | Уборка legacy-кода | Частично: `pWaitFor` для ask/response убран, но остаётся в `Task` для других ожиданий (MCP, `userMessageContentReady`) |
 
-> **Примечание:** `Session` пока адаптер над `Task`; `Task` продолжает владеть agent loop, а состояние в webview по-прежнему идёт через `postStateToWebview()` вместе с событиями сессии. Одновременно стримят ответ не больше 3 задач (`ApiSlotLimiter`), остальные ждут слот. Вкладки: [plans/TABS.md](../plans/TABS.md).
+> **Примечание:** `Session` пока адаптер над `Task`; `Task` продолжает владеть agent loop, а состояние в webview по-прежнему идёт через `postStateToWebview()` вместе с событиями сессии. Одновременно стримят ответ не больше 3 задач (`ApiSlotLimiter`), остальные ждут слот.
