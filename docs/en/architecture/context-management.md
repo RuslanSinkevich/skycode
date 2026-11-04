@@ -57,16 +57,16 @@ If the context still overflows, `context-error-handling.ts` recognizes provider 
 
 ## Long-term memory
 
-Memory holds short facts about the user and their work, shared by all tabs and future tasks. It is turned on in settings ("Context" → "Long-term memory", on by default). File: `Documents/Skycode/Memory/memory.json`; the "Open memory file" button opens it in the editor, and manual edits are picked up on the next request.
+There are two memories: the **shared** one, about the user, for all projects, and the **project** memory for the current workspace folder. It is turned on in settings ("Context" → "Long-term memory", on by default). Files live in `Documents/Skycode/Memory/`: the shared one is `global.json`, projects are `projects/<folder>-<hash>.json`. The "Open memory" button opens both in the editor; manual edits are picked up on the next request. The first-version file `memory.json` is split into the new files on first read and kept next to them as `memory.json.migrated`.
 
-The agent decides what to remember on its own with the `remember` tool and removes a fact with `forget`. It does not ask for approval, but after a save VS Code shows a notification with an "Undo" button. The limits are checked by code (`core/memory/memory.ts`), not by the model:
+The agent decides what to remember on its own with the `remember` tool and removes a fact with `forget`. It does not ask for approval, but after a save VS Code shows a notification with an "Undo" button. Where a fact goes is set by its type, not by the model: `user` (who the user is) and `preference` (how to work with them) go to the shared memory, `project` goes to the project memory. The tool description explicitly forbids putting project details into the shared memory. The other limits are also checked by code (`core/memory/memory.ts`):
 
-- at most 3 saves per task, a fact of up to 200 characters, a type from the list: `user`, `preference`, `project`, `event`;
-- a quote from the user's messages in this task is required; without it the fact is not saved. Text from files, pages and command output does not count;
+- at most 3 saves per task, a fact of up to 160 characters;
+- a quote from the user's messages in this task is required (taken from the `<task>`, `<feedback>`, `<answer>` and `<user_message>` tags); without it the fact is not saved. Text from files, pages and command output does not count;
 - keys, tokens, passwords and card numbers are rejected;
-- a similar fact (60% or more of the words match) updates the old entry instead of adding a new one.
+- a similar fact (60% or more of the words match) updates the old entry in the same memory instead of adding a new one.
 
-A new entry is unconfirmed. It becomes confirmed when two other tasks start and the entry is not deleted, or when the same fact comes up again in another task. At the end of the system prompt, the `## MEMORY` block lists confirmed entries (up to 30) and, separately, unconfirmed ones (up to 10) marked as lower confidence. When there are more than 10 unconfirmed entries, the oldest one is dropped. Entries with the `project` scope are visible only in their own workspace folder.
+A new entry is unconfirmed. It becomes confirmed when two other tasks start and the entry is not deleted, or when the same fact comes up again in another task. At the end of the system prompt, the `## MEMORY` block shows the "About the user" and "This project" sections: each has up to 10 confirmed and up to 3 unconfirmed entries, the latter marked `(unconfirmed)`. An entry line is just `[id] text`. When there are more than 3 unconfirmed entries, the oldest one is dropped. The worst case is about 1.8 thousand tokens.
 
 When memory is empty, the `## MEMORY` block is still present: one line on when to call `remember`. In addition, messages with new words from the user (task, answer, feedback) get a short `# Memory` reminder next to `# Current Mode`. Without it, Qwen noticed a fact in its reasoning but did not save it.
 
@@ -84,5 +84,5 @@ When memory is empty, the `## MEMORY` block is still present: one line on when t
 | `core/task/environmentDetailsDiff.ts` | Sending only changed sections |
 | `webview-ui/src/components/chat/context-ring/` | The context ring |
 | `core/memory/memory.ts` | Checks, duplicates, confirmation, the `## MEMORY` block |
-| `core/memory/MemoryStore.ts` | Memory file, queue for writes from different tabs |
+| `core/memory/MemoryStore.ts` | Shared and project memory files, queue for writes from different tabs |
 | `core/task/tools/handlers/MemoryToolHandler.ts` | The `remember` and `forget` tools |

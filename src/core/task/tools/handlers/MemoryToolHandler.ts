@@ -88,7 +88,7 @@ export class RememberToolHandler implements IToolHandler, IPartialBlockHandler {
 
 		const store = MemoryStore.get()
 		const result = await store.remember(
-			{ fact, type, evidence, scope: block.params.scope?.trim() === "project" ? "project" : "global" },
+			{ fact, type, evidence },
 			{ taskId: config.taskId, cwd: config.cwd, userTexts: userTextsOf(config) },
 		)
 		if (!result.ok) {
@@ -109,9 +109,9 @@ export class RememberToolHandler implements IToolHandler, IPartialBlockHandler {
 					return
 				}
 				if (previous) {
-					await store.restore(previous)
+					await store.restore(previous, config.cwd)
 				} else {
-					await store.forget(entry.id)
+					await store.forget(entry.id, config.cwd)
 				}
 			})
 			.catch((error) => Logger.error("[Memory] notification failed", error))
@@ -145,7 +145,7 @@ export class ForgetToolHandler implements IToolHandler, IPartialBlockHandler {
 			return await config.callbacks.sayAndCreateMissingParamError(this.name, "id")
 		}
 		config.taskState.consecutiveMistakeCount = 0
-		const removed = await MemoryStore.get().forget(id)
+		const removed = await MemoryStore.get().forget(id, config.cwd)
 		if (!removed) {
 			return formatResponse.toolResult(`No memory entry with id ${id}.`)
 		}

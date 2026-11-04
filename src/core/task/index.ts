@@ -912,7 +912,7 @@ export class Task {
 		}
 		// [SKYCODE] Каждая задача — ещё одна «сессия» для пробных записей памяти (см. core/memory)
 		if (this.stateManager.getGlobalSettingsKey("memoryEnabled")) {
-			void MemoryStore.get().noteTaskStarted(this.taskId)
+			void MemoryStore.get().noteTaskStarted(this.taskId, this.cwd)
 		}
 		// conversationHistory (for API) and skycodeMessages (for webview) need to be in sync
 		// if the extension process were killed, then on restart the skycodeMessages might not be empty, so we need to set it to [] when we create a new Skycode client (otherwise webview would show stale messages from previous session)
@@ -1059,7 +1059,7 @@ export class Task {
 		}
 		// [SKYCODE] Каждая задача — ещё одна «сессия» для пробных записей памяти (см. core/memory)
 		if (this.stateManager.getGlobalSettingsKey("memoryEnabled")) {
-			void MemoryStore.get().noteTaskStarted(this.taskId)
+			void MemoryStore.get().noteTaskStarted(this.taskId, this.cwd)
 		}
 
 		const savedSkycodeMessages = await getSavedSkycodeMessages(this.taskId)

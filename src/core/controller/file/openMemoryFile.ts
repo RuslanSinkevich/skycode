@@ -1,14 +1,19 @@
 import { MemoryStore } from "@core/memory/MemoryStore"
 import { openFile as openFileIntegration } from "@integrations/misc/open-file"
 import { Empty, EmptyRequest } from "@shared/proto/skycode/common"
+import { getCwd } from "@/utils/path"
 import { Controller } from ".."
 
 /**
- * [SKYCODE] Opens the long-term memory file in the editor, creating an empty one if it does not exist yet.
- * The file is Documents/Skycode/Memory/memory.json; manual edits are picked up on the next request.
+ * [SKYCODE] Opens both memory files in the editor — the shared one (Documents/Skycode/Memory/global.json)
+ * and the one for the current workspace (projects/<folder>-<hash>.json), creating empty files if needed.
+ * Manual edits are picked up on the next request.
  */
 export async function openMemoryFile(_controller: Controller, _request: EmptyRequest): Promise<Empty> {
-	const filePath = await MemoryStore.get().ensureFile()
-	await openFileIntegration(filePath)
+	const cwd = await getCwd("")
+	const paths = await MemoryStore.get().ensureFiles(cwd || undefined)
+	for (const filePath of paths) {
+		await openFileIntegration(filePath)
+	}
 	return Empty.create()
 }

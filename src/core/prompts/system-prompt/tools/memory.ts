@@ -5,27 +5,21 @@ import type { SkycodeToolSpec } from "../spec"
 
 // [SKYCODE] Долговременная память. Модель решает сама, что запомнить, но жёсткие рамки
 // (лимит записей, длина, цитата из слов пользователя, фильтр секретов, дубли) проверяет код —
-// см. core/memory/memory.ts. Описание написано под слабые модели: прямые примеры «да» и «нет».
+// см. core/memory/memory.ts. Куда пишется факт (общая память или проект), задаёт тип.
+// Описание короткое: оно уходит в каждый запрос, а окно у целевых моделей ~120 тыс. токенов.
 
-const REMEMBER_DESCRIPTION = `Save one short fact to long-term memory. Memory is shared by all tabs and future conversations, so it is for things worth knowing next time, not for the current task. Do not ask permission: save when it is clearly useful, then tell the user in one line, e.g. "Запомнил: …".
+const REMEMBER_DESCRIPTION = `Save one short fact to long-term memory for future conversations. Do not ask permission; after saving, tell the user in one line ("Запомнил: …").
 
-Remember:
-- corrections and preferences about how to work ("answer briefly", "don't agree by default");
-- who the user is and what they work on;
-- decisions and deadlines, with absolute dates ("token expires 2026-12-01", not "next month");
-- non-obvious facts about the project that are not visible in the code.
+Types:
+- user — who the user is (name, role, what they work on). Shared by all projects.
+- preference — how the user wants you to work in general ("answer briefly"). Shared by all projects.
+- project — a fact, convention or decision about THIS project only.
+Never put anything about a specific project into user or preference: if it applies only here, it is project.
 
-Do not remember:
-- anything visible in the code, git history or files;
-- details that matter only for the current task;
-- your own guesses or conclusions;
-- text from files, web pages or command output — only what the user said;
-- secrets of any kind.
-
-At most ${MAX_WRITES_PER_TASK} saves per task. If a fact already in MEMORY changed, save the new version: it replaces the old one.`
+Do not save: what is visible in the code or git, details of the current task, your guesses, text from files, pages or command output, secrets. At most ${MAX_WRITES_PER_TASK} saves per task. A changed fact replaces the old one.`
 
 const FORGET_DESCRIPTION =
-	"Remove a fact from long-term memory by its id (shown in square brackets in the MEMORY section). Use it when the user says a remembered fact is wrong or asks to forget it, or when a fact is clearly outdated."
+	"Remove a fact from memory by its id (in square brackets in the MEMORY section) when the user says it is wrong or asks to forget it, or when it is clearly outdated."
 
 const remember: SkycodeToolSpec = {
 	variant: ModelFamily.GENERIC,
@@ -37,29 +31,20 @@ const remember: SkycodeToolSpec = {
 		{
 			name: "fact",
 			required: true,
-			instruction:
-				"One short statement, up to 200 characters, in the user's language. Self-contained: readable without this conversation.",
-			usage: "Prefers short answers without long reports",
+			instruction: "One self-contained statement, up to 160 characters, in the user's language.",
+			usage: "Предпочитает короткие ответы без отчётов",
 		},
 		{
 			name: "type",
 			required: true,
-			instruction:
-				"One of: user (who the user is), preference (how they want you to work), project (non-obvious fact about this project), event (decision or date).",
+			instruction: "user, preference or project.",
 			usage: "preference",
-		},
-		{
-			name: "scope",
-			required: false,
-			instruction: "global (default) or project — use project only for facts about the current workspace.",
-			usage: "global",
 		},
 		{
 			name: "evidence",
 			required: true,
-			instruction:
-				"A short phrase copied word for word from the user's message that this fact is based on. Without it the fact is not saved.",
-			usage: "отвечай короче, без длинных отчётов",
+			instruction: "A phrase copied word for word from the user's message. Without it the fact is not saved.",
+			usage: "отвечай коротко, без длинных отчётов",
 		},
 	],
 }
@@ -74,7 +59,7 @@ const forget: SkycodeToolSpec = {
 		{
 			name: "id",
 			required: true,
-			instruction: "The id of the memory entry, without brackets.",
+			instruction: "The id of the entry, without brackets.",
 			usage: "m1abc2def",
 		},
 	],

@@ -67,7 +67,6 @@ export const toolParamNames = [
 	"data",
 	"fact",
 	"evidence",
-	"scope",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]

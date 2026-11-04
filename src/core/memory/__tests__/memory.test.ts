@@ -11,21 +11,21 @@ import {
 	emptyMemoryFile,
 	evidenceMatches,
 	extractUserWords,
-	MAX_PROBATION_ENTRIES,
+	MAX_PROBATION_PER_FILE,
 	MAX_WRITES_PER_TASK,
 	type MemoryFile,
 	noteTaskStarted,
 	parseMemoryFile,
 	type RememberContext,
 	renderMemoryForPrompt,
+	scopeOfType,
 } from "../memory"
-import { MemoryStore } from "../MemoryStore"
+import { MemoryStore, projectMemoryFileName } from "../MemoryStore"
 
 const NOW = new Date("2026-11-04T10:00:00Z")
 let counter = 0
 const ctx = (over: Partial<RememberContext> = {}): RememberContext => ({
 	taskId: "t1",
-	cwd: "D:/proj",
 	userTexts: ["Отвечай коротко, без длинных отчётов. И не соглашайся по умолчанию."],
 	writesInTask: 0,
 	now: NOW,
@@ -34,7 +34,7 @@ const ctx = (over: Partial<RememberContext> = {}): RememberContext => ({
 })
 
 function remember(file: MemoryFile, fact: string, evidence: string, over: Partial<RememberContext> = {}, type = "preference") {
-	return applyRemember(file, { fact, type, scope: "global", evidence }, ctx(over))
+	return applyRemember(file, { fact, type, evidence }, ctx(over))
 }
 
 describe("memory: applyRemember", () => {
@@ -44,7 +44,6 @@ describe("memory: applyRemember", () => {
 		if (!r.ok) return
 		r.action.should.equal("added")
 		r.entry.status.should.equal("probation")
-		r.entry.scope.should.equal("global")
 		r.entry.created.should.equal("2026-11-04")
 		r.file.entries.length.should.equal(1)
 	})
@@ -54,19 +53,18 @@ describe("memory: applyRemember", () => {
 	})
 
 	it("rejects evidence that is not in the user's messages", () => {
-		const r = remember(emptyMemoryFile(), "Любит табы", "используй табы вместо пробелов")
-		r.ok.should.equal(false)
+		remember(emptyMemoryFile(), "Любит табы", "используй табы вместо пробелов").ok.should.equal(false)
 	})
 
 	it("rejects a single-word evidence that is not an exact phrase", () => {
 		evidenceMatches("табы", ["Отвечай коротко"]).should.equal(false)
 	})
 
-	it("rejects unknown type, too long fact and secrets", () => {
+	it("rejects unknown or removed types, too long fact and secrets", () => {
 		remember(emptyMemoryFile(), "x", "отвечай коротко", {}, "opinion").ok.should.equal(false)
-		remember(emptyMemoryFile(), "a".repeat(201), "отвечай коротко").ok.should.equal(false)
-		const secret = remember(emptyMemoryFile(), "Ключ API: sk-abcdefghijklmnopqrstuvwx", "отвечай коротко")
-		secret.ok.should.equal(false)
+		remember(emptyMemoryFile(), "x", "отвечай коротко", {}, "event").ok.should.equal(false)
+		remember(emptyMemoryFile(), "a".repeat(161), "отвечай коротко").ok.should.equal(false)
+		remember(emptyMemoryFile(), "Ключ API: sk-abcdefghijklmnopqrstuvwx", "отвечай коротко").ok.should.equal(false)
 	})
 
 	it("enforces the per-task write limit", () => {
@@ -99,37 +97,29 @@ describe("memory: applyRemember", () => {
 	})
 
 	it("evicts the oldest probation entry when probation is full", () => {
-		let file = emptyMemoryFile()
-		for (let i = 0; i < MAX_PROBATION_ENTRIES; i++) {
+		const file = emptyMemoryFile()
+		for (let i = 0; i < MAX_PROBATION_PER_FILE; i++) {
 			file.entries.push({
 				id: `old${i}`,
-				type: "event",
-				scope: "global",
+				type: "user",
 				text: `событие номер ${i} уникальное слово${i}`,
 				status: "probation",
-				created: `2026-10-${String(10 + i).padStart(2, "0")}`,
-				updated: `2026-10-${String(10 + i).padStart(2, "0")}`,
+				created: `2026-10-1${i}`,
+				updated: `2026-10-1${i}`,
 				sourceTask: "t0",
 				seenInTasks: [],
 			})
 		}
 		const r = remember(file, "Предпочитает короткие ответы", "отвечай коротко")
 		if (!r.ok) throw new Error("not saved")
-		file = r.file
-		file.entries.length.should.equal(MAX_PROBATION_ENTRIES)
-		file.entries.some((e) => e.id === "old0").should.equal(false)
+		r.file.entries.length.should.equal(MAX_PROBATION_PER_FILE)
+		r.file.entries.some((e) => e.id === "old0").should.equal(false)
 	})
 
-	it("project scope stores the workspace path and is hidden in other folders", () => {
-		const r = applyRemember(
-			emptyMemoryFile(),
-			{ fact: "Отчёты без воды", type: "project", scope: "project", evidence: "без длинных отчётов" },
-			ctx(),
-		)
-		if (!r.ok) throw new Error("not saved")
-		r.entry.scope.should.equal("D:/proj")
-		renderMemoryForPrompt(r.file, "D:\\proj\\").should.containEql("Отчёты без воды")
-		renderMemoryForPrompt(r.file, "D:/other").should.equal("")
+	it("scope follows the type: only project goes to the project memory", () => {
+		scopeOfType("user").should.equal("global")
+		scopeOfType("preference").should.equal("global")
+		scopeOfType("project").should.equal("project")
 	})
 })
 
@@ -151,59 +141,46 @@ describe("memory: forget, restore, render, parse", () => {
 	it("forget removes by id and restore brings back the previous text", () => {
 		const r = remember(emptyMemoryFile(), "Предпочитает короткие ответы", "отвечай коротко")
 		if (!r.ok) throw new Error("not saved")
-		const { file, removed } = applyForget(r.file, `[${r.entry.id}]`.slice(1, -1))
+		const { file, removed } = applyForget(r.file, r.entry.id)
 		removed!.id.should.equal(r.entry.id)
 		file.entries.length.should.equal(0)
 		applyRestore(file, r.entry).entries.length.should.equal(1)
 	})
 
-	it("renders confirmed and unconfirmed sections separately", () => {
-		const r = remember(emptyMemoryFile(), "Предпочитает короткие ответы", "отвечай коротко")
-		if (!r.ok) throw new Error("not saved")
-		const text = renderMemoryForPrompt(r.file, "D:/proj")
+	it("renders the user and project sections, marking unconfirmed entries", () => {
+		const g = remember(emptyMemoryFile(), "Предпочитает короткие ответы", "отвечай коротко")
+		if (!g.ok) throw new Error("not saved")
+		const p = applyRemember(
+			emptyMemoryFile(),
+			{ fact: "Здесь отчёты без воды", type: "project", evidence: "без длинных отчётов" },
+			ctx(),
+		)
+		if (!p.ok) throw new Error("not saved")
+		const text = renderMemoryForPrompt(g.file, p.file)
 		text.should.startWith("## MEMORY")
-		text.should.containEql("Unconfirmed")
-		text.should.not.containEql("Confirmed:")
-		text.should.containEql(`[${r.entry.id}]`)
-		renderMemoryForPrompt(emptyMemoryFile(), "D:/proj").should.equal("")
+		text.should.containEql("About the user (all projects):")
+		text.should.containEql("This project:")
+		text.should.containEql(`- [${g.entry.id}] Предпочитает короткие ответы (unconfirmed)`)
+		renderMemoryForPrompt(g.file, emptyMemoryFile()).should.not.containEql("This project:")
+		renderMemoryForPrompt(emptyMemoryFile(), emptyMemoryFile()).should.equal("")
 	})
 
-	it("parse survives broken JSON and drops invalid entries", () => {
+	it("parse survives broken JSON, drops invalid entries and maps the old event type to project", () => {
 		parseMemoryFile("{oops").entries.length.should.equal(0)
-		const parsed = parseMemoryFile(JSON.stringify({ entries: [{ id: "a", text: "ok" }, { id: 1 }, { id: "b", text: "  " }] }))
-		parsed.entries.length.should.equal(1)
+		const parsed = parseMemoryFile(
+			JSON.stringify({
+				entries: [{ id: "a", text: "ok" }, { id: 1 }, { id: "b", text: "  " }, { id: "c", text: "срок", type: "event" }],
+			}),
+		)
+		parsed.entries.length.should.equal(2)
 		parsed.entries[0].status.should.equal("probation")
+		parsed.entries[1].type.should.equal("project")
 	})
 
 	it("secret filter does not flag ordinary paths and dates", () => {
 		containsSecret("Код лежит в src/core/prompts/system-prompt/variants/qwen").should.equal(false)
 		containsSecret("Токен истекает 2026-12-01").should.equal(false)
 		containsSecret("password: hunter2hunter").should.equal(true)
-	})
-})
-
-describe("MemoryStore", () => {
-	it("persists to disk and serializes concurrent writes", async () => {
-		const dir = await fs.mkdtemp(path.join(os.tmpdir(), "skycode-memory-"))
-		try {
-			const store = MemoryStore.forDirectory(dir)
-			const base = { cwd: "D:/proj", userTexts: ["Отвечай коротко. Меня зовут Руслан. Работаю над Skycode."] }
-			const results = await Promise.all([
-				store.remember(
-					{ fact: "Предпочитает короткие ответы", type: "preference", scope: "global", evidence: "отвечай коротко" },
-					{ ...base, taskId: "a" },
-				),
-				store.remember(
-					{ fact: "Зовут Руслан", type: "user", scope: "global", evidence: "меня зовут руслан" },
-					{ ...base, taskId: "b" },
-				),
-			])
-			results.every((r) => r.ok).should.equal(true)
-			const reread = MemoryStore.forDirectory(dir)
-			;(await reread.list()).length.should.equal(2)
-		} finally {
-			await fs.rm(dir, { recursive: true, force: true })
-		}
 	})
 })
 
@@ -220,5 +197,104 @@ describe("memory: extractUserWords", () => {
 		words.should.eql(["Меня зовут Руслан, я разрабатываю Skycode.", "Да, отвечай коротко", "не так", "продолжай"])
 		evidenceMatches("Меня зовут Руслан, я разрабатываю Skycode", words).should.equal(true)
 		evidenceMatches("README.md", words).should.equal(false)
+	})
+})
+
+describe("MemoryStore", () => {
+	const withDir = async (run: (dir: string) => Promise<void>) => {
+		const dir = await fs.mkdtemp(path.join(os.tmpdir(), "skycode-memory-"))
+		try {
+			await run(dir)
+		} finally {
+			await fs.rm(dir, { recursive: true, force: true })
+		}
+	}
+	const texts = ["Отвечай коротко. Меня зовут Руслан. В этом проекте отступы табами."]
+
+	it("writes user facts to global.json and project facts to the project file, serializing writes", async () => {
+		await withDir(async (dir) => {
+			const store = MemoryStore.forDirectory(dir)
+			const results = await Promise.all([
+				store.remember(
+					{ fact: "Зовут Руслан", type: "user", evidence: "меня зовут руслан" },
+					{ taskId: "a", cwd: "D:/proj", userTexts: texts },
+				),
+				store.remember(
+					{ fact: "Отступы табами", type: "project", evidence: "в этом проекте отступы табами" },
+					{ taskId: "b", cwd: "D:/proj", userTexts: texts },
+				),
+			])
+			results.every((r) => r.ok).should.equal(true)
+			const reread = MemoryStore.forDirectory(dir)
+			const here = await reread.list("D:/proj")
+			here.global.map((e) => e.text).should.eql(["Зовут Руслан"])
+			here.project.map((e) => e.text).should.eql(["Отступы табами"])
+			const elsewhere = await reread.list("D:/other")
+			elsewhere.global.length.should.equal(1)
+			elsewhere.project.length.should.equal(0)
+			const projectFile = JSON.parse(
+				await fs.readFile(path.join(dir, "projects", projectMemoryFileName("D:/proj")), "utf8"),
+			)
+			projectFile.workspace.should.equal("D:/proj")
+		})
+	})
+
+	it("forget finds the entry in either memory", async () => {
+		await withDir(async (dir) => {
+			const store = MemoryStore.forDirectory(dir)
+			const r = await store.remember(
+				{ fact: "Отступы табами", type: "project", evidence: "в этом проекте отступы табами" },
+				{ taskId: "a", cwd: "D:/proj", userTexts: texts },
+			)
+			if (!r.ok) throw new Error("not saved")
+			;(await store.forget(r.entry.id, "D:/proj"))!.text.should.equal("Отступы табами")
+			;(await store.list("D:/proj")).project.length.should.equal(0)
+		})
+	})
+
+	it("migrates the old single memory.json into global and project files", async () => {
+		await withDir(async (dir) => {
+			const old = {
+				version: 1,
+				entries: [
+					{
+						id: "g1",
+						type: "user",
+						scope: "global",
+						text: "Зовут Руслан",
+						status: "stable",
+						created: "2026-11-04",
+						updated: "2026-11-04",
+						sourceTask: "x",
+						seenInTasks: [],
+					},
+					{
+						id: "p1",
+						type: "project",
+						scope: "D:/proj",
+						text: "Отступы табами",
+						status: "probation",
+						created: "2026-11-04",
+						updated: "2026-11-04",
+						sourceTask: "x",
+						seenInTasks: [],
+					},
+				],
+			}
+			await fs.writeFile(path.join(dir, "memory.json"), JSON.stringify(old), "utf8")
+			const store = MemoryStore.forDirectory(dir)
+			const here = await store.list("D:/proj")
+			here.global.map((e) => e.id).should.eql(["g1"])
+			here.project.map((e) => e.id).should.eql(["p1"])
+			await fs.access(path.join(dir, "memory.json.migrated"))
+		})
+	})
+
+	it("renders an empty-memory section when nothing is saved", async () => {
+		await withDir(async (dir) => {
+			;(await MemoryStore.forDirectory(dir).renderForPrompt("D:/proj")).should.startWith(
+				"## MEMORY\n\nNothing remembered yet",
+			)
+		})
 	})
 })
