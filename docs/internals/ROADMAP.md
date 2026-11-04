@@ -21,13 +21,8 @@
 
 ## Открыто
 
-- **Shell Diff Tracking** — [IMPL-16](./implementation/IMPL-16-shell-diff-tracking.md): правки файлов из shell-команд не показываются в diff.
-- **Multi-Model System** — [IMPL-17](./implementation/IMPL-17-multi-model-system.md): слоты моделей Primary/Secondary/Utility.
-- **Вкладки, этап 5** — [TABS](./TABS.md): автосжатие иногда срабатывает раньше порога (~80%).
-- **Тесты** — [TESTING_PLAN](./TESTING_PLAN.md): нет тестов `deleteFromMessage` и `retryFromMessage`.
+- **Правки из shell-команд:** изменения файлов, сделанные через `execute_command`, не попадают в diff. Есть только обнаружение внешних изменений в `DiffSystem` (закрытие устаревших сессий).
+- **Слоты моделей:** одна модель на все вкладки; отдельных моделей для подзадач (Primary/Secondary/Utility) нет.
+- **Автосжатие контекста** иногда срабатывает раньше порога (~80%).
+- **Тесты:** нет тестов `deleteFromMessage` и `retryFromMessage`.
 - **Undo/Redo для Accept/Reject** в diff: архитектурно сложно.
-- **Грант Фонда Бортника** — [заявка](./grant-fasie-start-ai.md): черновик, актуальность не определена.
-
-## Выполненные планы
-
-См. [completed/](./completed/) и [implementation/completed/](./implementation/completed/).

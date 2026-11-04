@@ -46,7 +46,5 @@ npm run test:unit   # юнит-тесты (mocha)
 - [docs/development/NETWORK.md](./development/NETWORK.md) — сетевые запросы
 - [docs/agent-rules/](./agent-rules/) — правила для AI агента
 
-### Планы
-- [docs/plans/ROADMAP.md](./plans/ROADMAP.md) — дорожная карта
-- [docs/plans/TABS.md](./plans/TABS.md) — вкладки сессий
-- [docs/plans/implementation/](./plans/implementation/) — планы реализации
+### Дорожная карта
+- [ROADMAP.md](./ROADMAP.md) — что сделано и что открыто
