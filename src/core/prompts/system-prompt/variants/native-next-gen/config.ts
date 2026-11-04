@@ -68,6 +68,8 @@ export const config = createVariant(ModelFamily.NATIVE_NEXT_GEN)
 		SkycodeDefaultTool.GENERATE_EXPLANATION,
 		SkycodeDefaultTool.SHOW_VISUAL,
 		SkycodeDefaultTool.SHOW_CHART,
+		SkycodeDefaultTool.MEMORY_REMEMBER,
+		SkycodeDefaultTool.MEMORY_FORGET,
 		SkycodeDefaultTool.USE_SKILL,
 		SkycodeDefaultTool.ATTEMPT,
 		SkycodeDefaultTool.PLAN_MODE,

@@ -56,6 +56,8 @@ export const config = createVariant(ModelFamily.XS)
 		SkycodeDefaultTool.ASK,
 		SkycodeDefaultTool.SHOW_VISUAL,
 		SkycodeDefaultTool.SHOW_CHART,
+		SkycodeDefaultTool.MEMORY_REMEMBER,
+		SkycodeDefaultTool.MEMORY_FORGET,
 		SkycodeDefaultTool.ATTEMPT,
 		SkycodeDefaultTool.PLAN_MODE,
 		SkycodeDefaultTool.READ_DIAGNOSTICS,

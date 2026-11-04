@@ -67,6 +67,8 @@ export const config = createVariant(ModelFamily.GEMINI_3)
 		SkycodeDefaultTool.GENERATE_EXPLANATION,
 		SkycodeDefaultTool.USE_SKILL,
 		SkycodeDefaultTool.ATTEMPT,
+		SkycodeDefaultTool.MEMORY_REMEMBER,
+		SkycodeDefaultTool.MEMORY_FORGET,
 		SkycodeDefaultTool.NEW_TASK,
 		SkycodeDefaultTool.PLAN_MODE,
 		SkycodeDefaultTool.ACT_MODE,

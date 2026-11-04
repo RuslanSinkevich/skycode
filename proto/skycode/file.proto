@@ -72,6 +72,9 @@ service FileService {
   // Opens or creates a focus chain checklist markdown file for editing
   rpc openFocusChainFile(StringRequest) returns (Empty);
 
+  // [SKYCODE] Opens the long-term memory file (Documents/Skycode/Memory/memory.json), creating it if needed
+  rpc openMemoryFile(EmptyRequest) returns (Empty);
+
   // Refreshes all hook toggles (discovers hooks and their enabled state)
   rpc refreshHooks(EmptyRequest) returns (HooksToggles);
 

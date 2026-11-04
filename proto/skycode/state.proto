@@ -301,6 +301,7 @@ message UpdateSettingsRequest {
   optional int32 custom_max_tool_calls_per_turn = 47;
   optional int32 custom_max_consecutive_read_only_tools = 48;
   optional int32 custom_force_compact_after_steps = 49;
+  optional bool memory_enabled = 50;
   // Removed providers (Bedrock, Vertex, SAP AI Core, Requesty, OCA and others) — numbers stay reserved.
   reserved 37;
 }

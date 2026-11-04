@@ -135,6 +135,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		yoloModeToggled: false,
 		customPrompt: undefined,
 		useAutoCondense: false,
+		memoryEnabled: true,
 		skycodeWebToolsEnabled: { user: true, featureFlag: true },
 		autoCondenseThreshold: undefined,
 		favoritedModelIds: [],

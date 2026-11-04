@@ -836,6 +836,7 @@ export class Controller {
 		const strictPlanModeEnabled = this.stateManager.getGlobalSettingsKey("strictPlanModeEnabled")
 		const yoloModeToggled = this.stateManager.getGlobalSettingsKey("yoloModeToggled")
 		const useAutoCondense = this.stateManager.getGlobalSettingsKey("useAutoCondense")
+		const memoryEnabled = this.stateManager.getGlobalSettingsKey("memoryEnabled")
 		const mcpDisplayMode = this.stateManager.getGlobalStateKey("mcpDisplayMode")
 		const planActSeparateModelsSetting = this.stateManager.getGlobalSettingsKey("planActSeparateModelsSetting")
 		const globalSkycodeRulesToggles = this.stateManager.getGlobalSettingsKey("globalSkycodeRulesToggles")
@@ -963,6 +964,7 @@ export class Controller {
 			strictPlanModeEnabled,
 			yoloModeToggled,
 			useAutoCondense,
+			memoryEnabled,
 			mcpDisplayMode,
 			planActSeparateModelsSetting,
 			platform,

@@ -25,6 +25,7 @@ import { read_diagnostics_variants } from "./read_diagnostics"
 import { replace_in_file_variants } from "./replace_in_file"
 import { replace_text_variants } from "./replace_text"
 import { search_files_variants } from "./search_files"
+import { memory_forget_variants, memory_remember_variants } from "./memory"
 import { show_chart_variants } from "./show_chart"
 import { show_visual_variants } from "./show_visual"
 import { use_mcp_tool_variants } from "./use_mcp_tool"
@@ -67,6 +68,8 @@ export function registerSkycodeToolSets(): void {
 		...search_files_variants,
 		...show_visual_variants,
 		...show_chart_variants,
+		...memory_remember_variants,
+		...memory_forget_variants,
 		...use_mcp_tool_variants,
 		...use_skill_variants,
 		...web_fetch_variants,

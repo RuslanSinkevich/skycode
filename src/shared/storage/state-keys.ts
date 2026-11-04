@@ -146,6 +146,7 @@ const USER_SETTINGS_FIELDS = {
 	strictPlanModeEnabled: { default: true as boolean },
 	yoloModeToggled: { default: false as boolean },
 	useAutoCondense: { default: true as boolean },
+	memoryEnabled: { default: true as boolean }, // [SKYCODE] долговременная память агента (core/memory)
 	skycodeWebToolsEnabled: { default: false as boolean },
 	// allow-any-unicode-next-line
 	preferredLanguage: { default: "Russian - Русский" as string },

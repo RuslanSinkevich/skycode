@@ -28,6 +28,7 @@ import { TaskState } from "./TaskState"
 import { AutoApprove } from "./tools/autoApprove"
 import { AccessMcpResourceHandler } from "./tools/handlers/AccessMcpResourceHandler"
 import { ActModeRespondHandler } from "./tools/handlers/ActModeRespondHandler"
+import { ForgetToolHandler, RememberToolHandler } from "./tools/handlers/MemoryToolHandler"
 import { ShowChartToolHandler } from "./tools/handlers/ShowChartToolHandler"
 import { ShowVisualToolHandler } from "./tools/handlers/ShowVisualToolHandler"
 import { ApplyPatchHandler } from "./tools/handlers/ApplyPatchHandler"
@@ -237,6 +238,8 @@ export class ToolExecutor {
 		this.coordinator.register(new AskFollowupQuestionToolHandler())
 		this.coordinator.register(new ShowVisualToolHandler())
 		this.coordinator.register(new ShowChartToolHandler())
+		this.coordinator.register(new RememberToolHandler())
+		this.coordinator.register(new ForgetToolHandler())
 		this.coordinator.register(new CodebaseSearchToolHandler())
 		this.coordinator.register(new WebFetchToolHandler())
 		this.coordinator.register(new WebSearchToolHandler())

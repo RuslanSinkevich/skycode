@@ -95,6 +95,7 @@ export interface ExtensionState {
 	strictPlanModeEnabled?: boolean
 	yoloModeToggled?: boolean
 	useAutoCondense?: boolean
+	memoryEnabled?: boolean
 	skycodeWebToolsEnabled?: SkycodeFeatureSetting
 	focusChainSettings: FocusChainSettings
 	dictationSettings: DictationSettings

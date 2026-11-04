@@ -116,6 +116,8 @@ export interface SystemPromptContext {
 	readonly localAgentsRulesFileInstructions?: string
 	readonly skycodeIgnoreInstructions?: string
 	readonly preferredLanguageInstructions?: string
+	/** [SKYCODE] Включена долговременная память: инструменты remember/forget и блок MEMORY */
+	readonly memoryEnabled?: boolean
 	readonly browserSettings?: BrowserSettings
 	readonly isTesting?: boolean
 	readonly runtimePlaceholders?: Readonly<Record<string, unknown>>

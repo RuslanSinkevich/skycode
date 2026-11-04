@@ -198,6 +198,18 @@ export async function ensureRulesDirectoryExists(): Promise<string> {
 	return skycodeRulesDir
 }
 
+// [SKYCODE] Долговременная память агента — рядом с глобальными правилами, чтобы её было видно и можно было править руками.
+export async function ensureMemoryDirectoryExists(): Promise<string> {
+	const userDocumentsPath = await getDocumentsPath()
+	const skycodeMemoryDir = path.join(userDocumentsPath, "Skycode", "Memory")
+	try {
+		await fs.mkdir(skycodeMemoryDir, { recursive: true })
+	} catch (_error) {
+		return path.join(os.homedir(), "Documents", "Skycode", "Memory")
+	}
+	return skycodeMemoryDir
+}
+
 export async function ensureWorkflowsDirectoryExists(): Promise<string> {
 	const userDocumentsPath = await getDocumentsPath()
 	const skycodeWorkflowsDir = path.join(userDocumentsPath, "Skycode", "Workflows")

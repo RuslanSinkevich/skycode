@@ -78,6 +78,8 @@ export const config = createVariant(ModelFamily.NATIVE_GPT_5)
 		SkycodeDefaultTool.GENERATE_EXPLANATION,
 		SkycodeDefaultTool.USE_SKILL,
 		SkycodeDefaultTool.ATTEMPT,
+		SkycodeDefaultTool.MEMORY_REMEMBER,
+		SkycodeDefaultTool.MEMORY_FORGET,
 		SkycodeDefaultTool.PLAN_MODE,
 		SkycodeDefaultTool.ASK,
 	)

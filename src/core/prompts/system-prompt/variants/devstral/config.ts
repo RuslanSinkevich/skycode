@@ -63,6 +63,8 @@ export const config = createVariant(ModelFamily.DEVSTRAL)
 		SkycodeDefaultTool.ASK,
 		SkycodeDefaultTool.SHOW_VISUAL,
 		SkycodeDefaultTool.SHOW_CHART,
+		SkycodeDefaultTool.MEMORY_REMEMBER,
+		SkycodeDefaultTool.MEMORY_FORGET,
 	)
 	.placeholders({
 		MODEL_FAMILY: "devstral",

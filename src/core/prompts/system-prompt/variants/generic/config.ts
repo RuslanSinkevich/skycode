@@ -84,6 +84,8 @@ export const config = createVariant(ModelFamily.GENERIC)
 		SkycodeDefaultTool.ASK,
 		SkycodeDefaultTool.SHOW_VISUAL,
 		SkycodeDefaultTool.SHOW_CHART,
+		SkycodeDefaultTool.MEMORY_REMEMBER,
+		SkycodeDefaultTool.MEMORY_FORGET,
 	)
 	.placeholders({
 		MODEL_FAMILY: "generic",

@@ -70,6 +70,7 @@ import * as path from "path"
 import { ulid } from "ulid"
 import type { SystemPromptContext } from "@/core/prompts/system-prompt"
 import { getSystemPrompt } from "@/core/prompts/system-prompt"
+import { MemoryStore } from "@core/memory/MemoryStore"
 import { HostProvider } from "@/hosts/host-provider"
 import { FileEditProvider } from "@/integrations/editor/FileEditProvider"
 import {
@@ -908,6 +909,10 @@ export class Task {
 			Logger.error("Failed to initialize SkycodeIgnoreController:", error)
 			// Optionally, inform the user or handle the error appropriately
 		}
+		// [SKYCODE] Каждая задача — ещё одна «сессия» для пробных записей памяти (см. core/memory)
+		if (this.stateManager.getGlobalSettingsKey("memoryEnabled")) {
+			void MemoryStore.get().noteTaskStarted(this.taskId)
+		}
 		// conversationHistory (for API) and skycodeMessages (for webview) need to be in sync
 		// if the extension process were killed, then on restart the skycodeMessages might not be empty, so we need to set it to [] when we create a new Skycode client (otherwise webview would show stale messages from previous session)
 		this.messageStateHandler.setSkycodeMessages([])
@@ -1050,6 +1055,10 @@ export class Task {
 		} catch (error) {
 			Logger.error("Failed to initialize SkycodeIgnoreController:", error)
 			// Optionally, inform the user or handle the error appropriately
+		}
+		// [SKYCODE] Каждая задача — ещё одна «сессия» для пробных записей памяти (см. core/memory)
+		if (this.stateManager.getGlobalSettingsKey("memoryEnabled")) {
+			void MemoryStore.get().noteTaskStarted(this.taskId)
 		}
 
 		const savedSkycodeMessages = await getSavedSkycodeMessages(this.taskId)
@@ -2034,6 +2043,7 @@ export class Task {
 			useSimplifiedEditTools: this.stateManager.getGlobalSettingsKey("lightweightMode") === true,
 			lightweightMode: this.stateManager.getGlobalSettingsKey("lightweightMode"),
 			mode: this.getMode() as "plan" | "act" | "ask" | "debug",
+			memoryEnabled: this.stateManager.getGlobalSettingsKey("memoryEnabled") === true,
 		}
 
 		// [SKYCODE] Сработавшие условные правила больше не печатаются в чат.
@@ -2050,7 +2060,11 @@ export class Task {
 		}
 		this.lastReportedConditionalRules = conditionalRulesKey
 
-		const { systemPrompt, tools } = await getSystemPrompt(promptContext)
+		const { systemPrompt: basePrompt, tools } = await getSystemPrompt(promptContext)
+		// [SKYCODE] Память дописываем в конец готового промпта: так она есть во всех вариантах
+		// (qwen, generic, native…) без правки шаблонов. Пусто — блока нет.
+		const memoryBlock = promptContext.memoryEnabled ? await MemoryStore.get().renderForPrompt(this.cwd) : ""
+		const systemPrompt = memoryBlock ? `${basePrompt}\n\n${memoryBlock}` : basePrompt
 		this.useNativeToolCalls = !!tools?.length
 		this.lastSystemPromptChars = systemPrompt.length
 		this.lastToolsChars = tools?.length ? JSON.stringify(tools).length : 0

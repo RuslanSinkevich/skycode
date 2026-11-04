@@ -365,6 +365,10 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			}
 		}
 		// Update auto-condense setting
+		if (request.memoryEnabled !== undefined) {
+			controller.stateManager.setGlobalState("memoryEnabled", request.memoryEnabled)
+		}
+
 		if (request.useAutoCondense !== undefined) {
 			controller.stateManager.setGlobalState("useAutoCondense", request.useAutoCondense)
 		}

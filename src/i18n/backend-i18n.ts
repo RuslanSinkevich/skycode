@@ -78,6 +78,10 @@ const en: Record<string, string> = {
 	"dictation.copyCommand": "Copy Command",
 	"dictation.dismiss": "Dismiss",
 
+	"memory.saved": "Skycode remembered: {{fact}}",
+	"memory.updated": "Skycode updated memory: {{fact}}",
+	"memory.undo": "Undo",
+
 	"gigachat.error.authRequired": "GigaChat Authorization Key is required",
 	"gigachat.error.oauthInvalidResponse": "GigaChat OAuth: invalid server response: {{details}}",
 	"gigachat.error.oauthFailed": "GigaChat OAuth error ({{status}}): {{details}}",
@@ -198,6 +202,12 @@ const ru: Record<string, string> = {
 	"dictation.missingDep": "{{name}} необходим для записи голоса. {{description}}",
 	// allow-any-unicode-next-line
 	"dictation.installWithSkycode": "Установить через Skycode",
+	// allow-any-unicode-next-line
+	"memory.saved": "Skycode запомнил: {{fact}}",
+	// allow-any-unicode-next-line
+	"memory.updated": "Skycode обновил память: {{fact}}",
+	// allow-any-unicode-next-line
+	"memory.undo": "Отменить",
 	// allow-any-unicode-next-line
 	"dictation.copyCommand": "Скопировать команду",
 	// allow-any-unicode-next-line

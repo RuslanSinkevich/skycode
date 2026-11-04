@@ -55,6 +55,19 @@ If `useAutoCondense` is switched off, the older truncation applies. After a requ
 
 If the context still overflows, `context-error-handling.ts` recognizes provider errors and starts recovery.
 
+## Long-term memory
+
+Memory holds short facts about the user and their work, shared by all tabs and future tasks. It is turned on in settings ("Context" → "Long-term memory", on by default). File: `Documents/Skycode/Memory/memory.json`; the "Open memory file" button opens it in the editor, and manual edits are picked up on the next request.
+
+The agent decides what to remember on its own with the `remember` tool and removes a fact with `forget`. It does not ask for approval, but after a save VS Code shows a notification with an "Undo" button. The limits are checked by code (`core/memory/memory.ts`), not by the model:
+
+- at most 3 saves per task, a fact of up to 200 characters, a type from the list: `user`, `preference`, `project`, `event`;
+- a quote from the user's messages in this task is required; without it the fact is not saved. Text from files, pages and command output does not count;
+- keys, tokens, passwords and card numbers are rejected;
+- a similar fact (60% or more of the words match) updates the old entry instead of adding a new one.
+
+A new entry is unconfirmed. It becomes confirmed when two other tasks start and the entry is not deleted, or when the same fact comes up again in another task. At the end of the system prompt, the `## MEMORY` block lists confirmed entries (up to 30) and, separately, unconfirmed ones (up to 10) marked as lower confidence. When there are more than 10 unconfirmed entries, the oldest one is dropped. Entries with the `project` scope are visible only in their own workspace folder.
+
 ## Key files
 
 | File | Purpose |
@@ -68,3 +81,6 @@ If the context still overflows, `context-error-handling.ts` recognizes provider 
 | `core/task/tools/handlers/SummarizeTaskHandler.ts` | Handling `summarize_task` |
 | `core/task/environmentDetailsDiff.ts` | Sending only changed sections |
 | `webview-ui/src/components/chat/context-ring/` | The context ring |
+| `core/memory/memory.ts` | Checks, duplicates, confirmation, the `## MEMORY` block |
+| `core/memory/MemoryStore.ts` | Memory file, queue for writes from different tabs |
+| `core/task/tools/handlers/MemoryToolHandler.ts` | The `remember` and `forget` tools |

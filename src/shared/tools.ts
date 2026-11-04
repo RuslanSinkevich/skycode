@@ -46,6 +46,9 @@ export enum SkycodeDefaultTool {
 	// [SKYCODE] Статичная HTML/SVG-визуализация в чате
 	SHOW_VISUAL = "show_visual",
 	SHOW_CHART = "show_chart",
+	// [SKYCODE] Долговременная память (core/memory)
+	MEMORY_REMEMBER = "remember",
+	MEMORY_FORGET = "forget",
 }
 
 // Array of all tool names for compatibility
