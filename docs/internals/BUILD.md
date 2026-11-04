@@ -39,7 +39,7 @@ npm run package    # типы + сборка webview + линт + продакш
 
 1. Поднять `version` в `package.json` и дописать запись в `CHANGELOG.md` (его показывает вкладка «Изменения» в Marketplace).
 2. Запушить тег `ext-vX.Y.Z` (версия в теге должна совпадать с `package.json`).
-3. Workflow `.github/workflows/skycode-extension.yml` (корень репозитория) ставит зависимости, собирает, прогоняет юнит-тесты, пакует .vsix, публикует в Visual Studio Marketplace (расширение `skycode.skycode-ai`) и прикладывает .vsix к GitHub Release. Секрет `VSCE_PAT` задаёт токен публикации; без него workflow пробует trusted publishing (`vsce --oidc`), который Marketplace пока не поддерживает. Open VSX — только при заданном секрете `OVSX_PAT`.
+3. Workflow `.github/workflows/skycode-extension.yml` (корень репозитория) ставит зависимости, собирает, прогоняет юнит-тесты, пакует .vsix, публикует в Visual Studio Marketplace (расширение `skycode.skycode-ai`) и прикладывает .vsix к GitHub Release. Публикация идёт через trusted publishing (`vsce publish --oidc`, без токена): у издателя `skycode` на marketplace.visualstudio.com/manage → Trusted Publishing разрешён этот workflow в `RuslanSinkevich/skycode`. Если задан секрет `VSCE_PAT`, публикация идёт по токену. Open VSX — только при заданном секрете `OVSX_PAT`.
 4. Ручной запуск workflow (Run workflow) только собирает .vsix в артефакты.
 
 ## Что не входит в .vsix

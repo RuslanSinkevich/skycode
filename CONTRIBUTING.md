@@ -78,7 +78,7 @@ Developer documentation is in `docs/`. Russian pages are primary; English mirror
 
 1. Raise `version` in `package.json`.
 2. Push the tag `ext-vX.Y.Z`. The version in the tag must equal the version in `package.json`.
-3. The workflow `.github/workflows/skycode-extension.yml` installs dependencies, builds, runs unit tests, packages the `.vsix`, publishes it to the Visual Studio Marketplace and attaches it to a GitHub Release. The secret `VSCE_PAT` holds the publishing token. Without it the workflow tries `vsce publish --oidc`, which the Marketplace does not support yet. Open VSX is used only if the secret `OVSX_PAT` is set.
+3. The workflow `.github/workflows/skycode-extension.yml` installs dependencies, builds, runs unit tests, packages the `.vsix`, publishes it to the Visual Studio Marketplace and attaches it to a GitHub Release. Publishing uses Marketplace trusted publishing (`vsce publish --oidc`, no token): the `skycode` publisher allows this workflow in this repository. If the secret `VSCE_PAT` is set, the workflow publishes with that token instead. Open VSX is used only if the secret `OVSX_PAT` is set.
 4. A manual run of the workflow (Actions, "Skycode Extension", Run workflow) only builds the `.vsix` as an artifact.
 
 ## Reporting bugs and security issues

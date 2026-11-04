@@ -57,7 +57,7 @@ npx vsce package --readme-path MARKETPLACE.md
 
 1. Поднять `version` в `package.json`.
 2. Запушить тег `ext-vX.Y.Z` (версия в теге должна совпадать с `package.json`).
-3. Workflow `.github/workflows/skycode-extension.yml` соберёт расширение, прогонит юнит-тесты, опубликует в VS Code Marketplace (секрет `VSCE_PAT`; без него workflow пробует `vsce publish --oidc`, Marketplace его пока не поддерживает) и приложит `.vsix` к GitHub Release. В Open VSX публикуется только если задан секрет `OVSX_PAT`.
+3. Workflow `.github/workflows/skycode-extension.yml` соберёт расширение, прогонит юнит-тесты, опубликует в VS Code Marketplace (trusted publishing, `vsce publish --oidc`, без токена; если задан секрет `VSCE_PAT`, публикация идёт по нему) и приложит `.vsix` к GitHub Release. В Open VSX публикуется только если задан секрет `OVSX_PAT`.
 
 Ручной запуск workflow (Actions, Skycode Extension, Run workflow) только собирает `.vsix` в артефакты.
 

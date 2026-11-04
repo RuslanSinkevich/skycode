@@ -3,11 +3,10 @@ name: Skycode Extension
 # [SKYCODE] Сборка и публикация расширения Skycode AI (skycode.skycode-ai).
 #  - push тега ext-vX.Y.Z → проверки, сборка .vsix, публикация в VS Code Marketplace
 #    и, если задан секрет OVSX_PAT, в Open VSX; .vsix прикладывается к GitHub Release.
-# Marketplace: пока задан секрет VSCE_PAT — публикуем по токену Azure DevOps (глобальные PAT
-# «All accessible organizations» объявлены к отключению с 2026-12-01). Без секрета — trusted publishing
-# (vsce 4+, --oidc, без токена); на 2026-10-19 Marketplace его ещё не поддерживает
-# (microsoft/vscode-vsce#1275). Когда включат — разрешить на marketplace.visualstudio.com публикацию
-# из RuslanSinkevich/skycode этим workflow и удалить секрет VSCE_PAT.
+# Marketplace: trusted publishing (vsce 4+, --oidc, без токена). Разрешение задано у издателя skycode
+# на marketplace.visualstudio.com/manage → Trusted Publishing (политика «Release workflow»:
+# RuslanSinkevich/skycode, skycode-extension.yml, без environment). Если задан секрет VSCE_PAT,
+# публикуем по токену Azure DevOps — это запасной путь.
 #  - ручной запуск (Actions → Skycode Extension → Run workflow) → только сборка .vsix в артефакты.
 # Версия в теге должна совпадать с "version" в package.json.
 # Префикс ext-v сохранён с тех времён, когда репозиторий был форком VS Code.
