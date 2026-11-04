@@ -1,4 +1,5 @@
 import type { ToolUse } from "@core/assistant-message"
+import { extractUserWords } from "@core/memory/memory"
 import { MemoryStore } from "@core/memory/MemoryStore"
 import { formatResponse } from "@core/prompts/responses"
 import { HostProvider } from "@hosts/host-provider"
@@ -11,12 +12,40 @@ import type { IPartialBlockHandler, IToolHandler } from "../ToolExecutorCoordina
 import type { TaskConfig } from "../types/TaskConfig"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 
-/** Слова пользователя в этой задаче: первое сообщение и все ответы. Только они — основание для памяти. */
+/**
+ * Слова пользователя в этой задаче — только они основание для памяти. Берём из истории для модели,
+ * а не из сообщений чата: там первое сообщение задачи хранится как say "text", как и ответы агента,
+ * и в первом живом тесте дословная цитата из него не нашлась.
+ */
 function userTextsOf(config: TaskConfig): string[] {
-	return config.messageState
-		.getSkycodeMessages()
-		.filter((m) => m.type === "say" && (m.say === "task" || m.say === "user_feedback") && typeof m.text === "string")
-		.map((m) => m.text as string)
+	const raw: string[] = []
+	for (const message of config.messageState.getApiConversationHistory()) {
+		if (message.role !== "user") {
+			continue
+		}
+		if (typeof message.content === "string") {
+			raw.push(message.content)
+			continue
+		}
+		for (const block of message.content) {
+			if (block.type === "text") {
+				raw.push(block.text)
+			} else if (block.type === "tool_result") {
+				// нативные вызовы: ответ на ask_followup_question приходит результатом инструмента
+				const content = block.content
+				if (typeof content === "string") {
+					raw.push(content)
+				} else if (Array.isArray(content)) {
+					for (const part of content) {
+						if (part.type === "text") {
+							raw.push(part.text)
+						}
+					}
+				}
+			}
+		}
+	}
+	return extractUserWords(raw)
 }
 
 function memoryEnabled(config: TaskConfig): boolean {

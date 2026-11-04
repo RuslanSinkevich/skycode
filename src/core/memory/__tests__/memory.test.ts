@@ -10,6 +10,7 @@ import {
 	containsSecret,
 	emptyMemoryFile,
 	evidenceMatches,
+	extractUserWords,
 	MAX_PROBATION_ENTRIES,
 	MAX_WRITES_PER_TASK,
 	type MemoryFile,
@@ -203,5 +204,21 @@ describe("MemoryStore", () => {
 		} finally {
 			await fs.rm(dir, { recursive: true, force: true })
 		}
+	})
+})
+
+describe("memory: extractUserWords", () => {
+	it("takes only the user's words from task, feedback, answer and continuation tags", () => {
+		const words = extractUserWords([
+			"<task>\nМеня зовут Руслан, я разрабатываю Skycode.\n</task>",
+			"<environment_details>\n# Current Mode\nACT MODE\n</environment_details>",
+			"[list_files for '.'] Result:\nREADME.md",
+			"[ask_followup_question] Result:\n<answer>\nДа, отвечай коротко\n</answer>",
+			"<feedback>\nне так</feedback>",
+			"<user_message>\nпродолжай</user_message>",
+		])
+		words.should.eql(["Меня зовут Руслан, я разрабатываю Skycode.", "Да, отвечай коротко", "не так", "продолжай"])
+		evidenceMatches("Меня зовут Руслан, я разрабатываю Skycode", words).should.equal(true)
+		evidenceMatches("README.md", words).should.equal(false)
 	})
 })

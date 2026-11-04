@@ -122,6 +122,25 @@ export function evidenceMatches(evidence: string, userTexts: string[]): boolean 
 	return found >= 2 && found / words.length >= EVIDENCE_MIN_OVERLAP
 }
 
+/**
+ * Достаёт слова пользователя из сообщений для модели: задача, отзыв, ответ на вопрос, продолжение
+ * задачи. Всё остальное в этих сообщениях (environment_details, результаты инструментов, системные
+ * напоминания) — не его слова и основанием для памяти быть не может.
+ */
+export function extractUserWords(rawTexts: string[]): string[] {
+	const words: string[] = []
+	const tag = /<(task|feedback|answer|user_message)>([\s\S]*?)<\/\1>/g
+	for (const raw of rawTexts) {
+		for (const match of raw.matchAll(tag)) {
+			const text = match[2].trim()
+			if (text) {
+				words.push(text)
+			}
+		}
+	}
+	return words
+}
+
 export interface RememberInput {
 	fact: string
 	type: string
