@@ -85,9 +85,9 @@ jobs:
         run: |
           VSIX=skycode-ai-${{ steps.version.outputs.version }}.vsix
           if [ -n "$VSCE_PAT" ]; then
-            npx --yes @vscode/vsce@4.0.0 publish --packagePath "$VSIX"
+            npx --yes @vscode/vsce@4.1.0 publish --packagePath "$VSIX"
           else
-            npx --yes @vscode/vsce@4.0.0 publish --oidc --packagePath "$VSIX"
+            npx --yes @vscode/vsce@4.1.0 publish --oidc --packagePath "$VSIX"
           fi
 
       - name: Publish to Open VSX
